@@ -1,0 +1,171 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: #3d99f4;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: #37404d;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: #475467;
+
+    --accent: #1a47f0;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0.5rem;
+
+    --table-border: #e2e2e2;
+    --table-header: #f7f9f8;
+
+    --purple: #1a47f0;
+    --purple-1: #8177cc;
+    --purple-2: #61598e;
+    --purple-3: #e2ddfa;
+    --purple-4: #1a47f012;
+
+    --blue: #5395d7;
+
+    --font-space-grostesk: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-light-border;
+  }
+
+  body {
+    @apply text-[#273237];
+    font-family: 'Rubik', sans-serif;
+  }
+
+  input,
+  textarea,
+  select {
+    @apply bg-transparent ring-1 ring-inset ring-light-border rounded-md py-3.5 px-3 text-base focus:ring-inset focus:ring-primary focus:outline-none transition-colors disabled:bg-gray-100;
+  }
+
+  ::-webkit-inner-spin-button,
+  ::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.fc-daygrid-day.fc-day-today {
+  position: relative;
+  background: transparent !important;
+}
+
+.fc-daygrid-day.fc-day-today::before {
+  content: '';
+  width: 80%;
+  height: 4px;
+  background-color: #027af2;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 4px;
+}
+
+.fc-toolbar-title {
+  font-size: 18px !important;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.fc-listDay-view {
+  border: 0 !important;
+}
+
+.fc-day-other {
+  @apply !bg-gray-100;
+}
+
+.fc-view th[role='presentation'] {
+  border: 0;
+}
+
+.fc-view td[role='presentation'] {
+  border: 0;
+}
+
+.fc-view table {
+  border: 0 !important;
+}
+
+.fc-view td[role='gridcell'] {
+  border-left: 0 !important;
+}
+
+.fc-view tr[role='row'] td:last-child {
+  border-right: 0 !important;
+}
+
+.fc-view tr[role='row']:last-child td {
+  border-bottom: 0 !important;
+}
+
+.fc-header-toolbar {
+  @apply !grid md:grid-cols-3 w-full p-4 !gap-5;
+}
+
+.fc-toolbar-chunk:nth-child(2) {
+  @apply mx-auto;
+}
+
+.fc-toolbar-chunk:last-child {
+  @apply ml-auto;
+}
+
+.fc-button {
+  @apply !bg-light-color/20 !border-none !py-1.5 !px-3 !capitalize !shadow-none !text-[#273237];
+}
+
+.fc-button[title='month view']:first-child {
+  @apply !rounded-l-lg;
+}
+
+.fc-button[title='day view'] {
+  @apply !rounded-r-lg;
+}
+
+.fc-button:hover {
+  @apply !bg-light-color/10;
+}
+
+.fc-prev-button > .fc-icon,
+.fc-next-button > .fc-icon {
+  @apply !grid !place-items-center;
+}
+
+.fc-prev-button > .fc-icon::before,
+.fc-next-button > .fc-icon::before {
+  @apply text-base;
+}
+
+.fc-button[aria-pressed='true'] {
+  @apply !bg-primary !text-white;
+}

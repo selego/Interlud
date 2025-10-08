@@ -1,0 +1,75 @@
+@import url(../node_modules/@codegouvfr/react-dsfr/main.css) layer(dsfr);
+@import url(../node_modules/@codegouvfr/react-dsfr/dsfr/utility/colors/colors.min.css) layer(dsfr);
+
+@font-face {
+  font-family: "Marianne";
+  src: url("/Marianne-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Marianne";
+  src: url("/Marianne-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer dsfr;
+
+@layer base {
+  body {
+    font-family: "Marianne", serif;
+    background: #fcfafe;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  html {
+    overflow-x: hidden;
+    height: 100%;
+  }
+
+  #main {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :root {
+    --color-decoration-bg: hsla(137, 47%, 94%, 1);
+  }
+
+  .property-section {
+    transition: all 0.3s ease-in-out;
+    overflow: hidden;
+  }
+
+  .property-section.expanded {
+    max-height: 1000px;
+  }
+
+  .property-section:not(.expanded) {
+    max-height: 300px;
+  }
+
+  input,
+  textarea,
+  select {
+    @apply bg-transparent border border-gray-200 px-3 py-2 w-full rounded !outline-none text-sm placeholder:text-gray-400 focus:outline-none focus:border-gray-200;
+  }
+
+  .button-primary {
+    @apply bg-secondary rounded-primary shadow-outline text-primary px-8 py-2 font-semibold text-base hover:bg-gray-100 flex items-center gap-2 focus:-ml-1 hover:bg-secondary/70 bg-none;
+  }
+
+  .button-secondary {
+    @apply bg-white text-primary border-b border-primary p-2 text-base hover:bg-gray-100 flex items-center gap-2 focus:-ml-1;
+  }
+}
