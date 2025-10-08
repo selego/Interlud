@@ -2,9 +2,6 @@ import React, { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 // @ts-ignore
-import Logo from "@/assets/logo.svg";
-// @ts-ignore
-import HeaderSideShadow from "@/assets/header-side-shadow.svg";
 import { FaArrowUp } from "react-icons/fa6";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
@@ -34,7 +31,6 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <>
       <div className="relative z-50">
-        <img src={HeaderSideShadow} alt="header-side-shadow" className="absolute top-0 right-0 h-full z-20" />
         <div className="relative z-10 border-b-2 border-primary">
           <Header
             brandTop={
@@ -53,13 +49,6 @@ export default function Layout({ children }: LayoutProps) {
               imgUrl: "/ademe.svg",
               orientation: "vertical",
             }}
-            serviceTitle={
-              <>
-                <span className="inline-block align-middle">
-                  <img src={Logo} alt="logo" className="h-8 object-contain" />
-                </span>
-              </>
-            }
             classes={{
               logo: "py-0",
               operator: "py-0",

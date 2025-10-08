@@ -3,8 +3,6 @@ import { BrowserRouter, Outlet, Route, useLocation, Routes } from "react-router-
 import { Toaster } from "react-hot-toast";
 
 import Home from "@/scenes/home";
-import Search from "@/scenes/search";
-import SolutionDetail from "@/scenes/solution-detail";
 
 import Layout from "@/components/Layout";
 
@@ -19,8 +17,6 @@ const App = () => {
       <Routes>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/recherche" element={<Search />} />
-          <Route path="/solution/:id" element={<SolutionDetail />} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>
