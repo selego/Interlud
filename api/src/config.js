@@ -1,7 +1,8 @@
 /* eslint-disable no-undef */
 const ENVIRONMENT = process.env.ENVIRONMENT || "development";
 const PORT = process.env.PORT || 8080;
-const MONGODB_ENDPOINT = process.env.MONGODB_ENDPOINT;
+const MONGODB_ENDPOINT =
+  process.env.MONGODB_ENDPOINT || "mongodb+srv://axel_db_user:EbubtALClwn4lrZR@interlud.zt98xxe.mongodb.net/db";
 const SECRET = process.env.SECRET || "not-so-secret";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 const SENTRY_DSN = process.env.SENTRY_DSN || "https://cb113131239df8207706baaf99145330@sentry.selego.co/212";
