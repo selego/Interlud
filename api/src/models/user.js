@@ -3,18 +3,18 @@ const bcrypt = require("bcryptjs");
 
 const MODELNAME = "user";
 
-const Schema = new mongoose.Schema({
-  name: { type: String, trim: true },
-  email: { type: String, required: true, unique: true, trim: true },
-  avatar: { type: String, default: "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" },
-  password: String,
-  role: { type: String, enum: ["user", "admin"], default: "user" },
-  forgot_password_reset_token: { type: String, default: "" },
-  forgot_password_reset_expires: { type: Date },
+const Schema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true },
+    email: { type: String, required: true, unique: true, trim: true },
 
-  last_login_at: { type: Date, default: Date.now },
-  createdAt: { type: Date, default: Date.now },
-});
+    password: String,
+    role: { type: String, enum: ["user", "admin"], default: "user" },
+    password_reset_token: { type: String, default: "" },
+    password_reset_expires: { type: Date },
+  },
+  { timestamps: true },
+);
 
 Schema.pre("save", function (next) {
   if (this.isModified("password") || this.isNew) {
