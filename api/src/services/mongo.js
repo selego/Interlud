@@ -3,7 +3,7 @@ const { MONGODB_ENDPOINT } = require("../config.js");
 
 console.log("Connecting to mongoDB...");
 mongoose
-  .connect(MONGODB_ENDPOINT, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(MONGODB_ENDPOINT)
   .then((r) => {
     console.log("MongoDB Connected");
   })

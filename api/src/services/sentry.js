@@ -1,17 +1,16 @@
 const Sentry = require("@sentry/node");
 const Tracing = require("@sentry/tracing");
-const { ENVIRONMENT } = require("../config");
+const { ENVIRONMENT, SENTRY_DSN } = require("../config");
 
 function initSentry(app) {
-  if (ENVIRONMENT !== "development") {
+  if (ENVIRONMENT === "production" && SENTRY_DSN) {
     Sentry.init({
-      dsn: "",
+      dsn: SENTRY_DSN,
       environment: "server",
       integrations: [new Sentry.Integrations.Http({ tracing: true }), new Tracing.Integrations.Express({ app })],
       tracesSampleRate: 1.0,
     });
 
-    // Les middlewares Sentry doivent être ajoutés uniquement en production
     app.use(Sentry.Handlers.requestHandler());
     app.use(Sentry.Handlers.tracingHandler());
 

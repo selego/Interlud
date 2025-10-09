@@ -2,18 +2,16 @@ const passport = require("passport");
 const JwtStrategy = require("passport-jwt").Strategy;
 const ExtractJwt = require("passport-jwt").ExtractJwt;
 const { SECRET } = require("../config");
-
-// load up the user model
+const Sentry = require("@sentry/node");
 const User = require("../models/user");
-const Admin = require("../models/admin");
 
 function getToken(req) {
-  let token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+  let token = ExtractJwt.fromAuthHeaderWithScheme("JWT")(req);
   if (!token) token = req.cookies.jwt;
   return token;
 }
 
-module.exports = function () {
+module.exports = function (app) {
   const opts = {};
   opts.jwtFromRequest = getToken;
   opts.secretOrKey = SECRET;
@@ -22,14 +20,14 @@ module.exports = function () {
     "user",
     new JwtStrategy(opts, async function (jwtPayload, done) {
       try {
-        if (!jwtPayload._id) return done(null, false);
         const user = await User.findOne({ _id: jwtPayload._id });
-        if (user) return done(null, user);
-        else return done(null, false);
+        if (!user) return done(null, false);
+        if (user.role !== "user") return done(null, false);
+        Sentry.setUser({ id: user._id.toString(), username: user.first_name + user.last_name, email: user.email });
+        return done(null, user);
       } catch (error) {
-        console.log(error);
+        return done(error, false);
       }
-      return done(null, false);
     }),
   );
 
@@ -37,14 +35,16 @@ module.exports = function () {
     "admin",
     new JwtStrategy(opts, async function (jwtPayload, done) {
       try {
-        if (!jwtPayload._id) return done(null, false);
-        const admin = await Admin.findOne({ _id: jwtPayload._id });
-        if (admin) return done(null, admin);
-        else return done(null, false);
+        const user = await User.findOne({ _id: jwtPayload._id });
+        if (!user) return done(null, false);
+        if (user.role !== "admin") return done(null, false);
+        Sentry.setUser({ id: user._id.toString(), username: user.first_name + user.last_name, email: user.email });
+        return done(null, user);
       } catch (error) {
-        console.log(error);
+        return done(error, false);
       }
-      return done(null, false);
     }),
   );
+
+  app.use(passport.initialize());
 };

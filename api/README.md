@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-cd /api
+cd /boilerplate/api
 npm install
 npm run dev
 ```
