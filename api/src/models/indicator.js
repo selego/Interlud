@@ -6,7 +6,6 @@ const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
     description: { type: String, trim: true },
-    value: { type: Number, trim: true },
     unit: { type: String, trim: true },
   },
   { timestamps: true },
