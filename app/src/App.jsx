@@ -5,9 +5,9 @@ import * as Sentry from "@sentry/browser"
 
 import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
+import Action from "@/scenes/action"
 
-import Navbar from "@/components/NavBar"
-import TopBar from "@/components/TopBar"
+import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
 import useStore from "@/services/store"
@@ -28,6 +28,14 @@ export default function App() {
         </Route>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/action/:id" element={<Action />} />
+          <Route path="/recherche" element={<div>Page de recherche</div>} />
+          <Route path="/a-propos" element={<div>À propos</div>} />
+          <Route path="/contact" element={<div>Contact</div>} />
+          <Route path="/cgu" element={<div>CGU</div>} />
+          <Route path="/politique-de-confidentialite" element={<div>Politique de confidentialité</div>} />
+          <Route path="/politique-des-cookies" element={<div>Politique des cookies</div>} />
+          <Route path="/mentions-legales" element={<div>Mentions légales</div>} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
@@ -77,16 +85,8 @@ const UserLayout = () => {
   if (!user) return <Navigate to="/auth" replace={true} />
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden lg:flex-row">
-      <nav className="w-56 absolute left-0 top-0">
-        <Navbar />
-      </nav>
-      <main className="ml-56 h-full w-full overflow-auto bg-gray-50">
-        <div className="h-14 border-b border-secondary bg-white">
-          <TopBar />
-        </div>
-        <Outlet />
-      </main>
-    </div>
+    <Layout>
+      <Outlet />
+    </Layout>
   )
 }
