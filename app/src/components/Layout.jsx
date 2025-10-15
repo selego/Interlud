@@ -1,8 +1,7 @@
 import React from "react";
-import Logo from "@/assets/interlud.png";
+import Logo from "@/assets/interlud-plus@2x.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
-import ademe from "@/assets/ademe.png";
 import useStore from "@/services/store";
 import { createConsentManagement } from "@codegouvfr/react-dsfr/consentManagement";
 import { useNavigate } from "react-router-dom";
@@ -50,12 +49,7 @@ export default function Layout({ children }) {
         }
         homeLinkProps={{
             to: "/",
-            title: `Accueil - Pacoupa`,
-        }}
-        operatorLogo={{
-            alt: "Logo de l'opérateur",
-            imgUrl: "/logo.svg",
-            orientation: "vertical",
+            title: `Accueil - InTerLUD`,
         }}
         serviceTitle={
             <>
@@ -64,7 +58,9 @@ export default function Layout({ children }) {
             </span>
             </>
         }
-        navigation={[
+
+        {...(user && {
+        navigation: [
             {
             text: "Accueil",
             linkProps: { to: "/" },
@@ -77,29 +73,19 @@ export default function Layout({ children }) {
             text: "Contact",
             linkProps: { to: "/contact" },
             },
-        ]}
-        quickAccessItems={[
-            {
-              iconId: "fr-icon-account-circle-line",
-              linkProps: {
-                to: "#",
-              },
-              text: user?.name || "Mon compte",
-              buttonProps: {
-                onClick: (e) => {
-                  e.preventDefault();
-                },
-              },
-            },
-          ].concat(
-            user
-              ? [
+        ],
+        quickAccessItems: [
                   {
-                    iconId: "fr-icon-user-line",
+                    iconId: "fr-icon-account-circle-line",
                     linkProps: {
-                      to: "/profil",
+                      to: "#",
                     },
-                    text: "Mon profil",
+                    text: user?.name || "Mon compte",
+                    buttonProps: {
+                      onClick: (e) => {
+                        e.preventDefault();
+                      },
+                    },
                   },
                   {
                     iconId: "fr-icon-settings-5-line",
@@ -119,16 +105,7 @@ export default function Layout({ children }) {
                     },
                   },
                 ]
-              : [
-                  {
-                    iconId: "fr-icon-login-box-line",
-                    linkProps: {
-                      to: "/auth/signin",
-                    },
-                    text: "Se connecter",
-                  },
-                ]
-          )}
+          })}
         classes={{
             logo: "py-0",
             operator: "py-0",
@@ -144,12 +121,7 @@ export default function Layout({ children }) {
         id={"footer"}
         accessibility="non compliant"
         accessibilityLinkProps={{ href: "/accessibilite" }}
-        contentDescription={`Pacoupa est un service développé par l'accélérateur de la transition écologique de l'ADEME.`}
-        operatorLogo={{
-          imgUrl: ademe,
-          alt: "ADEME",
-          orientation: "vertical",
-        }}
+        contentDescription={`InTerLUD est un service développé par l'accélérateur de la transition écologique de l'ADEME.`}
         classes={{
           root: "border-t-2 border-primary shadow-none",
         }}
