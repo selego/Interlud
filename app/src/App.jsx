@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/browser"
 import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
 import Action from "@/scenes/action"
-import Test from "@/scenes/test"
+// import Test from "@/scenes/test"
 
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
