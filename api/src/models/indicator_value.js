@@ -5,8 +5,6 @@ const MODELNAME = "action_indicator_value";
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
-    user_id: { type: String, trim: true },
-    user_name: { type: String, trim: true },
     action_id: { type: String, trim: true },
     action_name: { type: String, trim: true },
     collectivity_id: { type: String, trim: true },
