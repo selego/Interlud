@@ -7,14 +7,10 @@ const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
     email: { type: String, required: true, unique: true, trim: true },
-
     password: String,
     role: { type: String, enum: ["user", "admin"], default: "user" },
     password_reset_token: { type: String, default: "" },
     password_reset_expires: { type: Date },
-    
-    collectivity_id: { type: String, trim: true },
-    collectivity_name: { type: String, trim: true },
   },
   { timestamps: true },
 );

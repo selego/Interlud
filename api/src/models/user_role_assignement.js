@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-
 const MODELNAME = "user_role_assignement";
 
 const Schema = new mongoose.Schema(
