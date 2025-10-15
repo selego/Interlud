@@ -114,12 +114,12 @@ export default () => {
 
             <div className="text-center">
               <p className="text-sm text-gray-600">
-                Vous n'avez pas encore de compte ?
+                Vous n'avez pas encore de compte ? &nbsp;
                 <Link 
                   className="text-primary-green hover:text-primary-green font-medium transition-colors" 
                   to="/auth/signup"
                 >
-                  Créer un compte
+                   Créer un compte
                 </Link>
               </p>
             </div>
