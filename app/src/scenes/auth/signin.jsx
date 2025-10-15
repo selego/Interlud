@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom"
 import store from "@/services/store"
 import toast from "react-hot-toast"
 import api from "@/services/api"
+import decorationImg from '../../assets/deco.png'
+
 
 export default () => {
   const [values, setValues] = useState({ email: "admin@selego.co", password: "abc123$$" })
@@ -23,8 +25,22 @@ export default () => {
   if (user) navigate("/")
 
   return (
-      <div className="min-h-[calc(100vh-300px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-green-50">
-        <div className="max-w-md w-full space-y-8">
+      <div className="relative min-h-screen overflow-hidden flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-green-50">        
+      <div className="max-w-md w-full space-y-8">
+
+        <div className="absolute w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px' , top: '-100px' }} >
+        <img src={decorationImg} alt="" className="w-full h-full object-contain" />
+      </div>
+
+      <div className="absolute bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
+        <img src={decorationImg} alt="" className="w-full h-full object-contain transform" />
+      </div>
+
+      <div className="absolute w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-200px' }}>
+        <img src={decorationImg} alt="" className="w-full h-full object-contain transform" />
+      </div>
+
+
           <div className="text-center">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">
               Connexion
@@ -41,7 +57,7 @@ export default () => {
                   Adresse e-mail
                 </label>
                 <input
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
                   name="email"
                   type="email"
                   id="email"
@@ -57,7 +73,7 @@ export default () => {
                   Mot de passe
                 </label>
                 <input
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
                   name="password"
                   type="password"
                   id="password"
@@ -71,18 +87,20 @@ export default () => {
               <div className="text-right mb-6">
                 <Link 
                   to="/auth/forgot" 
-                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                  className="text-sm text-primary-green hover:text-primary-green transition-colors"
                 >
                   Mot de passe oublié ?
                 </Link>
               </div>
 
               <button
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg px-6 py-3 transition-all duration-200 transform hover:scale-[1.02] shadow-md hover:shadow-lg"
-                onClick={login}
-              >
-                Se connecter
-              </button>
+          onClick={login}
+          className="px-4 py-2 rounded-full bg-primary-green text-white text-base w-full"
+        >
+          Se connecter
+        </button>
+
+
             </form>
 
             <div className="relative my-6">
@@ -98,7 +116,7 @@ export default () => {
               <p className="text-sm text-gray-600">
                 Vous n'avez pas encore de compte ?
                 <Link 
-                  className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors" 
+                  className="text-primary-green hover:text-primary-green font-medium transition-colors" 
                   to="/auth/signup"
                 >
                   Créer un compte
@@ -107,15 +125,15 @@ export default () => {
             </div>
           </div>
 
-          <div className="bg-blue-50 border-l-4 border-blue-600 rounded-lg p-4">
+          <div className="bg-blue-50 border-l-4 border-secondary-green rounded-lg p-4">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="h-5 w-5 text-secondary-green" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-primary-green">
                   Accédez aux outils et ressources pour la logistique urbaine durable
                 </p>
               </div>
