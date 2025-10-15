@@ -5,6 +5,7 @@ const MODELNAME = "collectivity";
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
+    description: { type: String, trim: true },
     department: { type: Number, trim: true },
     population: { type: Number, trim: true },
   },
