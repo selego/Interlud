@@ -4,8 +4,8 @@ const MODELNAME = "action";
 
 const Schema = new mongoose.Schema(
   {
-    type : { type: String, enum: ["custom", "charter"], trim: true },
-    charter_reference_id: { type: String, trim: true, required: true },
+    type : { type: String, enum: ["custom", "master"], trim: true },
+    master_reference_id: { type: String, trim: true, required: true },
     name: { type: String, trim: true, required: true },
     collectivity_id: { type: String, trim: true },
     collectivity_name: { type: String, trim: true },
