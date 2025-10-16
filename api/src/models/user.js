@@ -11,6 +11,7 @@ const Schema = new mongoose.Schema(
     role: { type: String, enum: ["user", "admin"], default: "user" },
     password_reset_token: { type: String, default: "" },
     password_reset_expires: { type: Date },
+    collectivities : [{ id : String, name : String }],
   },
   { timestamps: true },
 );
