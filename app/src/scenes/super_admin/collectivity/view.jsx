@@ -3,11 +3,7 @@ import { useState, useEffect } from "react";
 
 export default function View() {
     const {id} = useParams()
-    const [collectivity, setCollectivity] = useState({
-      name: "",
-      date: "",
-      description: ""
-    });
+    const [collectivity, setCollectivity] = useState({ name: "", date: "", description: "" });
 
     const getCollectivity = async () => {
       const data = { id: 1, name: "Collectivité de Paris", date: "2024-03-15", description: "Gestion urbaine et services publics locaux" }

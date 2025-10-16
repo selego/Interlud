@@ -26,7 +26,7 @@ export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, F
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
-  const { user, collectivity } = useStore();
+  const { user } = useStore();
 
   async function handleLogout() {
     try {

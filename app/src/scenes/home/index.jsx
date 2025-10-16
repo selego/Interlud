@@ -8,7 +8,7 @@ const fetchData = async () => {
   
   return {
     collectivite: "Collectivité",
-    synthese: { 
+    synthese: {
       actionsCreees: 3,
       actionsMisesAJour: 12,
       actionsTerminees: 6,
