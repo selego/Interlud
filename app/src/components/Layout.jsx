@@ -81,12 +81,12 @@ export default function Layout({ children }) {
                   linkProps: { to: "/admin/collectivity" },
                   },
                   {
-                  text: "Indicators",
-                  linkProps: { to: "/admin/indicator" },
-                  },
+                    text: "Actions",
+                    linkProps: { to: "/admin/action" },
+                    },
                   {
-                  text: "Actions",
-                  linkProps: { to: "/admin/action" },
+                  text: "Indicateurs",
+                  linkProps: { to: "/admin/indicator" },
                   },
               ],
             },
