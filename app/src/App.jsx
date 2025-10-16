@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/browser"
 import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
 import Action from "@/scenes/action"
+// import Test from "@/scenes/test"
 
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/action/:id" element={<Action />} />
           <Route path="/recherche" element={<div>Page de recherche</div>} />
+          {/* <Route path="/test" element={<Test />} /> */}
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/contact" element={<div>Contact</div>} />
           <Route path="/cgu" element={<div>CGU</div>} />
@@ -48,10 +50,9 @@ const AuthLayout = () => {
   const { user } = useStore()
   if (user) return <Navigate to="/" replace={true} />
   return (
-    <div className="flex flex-col justify-center items-center gap-8 w-screen h-screen">
-      <h1 className="text-3xl font-bold">Boilerplate</h1>
+    <Layout>
       <Outlet />
-    </div>
+    </Layout>
   )
 }
 

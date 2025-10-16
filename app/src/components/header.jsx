@@ -23,7 +23,7 @@ const Header = ({}) => {
     <div className="relative">
       <div className="fixed top-0 left-0 z-20 flex items-center justify-between w-full h-16 px-4 py-4 bg-white border-b md:px-6 md:py-2">
         <h1 className="m-0 text-2xl font-bold md:text-3xl text-primary">
-          <Link to="/">Tifo</Link>
+          <Link to="/">InTerLUD</Link>
         </h1>
         <Menu as="div" className="relative">
           <Menu.Button className="flex items-center gap-x-1 md:gap-x-2">

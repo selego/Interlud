@@ -3,8 +3,6 @@ import { useParams } from "react-router-dom"
 
 // Fonction à remplacer par votre fetch de BDD
 const fetchActionData = async (actionId) => {
-  // Simuler un délai de réseau
-  await new Promise(resolve => setTimeout(resolve, 100))
   
   // Retourner les données hardcodées
   return {
@@ -78,26 +76,25 @@ export default function ActionDetail() {
   const [loading, setLoading] = useState(true)
   const [expandedSections, setExpandedSections] = useState({})
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        const result = await fetchActionData(id)
-        setData(result)
-        
-        // Initialiser les sections expandées
-        const initialExpanded = {}
-        result.sections.forEach(section => {
-          initialExpanded[section.id] = section.expanded
-        })
-        setExpandedSections(initialExpanded)
-      } catch (error) {
-        console.error("Erreur lors du chargement des données:", error)
-      } finally {
-        setLoading(false)
-      }
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const result = await fetchActionData(id)
+      setData(result)
+      
+      const initialExpanded = {}
+      result.sections.forEach(section => {
+        initialExpanded[section.id] = section.expanded
+      })
+      setExpandedSections(initialExpanded)
+    } catch (error) {
+      console.error("Erreur lors du chargement des données:", error)
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadData()
   }, [id])
 
@@ -125,10 +122,10 @@ export default function ActionDetail() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-        <div className="p-6">
+    <div className="flex bg-gray-50 min-h-screen">
+      {/* Sidebar - Static */}
+      <div className="w-80 bg-white border-r border-gray-200 flex-shrink-0">
+        <div className="p-6 top-0">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">{data.nom}</h2>
           
           {data.sections.map((section) => (
@@ -167,7 +164,7 @@ export default function ActionDetail() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         <div className="max-w-5xl mx-auto p-8">
           {/* Header */}
           <div className="mb-8">
