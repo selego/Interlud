@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "@/assets/primary-logo.png";
+import Logo from "@/assets/primary_logo.png";
 import background_element from "@/assets/background_element.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
