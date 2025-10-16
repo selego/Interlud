@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const MODELNAME = "category";
+const MODELNAME = "indicator_category";
 
 const Schema = new mongoose.Schema(
   {
@@ -9,6 +9,8 @@ const Schema = new mongoose.Schema(
     type : { type: String, enum: ["principal", "sub"], trim: true },
     principal_category_id: { type: String, trim: true },
     principal_category_name: { type: String, trim: true },
+    indicator_id: { type: String, trim: true },
+    indicator_name: { type: String, trim: true },
   },
   { timestamps: true },
 );
