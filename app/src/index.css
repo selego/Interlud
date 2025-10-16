@@ -68,6 +68,12 @@
     line-height: 1;
     letter-spacing: 0;
     color: #123314;
+    overscroll-behavior-y: none;
+
+  }
+  
+  html {
+    overscroll-behavior-y: none;
   }
 
   h1 {
@@ -81,6 +87,12 @@
     letter-spacing: 0;
   }
   h3 {
+    font-family: 'Quicksand', sans-serif;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+
+  button {
     font-family: 'Quicksand', sans-serif;
     line-height: 1;
     letter-spacing: 0;

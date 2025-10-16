@@ -164,19 +164,7 @@ export default function Home() {
   ]
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px' , top: '-100px' }} >
-        <img src={decorationImg} alt="" className="w-full h-full object-contain" />
-      </div>
-
-      <div className="absolute bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
-        <img src={decorationImg} alt="" className="w-full h-full object-contain transform rotate-180" />
-      </div>
-
-      <div className="absolute w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-250px' }}>
-        <img src={decorationImg} alt="" className="w-full h-full object-contain transform rotate-180" />
-      </div>
-
+    <div className="min-h-screen">
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-font-primary text-4xl">
