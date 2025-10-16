@@ -53,6 +53,14 @@
 
     --font-space-grostesk: 'Space Grotesk', sans-serif;
   }
+
+  .button-primary {
+    @apply px-4 py-2 rounded-full bg-primary-green text-white text-base
+  }
+
+  .input-primary {
+    @apply pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-full text-sm
+  }
 }
 
 @layer base {
@@ -68,6 +76,12 @@
     line-height: 1;
     letter-spacing: 0;
     color: #123314;
+    overscroll-behavior-y: none;
+
+  }
+  
+  html {
+    overscroll-behavior-y: none;
   }
 
   h1 {
@@ -91,7 +105,6 @@
     line-height: 1;
     letter-spacing: 0;
   }
-  
 
   input,
   textarea,

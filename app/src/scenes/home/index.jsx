@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import background_element from '../../assets/background_element.png'
 
 // Fonction à remplacer par votre fetch de BDD
 const fetchData = async () => {
@@ -159,19 +158,7 @@ export default function Home() {
   ]
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px' , top: '-100px' }} >
-        <img src={background_element} alt="" className="w-full h-full object-contain" />
-      </div>
-
-      <div className="absolute bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
-        <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
-      </div>
-
-      <div className="absolute w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-250px' }}>
-        <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
-      </div>
-
+    <div className="min-h-screen">
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-font-primary text-4xl">
@@ -443,7 +430,7 @@ export default function Home() {
                 placeholder="Rechercher une action..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-secondary-green  bg-deco-background-green rounded-full text-sm  w-96 text-[#768776]"
+                className="pl-10 pr-4 py-2 input-primary text-sm w-96"
               />
               <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

@@ -1,5 +1,6 @@
 import React from "react";
 import Logo from "@/assets/primary_logo.png";
+import background_element from "@/assets/background_element.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
 import useStore from "@/services/store";
@@ -25,7 +26,7 @@ export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, F
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
-  const { user, setUser } = useStore();
+  const { user } = useStore();
 
   async function handleLogout() {
     try {
@@ -73,7 +74,24 @@ export default function Layout({ children }) {
             text: "Contact",
             linkProps: { to: "/contact" },
             },
+            {        text: "Admin",
+              menuLinks: [
+                  {
+                  text: "Collectivités",
+                  linkProps: { to: "/admin/collectivity" },
+                  },
+                  {
+                  text: "Indicators",
+                  linkProps: { to: "/admin/indicator" },
+                  },
+                  {
+                  text: "Actions",
+                  linkProps: { to: "/admin/action" },
+                  },
+              ],
+            },
         ],
+
         quickAccessItems: [
                   {
                     iconId: "fr-icon-account-circle-line",
@@ -113,8 +131,22 @@ export default function Layout({ children }) {
         />
       </div>
 
-      <main className="flex-1 bg-gray-50" id="main">
-        {children}
+      <main className="flex-1 bg-gray-50 relative" id="main">
+        <div className="fixed w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px', top: '-100px' }}>
+          <img src={background_element} alt="" className="w-full h-full object-contain" />
+        </div>
+
+        <div className="fixed bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
+          <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
+        </div>
+
+        <div className="fixed w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-250px' }}>
+          <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
+        </div>
+
+        <div className="relative z-10">
+          {children}
+        </div>
       </main>
 
       <Footer
@@ -125,7 +157,7 @@ export default function Layout({ children }) {
         classes={{
           root: "border-t-2 border-primary shadow-none",
         }}
-        className={"bg-white"}
+        className={"bg-white relative"}
         bottomItems={[
           {
             text: "CGU",

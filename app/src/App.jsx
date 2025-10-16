@@ -7,6 +7,8 @@ import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
 import Action from "@/scenes/action"
 // import Test from "@/scenes/test"
+import SuperAdminAction from "@/scenes/super_admin/action"
+import SuperAdminCollectivity from "@/scenes/super_admin/collectivity"
 
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
@@ -38,6 +40,8 @@ export default function App() {
           <Route path="/politique-de-confidentialite" element={<div>Politique de confidentialité</div>} />
           <Route path="/politique-des-cookies" element={<div>Politique des cookies</div>} />
           <Route path="/mentions-legales" element={<div>Mentions légales</div>} />
+          <Route path="/admin/action/*" element={<SuperAdminAction />} />
+          <Route path="/admin/collectivity/*" element={<SuperAdminCollectivity />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
