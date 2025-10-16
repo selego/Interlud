@@ -81,12 +81,6 @@ export default function ActionDetail() {
       setLoading(true)
       const result = await fetchActionData(id)
       setData(result)
-      
-      const initialExpanded = {}
-      result.sections.forEach(section => {
-        initialExpanded[section.id] = section.expanded
-      })
-      setExpandedSections(initialExpanded)
     } catch (error) {
       console.error("Erreur lors du chargement des données:", error)
     } finally {

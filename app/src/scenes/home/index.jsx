@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import background_element from '../../assets/background_element.png'
 
 // Fonction à remplacer par votre fetch de BDD
 const fetchData = async () => {
@@ -9,7 +8,7 @@ const fetchData = async () => {
   
   return {
     collectivite: "Collectivité",
-    synthese: {
+    synthese: { 
       actionsCreees: 3,
       actionsMisesAJour: 12,
       actionsTerminees: 6,
