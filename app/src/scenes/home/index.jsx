@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import decorationImg from '../../assets/deco.png'
+import background_element from '../../assets/background_element.png'
 
 // Fonction à remplacer par votre fetch de BDD
 const fetchData = async () => {
@@ -86,16 +86,11 @@ const fetchData = async () => {
 }
 
 const getStatutBadgeClass = (statut) => {
-  switch (statut) {
-    case "Terminée":
-      return "bg-primary-green/10 text-primary-green"
-    case "À compléter":
-      return "bg-primary-orange/10 text-primary-orange"
-    case "En attente":
-      return "bg-primary-teal/10 text-primary-teal"
-    default:
-      return "bg-gray-100 text-gray-700"
-  }
+  if (statut === "Terminée") return "bg-primary-green/10 text-primary-green"
+  if (statut === "À compléter") return "bg-primary-orange/10 text-primary-orange"
+  if (statut === "En attente") return "bg-primary-teal/10 text-primary-teal"
+  return "bg-gray-100 text-gray-700"
+
 }
 
 const COLORS = {
@@ -166,15 +161,15 @@ export default function Home() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div className="absolute w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px' , top: '-100px' }} >
-        <img src={decorationImg} alt="" className="w-full h-full object-contain" />
+        <img src={background_element} alt="" className="w-full h-full object-contain" />
       </div>
 
       <div className="absolute bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
-        <img src={decorationImg} alt="" className="w-full h-full object-contain transform rotate-180" />
+        <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
       </div>
 
       <div className="absolute w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-250px' }}>
-        <img src={decorationImg} alt="" className="w-full h-full object-contain transform rotate-180" />
+        <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
       </div>
 
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">

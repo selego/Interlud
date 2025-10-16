@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "@/assets/interlud-plus@2x.png";
+import Logo from "@/assets/primary_logo.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
 import useStore from "@/services/store";
