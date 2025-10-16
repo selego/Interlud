@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const MODELNAME = "action_indicator_value";
+const MODELNAME = "indicator_value";
 
 const Schema = new mongoose.Schema(
   {

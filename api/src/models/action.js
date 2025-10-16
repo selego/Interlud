@@ -4,8 +4,8 @@ const MODELNAME = "action";
 
 const Schema = new mongoose.Schema(
   {
-    type : { type: String, enum: ["custom", "master"], trim: true },
-    master_reference_id: { type: String, trim: true, required: true },
+    type : { type: String, enum: ["custom", "reference"], trim: true },
+    action_reference_id: { type: String, trim: true },
     name: { type: String, trim: true, required: true },
     collectivity_id: { type: String, trim: true },
     collectivity_name: { type: String, trim: true },
@@ -15,14 +15,16 @@ const Schema = new mongoose.Schema(
     step_description: { type: String, trim: true },
     date_start: { type: Date, trim: true },
     date_end: { type: Date, trim: true },
-    costs: { type: String, trim: true },
-    financial_aid: { type: String, trim: true },
+    budget_costs: { type: Number, trim: true },
+    budget_description: { type: String, trim: true },
+    financial_aid: { type: Number, trim: true },
+    financial_aid_description: { type: String, trim: true },
     pilote: { type: String, enum: ["epci", "acteur_economique"], trim: true, required: true },
     pilote_description: { type: String, trim: true },
     partners: { type: String, enum: ["epci", "acteur_economique"], trim: true },
     partners_description: { type: String, trim: true },
     priority: { type: String, enum: ["high", "medium", "low"], trim: true },
-    subsidized_by_program: { type: Boolean, default: false, required: true },
+    is_subsidized_by_program: { type: Boolean, default: false, required: true },
     related_initiatives: { type: String, trim: true },
     comment: { type: String, trim: true },
     attached_documents: [{
