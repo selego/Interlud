@@ -34,6 +34,9 @@ app.get("/", async (req, res) => {
 app.use("/user", require("./controllers/user"));
 app.use("/action", require("./controllers/action"));
 app.use("/collectivity", require("./controllers/collectivity"));
+app.use("/indicator", require("./controllers/indicator"));
+app.use("/indicator_value", require("./controllers/indicator_value"));
+app.use("/indicator_category", require("./controllers/indicator_category"));
 
 setupErrorHandler(app);
 require("./services/passport")(app);
