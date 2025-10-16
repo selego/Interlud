@@ -25,7 +25,7 @@ export default () => {
   if (user) navigate("/")
 
   return (
-      <div className="relative min-h-screen overflow-hidden flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-green-50">        
+      <div className="relative overflow-hidden flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-green-50">        
       <div className="max-w-md w-full space-y-8">
 
         <div className="absolute w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px' , top: '-100px' }} >
