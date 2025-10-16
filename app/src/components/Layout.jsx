@@ -1,6 +1,6 @@
 import React from "react";
-import Logo from "@/assets/interlud-plus@2x.png";
-import decorationImg from "@/assets/deco.png";
+import Logo from "@/assets/primary-logo.png";
+import background_element from "@/assets/background_element.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
 import useStore from "@/services/store";
@@ -133,15 +133,15 @@ export default function Layout({ children }) {
 
       <main className="flex-1 bg-gray-50 relative" id="main">
         <div className="fixed w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px', top: '-100px' }}>
-          <img src={decorationImg} alt="" className="w-full h-full object-contain" />
+          <img src={background_element} alt="" className="w-full h-full object-contain" />
         </div>
 
         <div className="fixed bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
-          <img src={decorationImg} alt="" className="w-full h-full object-contain transform rotate-180" />
+          <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
         </div>
 
         <div className="fixed w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-250px' }}>
-          <img src={decorationImg} alt="" className="w-full h-full object-contain transform rotate-180" />
+          <img src={background_element} alt="" className="w-full h-full object-contain transform rotate-180" />
         </div>
 
         <div className="relative z-10">
