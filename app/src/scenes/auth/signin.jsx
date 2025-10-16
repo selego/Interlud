@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom"
 import store from "@/services/store"
 import toast from "react-hot-toast"
 import api from "@/services/api"
-import background_element from '../../assets/background_element.png'
 
 
 export default () => {
@@ -25,20 +24,8 @@ export default () => {
   if (user) navigate("/")
 
   return (
-      <div className="relative overflow-hidden flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-green-50">        
+      <div className="relative overflow-hidden flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">        
       <div className="max-w-md w-full space-y-8">
-
-        <div className="absolute w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px' , top: '-100px' }} >
-        <img src={background_element} alt="" className="w-full h-full object-contain" />
-      </div>
-
-      <div className="absolute bottom-[150px] w-1/3 h-1/3 pointer-events-none z-0" style={{ left: '-200px' }}>
-        <img src={background_element} alt="" className="w-full h-full object-contain transform" />
-      </div>
-
-      <div className="absolute w-1/3 h-1/3 right-[180px] pointer-events-none z-0" style={{ bottom: '-200px' }}>
-        <img src={background_element} alt="" className="w-full h-full object-contain transform" />
-      </div>
 
 
           <div className="text-center">
