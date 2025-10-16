@@ -157,7 +157,7 @@ export default function Layout({ children }) {
         classes={{
           root: "border-t-2 border-primary shadow-none",
         }}
-        className={"bg-white relative z-20"}
+        className={"bg-white relative"}
         bottomItems={[
           {
             text: "CGU",

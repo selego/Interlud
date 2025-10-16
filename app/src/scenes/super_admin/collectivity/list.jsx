@@ -30,7 +30,7 @@ export default function List() {
         <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2 rounded-full bg-primary-green text-white text-base"
+          className="button-primary"
         >
           Ajouter
         </button>
@@ -90,10 +90,7 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
         </div>
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={createCollectivity}
-            className="px-6 py-2.5 rounded-full bg-primary-green text-white font-medium hover:bg-green-700 transition-colors shadow-sm"
-          >
+          <button onClick={createCollectivity} className="button-primary">
             Créer
           </button>
         </div>

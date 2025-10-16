@@ -36,7 +36,7 @@ export default function View() {
                   placeholder="Nom de la collectivité"
                   value={collectivity.name}
                   onChange={(e) => setCollectivity({...collectivity, name: e.target.value})}
-                  className="w-full pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-full text-sm"
+                  className="w-full input-primary"
                 />
               </div>
               
@@ -49,7 +49,7 @@ export default function View() {
                   name="date"
                   value={collectivity.date}
                   onChange={(e) => setCollectivity({...collectivity, date: e.target.value})}
-                  className="w-full pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-full text-sm"
+                  className="w-full input-primary"  
                 />
               </div>
             </div>
@@ -63,15 +63,12 @@ export default function View() {
                 value={collectivity.description}
                 onChange={(e) => setCollectivity({...collectivity, description: e.target.value})}
                 rows="4"
-                className="w-full pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-lg text-sm"
+                className="w-full input-primary rounded-lg"
               />
             </div>
 
             <div className="flex justify-end pt-4">
-              <button
-                onClick={handleSave}
-                className="px-6 py-3 rounded-full bg-primary-green hover:bg-green-700 text-white text-base font-medium transition-colors"
-              >
+              <button onClick={handleSave} className="button-primary">
                 Enregistrer
               </button>
             </div>

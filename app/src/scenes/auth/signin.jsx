@@ -95,7 +95,7 @@ export default () => {
 
               <button
           onClick={login}
-          className="px-4 py-2 rounded-full bg-primary-green text-white text-base w-full"
+          className="button-primary w-full"
         >
           Se connecter
         </button>
