@@ -8,8 +8,8 @@ const Schema = new mongoose.Schema(
     description: { type: String, trim: true },
     value_unit: { type: String, trim: true },
     value_type: { type: String, trim: true },
-    category: { type: String, trim: true },
-    sub_category: { type: String, trim: true },
+    category_id: { type: String, trim: true },
+    category_name: { type: String, trim: true },
   },
   { timestamps: true },
 );
