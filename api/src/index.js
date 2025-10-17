@@ -32,6 +32,7 @@ app.get("/", async (req, res) => {
 });
 
 app.use("/user", require("./controllers/user"));
+app.use("/collectivity", require("./controllers/collectivity"));
 
 setupErrorHandler(app);
 require("./services/passport")(app);
