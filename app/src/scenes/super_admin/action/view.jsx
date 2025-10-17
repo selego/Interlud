@@ -1,0 +1,376 @@
+import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import api from "@/services/api"
+import toast from "react-hot-toast"
+
+export default function View() {
+    const {id} = useParams()
+    const navigate = useNavigate()
+    const [referenceAction, setReferenceAction] = useState([])
+    const [action, setAction] = useState({
+      type: "custom",
+      action_reference_id: "",
+      action_reference_name: "",
+      name: "",
+      description: "",
+      status: "no_status",
+      blocked_reason: "",
+      step_description: "",
+      date_start: "",
+      date_end: "",
+      budget_costs: "",
+      budget_description: "",
+      financial_aid: "",
+      financial_aid_description: "",
+      pilote: "",
+      pilote_description: "",
+      partners: "",
+      partners_description: "",
+      priority: "",
+      is_subsidized_by_program: false,
+      related_initiatives: "",
+      comment: ""
+    });
+
+    const fetchReferenceAction = async () => {
+      try {
+        const { ok, data, code } = await api.post(`/action/search`, {type: "reference"} );
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+        setReferenceAction(data)
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    }
+
+    useEffect(() => {
+      fetchReferenceAction()
+    }, [id])
+
+    const getAction = async () => {
+      try {
+        const { ok, data, code } = await api.get(`/action/${id}`);
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+        setAction(data)
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    };
+
+    const handleDelete = async () => {
+      try {
+        if (!confirm("Are you sure you want to delete this action?")) return
+        const { ok, data, code } = await api.delete(`/action/${id}`);
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+        toast.success("Action supprimée !")
+        navigate("/admin/action")
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    }
+
+    const handleSave = async () => {
+      try {
+        const { ok, data, code } = await api.put(`/action/${id}`, action);
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+        toast.success("Action sauvegardée !")
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    }
+
+    useEffect(() => {
+        getAction()
+    }, [id])
+
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-8">Détails de l'action</h1>
+      
+      <div className="flex justify-center">
+        <div className="w-full max-w-4xl">
+          <div className="space-y-6">
+            
+            {/* Nom, Statut et Priorité */}
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Nom de l'action</label>
+                <input
+                  type="text"
+                  value={action.name || ""}
+                  onChange={(e) => setAction({...action, name: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Statut</label>
+                <select
+                  value={action.status}
+                  onChange={(e) => setAction({...action, status: e.target.value})}
+                  className="w-full input-primary"
+                >
+                  <option value="no_status">Pas de statut</option>
+                  <option value="upcoming">À venir</option>
+                  <option value="in_progress">En cours</option>
+                  <option value="blocked">Bloqué</option>
+                  <option value="completed">Terminé</option>
+                </select>
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Priorité</label>
+                <select
+                  value={action.priority || ""}
+                  onChange={(e) => setAction({...action, priority: e.target.value})}
+                  className="w-full input-primary"
+                >
+                  <option value="">Sélectionner</option>
+                  <option value="high">Haute</option>
+                  <option value="medium">Moyenne</option>
+                  <option value="low">Basse</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Type et Référence */}
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Type</label>
+                <select
+                  value={action.type}
+                  onChange={(e) => setAction({...action, type: e.target.value})}
+                  className="w-full input-primary"
+                >
+                  <option value="custom">Custom</option>
+                  <option value="reference">Reference</option>
+                </select>
+              </div>
+              
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
+                <select
+                  value={action.action_reference_id || ""}
+                  onChange={(e) => {
+                    const selectedAction = referenceAction.find(ref => ref._id === e.target.value);
+                    setAction({ ...action, action_reference_id: e.target.value, action_reference_name: selectedAction.name });
+                  }}
+                  className="w-full input-primary"
+                >
+                  <option value="">Sélectionner</option>
+                  {referenceAction.map((refAction) => (
+                    <option key={refAction._id} value={refAction._id}>{refAction.name}</option>
+                  ))}
+                </select>
+              </div>
+
+
+            </div>
+
+            <div className="flex-1 flex items-end pb-1">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={action.is_subsidized_by_program || false}
+                    onChange={(e) => setAction({...action, is_subsidized_by_program: e.target.checked})}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-semibold">Subventionné par le programme</span>
+                </label>
+              </div>
+
+            {action.status === "blocked" && (
+              <div>
+                <label className="block text-sm font-semibold mb-2">Raison de blocage</label>
+                <input
+                  type="text"
+                  value={action.blocked_reason || ""}
+                  onChange={(e) => setAction({...action, blocked_reason: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Date de début</label>
+                <input
+                  type="date"
+                  value={action.date_start ? new Date(action.date_start).toISOString().split('T')[0] : ""}
+                  onChange={(e) => setAction({...action, date_start: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Date de fin</label>
+                <input
+                  type="date"
+                  value={action.date_end ? new Date(action.date_end).toISOString().split('T')[0] : ""}
+                  onChange={(e) => setAction({...action, date_end: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+            </div>
+
+            {/* Pilote */}
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Pilote</label>
+                <select
+                  value={action.pilote || ""}
+                  onChange={(e) => setAction({...action, pilote: e.target.value})}
+                  className="w-full input-primary"
+                >
+                  <option value="">Sélectionner</option>
+                  <option value="epci">EPCI</option>
+                  <option value="acteur_economique">Acteur économique</option>
+                </select>
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Description du pilote</label>
+                <input
+                  type="text"
+                  value={action.pilote_description || ""}
+                  onChange={(e) => setAction({...action, pilote_description: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Partenaires</label>
+                <select
+                  value={action.partners || ""}
+                  onChange={(e) => setAction({...action, partners: e.target.value})}
+                  className="w-full input-primary"
+                >
+                  <option value="">Sélectionner</option>
+                  <option value="epci">EPCI</option>
+                  <option value="acteur_economique">Acteur économique</option>
+                </select>
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
+                <input
+                  type="text"
+                  value={action.partners_description || ""}
+                  onChange={(e) => setAction({...action, partners_description: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+            </div>
+
+            {/* Budget */}
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Coûts budget</label>
+                <input
+                  type="number"
+                  value={action.budget_costs || ""}
+                  onChange={(e) => setAction({...action, budget_costs: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Description du budget</label>
+                <input
+                  type="text"
+                  value={action.budget_description || ""}
+                  onChange={(e) => setAction({...action, budget_description: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+            </div>
+
+            {/* Aide financière */}
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Aide financière</label>
+                <input
+                  type="number"
+                  value={action.financial_aid || ""}
+                  onChange={(e) => setAction({...action, financial_aid: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Description aide financière</label>
+                <input
+                  type="text"
+                  value={action.financial_aid_description || ""}
+                  onChange={(e) => setAction({...action, financial_aid_description: e.target.value})}
+                  className="w-full input-primary"
+                />
+              </div>
+            </div>
+
+            {/* Initiatives liées */}
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Initiatives liées</label>
+                  <textarea
+                    rows="4"
+                    value={action.related_initiatives || ""}
+                    onChange={(e) => setAction({...action, related_initiatives: e.target.value})}
+                    className="w-full input-primary rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Description des étapes</label>
+                <textarea
+                  rows="4"
+                  value={action.step_description || ""}
+                  onChange={(e) => setAction({...action, step_description: e.target.value})}
+                  className="w-full input-primary rounded-lg"
+                />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Description</label>
+              <textarea
+                value={action.description || ""}
+                onChange={(e) => setAction({...action, description: e.target.value})}
+                rows="4"
+                className="w-full input-primary rounded-lg"
+              />
+            </div>
+
+            {/* Commentaire */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Commentaire</label>
+              <textarea
+                value={action.comment || ""}
+                onChange={(e) => setAction({...action, comment: e.target.value})}
+                rows="4"
+                className="w-full input-primary rounded-lg"
+              />
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="flex justify-end pt-4 gap-4">
+              <button 
+                onClick={handleDelete} 
+                className="px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors font-medium"
+              >
+                Supprimer
+              </button>
+              <button onClick={handleSave} className="button-primary">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
