@@ -5,16 +5,6 @@ const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 
-router.get("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const indicators = await Indicator.find({});
-    return res.status(200).send({ ok: true, data: indicators });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicator = await Indicator.findById(req.params.id);
