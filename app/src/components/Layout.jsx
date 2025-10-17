@@ -131,7 +131,7 @@ export default function Layout({ children }) {
         />
       </div>
 
-      <main className="flex-1 bg-gray-50 relative" id="main">
+      <main className="flex-1 bg-[#F9FFFC]   relative" id="main">
         <div className="fixed w-1/2 h-3/5 pointer-events-none z-0" style={{ right: '-200px', top: '-100px' }}>
           <img src={background_element} alt="" className="w-full h-full object-contain" />
         </div>
