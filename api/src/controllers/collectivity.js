@@ -5,16 +5,6 @@ const Collectivity = require("../models/collectivity");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 
-router.get("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const collectivities = await Collectivity.find({});
-    return res.status(200).send({ ok: true, data: collectivities });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const collectivity = await Collectivity.findById(req.params.id);
