@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Modal from "@/components/modal"
+import api from "@/services/api"
+import toast from "react-hot-toast"
 
 export default function List() {
   const navigate = useNavigate()
   const [collectivities, setCollectivities] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const fetchCollectivities = () => {
-    setCollectivities([
-      { id: 1, name: "Collectivité de Paris", date: "2024-03-15", description: "Gestion urbaine et services publics locaux" },
-      { id: 2, name: "Métropole de Lyon", date: "2024-02-28", description: "Transition écologique et développement durable" },
-      { id: 3, name: "Communauté de Marseille", date: "2024-01-20", description: "Innovation maritime et développement portuaire" },
-      { id: 4, name: "Ville de Toulouse", date: "2024-04-10", description: "Dynamisme aéronautique et qualité de vie" },
-      { id: 5, name: "Région de Bordeaux", date: "2023-12-05", description: "Préservation du patrimoine culturel" },
-      { id: 6, name: "Communauté de Nantes", date: "2024-05-22", description: "Urbanisme participatif" },
-      { id: 7, name: "Collectivité de Strasbourg", date: "2024-03-08", description: "Coopération transfrontalière" },
-      { id: 8, name: "Métropole de Lille", date: "2024-02-14", description: "Territoire en transformation" }
-    ])
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data } = await api.post("/collectivity/search")
+      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      setCollectivities(data)
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue")
+    }
   };
 
   useEffect(() => {
@@ -27,7 +26,7 @@ export default function List() {
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
+          <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
         <button
           onClick={() => setIsModalOpen(true)}
           className="button-primary"
@@ -40,16 +39,18 @@ export default function List() {
         <thead className="bg-gray-100">
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Population</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Department</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {collectivities.map((collectivity) => (
-            <tr key={collectivity.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/collectivity/${collectivity.id}`)}>
+            <tr key={collectivity._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/collectivity/${collectivity._id}`)}>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{collectivity.name}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.date}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{collectivity.description}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.population}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.department}</td>
             </tr>
           ))}
         </tbody>
@@ -64,9 +65,14 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate()
     const [name, setName] = useState("")
 
-    const createCollectivity = () => {
-        console.log("Creating collectivity", name)
-        navigate(`/admin/collectivity/1`)
+    const createCollectivity = async () => {
+      try {
+        const { ok, data } = await api.post("/collectivity/", { name })
+        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        navigate(`/admin/collectivity/${data._id}`)
+      } catch (error) {
+        toast.error(data.code || "Une erreur est survenue")
+      }
     }
 
   return (
