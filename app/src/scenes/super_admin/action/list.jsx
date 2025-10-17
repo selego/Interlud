@@ -69,7 +69,7 @@ const AddActionModal = ({ isOpen, onClose }) => {
 
     const createAction = async () => {
       try {
-        const { ok, data } = await api.post("/action/", { name })
+        const { ok, data } = await api.post("/action", { name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
         navigate(`/admin/action/${data._id}`)
       } catch (error) {
