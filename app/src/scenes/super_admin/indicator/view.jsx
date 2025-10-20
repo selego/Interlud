@@ -111,7 +111,18 @@ export default function View() {
 function InfoTab({ indicator, setIndicator }) {
   const [principalCategories, setPrincipalCategories] = useState([])
   const [subCategories, setSubCategories] = useState([])
+  const [actions, setActions] = useState([])
   const navigate = useNavigate()
+
+  const fetchActions = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/action/search`, {});
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      setActions(data)
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue")
+    }
+  }
 
   const fetchPrincipalCategories = async () => {
     try {
@@ -158,6 +169,7 @@ function InfoTab({ indicator, setIndicator }) {
   useEffect(() => {
     fetchPrincipalCategories()
     fetchSubCategories()
+    fetchActions()
   }, [])
 
   return (
@@ -217,6 +229,8 @@ function InfoTab({ indicator, setIndicator }) {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+
         <div>
           <label className="block text-sm font-medium mb-2">Sous-catégorie</label>
           <select
@@ -234,6 +248,24 @@ function InfoTab({ indicator, setIndicator }) {
           </select>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium mb-2">Action</label>
+          <select
+            value={indicator.action_id || ""}
+            onChange={(e) => {
+              const selectedAction = actions.find(action => action._id === e.target.value);
+              setIndicator({ ...indicator, action_id: e.target.value, action_name: selectedAction?.name });
+            }}
+            className="w-full input-primary"
+          >
+            <option value="">Sélectionner</option>
+            {actions.map((action) => (
+              <option key={action._id} value={action._id}>{action.name}</option>
+            ))}
+          </select>
+        </div>
+
+        </div>
         <div>
           <label className="block text-sm font-medium mb-2">Description</label>
           <textarea
