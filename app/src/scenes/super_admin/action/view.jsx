@@ -7,6 +7,7 @@ export default function View() {
     const {id} = useParams()
     const navigate = useNavigate()
     const [referenceAction, setReferenceAction] = useState([])
+    const [collectivities, setCollectivities] = useState([])
     const [action, setAction] = useState({
       type: "custom",
       action_reference_id: "",
@@ -32,6 +33,17 @@ export default function View() {
       comment: ""
     });
 
+
+    const fetchCollectivities = async () => {
+      try {
+        const { ok, data, code } = await api.post(`/collectivity/search`, {});
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+        setCollectivities(data)
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    }
+
     const fetchReferenceAction = async () => {
       try {
         const { ok, data, code } = await api.post(`/action/search`, {type: "reference"} );
@@ -41,11 +53,6 @@ export default function View() {
         toast.error(error || "Une erreur est survenue")
       }
     }
-
-    useEffect(() => {
-      fetchReferenceAction()
-    }, [id])
-
     const getAction = async () => {
       try {
         const { ok, data, code } = await api.get(`/action/${id}`);
@@ -80,6 +87,8 @@ export default function View() {
 
     useEffect(() => {
         getAction()
+        fetchCollectivities()
+        fetchReferenceAction()
     }, [id])
 
   return (
@@ -177,6 +186,22 @@ export default function View() {
                   <span className="text-sm font-semibold">Subventionné par le programme</span>
                 </label>
               </div>
+
+            <div className="flex gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold mb-2">Collectivités</label>
+                <select
+                  value={action.collectivity_id || ""}
+                  onChange={(e) => setAction({...action, collectivity_id: e.target.value, collectivity_name: collectivities.find(c => c._id === e.target.value)?.name})}
+                  className="w-full input-primary"
+                >
+                  <option value="">Sélectionner</option>
+                  {collectivities.map((collectivity) => (
+                    <option key={collectivity._id} value={collectivity._id}>{collectivity.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             {action.status === "blocked" && (
               <div>
