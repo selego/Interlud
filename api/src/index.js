@@ -34,6 +34,8 @@ app.get("/", async (req, res) => {
 app.use("/user", require("./controllers/user"));
 app.use("/action", require("./controllers/action"));
 app.use("/collectivity", require("./controllers/collectivity"));
+// app.use("/excel", require("./controllers/excel"));
+app.use("/user_action_right", require("./controllers/user_action_right"));
 
 setupErrorHandler(app);
 require("./services/passport")(app);

@@ -215,7 +215,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
     const total = await UserObject.countDocuments(query);
 
-    return res.status(200).send({ ok: true, data: { users, total } });
+    return res.status(200).send({ ok: true, data: users,  total : total });
   } catch (error) {
     capture(error);
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
@@ -273,6 +273,22 @@ router.delete("/:id", passport.authenticate("admin", { session: false }), async 
   } catch (error) {
     capture(error);
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+  }
+});
+
+
+router.post("/reset_password/:id", passport.authenticate(["admin"], { session: false }), async (req, res) => {
+  try {
+    if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
+    if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
+    const obj = await UserObject.findById(req.params.id);
+    if (!obj) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    obj.set({ password: req.body.newPassword });
+    await obj.save();
+    return res.status(200).send({ ok: true, user: obj });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
   }
 });
 
