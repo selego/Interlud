@@ -7,11 +7,13 @@ const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
     email: { type: String, required: true, unique: true, trim: true },
-    password: String,
+    password: { type: String, default: "Interlud2025" },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     password_reset_token: { type: String, default: "" },
     password_reset_expires: { type: Date },
     collectivities : [{ id : String, name : String }],
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
+
   },
   { timestamps: true },
 );

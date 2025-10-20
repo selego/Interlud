@@ -6,10 +6,10 @@ import * as Sentry from "@sentry/browser"
 import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
 import Action from "@/scenes/action"
-// import Test from "@/scenes/test"
+import Test from "@/scenes/test"
 import SuperAdminAction from "@/scenes/super_admin/action"
 import SuperAdminCollectivity from "@/scenes/super_admin/collectivity"
-
+import AdminUsers from "@/scenes/super_admin/users"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
@@ -31,9 +31,10 @@ export default function App() {
         </Route>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/action/:id" element={<Action />} />
+          <Route path="/action/:id/*" element={<Action />} />
+          <Route path="/admin/users/*" element={<AdminUsers />} />
           <Route path="/recherche" element={<div>Page de recherche</div>} />
-          {/* <Route path="/test" element={<Test />} /> */}
+          <Route path="/test" element={<Test />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/contact" element={<div>Contact</div>} />
           <Route path="/cgu" element={<div>CGU</div>} />
