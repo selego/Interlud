@@ -1,0 +1,176 @@
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import api from "@/services/api";
+import toast from "react-hot-toast";
+
+export default function Completion({ action }) {
+  const { id } = useParams();
+  const [activeTab, setActiveTab] = useState("init");
+
+  if (!action) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-lg text-gray-600">Chargement...</div>
+    </div>
+  );
+
+  return (
+    <div className="p-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
+        <p className="text-gray-600 mt-1">Complétion des indicateurs</p>
+      </div>
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all ${
+            activeTab === "init"  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab("init")}
+        >
+          Initial
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all ${
+            activeTab === "ref"   ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600" }`}
+          onClick={() => setActiveTab("ref")}
+        >
+          Référence
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all ${
+            activeTab === "prev" ? "text-green-600 border-b-2 border-green-600" : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab("prev")}
+        >
+          Prévisionnel
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all ${
+            activeTab === "expost"  ? "text-green-600 border-b-2 border-green-600" : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab("expost")}
+        >
+          Ex-post
+        </button>
+      </div>
+
+      {activeTab === "init" && <SituationTab actionId={id} situation="init" />}
+      {activeTab === "ref" && <SituationTab actionId={id} situation="ref" />}
+      {activeTab === "prev" && <SituationTab actionId={id} situation="prev" />}
+      {activeTab === "expost" && <SituationTab actionId={id} situation="expost" />}
+    </div>
+  );
+}
+
+function SituationTab({ actionId, situation }) {
+  const [values, setValues] = useState([]);
+
+  const fetchIndicatorsValue = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: actionId, situation: situation });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setValues(data);
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const handleSave = async (value) => {
+    try {
+      const { ok, code } = await api.put(`/indicator_value/${value._id}`, value);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Valeurs enregistrées");
+      await fetchIndicatorsValue();
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  }
+
+  const situationLabels = {
+    init: "Initial",
+    ref: "Référence",
+    prev: "Prévisionnel",
+    expost: "Ex-post"
+  };
+
+  useEffect(() => {
+    fetchIndicatorsValue();
+  }, [actionId, situation]);
+
+  if (values.length === 0) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-lg text-gray-600">Aucune valeur trouvée</div>
+    </div>
+  );
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900">Situation : {situationLabels[situation]}</h2>
+        <p className="text-sm text-gray-600 mt-1">Renseigner les valeurs des indicateurs</p>
+      </div>
+        <div className="space-y-6">
+          {values.map((value) => {
+            return (
+              <div key={value._id} className="border border-gray-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">{value.indicator_name}</h3>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valeur</label>
+                    <input
+                      type="number"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      value={value.value || ""}
+                      onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, value: e.target.value } : v))}
+                      placeholder="Entrer la valeur"
+                    />  
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Année</label>
+                    <input
+                      type="number"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      value={value.year || ""}
+                      onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, year: e.target.value } : v))}
+                      placeholder="2024"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Source</label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      value={value.source || ""}
+                      onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, source: e.target.value } : v))}
+                      placeholder="Source des données"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Commentaire</label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      value={value.comment || ""}
+                      onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, comment: e.target.value } : v))}
+                      placeholder="Commentaire optionnel"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+                    onClick={() => handleSave(value)}
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+    </div>
+  );
+}

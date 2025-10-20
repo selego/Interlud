@@ -32,35 +32,35 @@ const fetchData = async () => {
     },
     actions: [
       {
-        id: 1,
+        id: "68f6453bbfdfb486bd415c5d",
         nom: "Décarbonnation du fret routier",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 66,
         statut: "À compléter",
       },
       {
-        id: 2,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Aménagement d'espace vert",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 100,
         statut: "Terminée",
       },
       {
-        id: 3,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Décarbonnation du fret maritime...",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 100,
         statut: "Terminée",
       },
       {
-        id: 4,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Remplacement des chauffage...",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 66,
         statut: "En attente",
       },
       {
-        id: 5,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Rénovation des écoles et des...",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 66,
@@ -459,7 +459,7 @@ export default function Home() {
               key={action.id} 
               className="bg-white rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer"
               style={{ boxShadow: '0 0 17px 0 rgba(10, 54, 65, 0.12)' }}
-              onClick={() => navigate(`/action/${action.id}`)}
+              onClick={() => navigate(`/action/${action.id}/dashboard`)}
             >
               <div className="mb-3">
                 <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.statut)}`}>

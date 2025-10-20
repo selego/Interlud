@@ -31,7 +31,8 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 router.post("/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     let query = {};
-
+    
+    if (req.body._id) query._id = req.body._id;
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Indicator.countDocuments(query);

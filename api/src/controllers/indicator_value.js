@@ -33,6 +33,8 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
     let query = {};
 
     if (req.body.indicator_id) { query.indicator_id = req.body.indicator_id; }
+    if (req.body.action_id) { query.action_id = req.body.action_id; }
+    if (req.body.situation) { query.situation = req.body.situation; }
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await IndicatorValue.countDocuments(query);
@@ -46,9 +48,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const indicatorValue = await IndicatorValue.create( req.body );
-
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
