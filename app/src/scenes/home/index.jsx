@@ -173,7 +173,7 @@ export default function Home() {
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-font-primary text-4xl">
-            Dashboard de <span className="font-bold">[{data.collectivite}]</span>
+            Dashboard de <span className="font-bold text-primary-green">{[data.collectivite]}</span>
           </h1>
           <p className="text-base mt-1">Ce tableau de bord est personnel</p>
         </div>

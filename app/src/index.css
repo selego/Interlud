@@ -75,7 +75,7 @@
 
   body {
     @apply text-[#123314];
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'GOTHAM', sans-serif;
     font-weight: 400;
     font-size: 14px;
     line-height: 1;
@@ -90,23 +90,23 @@
   }
 
   h1 {
-    font-family: 'Quicksand', sans-serif;
+    font-family: 'GOTHAM', sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
   h2 {
-    font-family: 'Quicksand', sans-serif;
+    font-family: 'GOTHAM', sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
   h3 {
-    font-family: 'Quicksand', sans-serif;
+    font-family: 'GOTHAM', sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
 
   button {
-    font-family: 'Quicksand', sans-serif;
+    font-family: 'GOTHAM', sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }

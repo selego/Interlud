@@ -101,36 +101,44 @@ export default function Layout({ children }) {
         ],
 
         quickAccessItems: [
-                  {
-                    iconId: "fr-icon-account-circle-line",
-                    linkProps: {
-                      to: "#",
-                    },
-                    text: user?.name || "Mon compte",
-                    buttonProps: {
-                      onClick: (e) => {
-                        e.preventDefault();
-                      },
-                    },
+          {
+            iconId: "fr-icon-leaf-line",
+            linkProps: {
+              to: "/collectivites",
+            },
+            text: "Collectivités",
+          },
+          {
+            iconId: "fr-icon-question-line",
+            linkProps: {
+              to: "/aide",
+            },
+            text: "Aide",
+          },
+          {
+            iconId: "fr-icon-account-circle-line",
+            text: user?.name || "Mon compte",
+            menuItems: [
+              {
+                iconId: "fr-icon-settings-5-line",
+                linkProps: {
+                  to: "/parametres",
+                },
+                text: "Paramètres",
+              },
+              {
+                iconId: "fr-icon-logout-box-r-line",
+                text: "Se déconnecter",
+                buttonProps: {
+                  onClick: (e) => {
+                    e.preventDefault();
+                    handleLogout();
                   },
-                  {
-                    iconId: "fr-icon-settings-5-line",
-                    linkProps: {
-                      to: "/parametres",
-                    },
-                    text: "Paramètres",
-                  },
-                  {
-                    iconId: "fr-icon-logout-box-r-line",
-                    text: "Se déconnecter",
-                    buttonProps: {
-                      onClick: (e) => {
-                        e.preventDefault();
-                        handleLogout();
-                      },
-                    },
-                  },
-                ]
+                },
+              },
+            ],
+          },
+        ]
           })}
         />
       </div>
