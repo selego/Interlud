@@ -3,12 +3,11 @@ import Logo from "@/assets/primary_logo.png";
 import background_element from "@/assets/background_element.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
 import { Header } from "@codegouvfr/react-dsfr/Header";
-
 import useStore from "@/services/store";
+import CustomHeader from "./CustomHeader";
 import { createConsentManagement } from "@codegouvfr/react-dsfr/consentManagement";
 import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
-import CustomHeader from "./CustomHeader";
 
 export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, FooterPersonalDataPolicyItem, useConsent } = createConsentManagement({
     finalityDescription: {
@@ -45,7 +44,10 @@ export default function Layout({ children }) {
       <div className="relative z-50">
         <CustomHeader
         brandTop={
-            <>République Française</>
+            <>
+            République <br />
+            Française
+            </>
         }
         homeLinkProps={{
             to: "/",
@@ -58,6 +60,7 @@ export default function Layout({ children }) {
             </span>
             </>
         }
+
         collectivityInfo={collectivity?._id}
         collectivities={user?.collectivities || []}
 
@@ -67,8 +70,15 @@ export default function Layout({ children }) {
             text: "Accueil",
             linkProps: { to: "/" },
             },
-            user.role === "admin" && {
-              text: "Admin",
+            {
+            text: "À propos",
+            linkProps: { to: "/about" },
+            },
+            {
+            text: "Contact",
+            linkProps: { to: "/contact" },
+            },
+            {        text: "Admin",
               menuLinks: [
                   {
                   text: "Collectivités",
@@ -91,14 +101,6 @@ export default function Layout({ children }) {
         ],
 
         quickAccessItems: [
-                {
-                  iconId: "fr-icon-settings-5-line",
-                  linkProps: {
-                    to: "/aides",
-                  },
-                  text: "Aide",
-                },
-
                   {
                     iconId: "fr-icon-account-circle-line",
                     linkProps: {
@@ -111,7 +113,13 @@ export default function Layout({ children }) {
                       },
                     },
                   },
-
+                  {
+                    iconId: "fr-icon-settings-5-line",
+                    linkProps: {
+                      to: "/parametres",
+                    },
+                    text: "Paramètres",
+                  },
                   {
                     iconId: "fr-icon-logout-box-r-line",
                     text: "Se déconnecter",
@@ -124,10 +132,6 @@ export default function Layout({ children }) {
                   },
                 ]
           })}
-        classes={{
-            logo: "py-0",
-            operator: "py-0",
-        }}
         />
       </div>
 
@@ -159,7 +163,7 @@ export default function Layout({ children }) {
         }
         homeLinkProps={{
           to: "/",
-          title: "Accueil - InTerLUD",
+          title: `Accueil - InTerLUD`,
         }}
         accessibility="non compliant"
         accessibilityLinkProps={{ href: "/accessibilite" }}
