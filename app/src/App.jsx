@@ -11,6 +11,7 @@ import SuperAdminAction from "@/scenes/super_admin/action"
 import SuperAdminCollectivity from "@/scenes/super_admin/collectivity"
 import SuperAdminIndicator from "@/scenes/super_admin/indicator"
 
+import AdminUsers from "@/scenes/super_admin/users"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
@@ -33,6 +34,7 @@ export default function App() {
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/action/:id/*" element={<Action />} />
+          <Route path="/admin/users/*" element={<AdminUsers />} />
           <Route path="/recherche" element={<div>Page de recherche</div>} />
           {/* <Route path="/test" element={<Test />} /> */}
           <Route path="/a-propos" element={<div>À propos</div>} />

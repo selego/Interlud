@@ -88,6 +88,10 @@ export default function Layout({ children }) {
                   text: "Indicateurs",
                   linkProps: { to: "/admin/indicator" },
                   },
+                  {
+                    text: "Utilisateurs",
+                    linkProps: { to: "/admin/users" },
+                  },
               ],
             },
         ],

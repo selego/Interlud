@@ -1,0 +1,646 @@
+// app/src/scenes/super_admin/users/view.jsx
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff } from "react-icons/fi";
+
+import Modal from "@/components/modal";
+import api from "@/services/api";
+
+export default function View() {
+  const { id } = useParams();
+  const [user, setUser] = useState();
+  const [activeTab, setActiveTab] = useState("info");
+
+  const getUser = async () => {
+    try {
+      const { data, code, ok } = await api.get(`/user/${id}`);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+    } catch (e) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  useEffect(() => {
+    getUser();
+  }, [id]);
+
+  if (!user) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-lg text-gray-600">Chargement...</div>
+    </div>
+  );
+
+  return (
+    <div className="w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+          activeTab === "info"  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab("info")}
+        >
+          <FiUser size={16} />
+          Informations
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+          activeTab === "rights"  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600" }`}
+          onClick={() => setActiveTab("rights")}
+        >
+          <FiShield size={16} />
+          Droits d'action
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+          activeTab === "history"  ? "text-green-600 border-b-2 border-green-600"   : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab("history")}
+        >
+          <FiClock size={16} />
+          Historique actions
+        </button>
+      </div>
+      {activeTab === "info" && (<UserInfoTab user={user} setUser={setUser} />)}
+      {activeTab === "rights" && (<UserActionRightsSection user={user} />)}
+      {activeTab === "history" && (<UserHistoryTab user={user} />)}
+    </div>
+  );
+}
+
+function UserInfoTab({ user, setUser }) {
+  const navigate = useNavigate();
+  const [values, setValues] = useState({ name:  user?.name || "", email: user?.email ||  "", role: user.role || "", status: user.status || "" });
+  const [collectivities, setCollectivities] = useState([]);
+  const [selectedCollectivityId, setSelectedCollectivityId] = useState("");
+
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data, code } = await api.post("/collectivity/search", {});
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setCollectivities(data);
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  useEffect(() => {
+    fetchCollectivities();
+  }, []);
+
+  const onUpdate = async () => {
+    try {
+      const { ok, data, code } = await api.put(`/user/${user._id}`, values);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      toast.success("Utilisateur mis à jour");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const onDelete = async () => {
+    try {
+      if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) return;
+      const { ok, data, code } = await api.delete(`/user/${user._id}`);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Utilisateur supprimé");
+      navigate("/admin/users");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const addCollectivity = async () => {
+    if (!selectedCollectivityId) return toast.error("Sélectionnez une collectivité");
+    const c = collectivities.find((x) => x._id === selectedCollectivityId);
+    if (!c) return toast.error("Collectivité introuvable");
+    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
+    const exists = current.some((x) => x.id === c._id);
+    if (exists) return toast.error("Déjà associée");
+    const updated = [...current, { id: c._id, name: c.name }];
+    try {
+      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      setSelectedCollectivityId("");
+      toast.success("Collectivité ajoutée");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const removeCollectivity = async (idToRemove) => {
+    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
+    const updated = current.filter((x) => x.id !== idToRemove);
+    try {
+      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      toast.success("Collectivité supprimée");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations générales</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
+            <input
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              value={values.name}
+              onChange={(e) => setValues({ ...values, name: e.target.value })}
+              placeholder="Nom de l'utilisateur"
+            />
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
+            <input
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              value={values.email}
+              onChange={(e) => setValues({ ...values, email: e.target.value })}
+              placeholder="email@exemple.fr"
+            />
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Rôle</label>
+            <select
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+              value={values.role}
+              onChange={(e) => setValues({ ...values, role: e.target.value })}
+            >
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+            </select>
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+            <select
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+              value={values.status || "active"}
+              onChange={(e) => setValues({ ...values, status: e.target.value })}
+            >
+              <option value="active">Actif</option>
+              <option value="inactive">Inactif</option>
+            </select>
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2"> Collectivités </label>
+            <div className="mb-3 min-h-[60px] bg-gray-50 rounded-lg p-3 border border-gray-200">
+              {(user?.collectivities) && user?.collectivities?.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {(user?.collectivities || []).map((c) => (
+                    <div
+                      key={c.id}
+                      className="inline-flex items-center gap-2 bg-white border border-gray-300 rounded-full px-3 py-1.5 text-sm"
+                    >
+                      <span className="text-gray-700">{c.name || c.id}</span>
+                      <button className="text-red-500 hover:text-red-700 transition-colors" onClick={() => removeCollectivity(c.id)} title="Retirer" >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-gray-500 text-sm">Aucune collectivité associée</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+                value={selectedCollectivityId}
+                onChange={(e) => setSelectedCollectivityId(e.target.value)}
+              >
+                <option value="">Sélectionner une collectivité</option>
+                {collectivities.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
+                onClick={addCollectivity}
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <ResetPassword userId={user._id} />
+          <div className="flex items-center gap-3">
+            <button
+              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+              onClick={onUpdate}
+            >
+              Enregistrer
+            </button>
+            <button
+              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+              onClick={onDelete}
+            >
+              Supprimer
+            </button>
+          </div>
+        </div>
+    </div>
+  );
+}
+
+function ResetPassword({ userId }) {
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState({ newPassword: "", verifyPassword: "" });
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showVerifyPassword, setShowVerifyPassword] = useState(false);
+
+  const resetPasswordHandle = async () => {
+    if (values.newPassword !== values.verifyPassword) return toast.error("Les mots de passe ne correspondent pas");
+    if (values.newPassword.length < 6) return toast.error("Le mot de passe doit contenir au moins 6 caractères");
+    try {
+      const { ok, data, code } = await api.post(`/user/reset_password/${userId}`, values);
+      if (!ok) return toast.error(code || "Erreur lors de la mise à jour du mot de passe");
+      setOpen(false);
+      toast.success("Mot de passe mis à jour avec succès !");
+      setValues({ newPassword: "", verifyPassword: "" });
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  return (
+    <>
+      <button
+        className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+        onClick={() => setOpen(true)}
+      >
+        Réinitialiser le mot de passe
+      </button>
+
+      <Modal isOpen={open} className="max-w-lg" onClose={() => setOpen(false)}>
+        <div className="p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Réinitialiser le mot de passe</h3>
+
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nouveau mot de passe</label>
+              <div className="relative">
+                <input
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all pr-10"
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="Entrer le nouveau mot de passe"
+                  value={values.newPassword}
+                  onChange={(e) => setValues({ ...values, newPassword: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="absolute top-1/2 -translate-y-1/2 right-3 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Confirmer le mot de passe</label>
+              <div className="relative">
+                <input
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all pr-10"
+                  type={showVerifyPassword ? "text" : "password"}
+                  placeholder="Confirmer le nouveau mot de passe"
+                  value={values.verifyPassword}
+                  onChange={(e) => setValues({ ...values, verifyPassword: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="absolute top-1/2 -translate-y-1/2 right-3 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowVerifyPassword(!showVerifyPassword)}
+                >
+                  {showVerifyPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
+            <button
+              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!values.newPassword || !values.verifyPassword}
+              onClick={resetPasswordHandle}
+            >
+              Réinitialiser
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function UserActionRightsSection({ user }) {
+  const [rights, setRights] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addValues, setAddValues] = useState({ user_id: "", user_name: "", action_id: "", description: "", can_read: true, can_write: false });
+
+  const fetchAction = async () => {
+    try {
+      const { ok, data, code } = await api.post("/action/search", {});
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setActions(data);
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const fetchRight = async () => {
+    try {
+      const { ok, data, code } = await api.post("/user_action_right/search", { user_id: user._id });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setRights(data);
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  useEffect(() => {
+    fetchAction();
+    fetchRight();
+  }, [user]);
+
+  const onSaveRow = async (right) => {
+    try {
+      const { ok, code } = await api.put(`/user_action_right/${right._id}`, right);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Droit mis à jour");
+      await fetchRight();
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const onDeleteRow = async (right) => {
+    try {
+      if (!confirm("Êtes-vous sûr de vouloir supprimer ce droit ?")) return;
+      const { ok, code } = await api.delete(`/user_action_right/${right._id}`);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Droit supprimé");
+      await fetchRight();
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const handleAdd = async () => {
+    try {
+      if (!addValues.action_id) return toast.error("Veuillez sélectionner une action");
+      const action = actions.find((a) => a._id === addValues.action_id);
+      if (!action) return toast.error("Action introuvable");
+      const payload = {
+        user_id: user._id,
+        user_name: user.name || "",
+        collectivity_id: action.collectivity_id || "",
+        collectivity_name: action.collectivity_name || "",
+        action_id: action._id,
+        action_name: action.name || "",
+        description: addValues.description || "",
+        can_read: !!addValues.can_read,
+        can_write: !!addValues.can_write,
+      };
+
+      const { ok, code } = await api.post("/user_action_right", payload);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setAddOpen(false);
+      setAddValues({ user_id: user._id, user_name: user.name || "", action_id: "", description: "", can_read: true, can_write: false });
+      await fetchRight();
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  if (!user) return null;
+
+  if (rights.length === 0 ) {
+    <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <p className="mt-2 text-sm text-gray-600">Aucun droit d'action défini</p>
+  </div>
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Droits d'action</h2>
+          <p className="text-sm text-gray-600 mt-1">Gérer les permissions d'accès aux actions</p>
+        </div>
+        <button
+          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm inline-flex items-center gap-2"
+          onClick={() => setAddOpen(true)}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Ajouter un droit
+        </button>
+      </div>
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Collectivité
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Action
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Description
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Lire
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Écrire
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {rights.map((r, idx) => (
+                <tr key={r._id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                    {r.collectivity_name || r.collectivity_id}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">
+                    {r.action_name || r.action_id}
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    <input
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-sm"
+                      value={r.description || ""}
+                      onChange={(e) => {
+                        const copy = [...rights];
+                        copy[idx] = { ...copy[idx], description: e.target.value };
+                        setRights(copy);
+                      }}
+                      placeholder="Ajouter une description"
+                    />
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={!!r.can_read}
+                      onChange={() => {
+                        const copy = [...rights];
+                        copy[idx] = { ...copy[idx], can_read: !copy[idx].can_read };
+                        setRights(copy);
+                      }}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={!!r.can_write}
+                      onChange={() => {
+                        const copy = [...rights];
+                        copy[idx] = { ...copy[idx], can_write: !copy[idx].can_write };
+                        setRights(copy);
+                      }}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors"
+                        onClick={() => onSaveRow(r)}
+                      >
+                        Enregistrer
+                      </button>
+                      <button
+                        className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors"
+                        onClick={() => onDeleteRow(r)}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} className="max-w-lg">
+        <div className="p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un droit</h3>
+          
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
+              <select
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+                value={addValues.action_id}
+                onChange={(e) => setAddValues({ ...addValues, action_id: e.target.value })}
+              >
+                <option value="">Sélectionner une action</option>
+                {actions.map((a) => (
+                  <option key={a._id} value={a._id}>
+                    {a.name} {a.collectivity_name ? `— ${a.collectivity_name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+              <input
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                value={addValues.description}
+                onChange={(e) => setAddValues({ ...addValues, description: e.target.value })}
+                placeholder="Description optionnelle"
+              />
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <p className="text-sm font-medium text-gray-700 mb-3">Permissions</p>
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addValues.can_read}
+                    onChange={() => setAddValues({ ...addValues, can_read: !addValues.can_read })}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">Lire</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addValues.can_write}
+                    onChange={() => setAddValues({ ...addValues, can_write: !addValues.can_write })}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">Écrire</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
+            <button
+              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+              onClick={() => setAddOpen(false)}
+            >
+              Annuler
+            </button>
+            <button
+              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+              onClick={handleAdd}
+            >
+              Ajouter
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function UserHistoryTab({ user }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+      <h2 className="text-xl font-semibold text-gray-900">Historique actions</h2>
+      <p className="text-sm text-gray-600 mt-1">Historique des actions effectuées par l'utilisateur</p>
+    </div>
+  );
+}
