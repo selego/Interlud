@@ -102,7 +102,7 @@ function SituationTab({ action, situation }) {
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+    <div className="p-8 card-shadow">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900">Situation : {situationLabels[situation]}</h2>
         <p className="text-sm text-gray-600 mt-1">Renseigner les valeurs des indicateurs</p>
@@ -110,7 +110,7 @@ function SituationTab({ action, situation }) {
         <div className="space-y-6">
           {values.map((value) => {
             return (
-              <div key={value._id} className="border border-gray-200 rounded-lg p-6">
+              <div key={value._id} className="p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">{value.indicator_name}</h3>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>

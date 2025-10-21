@@ -56,32 +56,32 @@ export default function Dashboard({ action }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Indicateurs</p>
             <p className="text-4xl font-bold text-blue-600">{uniqueIndicators}</p>
             <p className="text-xs text-gray-500 mt-1">Nombre d'indicateurs</p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Complétion</p>
             <p className="text-4xl font-bold text-green-600">{stats.completion}%</p>
             <p className="text-xs text-gray-500 mt-1">{stats.filled} / {stats.total} valeurs</p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Remplis</p>
             <p className="text-4xl font-bold text-green-600">{stats.filled}</p>
             <p className="text-xs text-gray-500 mt-1">Valeurs complètes</p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">À compléter</p>
             <p className="text-4xl font-bold text-orange-600">{stats.empty}</p>
             <p className="text-xs text-gray-500 mt-1">Valeurs manquantes</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <div className="p-6 card-shadow mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Progression globale</h2>
           <div className="w-full bg-gray-200 rounded-full h-6">
             <div 
@@ -93,25 +93,25 @@ export default function Dashboard({ action }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <div className="p-6 card-shadow mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Complétion par situation</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="border rounded-lg p-4">
+            <div className="p-4">
               <p className="text-sm text-gray-600 mb-2">Initial</p>
               <p className="text-2xl font-bold text-blue-600">{stats.bySituation.init}</p>
               <p className="text-xs text-gray-500">/ {indicatorValues.filter(v => v.situation === "init").length}</p>
             </div>
-            <div className="border rounded-lg p-4">
+            <div className="p-4">
               <p className="text-sm text-gray-600 mb-2">Référence</p>
               <p className="text-2xl font-bold text-purple-600">{stats.bySituation.ref}</p>
               <p className="text-xs text-gray-500">/ {indicatorValues.filter(v => v.situation === "ref").length}</p>
             </div>
-            <div className="border rounded-lg p-4">
+            <div className="p-4">
               <p className="text-sm text-gray-600 mb-2">Prévisionnel</p>
               <p className="text-2xl font-bold text-yellow-600">{stats.bySituation.prev}</p>
               <p className="text-xs text-gray-500">/ {indicatorValues.filter(v => v.situation === "prev").length}</p>
             </div>
-            <div className="border rounded-lg p-4">
+            <div className="p-4">
               <p className="text-sm text-gray-600 mb-2">Ex-post</p>
               <p className="text-2xl font-bold text-green-600">{stats.bySituation.expost}</p>
               <p className="text-xs text-gray-500">/ {indicatorValues.filter(v => v.situation === "expost").length}</p>
@@ -119,7 +119,7 @@ export default function Dashboard({ action }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-hidden card-shadow">
           <div className="px-6 py-4 border-b">
             <h2 className="text-lg font-semibold text-gray-900">Liste des indicateurs</h2>
           </div>
