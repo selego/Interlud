@@ -61,6 +61,11 @@
   .input-primary {
     @apply pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-full text-sm
   }
+
+  .card-shadow {
+    @apply shadow-lg rounded-2xl p-4 bg-white;
+    box-shadow: 0 0 17px 0 rgba(10, 54, 65, 0.12);
+  }
 }
 
 @layer base {

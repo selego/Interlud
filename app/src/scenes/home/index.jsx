@@ -32,35 +32,35 @@ const fetchData = async () => {
     },
     actions: [
       {
-        id: 1,
+        id: "68f6453bbfdfb486bd415c5d",
         nom: "Décarbonnation du fret routier",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 66,
         statut: "À compléter",
       },
       {
-        id: 2,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Aménagement d'espace vert",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 100,
         statut: "Terminée",
       },
       {
-        id: 3,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Décarbonnation du fret maritime...",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 100,
         statut: "Terminée",
       },
       {
-        id: 4,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Remplacement des chauffage...",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 66,
         statut: "En attente",
       },
       {
-        id: 5,
+        id: "68f0fc288459830dcd4b3e8e",
         nom: "Rénovation des écoles et des...",
         description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
         completionPourcentage: 66,
@@ -167,9 +167,8 @@ export default function Home() {
           <p className="text-base mt-1">Ce tableau de bord est personnel</p>
         </div>
 
-      {/* Zone des 3 cards du haut */}
       <div className="grid grid-cols-1 xl:grid-cols-15 gap-6 mb-12">
-        <div className="xl:col-span-3 bg-white rounded-2xl p-6 h-[340px]" style={{ boxShadow: '0 0 17px 0 rgba(10, 54, 65, 0.12)' }}>
+        <div className="xl:col-span-3 p-6 h-[340px] card-shadow">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
             <select 
@@ -216,7 +215,7 @@ export default function Home() {
         </div>
 
         {/* Card Répartition des actions */}
-        <div className="xl:col-span-4 bg-white rounded-2xl p-6  h-full" style={{ boxShadow: '0 0 17px 0 rgba(10, 54, 65, 0.12)' }}>
+        <div className="xl:col-span-4 p-6 h-full card-shadow">
           <h3 className="font-bold text-font-primary text-2xl mb-4">Répartition des actions</h3>
           
           <div className="flex gap-2 mb-6 flex-wrap">
@@ -295,7 +294,6 @@ export default function Home() {
               </PieChart>
             </ResponsiveContainer>
             
-            {/* Légende */}
             <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-center text-xs text-gray-600">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-primary-green"></div>
@@ -313,8 +311,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Card Évolutions */}
-        <div className="xl:col-span-8 bg-white rounded-2xl p-6 h-full" style={{ boxShadow: '0 0 17px 0 rgba(10, 54, 65, 0.12)' }}>
+        <div className="xl:col-span-8 p-6 h-full card-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
             <select 
@@ -452,14 +449,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {filteredActions.map((action) => (
             <div 
               key={action.id} 
-              className="bg-white rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer"
-              style={{ boxShadow: '0 0 17px 0 rgba(10, 54, 65, 0.12)' }}
-              onClick={() => navigate(`/action/${action.id}`)}
+              className="card-shadow"
+              onClick={() => navigate(`/action/${action.id}/dashboard`)}
             >
               <div className="mb-3">
                 <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.statut)}`}>
