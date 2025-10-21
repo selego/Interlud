@@ -76,6 +76,7 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
     
     const existing = await IndicatorValue.findOne({  action_id: req.body.action_id,  indicator_id: req.body.indicator_id  });
     if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
+    
     const situations = ["init", "ref", "prev", "expost"];
     const createdValues = [];
     

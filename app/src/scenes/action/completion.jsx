@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
+import { SITUATION_TYPES } from "@/utils/constants";
 
 export default function Completion({ action }) {
-  const { id } = useParams();
-  const [activeTab, setActiveTab] = useState("init");
+  const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
 
   if (!action) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -22,51 +21,51 @@ export default function Completion({ action }) {
       <div className="flex border-b border-gray-200 mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all ${
-            activeTab === "init"  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600"}`}
-          onClick={() => setActiveTab("init")}
+            activeTab === SITUATION_TYPES.INIT  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab(SITUATION_TYPES.INIT)}
         >
           Initial
         </button>
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all ${
-            activeTab === "ref"   ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600" }`}
-          onClick={() => setActiveTab("ref")}
+            activeTab === SITUATION_TYPES.REF   ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600" }`}
+          onClick={() => setActiveTab(SITUATION_TYPES.REF)}
         >
           Référence
         </button>
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all ${
-            activeTab === "prev" ? "text-green-600 border-b-2 border-green-600" : "text-gray-500 hover:text-green-600"}`}
-          onClick={() => setActiveTab("prev")}
+            activeTab === SITUATION_TYPES.PREV ? "text-green-600 border-b-2 border-green-600" : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab(SITUATION_TYPES.PREV)}
         >
           Prévisionnel
         </button>
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all ${
-            activeTab === "expost"  ? "text-green-600 border-b-2 border-green-600" : "text-gray-500 hover:text-green-600"}`}
-          onClick={() => setActiveTab("expost")}
+            activeTab === SITUATION_TYPES.EXPOST  ? "text-green-600 border-b-2 border-green-600" : "text-gray-500 hover:text-green-600"}`}
+          onClick={() => setActiveTab(SITUATION_TYPES.EXPOST)}
         >
           Ex-post
         </button>
       </div>
 
-      {activeTab === "init" && <SituationTab actionId={id} situation="init" />}
-      {activeTab === "ref" && <SituationTab actionId={id} situation="ref" />}
-      {activeTab === "prev" && <SituationTab actionId={id} situation="prev" />}
-      {activeTab === "expost" && <SituationTab actionId={id} situation="expost" />}
+      {activeTab === SITUATION_TYPES.INIT && <SituationTab action={action} situation={SITUATION_TYPES.INIT} />}
+      {activeTab === SITUATION_TYPES.REF && <SituationTab action={action} situation={SITUATION_TYPES.REF} />}
+      {activeTab === SITUATION_TYPES.PREV && <SituationTab action={action} situation={SITUATION_TYPES.PREV} />}
+      {activeTab === SITUATION_TYPES.EXPOST && <SituationTab action={action} situation={SITUATION_TYPES.EXPOST} />}
     </div>
   );
 }
 
-function SituationTab({ actionId, situation }) {
+function SituationTab({ action, situation }) {
   const [values, setValues] = useState([]);
 
   const fetchIndicatorsValue = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: actionId, situation: situation });
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: situation });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setValues(data);
     } catch (error) {
@@ -94,7 +93,7 @@ function SituationTab({ actionId, situation }) {
 
   useEffect(() => {
     fetchIndicatorsValue();
-  }, [actionId, situation]);
+  }, [action._id, situation]);
 
   if (values.length === 0) return (
     <div className="flex items-center justify-center min-h-screen">
