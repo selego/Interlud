@@ -46,10 +46,10 @@ export default function Dashboard({ action }) {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard de l'action</h1>
           <div className="flex gap-3">
-            <button className="button-primary" onClick={() => navigate(`/action/${action._id}/completion`)}>
+            <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/completion`)}>
               Compléter l'action
             </button>
-            <button className="button-primary" onClick={() => navigate(`/action/${action._id}/settings`)}>
+            <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/settings`)}>
               Gérer l'action
             </button>
           </div>

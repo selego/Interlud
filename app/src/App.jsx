@@ -2,10 +2,11 @@ import { useEffect, useState } from "react"
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom"
 import { Toaster } from "react-hot-toast"
 import * as Sentry from "@sentry/browser"
+import toast from "react-hot-toast"
 
 import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
-import Action from "@/scenes/action"
+import Actions from "@/scenes/actions"
 // import Test from "@/scenes/test"
 import AdminAction from "@/scenes/admin/action"
 import AdminCollectivity from "@/scenes/admin/collectivity"
@@ -33,7 +34,7 @@ export default function App() {
         </Route>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/action/:id/*" element={<Action />} />
+          <Route path="/actions/*" element={<Actions />} />
           <Route path="/admin/users/*" element={<AdminUsers />} />
           <Route path="/recherche" element={<div>Page de recherche</div>} />
           {/* <Route path="/test" element={<Test />} /> */}
@@ -66,7 +67,7 @@ const AuthLayout = () => {
 
 const UserLayout = () => {
   const [loading, setLoading] = useState(true)
-  const { user, setUser } = useStore()
+  const { user, setUser, setCollectivity } = useStore()
 
   async function fetchUser() {
     try {
@@ -85,7 +86,20 @@ const UserLayout = () => {
     }
   }
 
+  const loadCollectivity = async () => {
+    const savedCollectivityId = localStorage.getItem('selectedCollectivityId');
+    if (!savedCollectivityId) return;
+    try {
+      const { ok, data, code } = await api.get(`/collectivity/${savedCollectivityId}`);
+      if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité");  
+      setCollectivity(data);
+    } catch (error) {
+      toast.error(error || "Erreur lors de la récupération de la collectivité");
+    }
+  }
+
   useEffect(() => {
+    loadCollectivity()
     fetchUser()
   }, [])
 

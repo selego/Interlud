@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import api from "@/services/api"
+import toast from "react-hot-toast"
+import useStore from "@/services/store"
 
 // Fonction à remplacer par votre fetch de BDD
 const fetchData = async () => {
@@ -99,8 +102,8 @@ const COLORS = {
 }
 
 export default function Home() {
-  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [data, setData] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filtreTerminees, setFiltreTerminees] = useState(true)
   const [filtreACompleter, setFiltreACompleter] = useState(true)
@@ -108,6 +111,7 @@ export default function Home() {
   const [periodeSynthese, setPeriodeSynthese] = useState("Ce mois-ci")
   const [periodeEvolution, setPeriodeEvolution] = useState("Par mois")
   const navigate = useNavigate()
+  const { collectivity, user } = useStore()
 
   useEffect(() => {
     const loadData = async () => {
@@ -121,7 +125,6 @@ export default function Home() {
         setLoading(false)
       }
     }
-
     loadData()
   }, [])
 
@@ -157,8 +160,16 @@ export default function Home() {
     { name: 'En attente', value: data?.repartitionActions.enAttente || 0 },
   ]
 
+  if (user?.collectivities?.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className=""> Vous n'avez pas encore de collectivités associées à votre compte. Veuillez contacter l'administrateur pour obtenir un accès.</div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen">
+    <div className="">
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-font-primary text-4xl">
@@ -454,7 +465,7 @@ export default function Home() {
             <div 
               key={action.id} 
               className="card-shadow"
-              onClick={() => navigate(`/action/${action.id}/dashboard`)}
+              onClick={() => navigate(`/actions/${action.id}/dashboard`)}
             >
               <div className="mb-3">
                 <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.statut)}`}>
@@ -479,7 +490,7 @@ export default function Home() {
             </div>
           ))}
 
-        <div className="mt-6 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+        <div className="mt-6 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer" onClick={() => navigate(`/actions`)}>
           <div className="flex justify-center mb-2">
             <div className="flex gap-2">
               <div className="w-6 h-6 border-2 border-primary-green rounded"></div>

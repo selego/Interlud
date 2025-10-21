@@ -3,30 +3,32 @@ import { useNavigate } from "react-router-dom"
 import Modal from "@/components/modal"
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import useStore from "@/services/store"
 
 export default function List() {
   const navigate = useNavigate()
-  const [collectivities, setCollectivities] = useState([])
+  const [actions, setActions] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const { collectivity } = useStore()
 
-  const fetchCollectivities = async () => {
+  const fetchActions = async () => {
     try {
-      const { ok, data } = await api.post("/collectivity/search")
+      const { ok, data } = await api.post("/action/search ", { collectivity_id: collectivity._id })
       if (!ok) return toast.error(data.code || "Une erreur est survenue")
-      setCollectivities(data)
+      setActions(data)
     } catch (error) {
       toast.error(error || "Une erreur est survenue")
     }
   };
 
   useEffect(() => {
-    fetchCollectivities()
+    fetchActions()
   }, [])
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
+        <h1 className="text-3xl font-bold">Liste des Actions</h1>
         <button
           onClick={() => setIsModalOpen(true)}
           className="button-primary"
@@ -40,36 +42,38 @@ export default function List() {
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Population</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Department</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date Start</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date End</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {collectivities.map((collectivity) => (
-            <tr key={collectivity._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/collectivity/${collectivity._id}`)}>
-              <td className="px-6 py-4 text-sm font-medium text-gray-900">{collectivity.name}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.description}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.population}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.department}</td>
+          {actions.map((action) => (
+            <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
+              <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.description}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.status}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.date_start}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.date_end}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <AddCollectivityModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )
 }
 
 
-const AddCollectivityModal = ({ isOpen, onClose }) => {
+const AddActionModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate()
     const [name, setName] = useState("")
 
-    const createCollectivity = async () => {
+    const createAction = async () => {
       try {
-        const { ok, data } = await api.post("/collectivity/", { name })
+        const { ok, data } = await api.post("/action", { name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
-        navigate(`/admin/collectivity/${data._id}`)
+        navigate(`/actions/${data._id}/settings`)
       } catch (error) {
         toast.error(data.code || "Une erreur est survenue")
       }
@@ -79,12 +83,12 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Ajouter une collectivité</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
         </div>
 
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Nom de la collectivité
+            Nom de l'action
           </label>
           <input
             type="text"
@@ -96,7 +100,7 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
         </div>
 
         <div className="flex justify-end gap-3">
-          <button onClick={createCollectivity} className="button-primary">
+          <button onClick={createAction} className="button-primary">
             Créer
           </button>
         </div>

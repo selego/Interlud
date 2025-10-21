@@ -4,8 +4,8 @@ const store = create(set => ({
   user: null,
   setUser: user => set(() => ({ user })),
 
-  organization: null,
-  setOrganization: organization => set(() => ({ organization }))
+  collectivity: null,
+  setCollectivity: collectivity => set(() => ({ collectivity }))
 }))
 
 export default store
