@@ -13,7 +13,7 @@ const Schema = new mongoose.Schema(
     indicator_name: { type: String, trim: true },
     situation: { type: String, enum: ["init", "ref", "prev", "expost"], trim: true },
     year: { type: Number, trim: true },
-    value: { type: Number, trim: true },
+    value: { type: String, trim: true },
     source: { type: String, trim: true },
     comment: { type: String, trim: true },
   },
