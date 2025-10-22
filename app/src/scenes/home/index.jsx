@@ -5,7 +5,6 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 
-// Fonction à remplacer par votre fetch de BDD
 const fetchData = async () => {
   await new Promise(resolve => setTimeout(resolve, 100))
   
@@ -88,30 +87,30 @@ const fetchData = async () => {
 }
 
 const getStatutBadgeClass = (statut) => {
-  if (statut === "Terminée") return "bg-primary-green/10 text-primary-green"
-  if (statut === "À compléter") return "bg-primary-orange/10 text-primary-orange"
-  if (statut === "En attente") return "bg-primary-teal/10 text-primary-teal"
+  if (statut === "completed") return "bg-primary-green/10 text-primary-green"
+  if (statut === "upcoming") return "bg-primary-orange/10 text-primary-orange"
+  if (statut === "in_progress") return "bg-primary-teal/10 text-primary-teal"
   return "bg-gray-100 text-gray-700"
 
-}
-
-const COLORS = {
-  terminees: '#2DAC6A', // green
-  aCompleter: '#F59600', // orange
-  enAttente: '#56BDB8', // cyan
 }
 
 export default function Home() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filtreTerminees, setFiltreTerminees] = useState(true)
-  const [filtreACompleter, setFiltreACompleter] = useState(true)
-  const [filtreEnAttente, setFiltreEnAttente] = useState(true)
-  const [periodeSynthese, setPeriodeSynthese] = useState("Ce mois-ci")
-  const [periodeEvolution, setPeriodeEvolution] = useState("Par mois")
+  const [actions, setActions] = useState([])
   const navigate = useNavigate()
   const { collectivity, user } = useStore()
+
+  const fetchActions = async () => {
+    try {
+      const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id })
+      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      setActions(data)
+      console.log(data)
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue")
+    }
+  }
 
   useEffect(() => {
     const loadData = async () => {
@@ -126,7 +125,8 @@ export default function Home() {
       }
     }
     loadData()
-  }, [])
+    fetchActions()
+  }, [collectivity])
 
   if (loading) {
     return (
@@ -144,14 +144,6 @@ export default function Home() {
     )
   }
 
-  const filteredActions = data.actions.filter(action => {
-    const matchesSearch = action.nom.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFiltre = 
-      (filtreTerminees && action.statut === "Terminée") ||
-      (filtreACompleter && action.statut === "À compléter") ||
-      (filtreEnAttente && action.statut === "En attente")
-    return matchesSearch && matchesFiltre
-  })
 
   // Données pour le graphique donut
   const pieData = [
@@ -173,7 +165,7 @@ export default function Home() {
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-font-primary text-4xl">
-            Dashboard de <span className="font-bold text-primary-green">{[data.collectivite]}</span>
+            Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
           </h1>
           <p className="text-base mt-1">Ce tableau de bord est personnel</p>
         </div>
@@ -183,8 +175,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
             <select 
-              value={periodeSynthese}
-              onChange={(e) => setPeriodeSynthese(e.target.value)}
+              value={"Ce mois-ci"}
               className="border border-secondary-green  bg-deco-background-green rounded-full text-sm px-3 py-2 text-[#768776]"
             >
               <option>Mois-ci</option>
@@ -231,10 +222,7 @@ export default function Home() {
           
           <div className="flex gap-2 mb-6 flex-wrap">
             <button
-              onClick={() => setFiltreTerminees(!filtreTerminees)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                filtreTerminees ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
-              }`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all bg-primary-green text-white"
             >
               Terminées 
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,10 +231,7 @@ export default function Home() {
               </svg>
             </button>
             <button
-              onClick={() => setFiltreACompleter(!filtreACompleter)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                filtreACompleter ? "bg-primary-orange text-white" : "border border-gray-300 text-gray-700 bg-white"
-              }`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all bg-primary-orange text-white"
             >
               À compléter 
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,10 +240,7 @@ export default function Home() {
               </svg>
             </button>
             <button
-              onClick={() => setFiltreEnAttente(!filtreEnAttente)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                filtreEnAttente ? "bg-primary-teal text-white" : "border border-gray-300 text-gray-700 bg-white"
-              }`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all bg-primary-teal text-white"
             >
               En attente 
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -283,9 +265,9 @@ export default function Home() {
                 >
                   {pieData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={
-                      entry.name === 'Terminées' ? COLORS.terminees :
-                      entry.name === 'À compléter' ? COLORS.aCompleter :
-                      COLORS.enAttente
+                      entry.name === 'Terminées' ? "#2DAC6A" :
+                      entry.name === 'À compléter' ? "#F59600" :
+                      "#56BDB8"
                     } />
                   ))}
                 </Pie>
@@ -326,8 +308,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
             <select 
-              value={periodeEvolution}
-              onChange={(e) => setPeriodeEvolution(e.target.value)}
+              value={"Mois"}
               className="border border-secondary-green  bg-deco-background-green rounded-full text-sm text-[#768776] px-3 py-2"
             >
               <option>Mois</option>
@@ -381,7 +362,7 @@ export default function Home() {
                         <p className="font-bold text-sm mb-1">{label}</p>
                         {payload.map((entry, index) => (
                           <p key={index} className="text-sm text-gray-600">
-                            Nombre d'action {entry.name?.toLowerCase()} 
+                            Nombre d'actions {entry.name?.toLowerCase()} 
                             <span className="text-primary-orange font-bold text-lg ml-1">{entry.value}</span>
                           </p>
                         ))}
@@ -393,19 +374,19 @@ export default function Home() {
                 <Line 
                   type="monotone" 
                   dataKey="terminees" 
-                  stroke={COLORS.terminees} 
+                  stroke="#2DAC6A" 
                   strokeWidth={3}
                   name="Terminées"
-                  dot={{ fill: COLORS.terminees, r: 4 }}
+                  dot={{ fill: "#2DAC6A", r: 4 }}
                   activeDot={{ r: 6 }}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="enAttente" 
-                  stroke={COLORS.aCompleter} 
+                  stroke="#F59600" 
                   strokeWidth={3}
                   name="En attente"
-                  dot={{ fill: COLORS.aCompleter, r: 4 }}
+                  dot={{ fill: "#F59600", r: 4 }}
                   activeDot={{ r: 6 }}
                 />
               </LineChart>
@@ -436,8 +417,7 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Rechercher une action..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={""}
                 className="pl-10 pr-4 py-2 input-primary text-sm w-96"
               />
               <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -461,19 +441,15 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {filteredActions.map((action) => (
-            <div 
-              key={action.id} 
-              className="card-shadow"
-              onClick={() => navigate(`/actions/${action.id}/dashboard`)}
-            >
+          {actions.map((action) => (
+            <div key={action._id}  className="card-shadow" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
               <div className="mb-3">
-                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.statut)}`}>
-                  {action.statut}
+                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.status)}`}>
+                  {action.status}
                 </span>
               </div>
               
-              <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.nom}</h3>
+              <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>
               <p className="text-sm text-gray-500 mb-3 line-clamp-2">{action.description}</p>
               
               <div className="flex items-center justify-between mb-2">
