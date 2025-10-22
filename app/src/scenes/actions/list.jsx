@@ -59,19 +59,19 @@ export default function List() {
           ))}
         </tbody>
       </table>
-      <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
     </div>
   )
 }
 
 
-const AddActionModal = ({ isOpen, onClose }) => {
+const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const navigate = useNavigate()
     const [name, setName] = useState("")
 
     const createAction = async () => {
       try {
-        const { ok, data } = await api.post("/action", { name })
+        const { ok, data } = await api.post("/action", { name, collectivity_id: collectivity._id, collectivity_name: collectivity.name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {
