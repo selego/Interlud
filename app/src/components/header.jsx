@@ -1,64 +1,304 @@
-import React, { Fragment } from "react"
-import { Link } from "react-router-dom"
-import { Menu, Transition } from "@headlessui/react"
-import { RxAvatar } from "react-icons/rx"
+import React, { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import api from "@/services/api";
+import useStore from "@/services/store";
+import toast from "react-hot-toast";
+import { FiChevronDown } from "react-icons/fi";
+import Logo from "@/assets/primary_logo.png";
 
-import api from "@/services/api"
-import useStore from "@/services/store"
-
-const Header = ({}) => {
-  const { user, setUser } = useStore()
-
-  const handleLogout = async () => {
+export default function Header() {
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
+  const { user, collectivity, setCollectivity } = useStore();
+  const navigate = useNavigate(); 
+  const location = useLocation();
+  
+  const handleCollectivityChange = async (collectivityId) => {
+    if (!collectivityId) {
+      setCollectivity(null);
+      localStorage.removeItem('selectedCollectivityId');
+      return;
+    }
     try {
-      const res = await api.post(`/user/logout`)
-      if (!res.ok) throw new Error("Something went wrong")
-      setUser(null)
+      const { ok, data, code } = await api.get(`/collectivity/${collectivityId}`);
+      if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité");
+      setCollectivity(data);
+      localStorage.setItem('selectedCollectivityId', collectivityId);
+      navigate(`/`);
+      console.log(data);
     } catch (error) {
-      console.log(error)
+      console.error("Error fetching collectivity:", error);
+      toast.error("Erreur lors de la récupération de la collectivité");
+    }
+  };
+
+  async function handleLogout() {
+    try {
+      console.log("Déconnexion");
+      await api.post(`/user/logout`);
+      api.removeToken();
+      navigate("/auth");
+    } catch (error) {
+      console.log(error);
     }
   }
 
-  return (
-    <div className="relative">
-      <div className="fixed top-0 left-0 z-20 flex items-center justify-between w-full h-16 px-4 py-4 bg-white border-b md:px-6 md:py-2">
-        <h1 className="m-0 text-2xl font-bold md:text-3xl text-primary">
-          <Link to="/">InTerLUD</Link>
-        </h1>
-        <Menu as="div" className="relative">
-          <Menu.Button className="flex items-center gap-x-1 md:gap-x-2">
-            <RxAvatar className="object-cover w-5 h-5 rounded-full cursor-pointer md:w-9 md:h-9 text-primary" />
-          </Menu.Button>
-          <Transition
-            as={Fragment}
-            enter="transition ease-out duration-100"
-            enterFrom="transform opacity-0 scale-95"
-            enterTo="transform opacity-100 scale-100"
-            leave="transition ease-in duration-75"
-            leaveFrom="transform opacity-100 scale-100"
-            leaveTo="transform opacity-0 scale-95"
-          >
-            <Menu.Items className="absolute shadow-lg right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-sidebar ring-1 ring-gray-900/5 focus:outline-none">
-              <Menu.Item>
-                {({ active }) => (
-                  <Link to="/account" className={`block px-3 py-1 text-sm leading-6 text-gray-900 ${active ? "bg-gray-50" : ""} hover:bg-gray-50`}>
-                    My account
-                  </Link>
-                )}
-              </Menu.Item>
-              <Menu.Item>
-                {({ active }) => (
-                  <button onClick={handleLogout} className={`block px-3 py-1 text-sm leading-6 text-gray-900 ${active ? "bg-gray-50" : ""} hover:bg-gray-50`}>
-                    Sign out
-                  </button>
-                )}
-              </Menu.Item>
-            </Menu.Items>
-          </Transition>
-        </Menu>
-      </div>
-    </div>
-  )
-}
+  // Navigation items - only shown when user is logged in
+  const navigation = user ? [
+    {
+      text: "Accueil",
+      linkProps: { to: "/" },
+    },
+    {
+      text: "À propos",
+      linkProps: { to: "/about" },
+    },
+    {
+      text: "Contact",
+      linkProps: { to: "/contact" },
+    },
+    {
+      text: "Admin",
+      menuLinks: [
+        {
+          text: "Collectivités",
+          linkProps: { to: "/admin/collectivity" },
+        },
+        {
+          text: "Actions",
+          linkProps: { to: "/admin/action" },
+        },
+        {
+          text: "Indicateurs",
+          linkProps: { to: "/admin/indicator" },
+        },
+        {
+          text: "Utilisateurs",
+          linkProps: { to: "/admin/users" },
+        },
+      ],
+    },
+  ] : [];
 
-export default Header
+  // Quick access items - only shown when user is logged in
+  const quickAccessItems = user ? [
+    {
+      iconId: "fr-icon-leaf-line",
+      linkProps: {
+        to: "/collectivites",
+      },
+      text: "Collectivités",
+    },
+    {
+      iconId: "fr-icon-question-line",
+      linkProps: {
+        to: "/aide",
+      },
+      text: "Aide",
+    },
+    {
+      iconId: "fr-icon-account-circle-line",
+      text: user?.name || "Mon compte",
+      menuItems: [
+        {
+          iconId: "fr-icon-settings-5-line",
+          linkProps: {
+            to: "/parametres",
+          },
+          text: "Paramètres",
+        },
+        {
+          iconId: "fr-icon-logout-box-r-line",
+          text: "Se déconnecter",
+          buttonProps: {
+            onClick: (e) => {
+              e.preventDefault();
+              handleLogout();
+            },
+          },
+        },
+      ],
+    },
+  ] : [];
+
+  return (
+    <header role="banner" className="fr-header">
+      <div className="fr-header__body">
+        <div className="fr-container">
+          <div className="fr-header__body-row">
+            <div className="fr-header__brand fr-enlarge-link">
+              <div className="fr-header__brand-top">
+                <div className="fr-header__logo md:max-xl:p-2 md:max-xl:!mr-0 p-1.5">
+                  <p className="fr-logo">
+                    République <br />
+                    Française
+                  </p>
+                </div>
+                <div className="fr-header__operator">
+                  <Link to="/" title="Accueil - InTerLUD" className="flex items-center">
+                    <span className="inline-block align-middle">
+                      <img src={Logo} alt="logo" className="h-8 object-contain" />
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="fr-header__tools">
+              <div className="fr-header__tools-links">
+                <ul className="fr-btns-group">
+                  {quickAccessItems.map((item, index) => (
+                    <li key={index} className="relative">
+                      {item.menuItems ? (
+                        <>
+                          <button
+                            className="fr-btn fr-btn--tertiary-no-outline mt-0 ml-2"
+                            onClick={() => setOpenQuickAccessDropdown(openQuickAccessDropdown === index ? null : index)}
+                          >
+                            <span className={item.iconId} aria-hidden="true"></span>
+                            <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
+                            <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? 'rotate-180' : ''}`} />
+                          </button>
+                          {openQuickAccessDropdown === index && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setOpenQuickAccessDropdown(null)}
+                              />
+                              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+                                <ul className="py-1">
+                                  {item.menuItems.map((subItem, subIndex) => (
+                                    <li key={subIndex}>
+                                      {subItem.buttonProps ? (
+                                        <button
+                                          {...subItem.buttonProps}
+                                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                        >
+                                          {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
+                                          {subItem.text}
+                                        </button>
+                                      ) : (
+                                        <Link
+                                          {...subItem.linkProps}
+                                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                        >
+                                          {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
+                                          {subItem.text}
+                                        </Link>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ) : item.buttonProps ? (
+                        <button
+                          className="fr-btn fr-btn--tertiary-no-outline"
+                          {...item.buttonProps}
+                        >
+                          <span className={item.iconId} aria-hidden="true"></span>
+                          <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
+                        </button>
+                      ) : (
+                        <Link
+                          {...item.linkProps}
+                          className="fr-btn fr-btn--tertiary-no-outline"
+                        >
+                          <span className={item.iconId} aria-hidden="true"></span>
+                          <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      {navigation.length > 0 && (
+        <div className="fr-header__menu">
+          <div className="fr-container">
+            <div className="flex items-center justify-between">
+              <nav className="fr-nav" role="navigation" aria-label="Menu principal">
+                <ul className="fr-nav__list">
+                  {navigation.map((item, index) => {
+                    const isActive = item.menuLinks 
+                      ? item.menuLinks?.some(subItem => subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + '/')))
+                      : item.linkProps?.to && (location.pathname === item.linkProps.to || location.pathname.startsWith(item.linkProps.to + '/'));
+                    
+                    return (
+                      <li key={index} className="fr-nav__item m-0 text-base">
+                        {item.menuLinks ? (
+                          <>
+                            <button
+                              className={`fr-nav__btn p-4 ${isActive ? 'border-b-2 !border-primary-green !text-primary-green' : ''}`}
+                              aria-expanded={openDropdown === index}
+                              aria-controls={`menu-${index}`}
+                              onClick={() => setOpenDropdown(openDropdown === index ? null : index) }
+                            >
+                              {item.text}
+                            </button>
+                            <div
+                              className={`fr-collapse fr-menu ${openDropdown === index ? "fr-collapse--expanded" : ""}`}
+                              id={`menu-${index}`}
+                            >
+                              <ul className="fr-menu__list">
+                                {item.menuLinks.map((subItem, subIndex) => {
+                                  const isSubActive = subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + '/'));
+                                  return (
+                                    <li key={subIndex}>
+                                      <Link 
+                                        {...subItem.linkProps} 
+                                        className={`fr-nav__link text-base ${isSubActive ? 'bg-gray-100' : ''}`}
+                                      >
+                                        {subItem.text}
+                                      </Link>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          </>
+                        ) : (
+                          <Link 
+                            {...item.linkProps} 
+                            className={`fr-nav__link text-base p-4 ${isActive ? 'border-b-2 !border-primary-green !text-primary-green' : ''}`}
+                          >
+                            {item.text}
+                          </Link>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+              
+              {user?.collectivities && user.collectivities.length > 0 && (
+                <div className="">
+                  <select 
+                    className="cursor-pointer text-lg font-semibold pr-6 appearance-auto"
+                    style={{  boxShadow: 'none' }}
+                    value={collectivity?._id || ""}
+                    onChange={(e) => handleCollectivityChange(e.target.value)}
+                  >
+                    <option value="" disabled>Collectivité</option>
+                    {user.collectivities.map((collectivity) => (
+                      <option key={collectivity.id} value={collectivity.id}>
+                        #{collectivity.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}

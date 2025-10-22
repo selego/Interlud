@@ -35,7 +35,7 @@ export default function List() {
         </button>
       </div>
       
-      <table className="w-full bg-white shadow-md rounded-lg overflow-hidden">
+      <table className="w-full overflow-hidden card-shadow">
         <thead className="bg-gray-100">
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>

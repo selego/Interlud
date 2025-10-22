@@ -1,12 +1,8 @@
 import React from "react";
-import Logo from "@/assets/primary_logo.png";
 import background_element from "@/assets/background_element.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
-import { Header } from "@codegouvfr/react-dsfr/Header";
-import useStore from "@/services/store";
+import Header from "@/components/header";
 import { createConsentManagement } from "@codegouvfr/react-dsfr/consentManagement";
-import { useNavigate } from "react-router-dom";
-import api from "@/services/api";
 
 export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, FooterPersonalDataPolicyItem, useConsent } = createConsentManagement({
     finalityDescription: {
@@ -25,114 +21,10 @@ export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, F
   });
 
 export default function Layout({ children }) {
-  const navigate = useNavigate();
-  const { user } = useStore();
-
-  async function handleLogout() {
-    try {
-      console.log("Déconnexion");
-      await api.post(`/user/logout`);
-      api.removeToken();
-      navigate("/auth");
-    } catch (error) {
-      console.log(error);
-    }
-  }
   return (
     <div className="flex flex-col min-h-screen">
       <div className="relative z-50">
-        <Header
-        brandTop={
-            <>
-            République <br />
-            Française
-            </>
-        }
-        homeLinkProps={{
-            to: "/",
-            title: `Accueil - InTerLUD`,
-        }}
-        serviceTitle={
-            <>
-            <span className="inline-block align-middle">
-                <img src={Logo} alt="logo" className="h-8 object-contain" />
-            </span>
-            </>
-        }
-
-        {...(user && {
-        navigation: [
-            {
-            text: "Accueil",
-            linkProps: { to: "/" },
-            },
-            {
-            text: "À propos",
-            linkProps: { to: "/about" },
-            },
-            {
-            text: "Contact",
-            linkProps: { to: "/contact" },
-            },
-            {        text: "Admin",
-              menuLinks: [
-                  {
-                  text: "Collectivités",
-                  linkProps: { to: "/admin/collectivity" },
-                  },
-                  {
-                    text: "Actions",
-                    linkProps: { to: "/admin/action" },
-                    },
-                  {
-                  text: "Indicateurs",
-                  linkProps: { to: "/admin/indicator" },
-                  },
-                  {
-                    text: "Utilisateurs",
-                    linkProps: { to: "/admin/users" },
-                  },
-              ],
-            },
-        ],
-
-        quickAccessItems: [
-                  {
-                    iconId: "fr-icon-account-circle-line",
-                    linkProps: {
-                      to: "#",
-                    },
-                    text: user?.name || "Mon compte",
-                    buttonProps: {
-                      onClick: (e) => {
-                        e.preventDefault();
-                      },
-                    },
-                  },
-                  {
-                    iconId: "fr-icon-settings-5-line",
-                    linkProps: {
-                      to: "/parametres",
-                    },
-                    text: "Paramètres",
-                  },
-                  {
-                    iconId: "fr-icon-logout-box-r-line",
-                    text: "Se déconnecter",
-                    buttonProps: {
-                      onClick: (e) => {
-                        e.preventDefault();
-                        handleLogout();
-                      },
-                    },
-                  },
-                ]
-          })}
-        classes={{
-            logo: "py-0",
-            operator: "py-0",
-        }}
-        />
+        <Header />
       </div>
 
       <main className="flex-1 bg-white relative" id="main">
@@ -155,6 +47,16 @@ export default function Layout({ children }) {
 
       <Footer
         id={"footer"}
+        brandTop={
+          <>
+            République <br />
+            Française
+          </>
+        }
+        homeLinkProps={{
+          to: "/",
+          title: `Accueil - InTerLUD`,
+        }}
         accessibility="non compliant"
         accessibilityLinkProps={{ href: "/accessibilite" }}
         contentDescription={`InTerLUD est un service développé par l'accélérateur de la transition écologique de l'ADEME.`}

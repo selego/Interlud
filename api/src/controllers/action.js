@@ -34,6 +34,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
     let query = {};
 
     if (req.body.type) { query.type = req.body.type; }
+    if (req.body.collectivity_id) { query.collectivity_id = req.body.collectivity_id; }
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Action.countDocuments(query);

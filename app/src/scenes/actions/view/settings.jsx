@@ -1,0 +1,529 @@
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import api from "@/services/api";
+import toast from "react-hot-toast";
+import Modal from "@/components/modal";
+import { FiList, FiSettings } from "react-icons/fi";
+
+export default function Settings({ action }) {
+  const [activeTab, setActiveTab] = useState("indicators");
+
+  return (
+    <div className="p-8">
+      {/* Tabs Navigation */}
+      <div className="flex mb-6">
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === "indicators"
+              ? "text-green-600 border-b-2 border-green-600"
+              : "text-gray-500 hover:text-green-600"
+          }`}
+          onClick={() => setActiveTab("indicators")}
+        >
+          <FiList size={16} />
+          Liste des Indicateurs
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === "settings"
+              ? "text-green-600 border-b-2 border-green-600"
+              : "text-gray-500 hover:text-green-600"
+          }`}
+          onClick={() => setActiveTab("settings")}
+        >
+          <FiSettings size={16} />
+          Paramètres de l'Action
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "indicators" && <IndicatorsTab action={action} />}
+      {activeTab === "settings" && <ActionSettingsTab action={action} />}
+    </div>
+  );
+}
+
+function IndicatorsTab({ action }) {
+  const [indicatorValues, setIndicatorValues] = useState([]);
+  const [indicators, setIndicators] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchIndicatorValues = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setIndicatorValues(data);
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const fetchIndicators = async () => {
+    try {
+      const ids = [...new Set(indicatorValues.map((v) => v.indicator_id))];
+      const { ok, data, code } = await api.post(`/indicator/search`, { _id: { $in: ids } });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setIndicators(data);
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  useEffect(() => {
+    fetchIndicatorValues();
+  }, [action]);
+
+  useEffect(() => {
+    if (indicatorValues.length > 0) fetchIndicators();
+  }, [indicatorValues]);
+
+  return (
+    <div className="p-8 card-shadow">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Indicateurs</h2>
+          <p className="text-sm text-gray-600 mt-1">Liste des indicateurs associés à cette action</p>
+        </div>
+        <button onClick={() => setIsModalOpen(true)} className="button-primary">
+          Ajouter
+        </button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Nom</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Description</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Unité</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Catégorie</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {indicators.map((indicator) => (
+              <tr key={indicator._id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">{indicator.name}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{indicator.description || "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{indicator.value_unit || "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{indicator.value_type || "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{indicator.indicator_category_name || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} action={action} />
+    </div>
+  );
+}
+
+function ActionSettingsTab({ action }) {
+  const [actionData, setActionData] = useState(action);
+  const [referenceAction, setReferenceAction] = useState([]);
+
+  const fetchReferenceAction = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/action/search`, { type: "reference" });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setReferenceAction(data);
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue");
+    }
+  };
+
+  useEffect(() => {
+    fetchReferenceAction();
+  }, []);
+
+  useEffect(() => {
+    setActionData(action);
+  }, [action]);
+
+  const handleSave = async () => {
+    try {
+      const { ok, data, code } = await api.put(`/action/${action._id}`, actionData);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Action sauvegardée !");
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue");
+    }
+  };
+
+  return (
+    <div className="p-8 card-shadow">
+      <h2 className="text-xl font-semibold text-gray-900 mb-6">Paramètres de l'action</h2>
+
+      <div className="space-y-6">
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Nom de l'action</label>
+            <input
+              type="text"
+              value={actionData.name || ""}
+              onChange={(e) => setActionData({ ...actionData, name: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Statut</label>
+            <select
+              value={actionData.status}
+              onChange={(e) => setActionData({ ...actionData, status: e.target.value })}
+              className="w-full input-primary"
+            >
+              <option value="no_status">Pas de statut</option>
+              <option value="upcoming">À venir</option>
+              <option value="in_progress">En cours</option>
+              <option value="blocked">Bloqué</option>
+              <option value="completed">Terminé</option>
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Priorité</label>
+            <select
+              value={actionData.priority || ""}
+              onChange={(e) => setActionData({ ...actionData, priority: e.target.value })}
+              className="w-full input-primary"
+            >
+              <option value="">Sélectionner</option>
+              <option value="high">Haute</option>
+              <option value="medium">Moyenne</option>
+              <option value="low">Basse</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Type et Référence */}
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Type</label>
+            <select
+              value={actionData.type}
+              onChange={(e) => setActionData({ ...actionData, type: e.target.value })}
+              className="w-full input-primary"
+            >
+              <option value="custom">Custom</option>
+              <option value="reference">Reference</option>
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
+            <select
+              value={actionData.action_reference_id || ""}
+              onChange={(e) => {
+                const selectedAction = referenceAction.find((ref) => ref._id === e.target.value);
+                setActionData({
+                  ...actionData,
+                  action_reference_id: e.target.value,
+                  action_reference_name: selectedAction?.name,
+                });
+              }}
+              className="w-full input-primary"
+            >
+              <option value="">Sélectionner</option>
+              {referenceAction.map((refAction) => (
+                <option key={refAction._id} value={refAction._id}>
+                  {refAction.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-end pb-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={actionData.is_subsidized_by_program || false}
+              onChange={(e) => setActionData({ ...actionData, is_subsidized_by_program: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <span className="text-sm font-semibold">Subventionné par le programme</span>
+          </label>
+        </div>
+
+        {actionData.status === "blocked" && (
+          <div>
+            <label className="block text-sm font-semibold mb-2">Raison de blocage</label>
+            <input
+              type="text"
+              value={actionData.blocked_reason || ""}
+              onChange={(e) => setActionData({ ...actionData, blocked_reason: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+        )}
+
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Date de début</label>
+            <input
+              type="date"
+              value={actionData.date_start ? new Date(actionData.date_start).toISOString().split("T")[0] : ""}
+              onChange={(e) => setActionData({ ...actionData, date_start: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Date de fin</label>
+            <input
+              type="date"
+              value={actionData.date_end ? new Date(actionData.date_end).toISOString().split("T")[0] : ""}
+              onChange={(e) => setActionData({ ...actionData, date_end: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+        </div>
+
+        {/* Pilote */}
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Pilote</label>
+            <select
+              value={actionData.pilote || ""}
+              onChange={(e) => setActionData({ ...actionData, pilote: e.target.value })}
+              className="w-full input-primary"
+            >
+              <option value="">Sélectionner</option>
+              <option value="epci">EPCI</option>
+              <option value="acteur_economique">Acteur économique</option>
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Description du pilote</label>
+            <input
+              type="text"
+              value={actionData.pilote_description || ""}
+              onChange={(e) => setActionData({ ...actionData, pilote_description: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Partenaires</label>
+            <select
+              value={actionData.partners || ""}
+              onChange={(e) => setActionData({ ...actionData, partners: e.target.value })}
+              className="w-full input-primary"
+            >
+              <option value="">Sélectionner</option>
+              <option value="epci">EPCI</option>
+              <option value="acteur_economique">Acteur économique</option>
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
+            <input
+              type="text"
+              value={actionData.partners_description || ""}
+              onChange={(e) => setActionData({ ...actionData, partners_description: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+        </div>
+
+        {/* Budget */}
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Coûts budget</label>
+            <input
+              type="number"
+              value={actionData.budget_costs || ""}
+              onChange={(e) => setActionData({ ...actionData, budget_costs: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Description du budget</label>
+            <input
+              type="text"
+              value={actionData.budget_description || ""}
+              onChange={(e) => setActionData({ ...actionData, budget_description: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+        </div>
+
+        {/* Aide financière */}
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Aide financière</label>
+            <input
+              type="number"
+              value={actionData.financial_aid || ""}
+              onChange={(e) => setActionData({ ...actionData, financial_aid: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Description aide financière</label>
+            <input
+              type="text"
+              value={actionData.financial_aid_description || ""}
+              onChange={(e) => setActionData({ ...actionData, financial_aid_description: e.target.value })}
+              className="w-full input-primary"
+            />
+          </div>
+        </div>
+
+        {/* Initiatives liées */}
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <div>
+              <label className="block text-sm font-semibold mb-2">Initiatives liées</label>
+              <textarea
+                rows="4"
+                value={actionData.related_initiatives || ""}
+                onChange={(e) => setActionData({ ...actionData, related_initiatives: e.target.value })}
+                className="w-full input-primary rounded-lg"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-2">Description des étapes</label>
+            <textarea
+              rows="4"
+              value={actionData.step_description || ""}
+              onChange={(e) => setActionData({ ...actionData, step_description: e.target.value })}
+              className="w-full input-primary rounded-lg"
+            />
+          </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-semibold mb-2">Description</label>
+          <textarea
+            value={actionData.description || ""}
+            onChange={(e) => setActionData({ ...actionData, description: e.target.value })}
+            rows="4"
+            className="w-full input-primary rounded-lg"
+          />
+        </div>
+
+        {/* Commentaire */}
+        <div>
+          <label className="block text-sm font-semibold mb-2">Commentaire</label>
+          <textarea
+            value={actionData.comment || ""}
+            onChange={(e) => setActionData({ ...actionData, comment: e.target.value })}
+            rows="4"
+            className="w-full input-primary rounded-lg"
+          />
+        </div>
+
+        {/* Bouton d'action */}
+        <div className="flex justify-end pt-4">
+          <button onClick={handleSave} className="button-primary">
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal pour ajouter un indicateur
+const AddIndicatorModal = ({ isOpen, onClose, action }) => {
+  const [allIndicators, setAllIndicators] = useState([]);
+  const [selectedIndicatorId, setSelectedIndicatorId] = useState("");
+
+  useEffect(() => {
+    fetchAllIndicators();
+  }, []);
+
+  const fetchAllIndicators = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator/search`, {});
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setAllIndicators(data);
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const handleAddIndicator = async () => {
+    if (!selectedIndicatorId) return toast.error("Veuillez sélectionner un indicateur");
+    const selectedIndicator = allIndicators.find((i) => i._id === selectedIndicatorId);
+    if (!selectedIndicator) return;
+
+    try {
+      const response = await api.post(`/action/initialize_indicator_values`, {
+        action_id: action._id,
+        action_name: action.name,
+        collectivity_id: action.collectivity_id,
+        collectivity_name: action.collectivity_name,
+        indicator_id: selectedIndicator._id,
+        indicator_name: selectedIndicator.name,
+      });
+
+      const { ok, code } = response;
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+
+      toast.success("Indicateur ajouté avec succès");
+      setSelectedIndicatorId("");
+      onClose();
+    } catch (error) {
+      toast.error(error.message || "Indicateur déjà associé à cette action");
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={() => {
+        onClose();
+        setSelectedIndicatorId("");
+      }}
+      className="max-w-lg"
+    >
+      <div className="p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un indicateur</h2>
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un indicateur</label>
+          <select
+            value={selectedIndicatorId}
+            onChange={(e) => setSelectedIndicatorId(e.target.value)}
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+          >
+            <option value="">-- Choisir un indicateur --</option>
+            {allIndicators.map((indicator) => (
+              <option key={indicator._id} value={indicator._id}>
+                {indicator.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => {
+              onClose();
+              setSelectedIndicatorId("");
+            }}
+            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+          >
+            Annuler
+          </button>
+          <button onClick={handleAddIndicator} className="button-primary">
+            Ajouter
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
