@@ -14,9 +14,7 @@ export default function Settings({ action }) {
       <div className="flex mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-            activeTab === "indicators"
-              ? "text-green-600 border-b-2 border-green-600"
-              : "text-gray-500 hover:text-green-600"
+            activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
           }`}
           onClick={() => setActiveTab("indicators")}
         >
@@ -26,9 +24,7 @@ export default function Settings({ action }) {
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-            activeTab === "settings"
-              ? "text-green-600 border-b-2 border-green-600"
-              : "text-gray-500 hover:text-green-600"
+            activeTab === "settings" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
           }`}
           onClick={() => setActiveTab("settings")}
         >
@@ -121,8 +117,32 @@ function IndicatorsTab({ action }) {
 }
 
 function ActionSettingsTab({ action }) {
-  const [actionData, setActionData] = useState(action);
+  const [actionData, setActionData] = useState({
+    type: "custom",
+    action_reference_id: "",
+    action_reference_name: "",
+    name: "",
+    description: "",
+    status: "no_status",
+    blocked_reason: "",
+    step_description: "",
+    date_start: "",
+    date_end: "",
+    budget_costs: "",
+    budget_description: "",
+    financial_aid: "",
+    financial_aid_description: "",
+    pilote: "",
+    pilote_description: "",
+    partners: "",
+    partners_description: "",
+    priority: "",
+    is_subsidized_by_program: false,
+    related_initiatives: "",
+    comment: ""
+  });
   const [referenceAction, setReferenceAction] = useState([]);
+  const [collectivities, setCollectivities] = useState([]);
 
   const fetchReferenceAction = async () => {
     try {
@@ -134,8 +154,19 @@ function ActionSettingsTab({ action }) {
     }
   };
 
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/collectivity/search`, {});
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setCollectivities(data);
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue");
+    }
+  };
+
   useEffect(() => {
     fetchReferenceAction();
+    fetchCollectivities();
   }, []);
 
   useEffect(() => {
@@ -152,27 +183,59 @@ function ActionSettingsTab({ action }) {
     }
   };
 
-  return (
-    <div className="p-8 card-shadow">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Paramètres de l'action</h2>
+  const ActionButtons = () => (
+    <div className="flex justify-end gap-3">
+      <button
+        onClick={handleSave}
+        className="px-5 py-2 bg-gray-900 text-white rounded-full hover:bg-black transition-colors font-medium"
+      >
+        Enregistrer
+      </button>
+    </div>
+  );
 
-      <div className="space-y-6">
-        <div className="flex gap-6">
-          <div className="flex-1">
+  return (
+    <div className="card-shadow">
+      {/* En-tête + boutons (haut) */}
+      <div className="flex items-start justify-between gap-4 p-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de l'action</h1>
+          <p className="text-gray-500 mt-1">Gère les informations, l'avancement et le contexte de l'action.</p>
+        </div>
+        <ActionButtons />
+      </div>
+
+      {/* Informations générales */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
             <label className="block text-sm font-semibold mb-2">Nom de l'action</label>
             <input
               type="text"
               value={actionData.name || ""}
-              onChange={(e) => setActionData({ ...actionData, name: e.target.value })}
+              onChange={(e) => setActionData({...actionData, name: e.target.value})}
               className="w-full input-primary"
             />
           </div>
-
-          <div className="flex-1">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Priorité</label>
+            <select
+              value={actionData.priority || ""}
+              onChange={(e) => setActionData({...actionData, priority: e.target.value})}
+              className="w-full input-primary"
+            >
+              <option value="">Sélectionner</option>
+              <option value="high">Haute</option>
+              <option value="medium">Moyenne</option>
+              <option value="low">Basse</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-semibold mb-2">Statut</label>
             <select
               value={actionData.status}
-              onChange={(e) => setActionData({ ...actionData, status: e.target.value })}
+              onChange={(e) => setActionData({...actionData, status: e.target.value})}
               className="w-full input-primary"
             >
               <option value="no_status">Pas de statut</option>
@@ -182,113 +245,117 @@ function ActionSettingsTab({ action }) {
               <option value="completed">Terminé</option>
             </select>
           </div>
-
-          <div className="flex-1">
-            <label className="block text-sm font-semibold mb-2">Priorité</label>
-            <select
-              value={actionData.priority || ""}
-              onChange={(e) => setActionData({ ...actionData, priority: e.target.value })}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              <option value="high">Haute</option>
-              <option value="medium">Moyenne</option>
-              <option value="low">Basse</option>
-            </select>
-          </div>
+          {actionData.status === "blocked" ? (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold mb-2">Raison de blocage</label>
+              <input
+                type="text"
+                value={actionData.blocked_reason || ""}
+                onChange={(e) => setActionData({...actionData, blocked_reason: e.target.value})}
+                className="w-full input-primary"
+              />
+            </div>
+          ) : null}
         </div>
+      </div>
 
-        {/* Type et Référence */}
-        <div className="flex gap-6">
-          <div className="flex-1">
+      {/* Type et référence */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Type et référence</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <label className="block text-sm font-semibold mb-2">Type</label>
             <select
               value={actionData.type}
-              onChange={(e) => setActionData({ ...actionData, type: e.target.value })}
+              onChange={(e) => setActionData({...actionData, type: e.target.value})}
               className="w-full input-primary"
             >
               <option value="custom">Custom</option>
               <option value="reference">Reference</option>
             </select>
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
             <select
               value={actionData.action_reference_id || ""}
               onChange={(e) => {
-                const selectedAction = referenceAction.find((ref) => ref._id === e.target.value);
-                setActionData({
-                  ...actionData,
-                  action_reference_id: e.target.value,
-                  action_reference_name: selectedAction?.name,
-                });
+                const selectedAction = referenceAction.find(ref => ref._id === e.target.value);
+                setActionData({ ...action, action_reference_id: e.target.value, action_reference_name: selectedAction?.name });
               }}
               className="w-full input-primary"
             >
               <option value="">Sélectionner</option>
               {referenceAction.map((refAction) => (
-                <option key={refAction._id} value={refAction._id}>
-                  {refAction.name}
-                </option>
+                <option key={refAction._id} value={refAction._id}>{refAction.name}</option>
               ))}
             </select>
           </div>
         </div>
 
-        <div className="flex-1 flex items-end pb-1">
-          <label className="flex items-center gap-2">
+        <div className="flex items-center justify-between border rounded-xl p-4 bg-gray-50 mt-4">
+          <label className="flex items-center gap-3">
             <input
               type="checkbox"
               checked={actionData.is_subsidized_by_program || false}
-              onChange={(e) => setActionData({ ...actionData, is_subsidized_by_program: e.target.checked })}
+              onChange={(e) => setActionData({...actionData, is_subsidized_by_program: e.target.checked})}
               className="w-4 h-4"
             />
-            <span className="text-sm font-semibold">Subventionné par le programme</span>
+            <span className="text-sm font-medium text-gray-800">Subventionné par le programme</span>
           </label>
         </div>
+      </div>
 
-        {actionData.status === "blocked" && (
+      {/* Collectivité et calendrier */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Collectivité et calendrier</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-semibold mb-2">Raison de blocage</label>
-            <input
-              type="text"
-              value={actionData.blocked_reason || ""}
-              onChange={(e) => setActionData({ ...actionData, blocked_reason: e.target.value })}
+            <label className="block text-sm font-semibold mb-2">Collectivité</label>
+            <select
+              value={actionData.collectivity_id || ""}
+              onChange={(e) => setActionData({
+                ...actionData,
+                collectivity_id: e.target.value,
+                collectivity_name: collectivities.find(c => c._id === e.target.value)?.name
+              })}
               className="w-full input-primary"
-            />
+            >
+              <option value="">Sélectionner</option>
+              {collectivities.map((collectivity) => (
+                <option key={collectivity._id} value={collectivity._id}>{collectivity.name}</option>
+              ))}
+            </select>
           </div>
-        )}
-
-        <div className="flex gap-6">
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Date de début</label>
             <input
               type="date"
-              value={actionData.date_start ? new Date(actionData.date_start).toISOString().split("T")[0] : ""}
-              onChange={(e) => setActionData({ ...actionData, date_start: e.target.value })}
+              value={actionData.date_start ? new Date(actionData.date_start).toISOString().split('T')[0] : ""}
+              onChange={(e) => setActionData({...actionData, date_start: e.target.value})}
               className="w-full input-primary"
             />
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Date de fin</label>
             <input
               type="date"
-              value={actionData.date_end ? new Date(actionData.date_end).toISOString().split("T")[0] : ""}
-              onChange={(e) => setActionData({ ...actionData, date_end: e.target.value })}
+              value={actionData.date_end ? new Date(actionData.date_end).toISOString().split('T')[0] : ""}
+              onChange={(e) => setActionData({...actionData, date_end: e.target.value})}
               className="w-full input-primary"
             />
           </div>
         </div>
+      </div>
 
-        {/* Pilote */}
-        <div className="flex gap-6">
-          <div className="flex-1">
+      {/* Responsables et partenaires */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Responsables et partenaires</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <label className="block text-sm font-semibold mb-2">Pilote</label>
             <select
               value={actionData.pilote || ""}
-              onChange={(e) => setActionData({ ...actionData, pilote: e.target.value })}
+              onChange={(e) => setActionData({...actionData, pilote: e.target.value})}
               className="w-full input-primary"
             >
               <option value="">Sélectionner</option>
@@ -296,24 +363,20 @@ function ActionSettingsTab({ action }) {
               <option value="acteur_economique">Acteur économique</option>
             </select>
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Description du pilote</label>
             <input
               type="text"
               value={actionData.pilote_description || ""}
-              onChange={(e) => setActionData({ ...actionData, pilote_description: e.target.value })}
+              onChange={(e) => setActionData({...actionData, pilote_description: e.target.value})}
               className="w-full input-primary"
             />
           </div>
-        </div>
-
-        <div className="flex gap-6">
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Partenaires</label>
             <select
               value={actionData.partners || ""}
-              onChange={(e) => setActionData({ ...actionData, partners: e.target.value })}
+              onChange={(e) => setActionData({...actionData, partners: e.target.value})}
               className="w-full input-primary"
             >
               <option value="">Sélectionner</option>
@@ -321,117 +384,107 @@ function ActionSettingsTab({ action }) {
               <option value="acteur_economique">Acteur économique</option>
             </select>
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
             <input
               type="text"
               value={actionData.partners_description || ""}
-              onChange={(e) => setActionData({ ...actionData, partners_description: e.target.value })}
+              onChange={(e) => setActionData({...actionData, partners_description: e.target.value})}
               className="w-full input-primary"
             />
           </div>
         </div>
+      </div>
 
-        {/* Budget */}
-        <div className="flex gap-6">
-          <div className="flex-1">
+      {/* Budget */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Budget</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <label className="block text-sm font-semibold mb-2">Coûts budget</label>
             <input
               type="number"
               value={actionData.budget_costs || ""}
-              onChange={(e) => setActionData({ ...actionData, budget_costs: e.target.value })}
+              onChange={(e) => setActionData({...actionData, budget_costs: e.target.value})}
               className="w-full input-primary"
             />
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Description du budget</label>
             <input
               type="text"
               value={actionData.budget_description || ""}
-              onChange={(e) => setActionData({ ...actionData, budget_description: e.target.value })}
+              onChange={(e) => setActionData({...actionData, budget_description: e.target.value})}
               className="w-full input-primary"
             />
           </div>
-        </div>
-
-        {/* Aide financière */}
-        <div className="flex gap-6">
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Aide financière</label>
             <input
               type="number"
               value={actionData.financial_aid || ""}
-              onChange={(e) => setActionData({ ...actionData, financial_aid: e.target.value })}
+              onChange={(e) => setActionData({...actionData, financial_aid: e.target.value})}
               className="w-full input-primary"
             />
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Description aide financière</label>
             <input
               type="text"
               value={actionData.financial_aid_description || ""}
-              onChange={(e) => setActionData({ ...actionData, financial_aid_description: e.target.value })}
+              onChange={(e) => setActionData({...actionData, financial_aid_description: e.target.value})}
               className="w-full input-primary"
             />
           </div>
         </div>
+      </div>
 
-        {/* Initiatives liées */}
-        <div className="flex gap-6">
-          <div className="flex-1">
-            <div>
-              <label className="block text-sm font-semibold mb-2">Initiatives liées</label>
-              <textarea
-                rows="4"
-                value={actionData.related_initiatives || ""}
-                onChange={(e) => setActionData({ ...actionData, related_initiatives: e.target.value })}
-                className="w-full input-primary rounded-lg"
-              />
-            </div>
+      {/* Contenu et suivi */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Contenu et suivi</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Initiatives liées</label>
+            <textarea
+              rows="4"
+              value={actionData.related_initiatives || ""}
+              onChange={(e) => setActionData({...actionData, related_initiatives: e.target.value})}
+              className="w-full input-primary rounded-lg"
+            />
           </div>
-
-          <div className="flex-1">
+          <div>
             <label className="block text-sm font-semibold mb-2">Description des étapes</label>
             <textarea
               rows="4"
               value={actionData.step_description || ""}
-              onChange={(e) => setActionData({ ...actionData, step_description: e.target.value })}
+              onChange={(e) => setActionData({...actionData, step_description: e.target.value})}
               className="w-full input-primary rounded-lg"
             />
           </div>
         </div>
-
-        {/* Description */}
-        <div>
+        <div className="mt-4">
           <label className="block text-sm font-semibold mb-2">Description</label>
           <textarea
             value={actionData.description || ""}
-            onChange={(e) => setActionData({ ...actionData, description: e.target.value })}
+            onChange={(e) => setActionData({...actionData, description: e.target.value})}
             rows="4"
             className="w-full input-primary rounded-lg"
           />
         </div>
-
-        {/* Commentaire */}
-        <div>
+        <div className="mt-4">
           <label className="block text-sm font-semibold mb-2">Commentaire</label>
           <textarea
             value={actionData.comment || ""}
-            onChange={(e) => setActionData({ ...actionData, comment: e.target.value })}
+            onChange={(e) => setActionData({...actionData, comment: e.target.value})}
             rows="4"
             className="w-full input-primary rounded-lg"
           />
         </div>
+      </div>
 
-        {/* Bouton d'action */}
-        <div className="flex justify-end pt-4">
-          <button onClick={handleSave} className="button-primary">
-            Enregistrer
-          </button>
-        </div>
+      {/* Boutons bas */}
+      <div className="pt-6 mt-6 border-t border-light-border px-6 pb-6">
+        <ActionButtons />
       </div>
     </div>
   );
@@ -495,10 +548,10 @@ const AddIndicatorModal = ({ isOpen, onClose, action }) => {
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un indicateur</h2>
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un indicateur</label>
-          <select
+          <select 
             value={selectedIndicatorId}
             onChange={(e) => setSelectedIndicatorId(e.target.value)}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+            className="w-full input-primary"
           >
             <option value="">-- Choisir un indicateur --</option>
             {allIndicators.map((indicator) => (
@@ -509,16 +562,7 @@ const AddIndicatorModal = ({ isOpen, onClose, action }) => {
           </select>
         </div>
 
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={() => {
-              onClose();
-              setSelectedIndicatorId("");
-            }}
-            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
-          >
-            Annuler
-          </button>
+        <div className="flex justify-end">
           <button onClick={handleAddIndicator} className="button-primary">
             Ajouter
           </button>
