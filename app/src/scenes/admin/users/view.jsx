@@ -150,13 +150,13 @@ function UserInfoTab({ user, setUser }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+    <div className="card-shadow">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations générales</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
             <input
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              className="w-full input-primary"
               value={values.name}
               onChange={(e) => setValues({ ...values, name: e.target.value })}
               placeholder="Nom de l'utilisateur"
@@ -166,7 +166,7 @@ function UserInfoTab({ user, setUser }) {
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
             <input
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              className="w-full input-primary"
               value={values.email}
               onChange={(e) => setValues({ ...values, email: e.target.value })}
               placeholder="email@exemple.fr"
@@ -176,7 +176,7 @@ function UserInfoTab({ user, setUser }) {
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">Rôle</label>
             <select
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+              className="w-full input-primary"
               value={values.role}
               onChange={(e) => setValues({ ...values, role: e.target.value })}
             >
@@ -188,7 +188,7 @@ function UserInfoTab({ user, setUser }) {
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
             <select
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+              className="w-full input-primary"
               value={values.status || "active"}
               onChange={(e) => setValues({ ...values, status: e.target.value })}
             >
@@ -199,7 +199,7 @@ function UserInfoTab({ user, setUser }) {
 
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2"> Collectivités </label>
-            <div className="mb-3 min-h-[60px] bg-gray-50 rounded-lg p-3 border border-gray-200">
+            <div className="mb-3">
               {(user?.collectivities) && user?.collectivities?.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {(user?.collectivities || []).map((c) => (
@@ -223,7 +223,7 @@ function UserInfoTab({ user, setUser }) {
 
             <div className="flex items-center gap-2">
               <select
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+                className="flex-1 input-primary"
                 value={selectedCollectivityId}
                 onChange={(e) => setSelectedCollectivityId(e.target.value)}
               >
@@ -235,7 +235,7 @@ function UserInfoTab({ user, setUser }) {
                 ))}
               </select>
               <button
-                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
+                className="button-primary"
                 onClick={addCollectivity}
               >
                 Ajouter
@@ -248,13 +248,13 @@ function UserInfoTab({ user, setUser }) {
           <ResetPassword userId={user._id} />
           <div className="flex items-center gap-3">
             <button
-              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+              className="button-primary"
               onClick={onUpdate}
             >
               Enregistrer
             </button>
             <button
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+              className="button-primary bg-red-600"
               onClick={onDelete}
             >
               Supprimer
@@ -453,19 +453,16 @@ function UserActionRightsSection({ user }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+    <div className="card-shadow">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Droits d'action</h2>
           <p className="text-sm text-gray-600 mt-1">Gérer les permissions d'accès aux actions</p>
         </div>
         <button
-          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm inline-flex items-center gap-2"
+          className="button-primary"
           onClick={() => setAddOpen(true)}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
           Ajouter un droit
         </button>
       </div>
@@ -541,13 +538,13 @@ function UserActionRightsSection({ user }) {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors"
+                        className="button-primary"
                         onClick={() => onSaveRow(r)}
                       >
                         Enregistrer
                       </button>
                       <button
-                        className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors"
+                        className="button-primary bg-red-600"
                         onClick={() => onDeleteRow(r)}
                       >
                         Supprimer
@@ -562,13 +559,13 @@ function UserActionRightsSection({ user }) {
 
       <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} className="max-w-lg">
         <div className="p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un droit</h3>
+          <h3 className="text-xl font-semibold mb-6">Ajouter un droit</h3>
           
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
               <select
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+                className="w-full input-primary"
                 value={addValues.action_id}
                 onChange={(e) => setAddValues({ ...addValues, action_id: e.target.value })}
               >
@@ -584,14 +581,14 @@ function UserActionRightsSection({ user }) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
               <input
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                className="w-full input-primary"
                 value={addValues.description}
                 onChange={(e) => setAddValues({ ...addValues, description: e.target.value })}
                 placeholder="Description optionnelle"
               />
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="card-shadow">
               <p className="text-sm font-medium text-gray-700 mb-3">Permissions</p>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -618,7 +615,7 @@ function UserActionRightsSection({ user }) {
 
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
             <button
-              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+              className="button-primary"
               onClick={() => setAddOpen(false)}
             >
               Annuler
@@ -638,7 +635,7 @@ function UserActionRightsSection({ user }) {
 
 function UserHistoryTab({ user }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+    <div className="card-shadow">
       <h2 className="text-xl font-semibold text-gray-900">Historique actions</h2>
       <p className="text-sm text-gray-600 mt-1">Historique des actions effectuées par l'utilisateur</p>
     </div>
