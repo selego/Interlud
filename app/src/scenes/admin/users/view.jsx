@@ -588,7 +588,7 @@ function UserActionRightsSection({ user }) {
               />
             </div>
 
-            <div className="card-shadow">
+            <div className="mb-3">
               <p className="text-sm font-medium text-gray-700 mb-3">Permissions</p>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -614,16 +614,7 @@ function UserActionRightsSection({ user }) {
           </div>
 
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
-            <button
-              className="button-primary"
-              onClick={() => setAddOpen(false)}
-            >
-              Annuler
-            </button>
-            <button
-              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm"
-              onClick={handleAdd}
-            >
+            <button className="button-primary" onClick={handleAdd} >
               Ajouter
             </button>
           </div>
