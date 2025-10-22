@@ -7,14 +7,16 @@ import api from "@/services/api"
 
 export default () => {
   const [values, setValues] = useState({ email: "admin@selego.co", password: "abc123$$" })
-  const { user, setUser } = store()
+  const { user, setUser, setCollectivity, setActionRights } = store()
   const navigate = useNavigate()
 
   const login = async () => {
     try {
-      const { user, token } = await api.post(`/user/signin`, values)
+      const { user, token, userActionRights, collectivity } = await api.post(`/user/signin`, values)
       if (token) api.setToken(token)
       if (user) setUser(user)
+      if (userActionRights) setActionRights(userActionRights)
+      if (collectivity) setCollectivity(collectivity)
     } catch (e) {
       console.log("e", e)
       toast.error(e.code)

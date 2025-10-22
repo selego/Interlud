@@ -22,6 +22,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
+    if (req.body.user_id) query.user_id = req.body.user_id;
     const total = await UserActionRight.countDocuments(query);
     const data = await UserActionRight.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
     return res.status(200).send({ ok: true, data, total });

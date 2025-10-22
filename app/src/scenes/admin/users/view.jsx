@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FiUser, FiShield, FiClock, FiEye, FiEyeOff } from "react-icons/fi";
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff,FiHome, FiX} from "react-icons/fi";
 
 import Modal from "@/components/modal";
 import api from "@/services/api";
@@ -37,7 +37,7 @@ export default function View() {
       <div className="flex border-b border-gray-200 mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-          activeTab === "info"  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600"}`}
+          activeTab === "info"  ? "text-primary-green border-b-2 border-primary-green"  : "text-gray-500 hover:text-primary-green"}`}
           onClick={() => setActiveTab("info")}
         >
           <FiUser size={16} />
@@ -46,7 +46,16 @@ export default function View() {
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-          activeTab === "rights"  ? "text-green-600 border-b-2 border-green-600"  : "text-gray-500 hover:text-green-600" }`}
+          activeTab === "collectivities"  ? "text-primary-green border-b-2 border-primary-green"  : "text-gray-500 hover:text-primary-green" }`}
+          onClick={() => setActiveTab("collectivities")}
+        >
+          <FiHome size={16} />
+          Collectivités
+        </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+          activeTab === "rights"  ? "text-primary-green border-b-2 border-primary-green"  : "text-gray-500 hover:text-primary-green" }`}
           onClick={() => setActiveTab("rights")}
         >
           <FiShield size={16} />
@@ -55,7 +64,7 @@ export default function View() {
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-          activeTab === "history"  ? "text-green-600 border-b-2 border-green-600"   : "text-gray-500 hover:text-green-600"}`}
+          activeTab === "history"  ? "text-primary-green border-b-2 border-primary-green"   : "text-gray-500 hover:text-primary-green"}`}
           onClick={() => setActiveTab("history")}
         >
           <FiClock size={16} />
@@ -65,6 +74,7 @@ export default function View() {
       {activeTab === "info" && (<UserInfoTab user={user} setUser={setUser} />)}
       {activeTab === "rights" && (<UserActionRightsSection user={user} />)}
       {activeTab === "history" && (<UserHistoryTab user={user} />)}
+      {activeTab === "collectivities" && (<UserCollectivitiesTab user={user} setUser={setUser} />)}
     </div>
   );
 }
@@ -72,24 +82,6 @@ export default function View() {
 function UserInfoTab({ user, setUser }) {
   const navigate = useNavigate();
   const [values, setValues] = useState({ name:  user?.name || "", email: user?.email ||  "", role: user.role || "", status: user.status || "" });
-  const [collectivities, setCollectivities] = useState([]);
-  const [selectedCollectivityId, setSelectedCollectivityId] = useState("");
-
-  const fetchCollectivities = async () => {
-    try {
-      const { ok, data, code } = await api.post("/collectivity/search", {});
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setCollectivities(data);
-    } catch (e) {
-      console.log(e);
-      toast.error("Une erreur est survenue");
-    }
-  };
-
-  useEffect(() => {
-    fetchCollectivities();
-  }, []);
-
   const onUpdate = async () => {
     try {
       const { ok, data, code } = await api.put(`/user/${user._id}`, values);
@@ -109,40 +101,6 @@ function UserInfoTab({ user, setUser }) {
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Utilisateur supprimé");
       navigate("/admin/users");
-    } catch (e) {
-      console.log(e);
-      toast.error("Une erreur est survenue");
-    }
-  };
-
-  const addCollectivity = async () => {
-    if (!selectedCollectivityId) return toast.error("Sélectionnez une collectivité");
-    const c = collectivities.find((x) => x._id === selectedCollectivityId);
-    if (!c) return toast.error("Collectivité introuvable");
-    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
-    const exists = current.some((x) => x.id === c._id);
-    if (exists) return toast.error("Déjà associée");
-    const updated = [...current, { id: c._id, name: c.name }];
-    try {
-      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setUser(data);
-      setSelectedCollectivityId("");
-      toast.success("Collectivité ajoutée");
-    } catch (e) {
-      console.log(e);
-      toast.error("Une erreur est survenue");
-    }
-  };
-
-  const removeCollectivity = async (idToRemove) => {
-    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
-    const updated = current.filter((x) => x.id !== idToRemove);
-    try {
-      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setUser(data);
-      toast.success("Collectivité supprimée");
     } catch (e) {
       console.log(e);
       toast.error("Une erreur est survenue");
@@ -195,52 +153,6 @@ function UserInfoTab({ user, setUser }) {
               <option value="active">Actif</option>
               <option value="inactive">Inactif</option>
             </select>
-          </div>
-
-          <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2"> Collectivités </label>
-            <div className="mb-3">
-              {(user?.collectivities) && user?.collectivities?.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {(user?.collectivities || []).map((c) => (
-                    <div
-                      key={c.id}
-                      className="inline-flex items-center gap-2 bg-white border border-gray-300 rounded-full px-3 py-1.5 text-sm"
-                    >
-                      <span className="text-gray-700">{c.name || c.id}</span>
-                      <button className="text-red-500 hover:text-red-700 transition-colors" onClick={() => removeCollectivity(c.id)} title="Retirer" >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-gray-500 text-sm">Aucune collectivité associée</span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                className="flex-1 input-primary"
-                value={selectedCollectivityId}
-                onChange={(e) => setSelectedCollectivityId(e.target.value)}
-              >
-                <option value="">Sélectionner une collectivité</option>
-                {collectivities.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="button-primary"
-                onClick={addCollectivity}
-              >
-                Ajouter
-              </button>
-            </div>
           </div>
         </div>
 
@@ -303,7 +215,7 @@ function ResetPassword({ userId }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">Nouveau mot de passe</label>
               <div className="relative">
                 <input
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all pr-10"
+                  className="w-full input-primary"
                   type={showNewPassword ? "text" : "password"}
                   placeholder="Entrer le nouveau mot de passe"
                   value={values.newPassword}
@@ -316,7 +228,7 @@ function ResetPassword({ userId }) {
                 >
                   {showNewPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
                 </button>
-              </div>
+              </div> 
             </div>
 
             <div>
@@ -340,9 +252,9 @@ function ResetPassword({ userId }) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
+          <div className="flex justify-end">
             <button
-              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="button-primary"
               disabled={!values.newPassword || !values.verifyPassword}
               onClick={resetPasswordHandle}
             >
@@ -520,7 +432,7 @@ function UserActionRightsSection({ user }) {
                         copy[idx] = { ...copy[idx], can_read: !copy[idx].can_read };
                         setRights(copy);
                       }}
-                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      className="w-4 h-4 input-primary"
                     />
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -532,7 +444,7 @@ function UserActionRightsSection({ user }) {
                         copy[idx] = { ...copy[idx], can_write: !copy[idx].can_write };
                         setRights(copy);
                       }}
-                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      className="w-4 h-4 input-primary"
                     />
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -596,7 +508,7 @@ function UserActionRightsSection({ user }) {
                     type="checkbox"
                     checked={addValues.can_read}
                     onChange={() => setAddValues({ ...addValues, can_read: !addValues.can_read })}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    className="w-4 h-4 input-primary"
                   />
                   <span className="text-sm text-gray-700">Lire</span>
                 </label>
@@ -605,7 +517,7 @@ function UserActionRightsSection({ user }) {
                     type="checkbox"
                     checked={addValues.can_write}
                     onChange={() => setAddValues({ ...addValues, can_write: !addValues.can_write })}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    className="w-4 h-4 input-primary"
                   />
                   <span className="text-sm text-gray-700">Écrire</span>
                 </label>
@@ -613,7 +525,7 @@ function UserActionRightsSection({ user }) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
+          <div className="flex justify-end">
             <button className="button-primary" onClick={handleAdd} >
               Ajouter
             </button>
@@ -623,6 +535,190 @@ function UserActionRightsSection({ user }) {
     </div>
   );
 }
+
+function UserCollectivitiesTab({ user, setUser }) {
+  const [collectivities, setCollectivities] = useState([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addValues, setAddValues] = useState({  collectivity_id: "", role: "user"  });
+
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data, code } = await api.post("/collectivity/search", {});
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setCollectivities(data);
+      console.log('collectivities', data);
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  useEffect(() => {
+    fetchCollectivities();
+  }, []);
+
+  const addCollectivity = async () => {
+    if (!addValues.collectivity_id) return toast.error("Sélectionnez une collectivité");
+  
+    const c = collectivities.find((x) => x._id === addValues.collectivity_id);
+    if (!c) return toast.error("Collectivité introuvable");
+    
+    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
+    const exists = current.some((x) => x._id === c._id); 
+    if (exists) return toast.error("Cette collectivité est déjà associée");
+    
+    const updated = [...current, { id: c._id, name: c.name, role: addValues.role }]; 
+    
+    try {
+      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      setAddOpen(false);
+      setAddValues({ collectivity_id: "", role: "user" });
+      toast.success("Collectivité ajoutée avec succès");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const updateCollectivityRole = async (collectivityId, newRole) => {
+    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
+    const updated = current.map(c =>   c.id === collectivityId ? { ...c, role: newRole } : c );
+    
+    try {
+      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      toast.success("Rôle mis à jour");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const removeCollectivity = async (idToRemove) => {
+    if (!confirm("Êtes-vous sûr de vouloir retirer cette collectivité ?")) return;
+    
+    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
+    const updated = current.filter((x) => x.id !== idToRemove);
+    
+    try {
+      const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      toast.success("Collectivité retirée avec succès");
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  return (
+    <div className="card-shadow">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Collectivités & Rôles</h2>
+          <p className="text-sm text-gray-600 mt-1">Gérer les collectivités associées et leurs rôles</p>
+        </div>
+        <button
+          className="button-primary"
+          onClick={() => setAddOpen(true)}
+        >
+          Ajouter une collectivité
+        </button>
+      </div>
+
+      {user?.collectivities && user.collectivities.length > 0 ? (
+        <div className="space-y-4">
+          {user.collectivities.map((collectivity) => (
+            <div key={collectivity.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary-green/10 rounded-full flex items-center justify-center">
+                  <FiHome className="text-blue-600" size={18} />
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900">{collectivity.name}</h3>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <select
+                  className="input-primary"
+                  value={collectivity.role || "user"}
+                  onChange={(e) => updateCollectivityRole(collectivity.id, e.target.value)}
+                >
+                  <option value="user">Utilisateur</option>
+                  <option value="admin">Administrateur</option>
+                </select>
+                
+                <button
+                  className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                  onClick={() => removeCollectivity(collectivity.id)}
+                  title="Retirer cette collectivité"
+                >
+                  <FiX size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <FiHome className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Aucune collectivité associée</p>
+          <p className="text-xs text-gray-500 mt-1">Cliquez sur "Ajouter une collectivité" pour commencer</p>
+        </div>
+      )}
+
+      <Modal isOpen={addOpen} className="max-w-lg" onClose={() => setAddOpen(false)}>
+        <div className="p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Ajouter une collectivité</h3>
+          
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Collectivité</label>
+              <select
+                className="w-full input-primary"
+                value={addValues.collectivity_id}
+                onChange={(e) => {setAddValues({ ...addValues, collectivity_id: e.target.value }); console.log('collectivity_id', e.target.value);}}
+              >
+                <option value="">Sélectionner une collectivité</option>
+                {collectivities
+                  .filter(c => !user?.collectivities?.some(uc => uc.id === c._id))
+                  .map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Rôle dans cette collectivité</label>
+              <select
+                className="w-full input-primary"
+                value={addValues.role}
+                onChange={(e) => {setAddValues({ ...addValues, role: e.target.value }); console.log('role', addValues.role);}}
+              >
+                <option value="user">Utilisateur</option>
+                <option value="admin">Administrateur</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button  className="button-primary" onClick={addCollectivity} >
+              Ajouter
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+
 
 function UserHistoryTab({ user }) {
   return (

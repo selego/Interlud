@@ -9,7 +9,7 @@ import Logo from "@/assets/primary_logo.png";
 export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
-  const { user, collectivity, setCollectivity, setUser } = useStore();
+  const { user, collectivity, setCollectivity, setUser, setActionRights } = useStore();
   const navigate = useNavigate(); 
   const location = useLocation();
   
@@ -39,6 +39,7 @@ export default function Header() {
       api.removeToken();
       setUser(null);
       setCollectivity(null);
+      setActionRights([]);
       navigate("/auth");
     } catch (error) {
       console.log(error);
@@ -274,10 +275,10 @@ export default function Header() {
             )}
             
             {user?.collectivities && user.collectivities.length > 0 && (
-              <div className="">
+              <div className="flex items-center gap-3">
                 <select 
                   className="cursor-pointer text-lg font-semibold pr-6 appearance-auto"
-                  style={{  boxShadow: 'none' }}
+                  style={{ boxShadow: 'none' }}
                   value={collectivity?._id || ""}
                   onChange={(e) => handleCollectivityChange(e.target.value)}
                 >
@@ -288,6 +289,14 @@ export default function Header() {
                     </option>
                   ))}
                 </select>
+
+                {collectivity && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
+                    <span className="text-sm font-semibold text-primary-green capitalize">
+                      {user.collectivities.find(uc => uc.id === collectivity._id).role}
+                    </span>
+                  </div>
+                  )}
               </div>
             )}
           </div>
