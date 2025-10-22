@@ -1,13 +1,8 @@
 import React from "react";
-import Logo from "@/assets/primary_logo.png";
 import background_element from "@/assets/background_element.png";
 import { Footer } from "@codegouvfr/react-dsfr/Footer";
-import { Header } from "@codegouvfr/react-dsfr/Header";
-import useStore from "@/services/store";
-import CustomHeader from "./CustomHeader";
+import Header from "@/components/header";
 import { createConsentManagement } from "@codegouvfr/react-dsfr/consentManagement";
-import { useNavigate } from "react-router-dom";
-import api from "@/services/api";
 
 export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, FooterPersonalDataPolicyItem, useConsent } = createConsentManagement({
     finalityDescription: {
@@ -26,121 +21,10 @@ export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, F
   });
 
 export default function Layout({ children }) {
-  const navigate = useNavigate();
-  const { user, collectivity } = useStore();
-
-  async function handleLogout() {
-    try {
-      console.log("Déconnexion");
-      await api.post(`/user/logout`);
-      api.removeToken();
-      navigate("/auth");
-    } catch (error) {
-      console.log(error);
-    }
-  }
   return (
     <div className="flex flex-col min-h-screen">
       <div className="relative z-50">
-        <CustomHeader
-        brandTop={
-            <>
-            République <br />
-            Française
-            </>
-        }
-        homeLinkProps={{
-            to: "/",
-            title: `Accueil - InTerLUD`,
-        }}
-        serviceTitle={
-            <>
-            <span className="inline-block align-middle">
-                <img src={Logo} alt="logo" className="h-8 object-contain" />
-            </span>
-            </>
-        }
-
-        collectivityInfo={collectivity?._id}
-        collectivities={user?.collectivities || []}
-
-        {...(user && {
-        navigation: [
-            {
-            text: "Accueil",
-            linkProps: { to: "/" },
-            },
-            {
-            text: "À propos",
-            linkProps: { to: "/about" },
-            },
-            {
-            text: "Contact",
-            linkProps: { to: "/contact" },
-            },
-            {        text: "Admin",
-              menuLinks: [
-                  {
-                  text: "Collectivités",
-                  linkProps: { to: "/admin/collectivity" },
-                  },
-                  {
-                    text: "Actions",
-                    linkProps: { to: "/admin/action" },
-                    },
-                  {
-                  text: "Indicateurs",
-                  linkProps: { to: "/admin/indicator" },
-                  },
-                  {
-                    text: "Utilisateurs",
-                    linkProps: { to: "/admin/users" },
-                  },
-              ],
-            },
-        ],
-
-        quickAccessItems: [
-          {
-            iconId: "fr-icon-leaf-line",
-            linkProps: {
-              to: "/collectivites",
-            },
-            text: "Collectivités",
-          },
-          {
-            iconId: "fr-icon-question-line",
-            linkProps: {
-              to: "/aide",
-            },
-            text: "Aide",
-          },
-          {
-            iconId: "fr-icon-account-circle-line",
-            text: user?.name || "Mon compte",
-            menuItems: [
-              {
-                iconId: "fr-icon-settings-5-line",
-                linkProps: {
-                  to: "/parametres",
-                },
-                text: "Paramètres",
-              },
-              {
-                iconId: "fr-icon-logout-box-r-line",
-                text: "Se déconnecter",
-                buttonProps: {
-                  onClick: (e) => {
-                    e.preventDefault();
-                    handleLogout();
-                  },
-                },
-              },
-            ],
-          },
-        ]
-          })}
-        />
+        <Header />
       </div>
 
       <main className="flex-1 bg-white relative" id="main">
