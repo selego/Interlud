@@ -51,7 +51,7 @@ export default function Header() {
       text: "Accueil",
       linkProps: { to: "/" },
     },
-    {
+    user.role === "admin" && {
       text: "Admin",
       menuLinks: [
         {

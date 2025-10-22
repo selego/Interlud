@@ -117,7 +117,7 @@ function SituationTab({ action, situation }) {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Valeur</label>
                     <input
                       type="number"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      className="w-full input-primary"
                       value={value.value || ""}
                       onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, value: e.target.value } : v))}
                       placeholder="Entrer la valeur"
@@ -128,7 +128,7 @@ function SituationTab({ action, situation }) {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Année</label>
                     <input
                       type="number"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      className="w-full input-primary"
                       value={value.year || ""}
                       onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, year: e.target.value } : v))}
                       placeholder="2024"
@@ -139,7 +139,7 @@ function SituationTab({ action, situation }) {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Source</label>
                     <input
                       type="text"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      className="w-full input-primary"
                       value={value.source || ""}
                       onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, source: e.target.value } : v))}
                       placeholder="Source des données"
@@ -150,7 +150,7 @@ function SituationTab({ action, situation }) {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Commentaire</label>
                     <input
                       type="text"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      className="w-full input-primary"
                       value={value.comment || ""}
                       onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, comment: e.target.value } : v))}
                       placeholder="Commentaire optionnel"
@@ -160,7 +160,7 @@ function SituationTab({ action, situation }) {
 
                 <div className="flex justify-end">
                   <button
-                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+                    className="button-primary"
                     onClick={() => handleSave(value)}
                   >
                     Enregistrer
