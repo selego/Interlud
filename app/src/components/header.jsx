@@ -9,7 +9,7 @@ import Logo from "@/assets/primary_logo.png";
 export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
-  const { user, collectivity, setCollectivity } = useStore();
+  const { user, collectivity, setCollectivity, setUser } = useStore();
   const navigate = useNavigate(); 
   const location = useLocation();
   
@@ -37,6 +37,8 @@ export default function Header() {
       console.log("Déconnexion");
       await api.post(`/user/logout`);
       api.removeToken();
+      setUser(null);
+      setCollectivity(null);
       navigate("/auth");
     } catch (error) {
       console.log(error);
