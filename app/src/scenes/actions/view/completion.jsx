@@ -116,7 +116,7 @@ function SituationTab({ action, situation }) {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Valeur</label>
                     <input
-                      type="number"
+                      type="text"
                       className="w-full input-primary"
                       value={value.value || ""}
                       onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, value: e.target.value } : v))}
