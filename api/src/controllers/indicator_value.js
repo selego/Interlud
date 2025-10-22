@@ -21,6 +21,12 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   try {
     const indicatorValue = await IndicatorValue.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    
+    if (indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id) {
+      await IndicatorValue.updateMany( { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id },
+        { $set: {value: indicatorValue.value} } );
+    }
+    
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
