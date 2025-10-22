@@ -219,11 +219,11 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Navigation */}
-      {navigation.length > 0 && (
-        <div className="fr-header__menu">
-          <div className="fr-container">
-            <div className="flex items-center justify-between">
+      {/* Navigation wrapper is always rendered to satisfy DSFR expectations */}
+      <div className="fr-header__menu">
+        <div className="fr-container">
+          <div className="flex items-center justify-between">
+            {navigation.length > 0 && (
               <nav className="fr-nav" role="navigation" aria-label="Menu principal">
                 <ul className="fr-nav__list">
                   {navigation.map((item, index) => {
@@ -277,28 +277,30 @@ export default function Header() {
                   })}
                 </ul>
               </nav>
-              
-              {user?.collectivities && user.collectivities.length > 0 && (
-                <div className="">
-                  <select 
-                    className="cursor-pointer text-lg font-semibold pr-6 appearance-auto"
-                    style={{  boxShadow: 'none' }}
-                    value={collectivity?._id || ""}
-                    onChange={(e) => handleCollectivityChange(e.target.value)}
-                  >
-                    <option value="" disabled>Collectivité</option>
-                    {user.collectivities.map((collectivity) => (
-                      <option key={collectivity.id} value={collectivity.id}>
-                        #{collectivity.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
+            )}
+            
+            {user?.collectivities && user.collectivities.length > 0 && (
+              <div className="">
+                <select 
+                  className="cursor-pointer text-lg font-semibold pr-6 appearance-auto"
+                  style={{  boxShadow: 'none' }}
+                  value={collectivity?._id || ""}
+                  onChange={(e) => handleCollectivityChange(e.target.value)}
+                >
+                  <option value="" disabled>Collectivité</option>
+                  {user.collectivities.map((collectivity) => (
+                    <option key={collectivity.id} value={collectivity.id}>
+                      #{collectivity.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
+          {/* Target for DSFR header links cloning */}
+          <div className="fr-header__menu-links"></div>
         </div>
-      )}
+      </div>
     </header>
   );
 }
