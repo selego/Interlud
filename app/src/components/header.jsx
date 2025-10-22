@@ -52,14 +52,6 @@ export default function Header() {
       linkProps: { to: "/" },
     },
     {
-      text: "À propos",
-      linkProps: { to: "/about" },
-    },
-    {
-      text: "Contact",
-      linkProps: { to: "/contact" },
-    },
-    {
       text: "Admin",
       menuLinks: [
         {
@@ -249,7 +241,7 @@ export default function Header() {
                               className={`fr-collapse fr-menu ${openDropdown === index ? "fr-collapse--expanded" : ""}`}
                               id={`menu-${index}`}
                             >
-                              <ul className="fr-menu__list">
+                              <ul className="fr-menu__list w-48">
                                 {item.menuLinks.map((subItem, subIndex) => {
                                   const isSubActive = subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + '/'));
                                   return (
