@@ -72,26 +72,13 @@ export default function View() {
 function UserInfoTab({ user, setUser }) {
   const navigate = useNavigate();
   const { collectivity } = useStore();
-  const userCollectivity = user?.collectivities?.find((c) => c.id === collectivity?._id);
   
-  const [values, setValues] = useState({ 
-    name: user?.name || "", 
-    email: user?.email || "", 
-    status: user.status || "",
-    collectivityRole: userCollectivity?.role || "user" 
-  });
-
-  useEffect(() => {
-    if (userCollectivity) setValues(prev => ({ ...prev, collectivityRole: userCollectivity.role || "user" }));
-  }, [userCollectivity]);
+  const [values, setValues] = useState({ name: user?.name || "",email: user?.email || "",status: user.status || "",collectivityRole: user.collectivities?.find((c) => c.id === collectivity?._id).role || "user"});
 
   const onUpdate = async () => {
     try {
       const updatedCollectivities = user.collectivities.map((c) => c.id === collectivity._id ? { ...c, role: values.collectivityRole } : c);
-      const payload = {
-        ...values,
-        collectivities: updatedCollectivities
-      };
+      const payload = { ...values, collectivities: updatedCollectivities };
 
       const { ok, data, code } = await api.put(`/user/${user._id}`, payload);
       if (!ok) return toast.error(code || "Une erreur est survenue");
@@ -287,7 +274,6 @@ function UserActionRightsSection({ user }) {
     const [addOpen, setAddOpen] = useState(false);
     const [addValues, setAddValues] = useState({ user_id: "", user_name: "", action_id: "", description: "", can_read: true, can_write: false });
     const { collectivity } = useStore();
-    const userCollectivity = user?.collectivities?.find((c) => c.id === collectivity?._id);
 
     const fetchAction = async () => {
       try {
@@ -372,7 +358,7 @@ function UserActionRightsSection({ user }) {
   
     if (!user) return null;
   
-    if (userCollectivity?.role === "admin" || user.role === "admin")
+    if (user.collectivities?.find((c) => c.id === collectivity?._id).role === "admin" || user.role === "admin")
     return (
         <div className="card-shadow">
         <div className="flex items-center gap-3 mb-4">
