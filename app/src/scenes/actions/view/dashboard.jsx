@@ -11,8 +11,7 @@ export default function Dashboard({ action }) {
   const navigate = useNavigate()
 
   const isAdmin = user.role === "admin" || user.collectivities.some(c => c.id === action.collectivity_id && c.role === "admin");
-  const hasRightToRead = (isAdmin || userActionRights.some(right => right.action_id === action._id && right.can_read));
-  const hasRightToWrite = (isAdmin || userActionRights.some(right => right.action_id === action._id && right.can_write));
+  const right = userActionRights.find(right => right.action_id === action._id);
 
   const calculateStats = (data) => {
     const filled = data.filter(v => v.value != null && v.value !== "").length;
@@ -44,7 +43,7 @@ export default function Dashboard({ action }) {
     fetchData();
   }, [action]);
 
-  if (!hasRightToRead) {
+  if (!isAdmin && !right?.can_read) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg text-gray-600">Vous n'avez pas les droits pour accéder à cette action</div>
@@ -58,7 +57,7 @@ export default function Dashboard({ action }) {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard de l'action</h1>
           <div className="flex gap-3">
-            {hasRightToWrite && (
+            {isAdmin || right?.can_write && (
               <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/completion`)}>
               Compléter l'action
             </button>
