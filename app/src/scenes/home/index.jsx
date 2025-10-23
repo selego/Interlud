@@ -99,7 +99,9 @@ export default function Home() {
   const [data, setData] = useState(null)
   const [actions, setActions] = useState([])
   const navigate = useNavigate()
-  const { collectivity, user } = useStore()
+  const [collectivities, setCollectivities] = useState([])
+  const { collectivity, user, setUser } = useStore();
+  const [selectedCollectivityId, setSelectedCollectivityId] = useState("");
 
   const fetchActions = async () => {
     try {
@@ -111,6 +113,39 @@ export default function Home() {
       toast.error(error || "Une erreur est survenue")
     }
   }
+
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data } = await api.post(`/collectivity/search`);
+      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      setCollectivities(data)
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue")
+    }
+  }
+
+  const handleRequestAccess = async () => {
+    if (!selectedCollectivityId) return toast.error("Sélectionnez une collectivité");
+
+    try {
+      const collectivityToAdd = collectivities.find(c => c._id === selectedCollectivityId);
+      const { ok, data } = await api.put("/user", {
+        collectivities: [ ...(user.collectivities || []),
+          {
+            id: collectivityToAdd._id,
+            name: collectivityToAdd.name,
+            role: "user",
+            status: "pending"
+          }
+        ]
+      });
+      if (!ok) return toast.error("Erreur lors de la demande");
+      setUser(data);
+      toast.success("Demande envoyée ! En attente d'approbation");
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -125,6 +160,7 @@ export default function Home() {
       }
     }
     loadData()
+    fetchCollectivities()
     if (collectivity) fetchActions()
   }, [collectivity])
 
@@ -138,10 +174,45 @@ export default function Home() {
 
   if (!collectivity) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="">Vous n'avez pas encore de collectivités associées à votre compte. Veuillez contacter l'administrateur pour obtenir un accès.</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="max-w-md w-full card-shadow p-8">
+          <h2 className="text-2xl font-bold text-font-primary mb-4">
+            Rejoindre une collectivité
+          </h2>
+          
+          {user.collectivities?.length > 0 && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-sm text-yellow-800">
+                {user.collectivities.map((c) => (
+                  <div key={c.id}>
+                    <p>Demande en attente pour <strong>{c.name}</strong></p>
+                  </div>
+                ))}
+              </p>
+            </div>
+          )}
+  
+          <select
+            value={selectedCollectivityId}
+            onChange={(e) => setSelectedCollectivityId(e.target.value)}
+            className="w-full input-primary mb-4"
+          >
+            <option value="">Sélectionner une collectivité</option>
+            {collectivities.map((c) => (
+              <option key={c._id} value={c._id}>{c.name}</option>
+            ))}
+          </select>
+  
+          <button
+            onClick={handleRequestAccess}
+            disabled={!selectedCollectivityId}
+            className="w-full px-4 py-3 bg-primary-green text-white rounded-lg font-medium disabled:bg-gray-300"
+          >
+            Demander l'accès
+          </button>
+        </div>
       </div>
-    )
+    );
   }
 
 

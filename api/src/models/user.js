@@ -12,8 +12,13 @@ const Schema = new mongoose.Schema(
     role: { type: String, enum: ["user", "admin"], default: "user" },
     password_reset_token: { type: String, default: "" },
     password_reset_expires: { type: Date },
-    collectivities : [{ id : String, name : String, role : { type: String, enum: ["user", "admin"], default: "user" } }],
     status: { type: String, enum: ["active", "inactive"], default: "active" },
+    collectivities : [{ 
+      id : String, 
+      name : String, 
+      role : { type: String, enum: ["user", "admin"], default: "user" },
+      status: { type: String, enum: ["pending", "approved"]},
+    }],
 
   },
   { timestamps: true },

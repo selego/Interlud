@@ -44,7 +44,8 @@ router.post("/signin", async (req, res) => {
     if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
-    const collectivity = await Collectivity.findById(user.collectivities[0]?.id);
+    const approvedCollectivities = user.collectivities?.filter(c => c.status === 'approved') || [];
+    const collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
 
     
     const match = config.ENVIRONMENT === "development" || (await user.comparePassword(password));
@@ -201,6 +202,8 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   try {
     const { search, sort, per_page, page } = req.body;
     let query = {};
+
+    if (req.body.collectivity_id) query = { ...query, collectivities: { $elemMatch: { id: req.body.collectivity_id } } };
 
     const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, "\\$&");
     if (search) {
