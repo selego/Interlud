@@ -5,7 +5,10 @@ const store = create(set => ({
   setUser: user => set(() => ({ user })),
 
   collectivity: null,
-  setCollectivity: collectivity => set(() => ({ collectivity }))
+  setCollectivity: collectivity => set(() => ({ collectivity })),
+
+  userActionRights: [],
+  setActionRights: userActionRights => set(() => ({ userActionRights }))
 }))
 
 export default store

@@ -4,8 +4,9 @@ const jwt = require("jsonwebtoken");
 const router = express.Router();
 const crypto = require("crypto");
 
+const Collectivity = require("../models/collectivity");
 const UserObject = require("../models/user");
-
+const UserActionRightObject = require("../models/user_action_right");
 const config = require("../config");
 const { validatePassword } = require("../utils");
 const { BREVO_TEMPLATES } = require("../utils/constants");
@@ -42,6 +43,10 @@ router.post("/signin", async (req, res) => {
     const user = await UserObject.findOne({ email });
     if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
 
+    const userActionRights = await UserActionRightObject.find({ user_id: user._id });
+    const collectivity = await Collectivity.findById(user.collectivities[0].id);
+
+    
     const match = config.ENVIRONMENT === "development" || (await user.comparePassword(password));
     if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
@@ -51,7 +56,7 @@ router.post("/signin", async (req, res) => {
     const token = jwt.sign({ _id: user.id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie("jwt", token, cookieOptions());
 
-    return res.status(200).send({ ok: true, token, user });
+    return res.status(200).send({ ok: true, token, user, userActionRights, collectivity });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
