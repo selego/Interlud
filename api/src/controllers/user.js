@@ -252,7 +252,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false }),
   try {
     const user = await UserObject.findById(req.params.id);
     const obj = req.body;
-
     user.set(obj);
     await user.save();
 
@@ -297,6 +296,39 @@ router.post("/reset_password/:id", passport.authenticate(["admin"], { session: f
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+  }
+});
+
+
+router.post("/request-collectivity-access", passport.authenticate(["user", "applicant"], { session: false }), async (req, res) => {
+  try {
+    const { collectivityId } = req.body;
+    if (!collectivityId) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    
+    const collectivity = await Collectivity.findById(collectivityId);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND }); 
+
+    const user = await UserObject.findById(req.user._id);
+    if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    if (user.collectivities?.find(c => c.id === collectivityId)) return res.status(409).send({ ok: false, code: "ALREADY_REQUESTED" });
+
+    const updatedUser = await UserObject.findByIdAndUpdate( req.user._id, 
+      { collectivities: [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: "user", status: "pending"}] }, 
+      { new: true }
+    );
+
+    
+    await brevo.sendEmail(
+      [{ email: "axel@selego.co"}],
+      "Demande de collectivité",
+      `<p>uwu</p>`
+    );
+    
+    res.status(200).send({ ok: true, data: updatedUser });
+  } catch (error) {
+    capture(error);
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
   }
 });
 

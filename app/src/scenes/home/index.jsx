@@ -126,24 +126,13 @@ export default function Home() {
 
   const handleRequestAccess = async () => {
     if (!selectedCollectivityId) return toast.error("Sélectionnez une collectivité");
-
     try {
-      const collectivityToAdd = collectivities.find(c => c._id === selectedCollectivityId);
-      const { ok, data } = await api.put("/user", {
-        collectivities: [ ...(user.collectivities || []),
-          {
-            id: collectivityToAdd._id,
-            name: collectivityToAdd.name,
-            role: "user",
-            status: "pending"
-          }
-        ]
-      });
-      if (!ok) return toast.error("Erreur lors de la demande");
+      const { ok, data, code } = await api.post("/user/request-collectivity-access", { collectivityId: selectedCollectivityId });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
       setUser(data);
-      toast.success("Demande envoyée ! En attente d'approbation");
+      toast.success("Demande envoyée avec succès ! En attente d'approbation");
     } catch (error) {
-      toast.error("Une erreur est survenue");
+      toast.error(error.code || error.message || "Une erreur est survenue");
     }
   };
 
