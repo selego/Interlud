@@ -176,6 +176,7 @@ export default function Home() {
             <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
             <select 
               value={"Ce mois-ci"}
+              onChange={ (e) => console.log(e.target.value) }
               className="border border-secondary-green  bg-deco-background-green rounded-full text-sm px-3 py-2 text-[#768776]"
             >
               <option>Mois-ci</option>
@@ -309,6 +310,7 @@ export default function Home() {
             <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
             <select 
               value={"Mois"}
+              onChange={ (e) => console.log(e.target.value) }
               className="border border-secondary-green  bg-deco-background-green rounded-full text-sm text-[#768776] px-3 py-2"
             >
               <option>Mois</option>
@@ -431,8 +433,11 @@ export default function Home() {
             </button>
 
 
-            <select className="border border-secondary-green  bg-deco-background-green rounded-full text-sm text-[#768776] px-3 py-2">
-              <option>Tous les statuts</option>
+            <select
+            className="input-primary" 
+            onChange={ (e) => console.log(e.target.value) }
+            value={"Tous les statuts"}
+            >
               <option>Terminée</option>
               <option>À compléter</option>
               <option>En attente</option>
