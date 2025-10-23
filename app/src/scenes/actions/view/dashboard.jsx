@@ -100,7 +100,7 @@ export default function Dashboard({ action }) {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Progression globale</h2>
           <div className="w-full bg-gray-200 rounded-full h-6">
             <div 
-              className="bg-green-600 h-6 rounded-full flex items-center justify-center text-white text-sm font-medium"
+              className="bg-primary-green h-6 rounded-full flex items-center justify-center text-white text-sm font-medium"
               style={{ width: `${stats.completion}%` }}
             >
               {stats.completion > 10 && `${stats.completion}%`}
