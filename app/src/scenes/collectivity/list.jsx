@@ -104,12 +104,6 @@ export default function List() {
                         })}
                     </tbody>
                 </table>
-                
-                {users.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                        Aucun membre pour le moment
-                    </div>
-                )}
             </div>
         </div>
     )
