@@ -163,7 +163,7 @@ function InfoTab({ indicator, setIndicator }) {
   return (
     <div className="space-y-6">
       {/* Informations générales */}
-      <div className="space-y-4">
+      <div className="space-y-4 card-shadow">
         <h2 className="text-lg font-semibold text-gray-900 pb-2 border-b">
           Informations générales
         </h2>
@@ -311,7 +311,7 @@ function ValueIndicator({ indicator }) {
   const situationLabels = { init: 'Initial', ref: 'Référence', prev: 'Prévisionnel', expost: 'Ex-post' };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 card-shadow">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Suivi des valeurs</h2>
         <span className="text-xs text-gray-500">

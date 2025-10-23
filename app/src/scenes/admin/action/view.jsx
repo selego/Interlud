@@ -101,7 +101,7 @@ export default function View() {
       </button>
       <button
         onClick={handleSave}
-        className="px-5 py-2 bg-gray-900 text-white rounded-full hover:bg-black transition-colors font-medium"
+        className="button-primary"
       >
         Enregistrer
       </button>

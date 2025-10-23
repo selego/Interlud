@@ -51,7 +51,7 @@ export default function View() {
       
       <div className="flex justify-center">
         <div className="w-full max-w-2xl">
-          <div className="space-y-6">
+          <div className="space-y-6 card-shadow">
             <div className="flex gap-6">
               <div className="flex-1">
                 <label className="block text-sm font-semibold mb-2">
