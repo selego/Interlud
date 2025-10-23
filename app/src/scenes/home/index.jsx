@@ -125,7 +125,7 @@ export default function Home() {
       }
     }
     loadData()
-    fetchActions()
+    if (collectivity) fetchActions()
   }, [collectivity])
 
   if (loading) {
@@ -136,10 +136,10 @@ export default function Home() {
     )
   }
 
-  if (!data) {
+  if (!collectivity) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Erreur lors du chargement des données</div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="">Vous n'avez pas encore de collectivités associées à votre compte. Veuillez contacter l'administrateur pour obtenir un accès.</div>
       </div>
     )
   }
@@ -151,14 +151,6 @@ export default function Home() {
     { name: 'À compléter', value: data?.repartitionActions.aCompleter || 0 },
     { name: 'En attente', value: data?.repartitionActions.enAttente || 0 },
   ]
-
-  if (user?.collectivities?.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className=""> Vous n'avez pas encore de collectivités associées à votre compte. Veuillez contacter l'administrateur pour obtenir un accès.</div>
-      </div>
-    )
-  }
 
   return (
     <div className="">
