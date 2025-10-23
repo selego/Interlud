@@ -559,15 +559,11 @@ function UserCollectivitiesTab({ user, setUser }) {
 
   const addCollectivity = async () => {
     if (!addValues.collectivity_id) return toast.error("Sélectionnez une collectivité");
-  
     const c = collectivities.find((x) => x._id === addValues.collectivity_id);
     if (!c) return toast.error("Collectivité introuvable");
     
-    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
-    const exists = current.some((x) => x._id === c._id); 
-    if (exists) return toast.error("Cette collectivité est déjà associée");
-    
-    const updated = [...current, { id: c._id, name: c.name, role: addValues.role }]; 
+    const exists = (user?.collectivities || []).some((x) => x._id === c._id);    if (exists) return toast.error("Cette collectivité est déjà associée");
+    const updated = [...(user?.collectivities || []), { id: c._id, name: c.name, role: addValues.role }]; 
     
     try {
       const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
@@ -583,8 +579,7 @@ function UserCollectivitiesTab({ user, setUser }) {
   };
 
   const updateCollectivityRole = async (collectivityId, newRole) => {
-    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
-    const updated = current.map(c =>   c.id === collectivityId ? { ...c, role: newRole } : c );
+    const updated = (user?.collectivities || []).map(c =>   c.id === collectivityId ? { ...c, role: newRole } : c );
     
     try {
       const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
@@ -599,9 +594,7 @@ function UserCollectivitiesTab({ user, setUser }) {
 
   const removeCollectivity = async (idToRemove) => {
     if (!confirm("Êtes-vous sûr de vouloir retirer cette collectivité ?")) return;
-    
-    const current = Array.isArray(user?.collectivities) ? user.collectivities : [];
-    const updated = current.filter((x) => x.id !== idToRemove);
+    const updated = (user?.collectivities || []).filter((x) => x.id !== idToRemove);
     
     try {
       const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });

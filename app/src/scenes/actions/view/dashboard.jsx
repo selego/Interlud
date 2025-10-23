@@ -73,7 +73,7 @@ export default function Dashboard({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Indicateurs</p>
-            <p className="text-4xl font-bold text-blue-600">{[...new Set(indicatorValues.map(v => v.indicator_id))].length}</p>
+            <p className="text-4xl font-bold text-blue-600">{indicatorValues.length/4}</p>
             <p className="text-xs text-gray-500 mt-1">Nombre d'indicateurs</p>
           </div>
 
