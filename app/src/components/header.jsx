@@ -40,6 +40,7 @@ export default function Header() {
       setUser(null);
       setCollectivity(null);
       setActionRights([]);
+      localStorage.removeItem('selectedCollectivityId');
       navigate("/auth");
     } catch (error) {
       console.log(error);

@@ -44,7 +44,7 @@ router.post("/signin", async (req, res) => {
     if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
-    const collectivity = await Collectivity.findById(user.collectivities[0].id);
+    const collectivity = await Collectivity.findById(user.collectivities[0]?.id);
 
     
     const match = config.ENVIRONMENT === "development" || (await user.comparePassword(password));
