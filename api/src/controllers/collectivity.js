@@ -32,6 +32,8 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   try {
     let query = {};
 
+    if (req.body.search) query.name = { $regex: req.body.search, $options: "i" };
+
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Collectivity.countDocuments(query);

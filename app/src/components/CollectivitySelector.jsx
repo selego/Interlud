@@ -1,25 +1,32 @@
 import React, { useState, useEffect, useRef } from "react";
+import api from "@/services/api";
+import toast from "react-hot-toast";
 
-const CollectivitySelector = ({  collectivities = [],  onSelect }) => {
-  const [searchTerm, setSearchTerm] = useState("");
+const CollectivitySelector = ({ onSelect }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [filteredCollectivities, setFilteredCollectivities] = useState([]);
   const [selectedCollectivity, setSelectedCollectivity] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
   const dropdownRef = useRef(null);
+  const [collectivities, setCollectivities] = useState([]);
+  const [filters, setFilters] = useState({search: ""});
+
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data, code } = await api.post("/collectivity/search", filters);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setCollectivities(data);
+    } catch (error) {
+      console.error("Error fetching collectivities:", error);
+      toast.error("Une erreur est survenue");
+    }
+  };
 
   useEffect(() => {
-    setFilteredCollectivities(collectivities.filter(c =>  c.name.toLowerCase().includes(searchTerm.toLowerCase())));
-    if (searchTerm.trim() === "" || !isSearching) setFilteredCollectivities(collectivities);
-  }, [searchTerm, collectivities, isSearching]);
+    fetchCollectivities();
+  }, [filters]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-        setIsSearching(false);
-        if (selectedCollectivity) setSearchTerm(selectedCollectivity.name); else setSearchTerm("");
-      }
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target))  setIsDropdownOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -27,17 +34,9 @@ const CollectivitySelector = ({  collectivities = [],  onSelect }) => {
 
   const handleCollectivitySelect = (collectivity) => {
     setSelectedCollectivity(collectivity);
-    setSearchTerm(collectivity.name);
+    setFilters({...filters, search: collectivity.name});
     setIsDropdownOpen(false);
-    setIsSearching(false);
     onSelect?.(collectivity);
-  };
-
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    setIsSearching(true);
-    setIsDropdownOpen(true);
-    if (e.target.value === "") setSelectedCollectivity(null); onSelect?.(null);
   };
 
   return (
@@ -45,9 +44,9 @@ const CollectivitySelector = ({  collectivities = [],  onSelect }) => {
       <div className="relative">
         <input
           type="text"
-          value={searchTerm}
-          onChange={handleSearchChange}
-          onFocus={() => { setIsDropdownOpen(true); setIsSearching(true); setSearchTerm(""); }}
+          value={filters.search}
+          onChange={(e) => { setFilters({...filters, search: e.target.value})}}
+          onFocus={() => { setIsDropdownOpen(true); setFilters({...filters, search: ""}); }}
           placeholder="Renseignez le nom et sélectionnez votre collectivité"
           className="input-primary w-full py-4 text-lg pr-10"
           autoComplete="off"
@@ -56,9 +55,8 @@ const CollectivitySelector = ({  collectivities = [],  onSelect }) => {
           type="button"
           onClick={() => {
             setIsDropdownOpen(!isDropdownOpen);
-            if (!isDropdownOpen) {
-              setIsSearching(true);
-              setSearchTerm("");
+            if (!isDropdownOpen && !selectedCollectivity) {
+              setFilters({...filters, search: ""});
             }
           }}
           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
@@ -76,8 +74,8 @@ const CollectivitySelector = ({  collectivities = [],  onSelect }) => {
       
       {isDropdownOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {filteredCollectivities.length > 0 ? (
-            filteredCollectivities.map((c) => (
+          {collectivities.length > 0 ? (
+            collectivities.map((c) => (
               <div
                 key={c._id}
                 onClick={() => handleCollectivitySelect(c)}

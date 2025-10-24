@@ -100,9 +100,8 @@ export default function Home() {
   const [data, setData] = useState(null)
   const [actions, setActions] = useState([])
   const navigate = useNavigate()
-  const [collectivities, setCollectivities] = useState([])
   const { collectivity, user, setUser } = useStore();
-  const [selectedCollectivityId, setSelectedCollectivityId] = useState(null);
+  const [selectedCollectivity, setSelectedCollectivity] = useState(null);
 
   const fetchActions = async () => {
     try {
@@ -114,21 +113,10 @@ export default function Home() {
       toast.error(error || "Une erreur est survenue")
     }
   }
-
-  const fetchCollectivities = async () => {
-    try {
-      const { ok, data } = await api.post(`/collectivity/search`);
-      if (!ok) return toast.error(data.code || "Une erreur est survenue")
-      setCollectivities(data)
-    } catch (error) {
-      toast.error(error || "Une erreur est survenue")
-    }
-  }
-
   const handleRequestAccess = async () => {
-    if (!selectedCollectivityId) return toast.error("Sélectionnez une collectivité");
+    if (!selectedCollectivity) return toast.error("Sélectionnez une collectivité");
     try {
-      const { ok, data, code } = await api.post("/user/request-collectivity-access", { collectivityId: selectedCollectivityId });
+      const { ok, data, code } = await api.post("/user/request-collectivity-access", { collectivityId: selectedCollectivity._id });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setUser(data);
       toast.success("Demande envoyée avec succès ! En attente d'approbation");
@@ -150,7 +138,6 @@ export default function Home() {
       }
     }
     loadData()
-    fetchCollectivities()
     if (collectivity) fetchActions()
   }, [collectivity])
 
@@ -192,14 +179,13 @@ export default function Home() {
                       Choisissez votre collectivité
                     </label>
                     <CollectivitySelector
-                      collectivities={collectivities}
-                      onSelect={ (collectivity) => setSelectedCollectivityId(collectivity._id)}
+                      onSelect={ (collectivity) => setSelectedCollectivity(collectivity)}
                     />
                   </div>
 
                   <button
                     onClick={handleRequestAccess}
-                    disabled={!selectedCollectivityId}
+                    disabled={!selectedCollectivity}
                     className="button-primary w-full px-6 py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Demander l'accès
