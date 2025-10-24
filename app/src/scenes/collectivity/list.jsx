@@ -19,19 +19,6 @@ export default function List() {
         }
     }
 
-    const handleStatus = async (userId, status) => {
-        try {
-            const user = users.find(u => u._id === userId)
-            const updatedCollectivities = user.collectivities.map(c => c.id === collectivity._id ? { ...c, status } : c)
-            const { ok, code } = await api.put(`/user/${userId}`, { collectivities: updatedCollectivities })
-            if (!ok) return toast.error(code || "Une erreur est survenue")
-            
-            toast.success(`Utilisateur ${status === 'approved' ? 'approuvé' : 'rejeté'} !`)
-            fetchUsers()
-        } catch (error) {
-            toast.error("Une erreur est survenue")
-        }
-    }
 
     useEffect(() => {
         fetchUsers()
@@ -49,7 +36,6 @@ export default function List() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rôle</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -76,28 +62,6 @@ export default function List() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm">
-                                        {collectivityData?.status === 'pending' && (
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        handleStatus(user._id, 'approved')
-                                                    }}
-                                                    className="px-2 py-1 text-xs button-primary"
-                                                >
-                                                    Approuver
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        handleStatus(user._id, 'rejected')
-                                                    }}
-                                                    className="px-2 py-1 bg-red-500 text-white hover:bg-red-600 text-xs button-primary rounded-full"
-                                                >
-                                                    Rejeter
-                                                </button>
-                                            </div>
-                                        )}
                                     </td>
                                 </tr>
                             )

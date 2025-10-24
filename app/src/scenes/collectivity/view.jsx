@@ -103,9 +103,48 @@ function UserInfoTab({ user, setUser }) {
     }
   };
 
+  const handleStatus = async (status) => {
+    try {
+      const updatedCollectivities = user.collectivities.map((c) =>
+        c.id === collectivity._id ? { ...c, status } : c
+      );
+      const payload = { ...values, collectivities: updatedCollectivities };
+
+      const { ok, data, code } = await api.put(`/user/${user._id}`, payload);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setUser(data);
+      toast.success(`Utilisateur ${status === 'approved' ? 'approuvé' : 'rejeté'}`);
+    } catch (e) {
+      console.log(e);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
   return (
     <div className="card-shadow">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations générales</h2>
+
+      {user.collectivities?.find(c => c.id === collectivity._id)?.status === 'pending' && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-yellow-700">Demande en attente</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleStatus('approved')}
+                className="px-3 py-1 text-xs button-primary"
+              >
+                Approuver
+              </button>
+              <button
+                onClick={() => handleStatus('rejected')}
+                className="px-3 py-1 text-xs bg-red-500 text-white hover:bg-red-600 rounded"
+              >
+                Rejeter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="w-full">
@@ -462,11 +501,7 @@ function UserActionRightsSection({ user }) {
                           <input
                             type="checkbox"
                             checked={!!r.can_read}
-                            onChange={() => {
-                              const copy = [...rights];
-                              copy[idx] = { ...copy[idx], can_read: !copy[idx].can_read };
-                              setRights(copy);
-                            }}
+                            onChange={() => { const copy = [...rights]; copy[idx] = { ...copy[idx], can_read: !copy[idx].can_read }; setRights(copy); }}
                             className="w-4 h-4 input-primary"
                           />
                         </td>
@@ -476,7 +511,8 @@ function UserActionRightsSection({ user }) {
                             checked={!!r.can_write}
                             onChange={() => {
                               const copy = [...rights];
-                              copy[idx] = { ...copy[idx], can_write: !copy[idx].can_write };
+                              const newCanWrite = !copy[idx].can_write;
+                              copy[idx] = {  ...copy[idx],  can_write: newCanWrite, can_read: newCanWrite ? true : copy[idx].can_read };
                               setRights(copy);
                             }}
                             className="w-4 h-4 input-primary"
@@ -484,16 +520,10 @@ function UserActionRightsSection({ user }) {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              className="button-primary"
-                              onClick={() => onSaveRow(r)}
-                            >
+                            <button className="button-primary" onClick={() => onSaveRow(r)} >
                               Enregistrer
                             </button>
-                            <button
-                              className="button-primary bg-red-600"
-                              onClick={() => onDeleteRow(r)}
-                            >
+                            <button className="button-primary bg-red-600" onClick={() => onDeleteRow(r)} >
                               Supprimer
                             </button>
                           </div>
@@ -552,7 +582,14 @@ function UserActionRightsSection({ user }) {
                     <input
                       type="checkbox"
                       checked={addValues.can_write}
-                      onChange={() => setAddValues({ ...addValues, can_write: !addValues.can_write })}
+                      onChange={() => {
+                        const newCanWrite = !addValues.can_write;
+                        setAddValues({ 
+                          ...addValues, 
+                          can_write: newCanWrite,
+                          can_read: newCanWrite ? true : addValues.can_read // Si on coche "écrire", on coche automatiquement "lire"
+                        });
+                      }}
                       className="w-4 h-4 input-primary"
                     />
                     <span className="text-sm text-gray-700">Écrire</span>
