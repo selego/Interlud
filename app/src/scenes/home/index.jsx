@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
+import CollectivitySelector from "@/components/CollectivitySelector";
 
 const fetchData = async () => {
   await new Promise(resolve => setTimeout(resolve, 100))
@@ -101,7 +102,7 @@ export default function Home() {
   const navigate = useNavigate()
   const [collectivities, setCollectivities] = useState([])
   const { collectivity, user, setUser } = useStore();
-  const [selectedCollectivityId, setSelectedCollectivityId] = useState("");
+  const [selectedCollectivityId, setSelectedCollectivityId] = useState(null);
 
   const fetchActions = async () => {
     try {
@@ -190,17 +191,10 @@ export default function Home() {
                     <label htmlFor="collectivity" className="block text-sm font-medium text-gray-700 mb-3">
                       Choisissez votre collectivité
                     </label>
-                    <select
-                      id="collectivity"
-                      value={selectedCollectivityId}
-                      onChange={(e) => setSelectedCollectivityId(e.target.value)}
-                      className="input-primary w-full py-4 text-lg"
-                    >
-                      <option value="">Sélectionnez une collectivité...</option>
-                      {collectivities.map((c) => (
-                        <option key={c._id} value={c._id}>{c.name}</option>
-                      ))}
-                    </select>
+                    <CollectivitySelector
+                      collectivities={collectivities}
+                      onSelect={ (collectivity) => setSelectedCollectivityId(collectivity._id)}
+                    />
                   </div>
 
                   <button
