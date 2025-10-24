@@ -63,7 +63,7 @@ export default function Header() {
     }
   }
 
-  const navigation = user ? [
+  const navigation = user?.collectivities?.find(c => c.status === 'approved') ? [
     {
       text: "Accueil",
       linkProps: { to: "/" },

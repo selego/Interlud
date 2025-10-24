@@ -163,42 +163,105 @@ export default function Home() {
 
   if (!collectivity) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="max-w-md w-full card-shadow p-8">
-          <h2 className="text-2xl font-bold text-font-primary mb-4">
-            Rejoindre une collectivité
-          </h2>
-          
-          {user.collectivities?.length > 0 && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-              <p className="text-sm text-yellow-800">
-                {user.collectivities.map((c) => (
-                  <div key={c.id}>
-                    <p>Demande en attente pour <strong>{c.name}</strong></p>
+      <div className="relative overflow-hidden flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              Rejoindre une collectivité
+            </h2>
+            <p className="text-sm text-gray-600">
+              Accédez aux outils et ressources pour la logistique urbaine durable
+            </p>
+          </div>
+
+          <div className="card-shadow p-8 space-y-6">
+            {user.collectivities?.length > 0 && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
                   </div>
-                ))}
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Demandes en attente
+                    </h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      {user.collectivities.map((c) => (
+                        <p key={c.id} className="mb-1">
+                          <strong>{c.name}</strong> - En attente d'approbation
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="collectivity" className="block text-sm font-medium text-gray-700 mb-2">
+                  Sélectionner une collectivité
+                </label>
+                <select
+                  id="collectivity"
+                  value={selectedCollectivityId}
+                  onChange={(e) => setSelectedCollectivityId(e.target.value)}
+                  className="input-primary w-full py-3"
+                >
+                  <option value="">Choisissez une collectivité...</option>
+                  {collectivities.map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={handleRequestAccess}
+                disabled={!selectedCollectivityId}
+                className="button-primary w-full px-3 py-2"
+              >
+                Demander l'accès
+              </button>
+            </div>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Ou</span>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <p className="text-sm text-gray-600">
+                Vous ne trouvez pas votre collectivité ? &nbsp;
+                <button 
+                  className="text-primary-green hover:text-primary-green font-medium transition-colors"
+                  onClick={() => toast.info("Contactez le support InTerLUD+ pour ajouter votre collectivité")}
+                >
+                  Contacter le support InTerLUD+
+                </button>
               </p>
             </div>
-          )}
-  
-          <select
-            value={selectedCollectivityId}
-            onChange={(e) => setSelectedCollectivityId(e.target.value)}
-            className="w-full input-primary mb-4"
-          >
-            <option value="">Sélectionner une collectivité</option>
-            {collectivities.map((c) => (
-              <option key={c._id} value={c._id}>{c.name}</option>
-            ))}
-          </select>
-  
-          <button
-            onClick={handleRequestAccess}
-            disabled={!selectedCollectivityId}
-            className="w-full px-4 py-3 bg-primary-green text-white rounded-lg font-medium disabled:bg-gray-300"
-          >
-            Demander l'accès
-          </button>
+          </div>
+
+          <div className="bg-blue-50 border-l-4 border-secondary-green rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-secondary-green" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-primary-green">
+                  Une fois votre demande approuvée, vous pourrez accéder au tableau de bord de votre collectivité
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
