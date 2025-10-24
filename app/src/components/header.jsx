@@ -99,7 +99,7 @@ export default function Header() {
         {
           iconId: "fr-icon-settings-5-line",
           linkProps: {
-            to: "/parametres",
+            to: "/settings",
           },
           text: "Paramètres",
         },
