@@ -132,7 +132,7 @@ export default function Home() {
       setUser(data);
       toast.success("Demande envoyée avec succès ! En attente d'approbation");
     } catch (error) {
-      toast.error(error.code || error.message || "Une erreur est survenue");
+      toast.error(error.code || "Une erreur est survenue");
     }
   };
 
