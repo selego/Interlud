@@ -160,7 +160,7 @@ export default function Header() {
                       {item.menuItems ? (
                         <>
                           <button
-                            className="fr-btn fr-btn--tertiary-no-outline mt-0 ml-2"
+                            className="fr-btn fr-btn--tertiary-no-outline mt-0 ml-2 hover:bg-gray-100 transition-colors"
                             onClick={() => setOpenQuickAccessDropdown(openQuickAccessDropdown === index ? null : index)}
                           >
                             <span className={item.iconId} aria-hidden="true"></span>
