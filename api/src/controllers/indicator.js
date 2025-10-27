@@ -24,16 +24,16 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     if (!oldIndicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const indicator = await Indicator.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (oldIndicator.value_type !== req.body.value_type ||  JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
-      await IndicatorValue.updateMany(
+    res.status(200).send({ ok: true, data: indicator });
+    
+    if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
+      IndicatorValue.updateMany(
         { indicator_id: req.params.id }, 
         { 
           $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
         }
-      );
+      ).catch(error => { capture(error)});
     }
-
-    return res.status(200).send({ ok: true, data: indicator });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
