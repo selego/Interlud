@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import Select from "@/components/Select"
 
 export default function View() {
   const {id} = useParams()
@@ -136,30 +137,30 @@ export default function View() {
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Priorité</label>
-                <select
+                <Select
                   value={action.priority || ""}
-                  onChange={(e) => setAction({...action, priority: e.target.value})}
-                  className="w-full input-primary"
-                >
-                  <option value="">Sélectionner</option>
-                  <option value="high">Haute</option>
-                  <option value="medium">Moyenne</option>
-                  <option value="low">Basse</option>
-                </select>
+                  onChange={(value) => setAction({...action, priority: value})}
+                  options={[
+                    { value: "", label: "Sélectionner" },
+                    { value: "high", label: "Haute" },
+                    { value: "medium", label: "Moyenne" },
+                    { value: "low", label: "Basse" }
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Statut</label>
-                <select
+                <Select
                   value={action.status}
-                  onChange={(e) => setAction({...action, status: e.target.value})}
-                  className="w-full input-primary"
-                >
-                  <option value="no_status">Pas de statut</option>
-                  <option value="upcoming">À venir</option>
-                  <option value="in_progress">En cours</option>
-                  <option value="blocked">Bloqué</option>
-                  <option value="completed">Terminé</option>
-                </select>
+                  onChange={(value) => setAction({...action, status: value})}
+                  options={[
+                    { value: "no_status", label: "Pas de statut" },
+                    { value: "upcoming", label: "À venir" },
+                    { value: "in_progress", label: "En cours" },
+                    { value: "blocked", label: "Bloqué" },
+                    { value: "completed", label: "Terminé" }
+                  ]}
+                />
               </div>
               {action.status === "blocked" ? (
                 <div className="md:col-span-2">
@@ -181,30 +182,31 @@ export default function View() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-2">Type</label>
-                <select
+                <Select
                   value={action.type}
-                  onChange={(e) => setAction({...action, type: e.target.value})}
-                  className="w-full input-primary"
-                >
-                  <option value="custom">Custom</option>
-                  <option value="reference">Reference</option>
-                </select>
+                  onChange={(value) => setAction({...action, type: value})}
+                  options={[
+                    { value: "custom", label: "Custom" },
+                    { value: "reference", label: "Reference" }
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
-                <select
+                <Select
                   value={action.action_reference_id || ""}
-                  onChange={(e) => {
-                    const selectedAction = referenceAction.find(ref => ref._id === e.target.value);
-                    setAction({ ...action, action_reference_id: e.target.value, action_reference_name: selectedAction?.name });
+                  onChange={(value) => {
+                    const selectedAction = referenceAction.find(ref => ref._id === value);
+                    setAction({ ...action, action_reference_id: value, action_reference_name: selectedAction?.name });
                   }}
-                  className="w-full input-primary"
-                >
-                  <option value="">Sélectionner</option>
-                  {referenceAction.map((refAction) => (
-                    <option key={refAction._id} value={refAction._id}>{refAction.name}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "Sélectionner" },
+                    ...referenceAction.map((refAction) => ({
+                      value: refAction._id,
+                      label: refAction.name
+                    }))
+                  ]}
+                />
               </div>
             </div>
 
@@ -227,20 +229,21 @@ export default function View() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-2">Collectivité</label>
-                <select
+                <Select
                   value={action.collectivity_id || ""}
-                  onChange={(e) => setAction({
+                  onChange={(value) => setAction({
                     ...action,
-                    collectivity_id: e.target.value,
-                    collectivity_name: collectivities.find(c => c._id === e.target.value)?.name
+                    collectivity_id: value,
+                    collectivity_name: collectivities.find(c => c._id === value)?.name
                   })}
-                  className="w-full input-primary"
-                >
-                  <option value="">Sélectionner</option>
-                  {collectivities.map((collectivity) => (
-                    <option key={collectivity._id} value={collectivity._id}>{collectivity.name}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "Sélectionner" },
+                    ...collectivities.map((collectivity) => ({
+                      value: collectivity._id,
+                      label: collectivity.name
+                    }))
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Date de début</label>
@@ -269,15 +272,15 @@ export default function View() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-2">Pilote</label>
-                <select
+                <Select
                   value={action.pilote || ""}
-                  onChange={(e) => setAction({...action, pilote: e.target.value})}
-                  className="w-full input-primary"
-                >
-                  <option value="">Sélectionner</option>
-                  <option value="epci">EPCI</option>
-                  <option value="acteur_economique">Acteur économique</option>
-                </select>
+                  onChange={(value) => setAction({...action, pilote: value})}
+                  options={[
+                    { value: "", label: "Sélectionner" },
+                    { value: "epci", label: "EPCI" },
+                    { value: "acteur_economique", label: "Acteur économique" }
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Description du pilote</label>
@@ -290,15 +293,15 @@ export default function View() {
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Partenaires</label>
-                <select
+                <Select
                   value={action.partners || ""}
-                  onChange={(e) => setAction({...action, partners: e.target.value})}
-                  className="w-full input-primary"
-                >
-                  <option value="">Sélectionner</option>
-                  <option value="epci">EPCI</option>
-                  <option value="acteur_economique">Acteur économique</option>
-                </select>
+                  onChange={(value) => setAction({...action, partners: value})}
+                  options={[
+                    { value: "", label: "Sélectionner" },
+                    { value: "epci", label: "EPCI" },
+                    { value: "acteur_economique", label: "Acteur économique" }
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Description des partenaires</label>

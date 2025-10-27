@@ -6,6 +6,7 @@ import { FiUser, FiShield, FiClock, FiEye, FiEyeOff,FiHome, FiX} from "react-ico
 
 import Modal from "@/components/modal";
 import api from "@/services/api";
+import Select from "@/components/Select";
 
 export default function View() {
   const { id } = useParams();
@@ -133,26 +134,26 @@ function UserInfoTab({ user, setUser }) {
 
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">Rôle</label>
-            <select
-              className="w-full input-primary"
+            <Select
               value={values.role}
-              onChange={(e) => setValues({ ...values, role: e.target.value })}
-            >
-              <option value="admin">Admin</option>
-              <option value="user">User</option>
-            </select>
+              onChange={(value) => setValues({ ...values, role: value })}
+              options={[
+                { value: "admin", label: "Admin" },
+                { value: "user", label: "User" }
+              ]}
+            />
           </div>
 
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-            <select
-              className="w-full input-primary"
+            <Select
               value={values.status || "active"}
-              onChange={(e) => setValues({ ...values, status: e.target.value })}
-            >
-              <option value="active">Actif</option>
-              <option value="inactive">Inactif</option>
-            </select>
+              onChange={(value) => setValues({ ...values, status: value })}
+              options={[
+                { value: "active", label: "Actif" },
+                { value: "inactive", label: "Inactif" }
+              ]}
+            />
           </div>
         </div>
 
@@ -476,18 +477,17 @@ function UserActionRightsSection({ user }) {
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
-              <select
-                className="w-full input-primary"
+              <Select
                 value={addValues.action_id}
-                onChange={(e) => setAddValues({ ...addValues, action_id: e.target.value })}
-              >
-                <option value="">Sélectionner une action</option>
-                {actions.map((a) => (
-                  <option key={a._id} value={a._id}>
-                    {a.name} {a.collectivity_name ? `— ${a.collectivity_name}` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setAddValues({ ...addValues, action_id: value })}
+                options={[
+                  { value: "", label: "Sélectionner une action" },
+                  ...actions.map((a) => ({
+                    value: a._id,
+                    label: `${a.name} ${a.collectivity_name ? `— ${a.collectivity_name}` : ""}`
+                  }))
+                ]}
+              />
             </div>
 
             <div>
@@ -636,14 +636,14 @@ function UserCollectivitiesTab({ user, setUser }) {
               </div>
               
               <div className="flex items-center gap-3">
-                <select
-                  className="input-primary"
+                <Select
                   value={collectivity.role || "user"}
-                  onChange={(e) => updateCollectivityRole(collectivity.id, e.target.value)}
-                >
-                  <option value="user">Utilisateur</option>
-                  <option value="admin">Administrateur</option>
-                </select>
+                  onChange={(value) => updateCollectivityRole(collectivity.id, value)}
+                  options={[
+                    { value: "user", label: "Utilisateur" },
+                    { value: "admin", label: "Administrateur" }
+                  ]}
+                />
                 
                 <button
                   className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
@@ -671,32 +671,31 @@ function UserCollectivitiesTab({ user, setUser }) {
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Collectivité</label>
-              <select
-                className="w-full input-primary"
+              <Select
                 value={addValues.collectivity_id}
-                onChange={(e) => {setAddValues({ ...addValues, collectivity_id: e.target.value }); console.log('collectivity_id', e.target.value);}}
-              >
-                <option value="">Sélectionner une collectivité</option>
-                {collectivities
-                  .filter(c => !user?.collectivities?.some(uc => uc.id === c._id))
-                  .map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-              </select>
+                onChange={(value) => {setAddValues({ ...addValues, collectivity_id: value }); console.log('collectivity_id', value);}}
+                options={[
+                  { value: "", label: "Sélectionner une collectivité" },
+                  ...collectivities
+                    .filter(c => !user?.collectivities?.some(uc => uc.id === c._id))
+                    .map((c) => ({
+                      value: c._id,
+                      label: c.name
+                    }))
+                ]}
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Rôle dans cette collectivité</label>
-              <select
-                className="w-full input-primary"
+              <Select
                 value={addValues.role}
-                onChange={(e) => {setAddValues({ ...addValues, role: e.target.value }); console.log('role', addValues.role);}}
-              >
-                <option value="user">Utilisateur</option>
-                <option value="admin">Administrateur</option>
-              </select>
+                onChange={(value) => {setAddValues({ ...addValues, role: value }); console.log('role', value);}}
+                options={[
+                  { value: "user", label: "Utilisateur" },
+                  { value: "admin", label: "Administrateur" }
+                ]}
+              />
             </div>
           </div>
 
