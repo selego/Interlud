@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
+import DebounceInput from "@/components/debounceInput";
 
 export default function Completion({ action }) {
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
@@ -104,7 +105,6 @@ function IndicatorsList({ action, activeTab, selectedIndicator, onSelectIndicato
     </div>
   );
 }
-
 function SituationTab({ action, situation, selectedIndicator }) {
   const [values, setValues] = useState([]);
 
@@ -118,18 +118,19 @@ function SituationTab({ action, situation, selectedIndicator }) {
     }
   };
 
-  const handleSave = async (value) => {
+  const handleAutoSave = async (updatedValue) => {
     try {
-      const { ok, code } = await api.put(`/indicator_value/${value._id}`, value);
+      setValues(values.map((v) => v._id === updatedValue._id ? updatedValue : v));
+      const { ok, code } = await api.put(`/indicator_value/${updatedValue._id}`, updatedValue);
       if (!ok) return toast.error(code || "Une erreur est survenue");
-      toast.success("Valeurs enregistrées");
+      toast.success("Enregistrement automatique effectué");
       await fetchIndicatorsValue();
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
-  }
+  };
 
-  const situationLabels = { init: "Initial", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post"  };
+  const situationLabels = { init: "Initial", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" };
 
   useEffect(() => {
     fetchIndicatorsValue();
@@ -159,57 +160,88 @@ function SituationTab({ action, situation, selectedIndicator }) {
           <div 
             key={value._id} 
             id={`indicator-${value._id}`}
-            className={`bg-white card-shadow ${ selectedIndicator?._id === value._id  ? "border-primary-green border-2"  : ""}`}
+            className={`bg-white card-shadow ${selectedIndicator?._id === value._id ? "border-primary-green border-2" : ""}`}
           >
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium text-gray-900">{value.indicator_name}</h3>
-              <button
-                className="px-2 py-1 text-xs button-primary"
-                onClick={() => handleSave(value)}
-              >
-                Enregistrer
-              </button>
             </div>
             
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Valeur</label>
-                <input
-                  type="text"
-                  className="w-full input-primary"
-                  value={value.value || ""}
-                  onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, value: e.target.value } : v))}
-                  placeholder="Valeur"
-                />  
+                <label className="block text-xs font-medium text-gray-600 mb-2">Valeur</label>
+                
+                {(value.indicator_type === "text" || value.indicator_type === undefined) && (
+                  <DebounceInput
+                    type="text"
+                    className="w-full input-primary"
+                    value={value.value || ""}
+                    onChange={(e) => handleAutoSave({ ...value, value: e.target.value })}
+                    placeholder="Valeur texte"
+                    debounce={800}
+                  />
+                )}
+
+                {value.indicator_type === "number" && (
+                  <DebounceInput
+                    type="number"
+                    className="w-full input-primary"
+                    value={value.value || ""}
+                    onChange={(e) => handleAutoSave({ ...value, value: e.target.value })}
+                    placeholder="Valeur numérique"
+                    debounce={800}
+                  />
+                )}
+
+                {value.indicator_type === "radio" && (
+                  <div className="space-y-2">
+                    {value.indicator_value_possibilities?.map((option, index) => (
+                      <label key={index} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`value-${value._id}`}
+                          value={option}
+                          checked={value.value === option}
+                          onChange={(e) => handleAutoSave({ ...value, value: e.target.value })}
+                          className="text-primary-green focus:ring-primary-green focus:ring-2 focus:ring-primary-green/20"
+                          style={{ accentColor: 'primary-green' }}
+                        />
+                        <span className="text-sm text-gray-700">{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {value.indicator_type === "checkbox" && (() => {
+                  const selectedValues = value.value && typeof value.value === 'string'  ? value.value.split(',').filter(v => v.trim()) : [];
+                  return (
+                    <div className="space-y-2">
+                      {value.indicator_value_possibilities?.map((option, index) => (
+                        <label key={index} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            value={option}
+                            checked={selectedValues.includes(option)}
+                            onChange={(e) => handleAutoSave({...value,value: e.target.checked ? [...selectedValues, option].join(',') : selectedValues.filter(v => v !== option).join(',') })}
+                            className="text-primary-green focus:ring-primary-green focus:ring-2 focus:ring-primary-green/20 rounded"
+                            style={{ accentColor: 'primary-green' }}
+                          />
+                          <span className="text-sm text-gray-700">{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Année</label>
-                <input
-                  type="number"
-                  className="w-full input-primary"
-                  value={value.year || ""}
-                  onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, year: e.target.value } : v))}
-                  placeholder="2024"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Source</label>
-                <input
-                  type="text"
-                  className="w-full input-primary"
-                  value={value.source || ""}
-                  onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, source: e.target.value } : v))}
-                  placeholder="Source"
-                />
-              </div>
+              
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Commentaire</label>
-                <input
+                <DebounceInput
                   type="text"
                   className="w-full input-primary"
                   value={value.comment || ""}
-                  onChange={(e) => setValues(values.map((v) => v._id === value._id ? { ...v, comment: e.target.value } : v))}
+                  onChange={(e) => handleAutoSave({ ...value, comment: e.target.value })}
                   placeholder="Commentaire"
+                  debounce={800}
                 />
               </div>
             </div>

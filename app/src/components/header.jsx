@@ -282,7 +282,6 @@ export default function Header() {
                   value={collectivity?._id || ""}
                   onChange={handleCollectivityChange}
                   options={[
-                    { value: "", label: "Collectivité" },
                     ...user.collectivities.map((collectivity) => ({
                       value: collectivity.id,
                       label: `#${collectivity.name}`

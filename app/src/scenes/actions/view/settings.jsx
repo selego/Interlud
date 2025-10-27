@@ -490,7 +490,6 @@ function ActionSettingsTab({ action }) {
   );
 }
 
-// Modal pour ajouter un indicateur
 const AddIndicatorModal = ({ isOpen, onClose, action }) => {
   const [allIndicators, setAllIndicators] = useState([]);
   const [selectedIndicatorId, setSelectedIndicatorId] = useState("");
@@ -515,16 +514,16 @@ const AddIndicatorModal = ({ isOpen, onClose, action }) => {
     if (!selectedIndicator) return;
 
     try {
-      const response = await api.post(`/action/initialize_indicator_values`, {
+      const { ok, data, code } = await api.post(`/action/initialize_indicator_values`, {
         action_id: action._id,
         action_name: action.name,
         collectivity_id: action.collectivity_id,
         collectivity_name: action.collectivity_name,
         indicator_id: selectedIndicator._id,
         indicator_name: selectedIndicator.name,
+        indicator_type: selectedIndicator.value_type,
+        indicator_value_possibilities: selectedIndicator.value_possibilities,
       });
-
-      const { ok, code } = response;
       if (!ok) return toast.error(code || "Une erreur est survenue");
 
       toast.success("Indicateur ajouté avec succès");
@@ -538,10 +537,7 @@ const AddIndicatorModal = ({ isOpen, onClose, action }) => {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => {
-        onClose();
-        setSelectedIndicatorId("");
-      }}
+      onClose={() => {onClose(); setSelectedIndicatorId("");}}
       className="max-w-lg"
     >
       <div className="p-6">

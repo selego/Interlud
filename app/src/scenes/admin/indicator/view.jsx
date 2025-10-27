@@ -13,6 +13,7 @@ export default function View() {
       description: "",
       value_unit: "",
       value_type: "",
+      value_possibilities: [],
       indicator_category_id: "",
       indicator_category_name: "",
       indicator_sub_category_id: "",
@@ -192,11 +193,15 @@ function InfoTab({ indicator, setIndicator }) {
 
           <div>
             <label className="block text-sm font-medium mb-2">Type de valeur</label>
-            <input
-              type="text"
+            <Select
               value={indicator.value_type || ""}
-              onChange={(e) => setIndicator({...indicator, value_type: e.target.value})}
-              className="w-full input-primary"
+              onChange={(value) => setIndicator({...indicator, value_type: value})}
+              options={[
+                { value: "number", label: "Nombre" },
+                { value: "text", label: "Texte" },
+                { value: "radio", label: "Radio" },
+                { value: "checkbox", label: "Checkbox" }
+              ]}
             />
           </div>
 
@@ -218,6 +223,45 @@ function InfoTab({ indicator, setIndicator }) {
             />
           </div>
         </div>
+
+        {(indicator.value_type === "checkbox" || indicator.value_type === "radio") && (
+          <div>
+            <label className="block text-sm font-medium mb-2">Options disponibles</label>
+            <div className="space-y-2">
+              {(indicator.value_possibilities || []).map((option, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => {
+                      setIndicator({ ...indicator, value_possibilities: (indicator.value_possibilities || []).map((option, i) => i === index ? e.target.value : option) });
+                    }}
+                    className="flex-1 input-primary"
+                    placeholder={`Option ${index + 1}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIndicator({...indicator, value_possibilities: [...(indicator.value_possibilities || []).filter((_, i) => i !== index)]});
+                    }}
+                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <FiTrash2 size={16} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setIndicator({...indicator, value_possibilities: [...(indicator.value_possibilities || []), ""]});
+                }}
+                className="px-4 py-2 text-primary-green hover:bg-primary-green/10 rounded-lg border border-primary-green transition-colors"
+              >
+                Ajouter une option
+              </button>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium mb-2">Sous-catégorie</label>
