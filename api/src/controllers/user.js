@@ -313,10 +313,8 @@ router.post("/request-collectivity-access", passport.authenticate(["user", "appl
 
     if (user.collectivities?.find(c => c.id === collectivityId)) return res.status(409).send({ ok: false, code: "ALREADY_REQUESTED" });
 
-    const updatedUser = await UserObject.findByIdAndUpdate( req.user._id, 
-      { collectivities: [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: "user", status: "pending"}] }, 
-      { new: true }
-    );
+    user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: "user", status: "pending"}];
+    await user.save();
 
     
     await brevo.sendEmail(
@@ -325,7 +323,7 @@ router.post("/request-collectivity-access", passport.authenticate(["user", "appl
       `<p>uwu</p>`
     );
     
-    res.status(200).send({ ok: true, data: updatedUser });
+    res.status(200).send({ ok: true, data: user });
   } catch (error) {
     capture(error);
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
