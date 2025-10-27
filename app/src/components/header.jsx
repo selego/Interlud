@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import api from "@/services/api";
 import useStore from "@/services/store";
@@ -10,10 +10,26 @@ import Select from "@/components/Select";
 export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
+  const quickAccessRef = useRef(null);
   const { user, collectivity, setCollectivity, setUser, setActionRights } = useStore();
   const navigate = useNavigate(); 
   const location = useLocation();
   
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (quickAccessRef.current && !quickAccessRef.current.contains(event.target)) {
+        setOpenQuickAccessDropdown(null);
+      }
+    }
+
+    if (openQuickAccessDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [openQuickAccessDropdown]);
+
   const handleCollectivityChange = async (collectivityId) => {
     if (!collectivityId) {
       setCollectivity(null);
@@ -48,36 +64,17 @@ export default function Header() {
     }
   }
 
-  // Navigation items - only shown when user is logged in
-  const navigation = user ? [
+  const navigation = user?.collectivities?.find(c => c.status === 'approved') ? [
     {
       text: "Accueil",
       linkProps: { to: "/" },
     },
-    user.role === "admin" && {
-      text: "Admin",
-      menuLinks: [
-        {
-          text: "Collectivités",
-          linkProps: { to: "/admin/collectivity" },
-        },
-        {
-          text: "Actions",
-          linkProps: { to: "/admin/action" },
-        },
-        {
-          text: "Indicateurs",
-          linkProps: { to: "/admin/indicator" },
-        },
-        {
-          text: "Utilisateurs",
-          linkProps: { to: "/admin/users" },
-        },
-      ],
+    (user.role === "admin" || user.collectivities?.find(c => c.id === collectivity?._id)?.role === "admin") && {
+      text: "Gérer ma collectivité",
+      linkProps: { to: "/collectivity" },
     },
   ] : [];
 
-  // Quick access items - only shown when user is logged in
   const quickAccessItems = user ? [
     {
       iconId: "fr-icon-leaf-line",
@@ -86,12 +83,27 @@ export default function Header() {
       },
       text: "Collectivités",
     },
-    {
-      iconId: "fr-icon-question-line",
-      linkProps: {
-        to: "/aide",
-      },
-      text: "Aide",
+    user.role === "admin" && {
+      iconId: "fr-icon-settings-5-line",
+      text: "Admin",
+      menuItems: [
+        {
+          linkProps: { to: "/admin/collectivity" },
+          text: "Collectivités",
+        },
+        {
+          linkProps: { to: "/admin/action" },
+          text: "Actions",
+        },
+        {
+          linkProps: { to: "/admin/indicator" },
+          text: "Indicateurs",
+        },
+        {
+          linkProps: { to: "/admin/users" },
+          text: "Utilisateurs",
+        },
+      ],
     },
     {
       iconId: "fr-icon-account-circle-line",
@@ -145,11 +157,11 @@ export default function Header() {
               <div className="fr-header__tools-links">
                 <ul className="fr-btns-group">
                   {quickAccessItems.map((item, index) => (
-                    <li key={index} className="relative">
+                    <li key={index} className="relative" ref={index === openQuickAccessDropdown ? quickAccessRef : null}>
                       {item.menuItems ? (
                         <>
                           <button
-                            className="fr-btn fr-btn--tertiary-no-outline mt-0 ml-2"
+                            className="fr-btn fr-btn--tertiary-no-outline mt-0 ml-2 hover:bg-gray-100 transition-colors"
                             onClick={() => setOpenQuickAccessDropdown(openQuickAccessDropdown === index ? null : index)}
                           >
                             <span className={item.iconId} aria-hidden="true"></span>
@@ -157,37 +169,32 @@ export default function Header() {
                             <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? 'rotate-180' : ''}`} />
                           </button>
                           {openQuickAccessDropdown === index && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-40"
-                                onClick={() => setOpenQuickAccessDropdown(null)}
-                              />
-                              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
-                                <ul className="py-1">
-                                  {item.menuItems.map((subItem, subIndex) => (
-                                    <li key={subIndex}>
-                                      {subItem.buttonProps ? (
-                                        <button
-                                          {...subItem.buttonProps}
-                                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                                        >
-                                          {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
-                                          {subItem.text}
-                                        </button>
-                                      ) : (
-                                        <Link
-                                          {...subItem.linkProps}
-                                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                                        >
-                                          {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
-                                          {subItem.text}
-                                        </Link>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </>
+                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+                              <ul className="py-1">
+                                {item.menuItems.map((subItem, subIndex) => (
+                                  <li key={subIndex}>
+                                    {subItem.buttonProps ? (
+                                      <button
+                                        {...subItem.buttonProps}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                      >
+                                        {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
+                                        {subItem.text}
+                                      </button>
+                                    ) : (
+                                      <Link
+                                        {...subItem.linkProps}
+                                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                        onClick={() => setOpenQuickAccessDropdown(null)}
+                                      >
+                                        {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
+                                        {subItem.text}
+                                      </Link>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           )}
                         </>
                       ) : item.buttonProps ? (
@@ -216,7 +223,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Navigation wrapper is always rendered to satisfy DSFR expectations */}
       <div className="fr-header__menu">
         <div className="fr-container">
           <div className="flex items-center justify-between">
@@ -276,7 +282,7 @@ export default function Header() {
               </nav>
             )}
             
-            {user?.collectivities && user.collectivities.length > 0 && (
+            {user?.collectivities && user.collectivities.filter(c => c.status === 'approved').length > 0 && (
               <div className="flex items-center gap-3">
                 <Select 
                   value={collectivity?._id || ""}
@@ -300,7 +306,6 @@ export default function Header() {
               </div>
             )}
           </div>
-          {/* Target for DSFR header links cloning */}
           <div className="fr-header__menu-links"></div>
         </div>
       </div>

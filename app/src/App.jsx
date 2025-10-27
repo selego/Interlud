@@ -11,6 +11,7 @@ import Actions from "@/scenes/actions"
 import AdminAction from "@/scenes/admin/action"
 import AdminCollectivity from "@/scenes/admin/collectivity"
 import AdminIndicator from "@/scenes/admin/indicator"
+import Collectivity from "@/scenes/collectivity"
 import Settings from "@/scenes/settings"
 
 import AdminUsers from "@/scenes/admin/users"
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/recherche" element={<div>Page de recherche</div>} />
           <Route path="/settings" element={<Settings />} />
           {/* <Route path="/test" element={<Test />} /> */}
+          <Route path="/collectivity/*" element={<Collectivity />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/contact" element={<div>Contact</div>} />
           <Route path="/cgu" element={<div>CGU</div>} />
