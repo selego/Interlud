@@ -12,14 +12,14 @@ export default () => {
 
   const login = async () => {
     try {
-      const { user, token, userActionRights, collectivity } = await api.post(`/user/signin`, values)
+      const { ok, code,user, token, userActionRights, collectivity } = await api.post(`/user/signin`, values)
+      if (!ok) return toast.error(code || "Une erreur est survenue");
       if (token) api.setToken(token)
       if (user) setUser(user)
       if (userActionRights) setActionRights(userActionRights)
       if (collectivity) setCollectivity(collectivity)
-    } catch (e) {
-      console.log("e", e)
-      toast.error(e.code)
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue")
     }
   }
 

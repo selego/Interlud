@@ -4,6 +4,7 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
 import { FiList, FiSettings } from "react-icons/fi";
+import Select from "@/components/Select";
 
 export default function Settings({ action }) {
   const [activeTab, setActiveTab] = useState("indicators");
@@ -217,30 +218,30 @@ function ActionSettingsTab({ action }) {
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Priorité</label>
-            <select
+            <Select
               value={actionData.priority || ""}
-              onChange={(e) => setActionData({...actionData, priority: e.target.value})}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              <option value="high">Haute</option>
-              <option value="medium">Moyenne</option>
-              <option value="low">Basse</option>
-            </select>
+              onChange={(value) => setActionData({...actionData, priority: value})}
+              options={[
+                { value: "", label: "Sélectionner" },
+                { value: "high", label: "Haute" },
+                { value: "medium", label: "Moyenne" },
+                { value: "low", label: "Basse" }
+              ]}
+            />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Statut</label>
-            <select
+            <Select
               value={actionData.status}
-              onChange={(e) => setActionData({...actionData, status: e.target.value})}
-              className="w-full input-primary"
-            >
-              <option value="no_status">Pas de statut</option>
-              <option value="upcoming">À venir</option>
-              <option value="in_progress">En cours</option>
-              <option value="blocked">Bloqué</option>
-              <option value="completed">Terminé</option>
-            </select>
+              onChange={(value) => setActionData({...actionData, status: value})}
+              options={[
+                { value: "no_status", label: "Pas de statut" },
+                { value: "upcoming", label: "À venir" },
+                { value: "in_progress", label: "En cours" },
+                { value: "blocked", label: "Bloqué" },
+                { value: "completed", label: "Terminé" }
+              ]}
+            />
           </div>
           {actionData.status === "blocked" ? (
             <div className="md:col-span-2">
@@ -262,30 +263,31 @@ function ActionSettingsTab({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Type</label>
-            <select
+            <Select
               value={actionData.type}
-              onChange={(e) => setActionData({...actionData, type: e.target.value})}
-              className="w-full input-primary"
-            >
-              <option value="custom">Custom</option>
-              <option value="reference">Reference</option>
-            </select>
+              onChange={(value) => setActionData({...actionData, type: value})}
+              options={[
+                { value: "custom", label: "Custom" },
+                { value: "reference", label: "Reference" }
+              ]}
+            />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
-            <select
+            <Select
               value={actionData.action_reference_id || ""}
-              onChange={(e) => {
-                const selectedAction = referenceAction.find(ref => ref._id === e.target.value);
-                setActionData({ ...action, action_reference_id: e.target.value, action_reference_name: selectedAction?.name });
+              onChange={(value) => {
+                const selectedAction = referenceAction.find(ref => ref._id === value);
+                setActionData({ ...actionData, action_reference_id: value, action_reference_name: selectedAction?.name });
               }}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              {referenceAction.map((refAction) => (
-                <option key={refAction._id} value={refAction._id}>{refAction.name}</option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "Sélectionner" },
+                ...referenceAction.map((refAction) => ({
+                  value: refAction._id,
+                  label: refAction.name
+                }))
+              ]}
+            />
           </div>
         </div>
 
@@ -308,20 +310,21 @@ function ActionSettingsTab({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Collectivité</label>
-            <select
+            <Select
               value={actionData.collectivity_id || ""}
-              onChange={(e) => setActionData({
+              onChange={(value) => setActionData({
                 ...actionData,
-                collectivity_id: e.target.value,
-                collectivity_name: collectivities.find(c => c._id === e.target.value)?.name
+                collectivity_id: value,
+                collectivity_name: collectivities.find(c => c._id === value)?.name
               })}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              {collectivities.map((collectivity) => (
-                <option key={collectivity._id} value={collectivity._id}>{collectivity.name}</option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "Sélectionner" },
+                ...collectivities.map((collectivity) => ({
+                  value: collectivity._id,
+                  label: collectivity.name
+                }))
+              ]}
+            />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Date de début</label>
@@ -350,15 +353,15 @@ function ActionSettingsTab({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Pilote</label>
-            <select
+            <Select
               value={actionData.pilote || ""}
-              onChange={(e) => setActionData({...actionData, pilote: e.target.value})}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              <option value="epci">EPCI</option>
-              <option value="acteur_economique">Acteur économique</option>
-            </select>
+              onChange={(value) => setActionData({...actionData, pilote: value})}
+              options={[
+                { value: "", label: "Sélectionner" },
+                { value: "epci", label: "EPCI" },
+                { value: "acteur_economique", label: "Acteur économique" }
+              ]}
+            />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description du pilote</label>
@@ -371,15 +374,15 @@ function ActionSettingsTab({ action }) {
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Partenaires</label>
-            <select
+            <Select
               value={actionData.partners || ""}
-              onChange={(e) => setActionData({...actionData, partners: e.target.value})}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              <option value="epci">EPCI</option>
-              <option value="acteur_economique">Acteur économique</option>
-            </select>
+              onChange={(value) => setActionData({...actionData, partners: value})}
+              options={[
+                { value: "", label: "Sélectionner" },
+                { value: "epci", label: "EPCI" },
+                { value: "acteur_economique", label: "Acteur économique" }
+              ]}
+            />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
@@ -545,18 +548,17 @@ const AddIndicatorModal = ({ isOpen, onClose, action }) => {
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un indicateur</h2>
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un indicateur</label>
-          <select 
+          <Select 
             value={selectedIndicatorId}
-            onChange={(e) => setSelectedIndicatorId(e.target.value)}
-            className="w-full input-primary"
-          >
-            <option value="">-- Choisir un indicateur --</option>
-            {allIndicators.map((indicator) => (
-              <option key={indicator._id} value={indicator._id}>
-                {indicator.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedIndicatorId}
+            options={[
+              { value: "", label: "-- Choisir un indicateur --" },
+              ...allIndicators.map((indicator) => ({
+                value: indicator._id,
+                label: indicator.name
+              }))
+            ]}
+          />
         </div>
 
         <div className="flex justify-end">

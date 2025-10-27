@@ -8,17 +8,19 @@ import api from "@/services/api"
 export default () => {
   const [values, setValues] = useState({ name: "", email: "", password: "" })
 
-  const { user, setUser } = store()
+  const { user, setUser, setActionRights, setCollectivity } = store()
   const navigate = useNavigate()
 
   const send = async () => {
     try {
-      const { user, token } = await api.post(`/user/signup`, values)
+      const { ok, code, user, token } = await api.post(`/user/signup`, values)
+      if (!ok) return toast.error(code || "Une erreur est survenue");
       if (token) api.setToken(token)
       if (user) setUser(user)
-    } catch (e) {
-      console.log("e", e)
-      toast.error(e.code)
+      setActionRights(null)
+      setCollectivity(null)
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue")
     }
   }
 
@@ -87,7 +89,7 @@ export default () => {
             </div>
 
             <button
-              onClick={send}
+              type="submit"
               className="button-primary w-full"
             >
               Créer mon compte

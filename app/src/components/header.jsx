@@ -5,6 +5,7 @@ import useStore from "@/services/store";
 import toast from "react-hot-toast";
 import { FiChevronDown } from "react-icons/fi";
 import Logo from "@/assets/primary_logo.png";
+import Select from "@/components/Select";
 
 export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -111,7 +112,7 @@ export default function Header() {
         {
           iconId: "fr-icon-settings-5-line",
           linkProps: {
-            to: "/parametres",
+            to: "/settings",
           },
           text: "Paramètres",
         },
@@ -283,19 +284,17 @@ export default function Header() {
             
             {user?.collectivities && user.collectivities.filter(c => c.status === 'approved').length > 0 && (
               <div className="flex items-center gap-3">
-                <select 
-                  className="cursor-pointer text-lg font-semibold pr-6 appearance-auto"
-                  style={{ boxShadow: 'none' }}
+                <Select 
                   value={collectivity?._id || ""}
-                  onChange={(e) => handleCollectivityChange(e.target.value)}
-                >
-                  <option value="" disabled>Collectivité</option>
-                  {user.collectivities.filter(c => c.status === 'approved').map((collectivity) => (
-                    <option key={collectivity.id} value={collectivity.id}>
-                      #{collectivity.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleCollectivityChange}
+                  options={[
+                    { value: "", label: "Collectivité" },
+                    ...user.collectivities.map((collectivity) => ({
+                      value: collectivity.id,
+                      label: `#${collectivity.name}`
+                    }))
+                  ]}
+                />
 
                 {collectivity && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">

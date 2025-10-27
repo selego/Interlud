@@ -1,9 +1,16 @@
-import React, { Fragment, useRef } from "react"
+import React, { Fragment, useRef, useState, useEffect } from "react"
 import { Dialog, Transition } from "@headlessui/react"
 import { HiX } from "react-icons/hi"
 
 export default function Modal({ isOpen, children, onClose, className = "w-[calc(100%_-_60px)]" }) {
-  const cancelButtonRef = useRef()
+  const [isReady, setIsReady] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => setIsReady(true), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen])
 
   if (!isOpen) return <Fragment />
 
@@ -12,9 +19,8 @@ export default function Modal({ isOpen, children, onClose, className = "w-[calc(
       <Dialog
         as="div"
         className="fixed inset-0 z-50 overflow-y-auto bg-[#D9D9D9] bg-opacity-30 backdrop-blur-sm"
-        initialFocus={cancelButtonRef}
         open={isOpen}
-        onClose={onClose ? onClose : () => {}}
+        onClose={isReady && onClose ? onClose : () => {}}
       >
         <div className="min-h-screen px-4">
           <Transition.Child

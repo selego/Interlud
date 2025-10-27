@@ -65,11 +65,15 @@ router.post("/signin", async (req, res) => {
 });
 
 router.post("/signup", async (req, res) => {
-  try {
-    const { password, email, name } = req.body;
+  let { password, email, name } = req.body;
+  email = (email || "").trim().toLowerCase();
 
-    if (password && !validatePassword(password))
-      return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORD_NOT_VALIDATE });
+  try {
+    const existingUser = await UserObject.findOne({ email });
+    console.log("existingUser", existingUser);
+    if (existingUser) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
+
+    if (password && !validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
 
     const user = await UserObject.create({ name, password, email });
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
@@ -77,7 +81,6 @@ router.post("/signup", async (req, res) => {
 
     return res.status(200).send({ user, token, ok: true });
   } catch (error) {
-    console.log("e", error);
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });

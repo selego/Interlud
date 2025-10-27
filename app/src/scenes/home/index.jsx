@@ -309,15 +309,15 @@ export default function Home() {
         <div className="xl:col-span-3 p-6 h-[340px] card-shadow">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
-            <select 
-              value={"Ce mois-ci"}
-              onChange={ (e) => console.log(e.target.value) }
-              className="border border-secondary-green  bg-deco-background-green rounded-full text-sm px-3 py-2 text-[#768776]"
-            >
-              <option>Mois-ci</option>
-              <option>Semaine</option>
-              <option>Jour</option>
-            </select>
+            <Select 
+              value="Ce mois-ci"
+              onChange={(value) => console.log(value)}
+              options={[
+                { value: "Ce mois-ci", label: "Mois-ci" },
+                { value: "Semaine", label: "Semaine" },
+                { value: "Jour", label: "Jour" }
+              ]}
+            />
           </div>
           
           <div className="space-y-4">
@@ -443,15 +443,15 @@ export default function Home() {
         <div className="xl:col-span-8 p-6 h-full card-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
-            <select 
-              value={"Mois"}
-              onChange={ (e) => console.log(e.target.value) }
-              className="border border-secondary-green  bg-deco-background-green rounded-full text-sm text-[#768776] px-3 py-2"
-            >
-              <option>Mois</option>
-              <option>Semaine</option>
-              <option>Jour</option>
-            </select>
+            <Select 
+              value="Mois"
+              onChange={(value) => console.log(value)}
+              options={[
+                { value: "Mois", label: "Mois" },
+                { value: "Semaine", label: "Semaine" },
+                { value: "Jour", label: "Jour" }
+              ]}
+            />
           </div>
           
           <div className="flex gap-2 mb-6 flex-wrap">
@@ -568,15 +568,15 @@ export default function Home() {
             </button>
 
 
-            <select
-            className="input-primary" 
-            onChange={ (e) => console.log(e.target.value) }
-            value={"Tous les statuts"}
-            >
-              <option>Terminée</option>
-              <option>À compléter</option>
-              <option>En attente</option>
-            </select>
+            <Select
+              value=""
+              onChange={(value) => console.log(value)}
+              options={[
+                { value: "Terminée", label: "Terminée" },
+                { value: "À compléter", label: "À compléter" },
+                { value: "En attente", label: "En attente" }
+              ]}
+            />
           </div>
         </div>
 

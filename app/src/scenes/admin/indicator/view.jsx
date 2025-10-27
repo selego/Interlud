@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { FiInfo, FiBarChart2, FiSave, FiTrash2 } from "react-icons/fi";
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import Select from "@/components/Select"
 
 export default function View() {
     const {id} = useParams()
@@ -201,37 +202,39 @@ function InfoTab({ indicator, setIndicator }) {
 
           <div>
             <label className="block text-sm font-medium mb-2">Catégorie principale</label>
-            <select
+            <Select
               value={indicator.indicator_category_id || ""}
-              onChange={(e) => {
-                const selectedCategory = principalCategories.find(cat => cat._id === e.target.value);
-                setIndicator({ ...indicator, indicator_category_id: e.target.value, indicator_category_name: selectedCategory?.name });
+              onChange={(value) => {
+                const selectedCategory = principalCategories.find(cat => cat._id === value);
+                setIndicator({ ...indicator, indicator_category_id: value, indicator_category_name: selectedCategory?.name });
               }}
-              className="w-full input-primary"
-            >
-              <option value="">Sélectionner</option>
-              {principalCategories.map((cat) => (
-                <option key={cat._id} value={cat._id}>{cat.name}</option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "Sélectionner" },
+                ...principalCategories.map((cat) => ({
+                  value: cat._id,
+                  label: cat.name
+                }))
+              ]}
+            />
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-2">Sous-catégorie</label>
-          <select
+          <Select
             value={indicator.indicator_sub_category_id || ""}
-            onChange={(e) => {
-              const selectedCategory = subCategories.find(cat => cat._id === e.target.value);
-              setIndicator({ ...indicator, indicator_sub_category_id: e.target.value, indicator_sub_category_name: selectedCategory?.name });
+            onChange={(value) => {
+              const selectedCategory = subCategories.find(cat => cat._id === value);
+              setIndicator({ ...indicator, indicator_sub_category_id: value, indicator_sub_category_name: selectedCategory?.name });
             }}
-            className="w-full input-primary"
-          >
-            <option value="">Sélectionner</option>
-            {subCategories.map((cat) => (
-              <option key={cat._id} value={cat._id}>{cat.name}</option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "Sélectionner" },
+              ...subCategories.map((cat) => ({
+                value: cat._id,
+                label: cat.name
+              }))
+            ]}
+          />
         </div>
 
         <div>
