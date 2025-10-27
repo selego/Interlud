@@ -5,6 +5,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import CollectivitySelector from "@/components/CollectivitySelector";
+import Select from "@/components/Select";
 
 const fetchData = async () => {
   await new Promise(resolve => setTimeout(resolve, 100))
