@@ -110,7 +110,7 @@ function IndicatorsTab({ action }) {
         </table>
       </div>
 
-      <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} action={action} onIndicatorAdded={fetchIndicatorValues} />
+      <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} action={action} onAdd={fetchIndicatorValues} />
     </div>
   );
 }
@@ -480,7 +480,8 @@ function ActionSettingsTab({ action }) {
   );
 }
 
-const AddIndicatorModal = ({ isOpen, onClose, action, onIndicatorAdded }) => {
+// Modal pour ajouter un indicateur
+const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
   const [allIndicators, setAllIndicators] = useState([]);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
 
@@ -517,8 +518,8 @@ const AddIndicatorModal = ({ isOpen, onClose, action, onIndicatorAdded }) => {
       toast.success("Indicateur ajouté avec succès");
       setSelectedIndicator(null);
       onClose();
-      onIndicatorAdded();
-    } catch (error) { 
+      onAdd();
+    } catch (error) {
       toast.error(error.message || "Indicateur déjà associé à cette action");
     }
   };
@@ -526,7 +527,7 @@ const AddIndicatorModal = ({ isOpen, onClose, action, onIndicatorAdded }) => {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => {onClose(); setSelectedIndicator(null);}}
+      onClose={() => { onClose(); setSelectedIndicatorId("")}}
       className="max-w-lg"
     >
       <div className="p-6">
