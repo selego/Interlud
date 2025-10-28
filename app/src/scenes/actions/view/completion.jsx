@@ -173,10 +173,9 @@ function SituationTab({ action, situation, selectedIndicator }) {
                 {(value.indicator_type === "text" || value.indicator_type === undefined) && (
                   <DebounceInput
                     type="text"
-                    className="w-full input-primary"
+                    placeholder="Valeur texte"
                     value={value.value || ""}
                     onChange={(e) => handleAutoSave({ ...value, value: e.target.value })}
-                    placeholder="Valeur texte"
                     debounce={800}
                   />
                 )}
@@ -184,7 +183,6 @@ function SituationTab({ action, situation, selectedIndicator }) {
                 {value.indicator_type === "number" && (
                   <DebounceInput
                     type="number"
-                    className="w-full input-primary"
                     value={value.value || ""}
                     onChange={(e) => handleAutoSave({ ...value, value: e.target.value })}
                     placeholder="Valeur numérique"
@@ -237,7 +235,6 @@ function SituationTab({ action, situation, selectedIndicator }) {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Commentaire</label>
                 <DebounceInput
                   type="text"
-                  className="w-full input-primary"
                   value={value.comment || ""}
                   onChange={(e) => handleAutoSave({ ...value, comment: e.target.value })}
                   placeholder="Commentaire"
