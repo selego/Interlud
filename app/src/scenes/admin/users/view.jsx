@@ -563,7 +563,7 @@ function UserCollectivitiesTab({ user, setUser }) {
     if (!c) return toast.error("Collectivité introuvable");
     
     const exists = (user?.collectivities || []).some((x) => x._id === c._id);    if (exists) return toast.error("Cette collectivité est déjà associée");
-    const updated = [...(user?.collectivities || []), { id: c._id, name: c.name, role: addValues.role }]; 
+    const updated = [...(user?.collectivities || []), { id: c._id, name: c.name, role: addValues.role, status: "approved" }]; 
     
     try {
       const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated });
