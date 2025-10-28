@@ -11,6 +11,8 @@ const Schema = new mongoose.Schema(
     collectivity_name: { type: String, trim: true },
     indicator_id: { type: String, trim: true },
     indicator_name: { type: String, trim: true },
+    indicator_type: { type: String, enum: ["number", "text", "radio", "checkbox"], trim: true },
+    indicator_value_possibilities: { type: Array, default: [] },
     situation: { type: String, enum: ["init", "ref", "prev", "expost"], trim: true },
     year: { type: Number, trim: true },
     value: { type: String, trim: true },

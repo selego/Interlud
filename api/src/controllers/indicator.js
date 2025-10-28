@@ -4,6 +4,7 @@ const passport = require("passport");
 const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
+const IndicatorValue = require("../models/indicator_value");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -19,9 +20,20 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
+    const oldIndicator = await Indicator.findById(req.params.id);
+    if (!oldIndicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
     const indicator = await Indicator.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    return res.status(200).send({ ok: true, data: indicator });
+    res.status(200).send({ ok: true, data: indicator });
+    
+    if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
+      IndicatorValue.updateMany(
+        { indicator_id: req.params.id }, 
+        { 
+          $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
+        }
+      ).catch(error => { capture(error)});
+    }
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

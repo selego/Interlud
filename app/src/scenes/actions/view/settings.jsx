@@ -11,7 +11,6 @@ export default function Settings({ action }) {
 
   return (
     <div className="p-8">
-      {/* Tabs Navigation */}
       <div className="flex mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
@@ -34,7 +33,6 @@ export default function Settings({ action }) {
         </button>
       </div>
 
-      {/* Tab Content */}
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
       {activeTab === "settings" && <ActionSettingsTab action={action} />}
     </div>
@@ -194,7 +192,6 @@ function ActionSettingsTab({ action }) {
 
   return (
     <div className="card-shadow">
-      {/* En-tête + boutons (haut) */}
       <div className="flex items-start justify-between gap-4 p-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de l'action</h1>
@@ -203,7 +200,6 @@ function ActionSettingsTab({ action }) {
         <ActionButtons />
       </div>
 
-      {/* Informations générales */}
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -257,7 +253,6 @@ function ActionSettingsTab({ action }) {
         </div>
       </div>
 
-      {/* Type et référence */}
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Type et référence</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,7 +299,6 @@ function ActionSettingsTab({ action }) {
         </div>
       </div>
 
-      {/* Collectivité et calendrier */}
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Collectivité et calendrier</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -347,7 +341,6 @@ function ActionSettingsTab({ action }) {
         </div>
       </div>
 
-      {/* Responsables et partenaires */}
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Responsables et partenaires</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -396,7 +389,6 @@ function ActionSettingsTab({ action }) {
         </div>
       </div>
 
-      {/* Budget */}
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Budget</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -439,7 +431,6 @@ function ActionSettingsTab({ action }) {
         </div>
       </div>
 
-      {/* Contenu et suivi */}
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Contenu et suivi</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -482,7 +473,6 @@ function ActionSettingsTab({ action }) {
         </div>
       </div>
 
-      {/* Boutons bas */}
       <div className="pt-6 mt-6 border-t border-light-border px-6 pb-6">
         <ActionButtons />
       </div>
@@ -493,7 +483,7 @@ function ActionSettingsTab({ action }) {
 // Modal pour ajouter un indicateur
 const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
   const [allIndicators, setAllIndicators] = useState([]);
-  const [selectedIndicatorId, setSelectedIndicatorId] = useState("");
+  const [selectedIndicator, setSelectedIndicator] = useState(null);
 
   useEffect(() => {
     fetchAllIndicators();
@@ -510,25 +500,23 @@ const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
   };
 
   const handleAddIndicator = async () => {
-    if (!selectedIndicatorId) return toast.error("Veuillez sélectionner un indicateur");
-    const selectedIndicator = allIndicators.find((i) => i._id === selectedIndicatorId);
-    if (!selectedIndicator) return;
+    if (!selectedIndicator) return toast.error("Veuillez sélectionner un indicateur");
 
     try {
-      const response = await api.post(`/action/initialize_indicator_values`, {
+      const { ok, code } = await api.post(`/action/initialize_indicator_values`, {
         action_id: action._id,
         action_name: action.name,
         collectivity_id: action.collectivity_id,
         collectivity_name: action.collectivity_name,
         indicator_id: selectedIndicator._id,
         indicator_name: selectedIndicator.name,
+        indicator_type: selectedIndicator.value_type,
+        indicator_value_possibilities: selectedIndicator.value_possibilities
       });
-
-      const { ok, code } = response;
       if (!ok) return toast.error(code || "Une erreur est survenue");
 
       toast.success("Indicateur ajouté avec succès");
-      setSelectedIndicatorId("");
+      setSelectedIndicator(null);
       onClose();
       onAdd();
     } catch (error) {
@@ -547,8 +535,11 @@ const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un indicateur</label>
           <Select 
-            value={selectedIndicatorId}
-            onChange={setSelectedIndicatorId}
+            value={selectedIndicator?._id}
+            onChange={(value) => {
+              const indicator = allIndicators.find(i => i._id === value);
+              setSelectedIndicator(indicator);
+            }}
             options={[
               { value: "", label: "-- Choisir un indicateur --" },
               ...allIndicators.map((indicator) => ({
