@@ -110,12 +110,23 @@ function RightsTab({ user }) {
     if (user) fetchUserActionRights();
   }, [user]);
 
+  if (user.role === "admin") {
+    return (
+      <div className="card-shadow">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <FiShield className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Vous êtes administrateur global. Tous les droits d'action sont accordés</p>
+        </div>
+      </div>
+    );
+  }
+
   if (user.collectivities && user.collectivities.length === 0) {
     return (
       <div className="card-shadow">
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <FiShield className="mx-auto h-12 w-12 text-gray-400" />
-          <p className="mt-2 text-sm text-gray-600">Aucune collectivité associée</p>
+          <p className="mt-2 text-sm text-gray-600">Vous n'avez accès à aucune collectivité</p>
         </div>
       </div>
     );
