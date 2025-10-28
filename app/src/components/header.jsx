@@ -11,10 +11,25 @@ export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
   const quickAccessRef = useRef(null);
-  const { user, collectivity, setCollectivity, setUser, setActionRights } = useStore();
+  const { user, collectivity, setCollectivity, setUser, setActionRights } = useStore()
+  const [collectivities, setCollectivities] = useState([]);
   const navigate = useNavigate(); 
   const location = useLocation();
+
+  const fetchCollectivities = async () => {
+    try {
+      const { ok, data, code } = await api.post("/collectivity/search");
+      if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités");
+      setCollectivities(data);
+    } catch (error) {
+      console.error("Error fetching collectivities:", error);
+    }
+  };
   
+  useEffect(() => {
+    fetchCollectivities();
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (quickAccessRef.current && !quickAccessRef.current.contains(event.target)) {
@@ -64,7 +79,7 @@ export default function Header() {
     }
   }
 
-  const navigation = user?.collectivities?.find(c => c.status === 'approved') ? [
+  const navigation = (user?.role === "admin" || user?.collectivities?.find(c => c.status === 'approved')) ? [
     {
       text: "Accueil",
       linkProps: { to: "/" },
@@ -282,26 +297,34 @@ export default function Header() {
               </nav>
             )}
             
-            {user?.collectivities && user.collectivities.filter(c => c.status === 'approved').length > 0 && (
+            {(user?.role === "admin" || (user?.collectivities && user.collectivities.filter(c => c.status === 'approved').length > 0)) && (
               <div className="flex items-center gap-3">
                 <Select 
                   value={collectivity?._id || ""}
                   onChange={handleCollectivityChange}
                   options={[
-                    ...user.collectivities.map((collectivity) => ({
-                      value: collectivity.id,
-                      label: `#${collectivity.name}`
-                    }))
+                    ...(user.role === "admin" 
+                      ? collectivities.map((collectivity) => ({
+                          value: collectivity._id,
+                          label: `#${collectivity.name}`
+                        }))
+                      : user.collectivities
+                          .filter(c => c.status === 'approved')
+                          .map((collectivity) => ({
+                            value: collectivity.id,
+                            label: `#${collectivity.name}`
+                          }))
+                      )
                   ]}
                 />
 
                 {collectivity && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
                     <span className="text-sm font-semibold text-primary-green capitalize">
-                      {user.collectivities.find(uc => uc.id === collectivity._id).role}
+                      {user.role === "admin" ? "admin" : user.collectivities.find(uc => uc.id === collectivity._id).role}
                     </span>
                   </div>
-                  )}
+                )}
               </div>
             )}
           </div>
