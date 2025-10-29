@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX } from "react-icons/fi";
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft } from "react-icons/fi";
 import useStore from "@/services/store";
 
 import Modal from "@/components/modal";
@@ -9,6 +9,7 @@ import api from "@/services/api";
 
 export default function View() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [user, setUser] = useState();
   const [activeTab, setActiveTab] = useState("info");
   const { collectivity } = useStore();
@@ -34,6 +35,16 @@ export default function View() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="mb-6">
+        <button
+          onClick={() => navigate("/collectivity")}
+          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+        >
+          <FiArrowLeft size={16} />
+          Retour à la liste des utilisateurs
+        </button>
+      </div>
+
       <div className="flex border-b border-gray-200 mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
@@ -122,94 +133,123 @@ function UserInfoTab({ user, setUser }) {
 
   return (
     <div className="card-shadow">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations générales</h2>
-
-      {user.collectivities?.find(c => c.id === collectivity._id)?.status === 'pending' && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-yellow-700">Demande en attente</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleStatus('approved')}
-                className="px-3 py-1 text-xs button-primary"
-              >
-                Approuver
-              </button>
-              <button
-                onClick={() => handleStatus('rejected')}
-                className="px-3 py-1 text-xs bg-red-500 text-white hover:bg-red-600 rounded"
-              >
-                Rejeter
-              </button>
-            </div>
-          </div>
+      {/* En-tête + boutons (haut) */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de l'utilisateur</h1>
+          <p className="text-gray-500 mt-1">Gère les informations et les permissions de l'utilisateur.</p>
         </div>
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-          <input
-            className="w-full input-primary"
-            value={values.name}
-            onChange={(e) => setValues({ ...values, name: e.target.value })}
-            placeholder="Nom de l'utilisateur"
-          />
-        </div>
-
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
-          <input
-            className="w-full input-primary"
-            value={values.email}
-            onChange={(e) => setValues({ ...values, email: e.target.value })}
-            placeholder="email@exemple.fr"
-          />
-        </div>
-
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-          <select
-            className="w-full input-primary"
-            value={values.status || "active"}
-            onChange={(e) => setValues({ ...values, status: e.target.value })}
-          >
-            <option value="active">Actif</option>
-            <option value="inactive">Inactif</option>
-          </select>
-        </div>
-
-        {collectivity && (
-          <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Rôle dans la collectivité
-            </label>
-            <select
-              className="w-full input-primary"
-              value={values.collectivityRole}
-              onChange={(e) => setValues({ ...values, collectivityRole: e.target.value })}
-            >
-              <option value="user">Utilisateur</option>
-              <option value="admin">Administrateur</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        <ResetPassword userId={user._id} />
-        <div className="flex items-center gap-3">
+        <div className="flex justify-end gap-3">
           <button
-            className="button-primary"
+            onClick={onDelete}
+            className="px-5 py-2 bg-red-50 text-red-700 rounded-full hover:bg-red-100 transition-colors font-medium border border-red-200"
+          >
+            Supprimer
+          </button>
+          <button
             onClick={onUpdate}
+            className="button-primary"
           >
             Enregistrer
           </button>
+        </div>
+      </div>
+
+      {/* Informations générales */}
+      <div className="pt-6 mt-6 border-t border-light-border">
+        <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
+
+        {user.collectivities?.find(c => c.id === collectivity._id)?.status === 'pending' && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-yellow-700">Demande en attente</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleStatus('approved')}
+                  className="px-3 py-1 text-xs button-primary"
+                >
+                  Approuver
+                </button>
+                <button
+                  onClick={() => handleStatus('rejected')}
+                  className="px-3 py-1 text-xs bg-red-500 text-white hover:bg-red-600 rounded"
+                >
+                  Rejeter
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="w-full">
+            <label className="block text-sm font-semibold mb-2">Nom</label>
+            <input
+              className="w-full input-primary"
+              value={values.name}
+              onChange={(e) => setValues({ ...values, name: e.target.value })}
+              placeholder="Nom de l'utilisateur"
+            />
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-semibold mb-2">E-mail</label>
+            <input
+              className="w-full input-primary"
+              value={values.email}
+              onChange={(e) => setValues({ ...values, email: e.target.value })}
+              placeholder="email@exemple.fr"
+            />
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-semibold mb-2">Statut</label>
+            <select
+              className="w-full input-primary"
+              value={values.status || "active"}
+              onChange={(e) => setValues({ ...values, status: e.target.value })}
+            >
+              <option value="active">Actif</option>
+              <option value="inactive">Inactif</option>
+            </select>
+          </div>
+
+          {collectivity && (
+            <div className="w-full">
+              <label className="block text-sm font-semibold mb-2">
+                Rôle dans la collectivité
+              </label>
+              <select
+                className="w-full input-primary"
+                value={values.collectivityRole}
+                onChange={(e) => setValues({ ...values, collectivityRole: e.target.value })}
+              >
+                <option value="user">Utilisateur</option>
+                <option value="admin">Administrateur</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <ResetPassword userId={user._id} />
+        </div>
+      </div>
+
+      {/* Boutons bas (identiques) */}
+      <div className="pt-6 mt-6 border-t border-light-border">
+        <div className="flex justify-end gap-3">
           <button
-            className="button-primary bg-red-600"
             onClick={onDelete}
+            className="px-5 py-2 bg-red-50 text-red-700 rounded-full hover:bg-red-100 transition-colors font-medium border border-red-200"
           >
             Supprimer
+          </button>
+          <button
+            onClick={onUpdate}
+            className="button-primary"
+          >
+            Enregistrer
           </button>
         </div>
       </div>

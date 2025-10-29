@@ -274,24 +274,23 @@ function InfoTab({ indicator, setIndicator }) {
             className="w-full input-primary rounded-lg"
           />
         </div>
-      </div>
 
-      <div className="flex items-center justify-between pt-4">
-        <button 
-          onClick={handleDelete} 
-          className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-full hover:bg-red-100 transition-colors"
-        >
-          <FiTrash2 size={16} />
-          Supprimer
-        </button>
-        
-        <button 
-          onClick={handleSave} 
-          className="button-primary inline-flex items-center gap-2"
-        >
-          <FiSave size={16} />
-          Enregistrer
-        </button>
+        {/* Footer actions dans la card */}
+        <div className="pt-4 mt-4 border-t border-light-border flex items-center justify-end gap-3">
+          <button 
+            onClick={handleDelete} 
+            className="button-primary bg-red-600 inline-flex items-center gap-2"
+          >
+            Supprimer
+          </button>
+          
+          <button 
+            onClick={handleSave} 
+            className="button-primary inline-flex items-center gap-2"
+          >
+            Enregistrer
+          </button>
+        </div>
       </div>
     </div>
   )
