@@ -610,17 +610,22 @@ export default function Home() {
               </div>
             </div>
           ))}
-          
-        <div className="mt-6 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer" onClick={() => navigate(`/actions`)}>
-          <div className="flex justify-center mb-2">
-            <div className="flex gap-2">
-              <div className="w-6 h-6 border-2 border-primary-green rounded"></div>
-              <div className="w-6 h-6 bg-primary-green rounded"></div>
-              <div className="w-1 h-6 bg-primary-green"></div>
+
+          <div
+            className="h-full card-shadow rounded-2xl border-2 border-dashed border-primary-green/60 hover:border-primary-green bg-white p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center"
+            onClick={() => navigate(`/actions`)}
+          >
+            <div className="flex flex-col items-center gap-3 mb-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
+                <div className="w-7 h-7 rounded-md bg-primary-green"></div>
+                <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
+                <div className="w-7 h-7 rounded-md bg-primary-green"></div>
+              </div>
+              <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
             </div>
+            <p className="text-base font-semibold text-primary-green">Voir toutes les actions</p>
           </div>
-          <p className="text-sm font-medium text-primary-green">Voir toutes les actions</p>
-        </div>
         </div>
       </div>
       </div>
