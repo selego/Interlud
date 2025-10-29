@@ -44,8 +44,12 @@ router.post("/signin", async (req, res) => {
     if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
+
     const approvedCollectivities = user.collectivities?.filter(c => c.status === 'approved') || [];
-    const collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
+    let collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
+    if (user.role === "admin") collectivity = await Collectivity.findOne();
+
+
 
     
     const match = config.ENVIRONMENT === "development" || (await user.comparePassword(password));

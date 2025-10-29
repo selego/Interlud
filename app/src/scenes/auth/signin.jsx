@@ -18,6 +18,7 @@ export default () => {
       if (user) setUser(user)
       if (userActionRights) setActionRights(userActionRights)
       if (collectivity) setCollectivity(collectivity)
+      localStorage.setItem('selectedCollectivityId', collectivity._id);
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }
