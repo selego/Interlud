@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FiUser, FiShield, FiClock, FiEye, FiEyeOff,FiHome, FiX} from "react-icons/fi";
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft } from "react-icons/fi";
 
 import Modal from "@/components/modal";
 import api from "@/services/api";
@@ -10,6 +10,7 @@ import Select from "@/components/Select";
 
 export default function View() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [user, setUser] = useState();
   const [activeTab, setActiveTab] = useState("info");
 
@@ -35,6 +36,16 @@ export default function View() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="mb-6">
+        <button
+          onClick={() => navigate("/admin/users")}
+          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+        >
+          <FiArrowLeft size={16} />
+          Retour à la liste des utilisateurs
+        </button>
+      </div>
+
       <div className="flex border-b border-gray-200 mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
