@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
-import { FiList, FiSettings } from "react-icons/fi";
+import { FiList, FiSettings, FiArrowLeft } from "react-icons/fi";
 import Select from "@/components/Select";
 
 export default function Settings({ action }) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("indicators");
 
   return (
     <div className="p-8">
+      <div className="mb-6">
+        <button
+          onClick={() => navigate(`/actions/${action._id}/dashboard`)}
+          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+        >
+          <FiArrowLeft size={16} />
+          Retour au dashboard
+        </button>
+      </div>
+
       <div className="flex mb-6">
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
 import DebounceInput from "@/components/debounceInput";
+import { FiArrowLeft } from "react-icons/fi";
 
 export default function Completion({ action }) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
 
@@ -27,6 +30,16 @@ export default function Completion({ action }) {
       </div>
 
       <div className="flex-1 p-8">
+        <div className="mb-6">
+          <button
+            onClick={() => navigate(`/actions/${action._id}/dashboard`)}
+            className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+          >
+            <FiArrowLeft size={16} />
+            Retour au dashboard
+          </button>
+        </div>
+
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
           <p className="text-gray-600 mt-1">Complétion des indicateurs</p>

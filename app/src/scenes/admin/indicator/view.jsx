@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { FiInfo, FiBarChart2, FiSave, FiTrash2 } from "react-icons/fi";
+import { FiInfo, FiBarChart2, FiSave, FiTrash2, FiArrowLeft } from "react-icons/fi";
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
 
 export default function View() {
+  const navigate = useNavigate();
     const {id} = useParams()
     const [activeTab, setActiveTab] = useState("info")
     const [indicator, setIndicator] = useState({
@@ -36,31 +37,16 @@ export default function View() {
 
     
     return (
-      <div className="p-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">
-            {indicator.name || "Détails de l'indicateur"}
-          </h1>
-          {indicator.indicator_category_name && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="px-3 py-1 rounded-full bg-primary-green/10 text-primary-green font-medium">
-                {indicator.indicator_category_name}
-              </span>
-              {indicator.indicator_sub_category_name && (
-                <>
-                  <span className="text-gray-400">›</span>
-                  <span className="px-3 py-1 rounded-full bg-secondary-green/10 text-secondary-green font-medium">
-                    {indicator.indicator_sub_category_name}
-                  </span>
-                </>
-              )}
+        <div className="w-full max-w-7xl mx-auto px-4 py-8">            
+            <div className="mb-6">
+              <button
+                onClick={() => navigate("/admin/indicator")}
+                className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+              >
+                <FiArrowLeft size={16} />
+                Retour à la liste des indicateurs
+              </button>
             </div>
-          )}
-        </div>
-
-        <div className="flex justify-center">
-          <div className="w-full max-w-5xl">
             
             {/* Tabs Navigation */}
             <div className="flex border-b border-gray-200 mb-6">
@@ -105,8 +91,6 @@ export default function View() {
             </div>
 
           </div>
-        </div>
-      </div>
     );
 }
 

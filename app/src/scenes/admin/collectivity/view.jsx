@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import { FiArrowLeft } from "react-icons/fi"
 
 export default function View() {
     const {id} = useParams()
@@ -46,81 +47,88 @@ export default function View() {
 
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-8">Détails de la collectivité</h1>
+    <div className="w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="mb-6">
+        <button
+          onClick={() => navigate("/admin/collectivity")}
+          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+        >
+          <FiArrowLeft size={16} />
+          Retour à la liste des collectivités
+        </button>
+      </div>
       
-      <div className="flex justify-center">
-        <div className="w-full max-w-2xl">
-          <div className="space-y-6 card-shadow">
-            <div className="flex gap-6">
-              <div className="flex-1">
-                <label className="block text-sm font-semibold mb-2">
-                  Nom de la collectivité
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nom de la collectivité"
-                  value={collectivity.name}
-                  onChange={(e) => setCollectivity({...collectivity, name: e.target.value})}
-                  className="w-full input-primary"
-                />
-              </div>
-              
-              <div className="flex-1">
-                <label className="block text-sm font-semibold mb-2">
-                  Population
-                </label>
-                <input
-                  type="number"
-                  name="population"
-                  value={collectivity.population}
-                  onChange={(e) => setCollectivity({...collectivity, population: e.target.value})}
-                  className="w-full input-primary"  
-                />
-              </div>
+      <div className="card-shadow">
+        {/* En-tête + boutons (haut) */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de la collectivité</h1>
+            <p className="text-gray-500 mt-1">Gère les informations de la collectivité.</p>
+          </div>
+        </div>
+
+        {/* Informations générales */}
+        <div className="pt-6 mt-6 border-t border-light-border">
+          <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2">Nom de la collectivité</label>
+              <input
+                type="text"
+                placeholder="Nom de la collectivité"
+                value={collectivity.name || ""}
+                onChange={(e) => setCollectivity({...collectivity, name: e.target.value})}
+                className="w-full input-primary"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold mb-2">Population</label>
+              <input
+                type="number"
+                value={collectivity.population || ""}
+                onChange={(e) => setCollectivity({...collectivity, population: e.target.value})}
+                className="w-full input-primary"  
+              />
             </div>
 
-            <div className="flex gap-6">
-              <div className="flex-1">
-                  <label className="block text-sm font-semibold mb-2">
-                    Department
-                  </label>
-                  <input
-                    type="number"
-                    name="department"
-                    value={collectivity.department}
-                    onChange={(e) => setCollectivity({...collectivity, department: e.target.value})}
-                    className="w-full input-primary"
-                  />
-              </div>
-
-              <div className="flex-1">
-                <label className="block text-sm font-semibold mb-2">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  value={collectivity.description}
-                  onChange={(e) => setCollectivity({...collectivity, description: e.target.value})}
-                  rows="4"
-                  className=" w-full input-primary rounded-lg"
-                />
-              </div>
-
+            <div>
+              <label className="block text-sm font-semibold mb-2">Département</label>
+              <input
+                type="number"
+                value={collectivity.department || ""}
+                onChange={(e) => setCollectivity({...collectivity, department: e.target.value})}
+                className="w-full input-primary"
+              />
             </div>
 
-            <div className="flex justify-end pt-4 gap-4">
-              <button 
-                onClick={handleDelete} 
-                className="px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors font-medium"
-              >
-                Supprimer
-              </button>
-              <button onClick={handleSave} className="button-primary">
-                Enregistrer
-              </button>
+            <div>
+              <label className="block text-sm font-semibold mb-2">Description</label>
+              <textarea
+                value={collectivity.description || ""}
+                onChange={(e) => setCollectivity({...collectivity, description: e.target.value})}
+                rows="4"
+                className="w-full input-primary rounded-lg"
+              />
             </div>
           </div>
+        </div>
+
+        <div className="pt-6 mt-6 border-t border-light-border">
+        <div className="flex justify-end gap-3">
+        <button
+          onClick={handleDelete}
+          className="button-primary bg-red-600"
+        >
+          Supprimer
+        </button>
+        <button
+          onClick={handleSave}
+          className="button-primary"
+        >
+          Enregistrer
+        </button>
+      </div>
         </div>
       </div>
     </div>

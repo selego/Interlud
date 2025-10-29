@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
+import { FiArrowLeft } from "react-icons/fi"
 
 export default function View() {
   const {id} = useParams()
@@ -96,7 +97,7 @@ export default function View() {
     <div className="flex justify-end gap-3">
       <button
         onClick={handleDelete}
-        className="px-5 py-2 bg-red-50 text-red-700 rounded-full hover:bg-red-100 transition-colors font-medium border border-red-200"
+        className="button-primary bg-red-600"
       >
         Supprimer
       </button>
@@ -110,8 +111,16 @@ export default function View() {
   )
 
   return (
-    <div className="p-6 md:p-8">
-      <div className="w-full max-w-5xl mx-auto">
+        <div className="w-full max-w-7xl mx-auto px-4 py-8">
+        <div className="mb-6">
+          <button
+            onClick={() => navigate("/admin/action")}
+            className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+          >
+            <FiArrowLeft size={16} />
+            Retour à la liste des actions
+          </button>
+        </div>
         <div className="card-shadow">
           {/* En-tête + boutons (haut) */}
           <div className="flex items-start justify-between gap-4">
@@ -119,7 +128,20 @@ export default function View() {
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de l'action</h1>
               <p className="text-gray-500 mt-1">Gère les informations, l’avancement et le contexte de l’action.</p>
             </div>
-            <ActionButtons />
+            <div className="flex justify-end gap-3">
+      <button
+        onClick={handleDelete}
+        className="button-primary bg-red-600"
+      >
+        Supprimer
+      </button>
+      <button
+        onClick={handleSave}
+        className="button-primary"
+      >
+        Enregistrer
+      </button>
+    </div>
           </div>
 
           {/* Informations générales */}
@@ -401,12 +423,23 @@ export default function View() {
             </div>
           </div>
 
-          {/* Boutons bas (identiques) */}
           <div className="pt-6 mt-6 border-t border-light-border">
-            <ActionButtons />
+          <div className="flex justify-end gap-3">
+      <button
+        onClick={handleDelete}
+        className="button-primary bg-red-600"
+      >
+        Supprimer
+      </button>
+      <button
+        onClick={handleSave}
+        className="button-primary"
+      >
+        Enregistrer
+      </button>
+    </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }
