@@ -356,6 +356,17 @@ function UserActionRightsSection({ user }) {
 
   if (!user) return null;
 
+  if (user.role === "admin") {
+    return (
+      <div className="card-shadow">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-400">
+          <FiShield className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Vous êtes administrateur global. Tous les droits d'action sont accordés</p>
+        </div>
+      </div>
+    );
+  }
+
   if (rights.length === 0 ) {
     <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
     <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -606,6 +617,17 @@ function UserCollectivitiesTab({ user, setUser }) {
       toast.error("Une erreur est survenue");
     }
   };
+
+  if (user.role === "admin") {
+    return (
+      <div className="card-shadow">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <FiShield className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Vous êtes administrateur global. Vous avez accès à toutes les collectivités en role admin</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card-shadow">
