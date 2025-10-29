@@ -583,17 +583,21 @@ export default function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {actions.map((action) => (
-            <div key={action._id}  className="card-shadow" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
+            <div
+              key={action._id}
+              className="card-shadow p-6 h-full flex flex-col"
+              onClick={() => navigate(`/actions/${action._id}/dashboard`)}
+            >
               <div className="mb-3">
                 <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.status)}`}>
                   {action.status}
                 </span>
               </div>
-              
+
               <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>
               <p className="text-sm text-gray-500 mb-3 line-clamp-2">{action.description}</p>
-              
-              <div className="flex items-center justify-between mb-2">
+
+              <div className="mt-auto pt-3 flex items-center justify-between">
                 <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">
                   Voir l'action
                 </button>
@@ -606,7 +610,7 @@ export default function Home() {
               </div>
             </div>
           ))}
-
+          
         <div className="mt-6 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer" onClick={() => navigate(`/actions`)}>
           <div className="flex justify-center mb-2">
             <div className="flex gap-2">
