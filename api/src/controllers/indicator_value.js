@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const passport = require("passport");
 const IndicatorValue = require("../models/indicator_value");
-const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 
