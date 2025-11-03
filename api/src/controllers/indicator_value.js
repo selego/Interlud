@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const passport = require("passport");
 const IndicatorValue = require("../models/indicator_value");
+const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 
@@ -45,6 +46,21 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
     const skip = req.body.offset || 0;
     const total = await IndicatorValue.countDocuments(query);
     const data = await IndicatorValue.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
+
+    const indicatorIds = [...new Set(data.map((v) => v.indicator_id).filter(Boolean))];
+    const indicators = await Indicator.find({ _id: { $in: indicatorIds } });
+    const indicatorMap = new Map(indicators.map((ind) => [ind._id.toString(), ind]));
+
+    for (const value of data) {
+      const indicator = indicatorMap.get(value.indicator_id);
+      if (indicator) {
+        value.indicator_category_id = indicator.indicator_category_id;
+        value.indicator_category_name = indicator.indicator_category_name;
+        value.indicator_sub_category_id = indicator.indicator_sub_category_id;
+        value.indicator_sub_category_name = indicator.indicator_sub_category_name;
+      }
+    }
+
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
     capture(error);

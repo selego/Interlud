@@ -4,7 +4,7 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
 import DebounceInput from "@/components/debounceInput";
-import { FiArrowLeft } from "react-icons/fi";
+import { FiArrowLeft, FiChevronDown, FiChevronRight } from "react-icons/fi";
 
 export default function Completion({ action }) {
   const navigate = useNavigate();
@@ -18,18 +18,18 @@ export default function Completion({ action }) {
   );
 
   return (
-    <div className="flex">
-      <div className="w-80 bg-white border-r border-gray-200 p-4 sticky top-0 h-full overflow-y-auto">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Indicateurs</h3>
-        <IndicatorsList 
-          action={action} 
-          activeTab={activeTab}
-          selectedIndicator={selectedIndicator}
-          onSelectIndicator={setSelectedIndicator}
-        />
+    <div className="flex h-screen">
+      <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 pt-4">
+          {/* <IndicatorsList action={action} activeTab={activeTab} selectedIndicator={selectedIndicator} onSelectIndicator={setSelectedIndicator} /> */}
+          <IndicatorsListDemo selectedIndicator={selectedIndicator} onSelectIndicator={setSelectedIndicator} />
+        </div>
       </div>
 
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-8 overflow-y-auto">
         <div className="mb-6">
           <button
             onClick={() => navigate(`/actions/${action._id}/dashboard`)}
@@ -88,13 +88,49 @@ export default function Completion({ action }) {
 }
 
 function IndicatorsList({ action, activeTab, selectedIndicator, onSelectIndicator }) {
-  const [indicators, setIndicators] = useState([]);
+  const [openCategories, setOpenCategories] = useState(new Set());
+  const [openSubCategories, setOpenSubCategories] = useState(new Set());
+  const [groupedData, setGroupedData] = useState({});
 
   const fetchIndicators = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, {  action_id: action._id,  situation: activeTab  });
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
       if (!ok) return toast.error(code || "Une erreur est survenue");
-      setIndicators(data);
+
+      const grouped = {};
+      data.forEach(indicator => {
+        const categoryName = indicator.indicator_category_name || "Sans catégorie";
+        const subCategoryName = indicator.indicator_sub_category_name;
+
+        if (!grouped[categoryName]) {
+          grouped[categoryName] = { subCategories: {}, directIndicators: [] };
+        }
+
+        if (subCategoryName) {
+          if (!grouped[categoryName].subCategories[subCategoryName]) {
+            grouped[categoryName].subCategories[subCategoryName] = [];
+          }
+          grouped[categoryName].subCategories[subCategoryName].push(indicator);
+        } else {
+          grouped[categoryName].directIndicators.push(indicator);
+        }
+      });
+
+      setGroupedData(grouped);
+
+      const firstCategory = Object.keys(grouped)[0];
+      if (firstCategory) {
+        setOpenCategories(new Set([firstCategory]));
+        const firstIndicator =
+          grouped[firstCategory].directIndicators[0] ||
+          (Object.keys(grouped[firstCategory].subCategories).length > 0 ? grouped[firstCategory].subCategories[Object.keys(grouped[firstCategory].subCategories)[0]][0] : null);
+        if (firstIndicator) {
+          if (firstIndicator.indicator_sub_category_name) {
+            setOpenSubCategories(new Set([`${firstCategory}-${firstIndicator.indicator_sub_category_name}`]));
+          }
+          onSelectIndicator(firstIndicator);
+        }
+      }
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
@@ -104,15 +140,88 @@ function IndicatorsList({ action, activeTab, selectedIndicator, onSelectIndicato
     fetchIndicators();
   }, [action, activeTab]);
 
+  const toggleCategory = (categoryName) => {
+    const newOpenCategories = new Set(openCategories);
+    if (newOpenCategories.has(categoryName)) {
+      newOpenCategories.delete(categoryName);
+    } else {
+      newOpenCategories.add(categoryName);
+    }
+    setOpenCategories(newOpenCategories);
+  };
+
+  const toggleSubCategory = (categoryName, subCategoryName) => {
+    const key = `${categoryName}-${subCategoryName}`;
+    const newOpenSubCategories = new Set(openSubCategories);
+    if (newOpenSubCategories.has(key)) {
+      newOpenSubCategories.delete(key);
+    } else {
+      newOpenSubCategories.add(key);
+    }
+    setOpenSubCategories(newOpenSubCategories);
+  };
+
+  const isCategoryOpen = (categoryName) => openCategories.has(categoryName);
+  const isSubCategoryOpen = (categoryName, subCategoryName) => openSubCategories.has(`${categoryName}-${subCategoryName}`);
+
   return (
     <div className="space-y-1">
-      {indicators.map((indicator) => (
-        <div
-          key={indicator._id}
-          className={`p-2 rounded cursor-pointer transition-colors text-sm ${ selectedIndicator?._id === indicator._id  ? "bg-secondary-green text-primary-green"  : ""}`}
-          onClick={() => onSelectIndicator(indicator)}
-        >
-          {indicator.value ? "✓" : "○"} {indicator.indicator_name}
+      {Object.entries(groupedData).map(([categoryName, categoryData]) => (
+        <div key={categoryName}>
+          <div className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium hover:bg-gray-50" onClick={() => toggleCategory(categoryName)}>
+            {isCategoryOpen(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+            <span className="flex-1">{categoryName}</span>
+          </div>
+
+          {isCategoryOpen(categoryName) && (
+            <div className="ml-4 space-y-1">
+              {categoryData.directIndicators.length > 0 && (
+                <div className="space-y-1">
+                  {categoryData.directIndicators.map(indicator => (
+                    <div
+                      key={indicator._id}
+                      className={`p-2 rounded cursor-pointer transition-colors text-xs ${
+                        selectedIndicator?._id === indicator._id ? "bg-secondary-green text-primary-green font-medium" : "hover:bg-gray-50"
+                      }`}
+                      onClick={() => onSelectIndicator(indicator)}
+                    >
+                      <span className="mr-2">{indicator.value ? "✓" : "○"}</span>
+                      {indicator.indicator_name}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {Object.entries(categoryData.subCategories).map(([subCategoryName, indicators]) => (
+                <div key={subCategoryName}>
+                  <div
+                    className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs hover:bg-gray-50"
+                    onClick={() => toggleSubCategory(categoryName, subCategoryName)}
+                  >
+                    {isSubCategoryOpen(categoryName, subCategoryName) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                    <span className="flex-1 text-gray-700">{subCategoryName}</span>
+                  </div>
+
+                  {isSubCategoryOpen(categoryName, subCategoryName) && (
+                    <div className="ml-4 space-y-1">
+                      {indicators.map(indicator => (
+                        <div
+                          key={indicator._id}
+                          className={`p-2 rounded cursor-pointer transition-colors text-xs ${
+                            selectedIndicator?._id === indicator._id ? "bg-secondary-green text-primary-green font-medium" : "hover:bg-gray-50"
+                          }`}
+                          onClick={() => onSelectIndicator(indicator)}
+                        >
+                          <span className="mr-2">{indicator.value ? "✓" : "○"}</span>
+                          {indicator.indicator_name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -258,6 +367,317 @@ function SituationTab({ action, situation, selectedIndicator }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+function IndicatorsListDemo({ selectedIndicator, onSelectIndicator }) {
+  const indicatorsCategories = [
+    {
+      categorie: "Aires de livraisons",
+      sous_categories: []
+    },
+    {
+      categorie: "Cyclologistique",
+      sous_categories: []
+    },
+    {
+      categorie: "Données de base",
+      sous_categories: []
+    },
+    {
+      categorie: "Données de production/consommation d'énergie",
+      sous_categories: []
+    },
+    {
+      categorie: "Déplacements de particuliers",
+      sous_categories: ["Parts modales par mode de déplacement pour les déplacements locaux"]
+    },
+    {
+      categorie: "E-commerce",
+      sous_categories: []
+    },
+    {
+      categorie: "Espaces de Logistique Urbains",
+      sous_categories: [
+        "PL Diesel <=7.5t (Crit'Air 2)",
+        "PL Diesel <=7.5t (Crit'Air 3)",
+        "PL Diesel <=7.5t (Crit'Air 4)",
+        "PL Diesel <=7.5t (Crit'Air 5)",
+        "PL Diesel >14-20t (Crit'Air 2)",
+        "PL Diesel >14-20t (Crit'Air 3)",
+        "PL Diesel >14-20t (Crit'Air 4)",
+        "PL Diesel >14-20t (Crit'Air 5)",
+        "PL Diesel >20-26t (Crit'Air 2)",
+        "PL Diesel >20-26t (Crit'Air 3)",
+        "PL Diesel >20-26t (Crit'Air 4)",
+        "PL Diesel >20-26t (Crit'Air 5)",
+        "PL Diesel >28-34t (Crit'Air 2)",
+        "PL Diesel >28-34t (Crit'Air 3)",
+        "PL Diesel >28-34t (Crit'Air 4)",
+        "PL Diesel >28-34t (Crit'Air 5)",
+        "PL Diesel >34-40t (Crit'Air 2)",
+        "PL Diesel >34-40t (Crit'Air 3)",
+        "PL Diesel >34-40t (Crit'Air 4)",
+        "PL Diesel >34-40t (Crit'Air 5)",
+        "PL Diesel >7.5-12t (Crit'Air 2)",
+        "PL Diesel >7.5-12t (Crit'Air 3)",
+        "PL Diesel >7.5-12t (Crit'Air 4)",
+        "PL Diesel >7.5-12t (Crit'Air 5)",
+        "PL Electrique <=7.5t (Crit'Air E)",
+        "PL Electrique >14-20t (Crit'Air E)",
+        "PL Electrique >20-26t (Crit'Air E)",
+        "PL Electrique >28-34t (Crit'Air E)",
+        "PL Electrique >34-40t (Crit'Air E)",
+        "PL Electrique >7.5-12t (Crit'Air E)",
+        "PL Gaz (GNC) >14-20t (Crit'Air 1)",
+        "PL Gaz (GNC) >14-20t (Crit'Air 2)",
+        "PL Gaz (GNC) >20-26t (Crit'Air 1)",
+        "PL Gaz (GNC) >20-26t (Crit'Air 2)",
+        "PL Gaz (GNC) >28-34t (Crit'Air 1)",
+        "PL Gaz (GNC) >28-34t (Crit'Air 2)",
+        "VUL Diesel (Crit'Air 2)",
+        "VUL Diesel (Crit'Air 3)",
+        "VUL Diesel (Crit'Air 4)",
+        "VUL Diesel (Crit'Air 5)",
+        "VUL Electrique (Crit'Air E)",
+        "VUL Essence (Crit'Air 1)",
+        "VUL Essence <=3,5t (Crit'Air 2)",
+        "VUL Essence <=3,5t (Crit'Air 3)",
+        "VUL Gaz (GNC) (Crit'Air 1)"
+      ]
+    },
+    {
+      categorie: "Fret ferroviaire",
+      sous_categories: []
+    },
+    {
+      categorie: "Fret fluvial",
+      sous_categories: ["Catégorie 1"]
+    },
+    {
+      categorie: "Fret routier",
+      sous_categories: ["Catégorie 1"]
+    },
+    {
+      categorie: "Livraisons silencieuses en horaires décalé",
+      sous_categories: []
+    },
+    {
+      categorie: "Logistique de chantiers",
+      sous_categories: [
+        "Accès au(x) chantier(s) depuis la plateforme",
+        "Accès direct au(x) chantier(s)",
+        "Accès à la plateforme logistique",
+        "Généralités sur le(s) chantier(s)",
+        "PL Diesel <=7.5t (Crit'Air 2)",
+        "PL Diesel <=7.5t (Crit'Air 3)",
+        "PL Diesel <=7.5t (Crit'Air 4)",
+        "PL Diesel <=7.5t (Crit'Air 5)",
+        "PL Diesel >14-20t (Crit'Air 2)",
+        "PL Diesel >14-20t (Crit'Air 3)",
+        "PL Diesel >14-20t (Crit'Air 4)",
+        "PL Diesel >14-20t (Crit'Air 5)",
+        "PL Diesel >20-26t (Crit'Air 2)",
+        "PL Diesel >20-26t (Crit'Air 3)",
+        "PL Diesel >20-26t (Crit'Air 4)",
+        "PL Diesel >20-26t (Crit'Air 5)",
+        "PL Diesel >28-34t (Crit'Air 2)",
+        "PL Diesel >28-34t (Crit'Air 3)",
+        "PL Diesel >28-34t (Crit'Air 4)",
+        "PL Diesel >28-34t (Crit'Air 5)",
+        "PL Diesel >34-40t (Crit'Air 2)",
+        "PL Diesel >34-40t (Crit'Air 3)",
+        "PL Diesel >34-40t (Crit'Air 4)",
+        "PL Diesel >34-40t (Crit'Air 5)",
+        "PL Diesel >7.5-12t (Crit'Air 2)",
+        "PL Diesel >7.5-12t (Crit'Air 3)",
+        "PL Diesel >7.5-12t (Crit'Air 4)",
+        "PL Diesel >7.5-12t (Crit'Air 5)",
+        "PL Electrique <=7.5t (Crit'Air E)",
+        "PL Electrique >14-20t (Crit'Air E)",
+        "PL Electrique >20-26t (Crit'Air E)",
+        "PL Electrique >28-34t (Crit'Air E)",
+        "PL Electrique >34-40t (Crit'Air E)",
+        "PL Electrique >7.5-12t (Crit'Air E)",
+        "PL Gaz (GNC) >14-20t (Crit'Air 1)",
+        "PL Gaz (GNC) >14-20t (Crit'Air 2)",
+        "PL Gaz (GNC) >20-26t (Crit'Air 1)",
+        "PL Gaz (GNC) >20-26t (Crit'Air 2)",
+        "PL Gaz (GNC) >28-34t (Crit'Air 1)",
+        "PL Gaz (GNC) >28-34t (Crit'Air 2)",
+        "VUL Diesel (Crit'Air 2)",
+        "VUL Diesel (Crit'Air 3)",
+        "VUL Diesel (Crit'Air 4)",
+        "VUL Diesel (Crit'Air 5)",
+        "VUL Electrique (Crit'Air E)",
+        "VUL Essence (Crit'Air 1)",
+        "VUL Essence <=3,5t (Crit'Air 2)",
+        "VUL Essence <=3,5t (Crit'Air 3)",
+        "VUL Gaz (GNC) (Crit'Air 1)"
+      ]
+    },
+    {
+      categorie: "Projets urbains immobiliers",
+      sous_categories: []
+    },
+    {
+      categorie: "ZFEm",
+      sous_categories: []
+    }
+  ];
+
+  const generateIndicatorName = (categoryName, subCategoryName) => {
+    if (!subCategoryName) {
+      return `${categoryName} - Indicateur`;
+    }
+    return `Indicateur ${subCategoryName}`;
+  };
+
+  const groupedData = {};
+  indicatorsCategories.forEach(cat => {
+    const categoryName = cat.categorie;
+    const hasSubCategories = cat.sous_categories.length > 0;
+
+    if (!groupedData[categoryName]) {
+      groupedData[categoryName] = { subCategories: {}, directIndicators: [] };
+    }
+
+    if (hasSubCategories) {
+      cat.sous_categories.forEach(subCat => {
+        if (!groupedData[categoryName].subCategories[subCat]) {
+          groupedData[categoryName].subCategories[subCat] = [];
+        }
+
+        const indicatorCount = Math.max(2, Math.min(4, (subCat.length % 5) + 2));
+        for (let i = 1; i <= indicatorCount; i++) {
+          groupedData[categoryName].subCategories[subCat].push({
+            _id: `demo-${categoryName}-${subCat}-${i}`,
+            indicator_name: `${generateIndicatorName(categoryName, subCat)} ${i > 1 ? i : ""}`.trim(),
+            value: i === 1 && Math.random() > 0.5 ? "Valeur exemple" : null,
+            indicator_category_name: categoryName,
+            indicator_sub_category_name: subCat
+          });
+        }
+      });
+    } else {
+      const indicatorCount = 3;
+      for (let i = 1; i <= indicatorCount; i++) {
+        groupedData[categoryName].directIndicators.push({
+          _id: `demo-${categoryName}-direct-${i}`,
+          indicator_name: `${generateIndicatorName(categoryName, null)} ${i > 1 ? i : ""}`.trim(),
+          value: i === 1 && Math.random() > 0.5 ? "Valeur exemple" : null,
+          indicator_category_name: categoryName,
+          indicator_sub_category_name: null
+        });
+      }
+    }
+  });
+
+  const [openCategories, setOpenCategories] = useState(new Set());
+  const [openSubCategories, setOpenSubCategories] = useState(new Set());
+
+  useEffect(() => {
+    const firstCategory = Object.keys(groupedData)[0];
+    if (firstCategory) {
+      setOpenCategories(new Set([firstCategory]));
+      const firstIndicator =
+        groupedData[firstCategory].directIndicators[0] ||
+        (Object.keys(groupedData[firstCategory].subCategories).length > 0
+          ? groupedData[firstCategory].subCategories[Object.keys(groupedData[firstCategory].subCategories)[0]][0]
+          : null);
+      if (firstIndicator && onSelectIndicator) {
+        if (firstIndicator.indicator_sub_category_name) {
+          setOpenSubCategories(new Set([`${firstCategory}-${firstIndicator.indicator_sub_category_name}`]));
+        }
+        onSelectIndicator(firstIndicator);
+      }
+    }
+  }, []);
+
+  const toggleCategory = (categoryName) => {
+    const newOpenCategories = new Set(openCategories);
+    if (newOpenCategories.has(categoryName)) {
+      newOpenCategories.delete(categoryName);
+    } else {
+      newOpenCategories.add(categoryName);
+    }
+    setOpenCategories(newOpenCategories);
+  };
+
+  const toggleSubCategory = (categoryName, subCategoryName) => {
+    const key = `${categoryName}-${subCategoryName}`;
+    const newOpenSubCategories = new Set(openSubCategories);
+    if (newOpenSubCategories.has(key)) {
+      newOpenSubCategories.delete(key);
+    } else {
+      newOpenSubCategories.add(key);
+    }
+    setOpenSubCategories(newOpenSubCategories);
+  };
+
+  const isCategoryOpen = (categoryName) => openCategories.has(categoryName);
+  const isSubCategoryOpen = (categoryName, subCategoryName) => openSubCategories.has(`${categoryName}-${subCategoryName}`);
+
+  return (
+    <div className="space-y-1">
+      {Object.entries(groupedData).map(([categoryName, categoryData]) => (
+        <div key={categoryName}>
+          <div className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium hover:bg-gray-50" onClick={() => toggleCategory(categoryName)}>
+            {isCategoryOpen(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+            <span className="flex-1">{categoryName}</span>
+          </div>
+
+          {isCategoryOpen(categoryName) && (
+            <div className="ml-4 space-y-1">
+              {categoryData.directIndicators.length > 0 && (
+                <div className="space-y-1">
+                  {categoryData.directIndicators.map(indicator => (
+                    <div
+                      key={indicator._id}
+                      className={`p-2 rounded cursor-pointer transition-colors text-xs ${
+                        selectedIndicator?._id === indicator._id ? "bg-secondary-green text-primary-green font-medium" : "hover:bg-gray-50"
+                      }`}
+                      onClick={() => onSelectIndicator && onSelectIndicator(indicator)}
+                    >
+                      <span className="mr-2">{indicator.value ? "✓" : "○"}</span>
+                      {indicator.indicator_name}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {Object.entries(categoryData.subCategories).map(([subCategoryName, indicators]) => (
+                <div key={subCategoryName}>
+                  <div
+                    className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs hover:bg-gray-50"
+                    onClick={() => toggleSubCategory(categoryName, subCategoryName)}
+                  >
+                    {isSubCategoryOpen(categoryName, subCategoryName) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                    <span className="flex-1 text-gray-700">{subCategoryName}</span>
+                  </div>
+
+                  {isSubCategoryOpen(categoryName, subCategoryName) && (
+                    <div className="ml-4 space-y-1">
+                      {indicators.map(indicator => (
+                        <div
+                          key={indicator._id}
+                          className={`p-2 rounded cursor-pointer transition-colors text-xs ${
+                            selectedIndicator?._id === indicator._id ? "bg-secondary-green text-primary-green font-medium" : "hover:bg-gray-50"
+                          }`}
+                          onClick={() => onSelectIndicator && onSelectIndicator(indicator)}
+                        >
+                          <span className="mr-2">{indicator.value ? "✓" : "○"}</span>
+                          {indicator.indicator_name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
