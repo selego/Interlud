@@ -92,45 +92,67 @@ function IndicatorsList({ action, activeTab, selectedIndicator, onSelectIndicato
   const [openSubCategories, setOpenSubCategories] = useState(new Set());
   const [groupedData, setGroupedData] = useState({});
 
+  const getIndicatorsCategories = (indicators) => {
+    const grouped = {};
+    
+    const ensureCategory = (categoryName) => {
+      if (!grouped[categoryName]) {
+        grouped[categoryName] = { subCategories: {}, directIndicators: [] };
+      }
+      return grouped[categoryName];
+    };
+
+    const ensureSubCategory = (category, subCategoryName) => {
+      if (!category.subCategories[subCategoryName]) {
+        category.subCategories[subCategoryName] = [];
+      }
+      return category.subCategories[subCategoryName];
+    };
+
+    indicators.forEach(indicator => {
+      const categoryName = indicator.indicator_category_name || "Sans catégorie";
+      const subCategoryName = indicator.indicator_sub_category_name;
+      const category = ensureCategory(categoryName);
+
+      if (subCategoryName) {
+        const subCategory = ensureSubCategory(category, subCategoryName);
+        subCategory.push(indicator);
+      } else {
+        category.directIndicators.push(indicator);
+      }
+    });
+
+    return grouped;
+  };
+
+  const getDefaultIndicator = (grouped, onSelectIndicator, setOpenCategories, setOpenSubCategories) => {
+    const firstCategory = Object.keys(grouped)[0];
+    if (!firstCategory) return;
+
+    setOpenCategories(new Set([firstCategory]));
+    
+    const firstIndicator =
+      grouped[firstCategory].directIndicators[0] ||
+      (Object.keys(grouped[firstCategory].subCategories).length > 0 
+        ? grouped[firstCategory].subCategories[Object.keys(grouped[firstCategory].subCategories)[0]][0]
+        : null);
+    
+    if (!firstIndicator) return;
+
+    if (firstIndicator.indicator_sub_category_name) {
+      setOpenSubCategories(new Set([`${firstCategory}-${firstIndicator.indicator_sub_category_name}`]));
+    }
+    onSelectIndicator(firstIndicator);
+  };
+
   const fetchIndicators = async () => {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
       if (!ok) return toast.error(code || "Une erreur est survenue");
 
-      const grouped = {};
-      data.forEach(indicator => {
-        const categoryName = indicator.indicator_category_name || "Sans catégorie";
-        const subCategoryName = indicator.indicator_sub_category_name;
-
-        if (!grouped[categoryName]) {
-          grouped[categoryName] = { subCategories: {}, directIndicators: [] };
-        }
-
-        if (subCategoryName) {
-          if (!grouped[categoryName].subCategories[subCategoryName]) {
-            grouped[categoryName].subCategories[subCategoryName] = [];
-          }
-          grouped[categoryName].subCategories[subCategoryName].push(indicator);
-        } else {
-          grouped[categoryName].directIndicators.push(indicator);
-        }
-      });
-
+      const grouped = getIndicatorsCategories(data);
       setGroupedData(grouped);
-
-      const firstCategory = Object.keys(grouped)[0];
-      if (firstCategory) {
-        setOpenCategories(new Set([firstCategory]));
-        const firstIndicator =
-          grouped[firstCategory].directIndicators[0] ||
-          (Object.keys(grouped[firstCategory].subCategories).length > 0 ? grouped[firstCategory].subCategories[Object.keys(grouped[firstCategory].subCategories)[0]][0] : null);
-        if (firstIndicator) {
-          if (firstIndicator.indicator_sub_category_name) {
-            setOpenSubCategories(new Set([`${firstCategory}-${firstIndicator.indicator_sub_category_name}`]));
-          }
-          onSelectIndicator(firstIndicator);
-        }
-      }
+      getDefaultIndicator(grouped, onSelectIndicator, setOpenCategories, setOpenSubCategories);
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
