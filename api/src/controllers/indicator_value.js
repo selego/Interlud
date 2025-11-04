@@ -41,6 +41,20 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
     if (req.body.indicator_id) { query.indicator_id = req.body.indicator_id; }
     if (req.body.action_id) { query.action_id = req.body.action_id; }
     if (req.body.situation) { query.situation = req.body.situation; }
+    if (req.body.indicator_category_name) { query.indicator_category_name = req.body.indicator_category_name; }
+    if (req.body.indicator_sub_category_name !== undefined) { 
+      if (req.body.indicator_sub_category_name === null) {
+        query.$and = [
+          { $or: [
+            { indicator_sub_category_name: null },
+            { indicator_sub_category_name: "" },
+            { indicator_sub_category_name: { $exists: false } }
+          ]}
+        ];
+      } else {
+        query.indicator_sub_category_name = req.body.indicator_sub_category_name;
+      }
+    }
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await IndicatorValue.countDocuments(query);
