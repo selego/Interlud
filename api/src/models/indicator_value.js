@@ -23,6 +23,7 @@ const Schema = new mongoose.Schema(
     value: { type: String, trim: true },
     source: { type: String, trim: true },
     comment: { type: String, trim: true },
+    default_value: { type: String, trim: true },
   },
   { timestamps: true },
 );
