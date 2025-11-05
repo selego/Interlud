@@ -4,7 +4,7 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 
 import Dashboard from "./dashboard";
-import Completion from "./completion";
+import Completion from "./completion/index";
 import Settings from "./settings";
 
 export default function Index() {
