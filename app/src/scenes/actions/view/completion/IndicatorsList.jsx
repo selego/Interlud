@@ -30,7 +30,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
         }
       }
     }
-  }, [allIndicators, selectedIndicator, grouped, uncategorized, onSelectIndicator]);
+  }, [allIndicators, selectedIndicator]);
 
   useEffect(() => {
     if (!selectedIndicator) return;
