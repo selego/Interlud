@@ -5,6 +5,7 @@ const Action = require("../models/action");
 const IndicatorValue = require("../models/indicator_value");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
+const patches = require("./patch");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -20,8 +21,10 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    action.set(req.body);
+    await action.save({ fromUser: req.user });
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -55,6 +58,22 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, data: { code: ERROR_CODES.SERVER_ERROR } });
+  }
+});
+
+router.get("/:id/patches", passport.authenticate(["admin"], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const action = await Action.findById(req.params.id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const actionPatches = await patches.get(req, Action);
+    return res.status(200).send({ ok: true, data: actionPatches });
+  } catch (error) {
+    capture(error);
+    if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
+      return res.status(error.message === ERROR_CODES.NOT_FOUND ? 404 : 400).send({ ok: false, code: error.message });
+    }
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
