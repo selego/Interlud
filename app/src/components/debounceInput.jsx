@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const DebounceInput = ({debounce = 400,value = "",onChange, placeholder = "" }) => {
+const DebounceInput = ({debounce = 400,value = "",onChange, placeholder = "", className = "" }) => {
   const [inputValue, setInputValue] = useState(value);
   
   useEffect(() => {
@@ -11,7 +11,7 @@ const DebounceInput = ({debounce = 400,value = "",onChange, placeholder = "" }) 
     return () => clearTimeout(timeoutId);
   }, [inputValue, value, onChange, debounce]);
 
-  return <input value={inputValue} onChange={(event) => setInputValue(event.target.value)} className="w-full input-primary" placeholder={placeholder}
+  return <input value={inputValue} onChange={(event) => setInputValue(event.target.value)} className={`w-full input-primary ${className}`} placeholder={placeholder}
   />;
 };
 
