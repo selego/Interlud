@@ -76,7 +76,7 @@ Schema.pre("findOneAndUpdate", async function () {
 
 Schema.post("findOneAndUpdate", async function () {
   if (this._shouldUpdateCompleteness && this._actionId) {
-    await updateActionCompleteness(this._action_id, mongoose.model(MODELNAME));
+    await updateActionCompleteness(this._actionId, mongoose.model(MODELNAME));
   }
 });
 
