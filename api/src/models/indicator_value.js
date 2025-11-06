@@ -18,12 +18,12 @@ const Schema = new mongoose.Schema(
     indicator_category_name: { type: String, trim: true },
     indicator_sub_category_id: { type: String, trim: true },
     indicator_sub_category_name: { type: String, trim: true },
+    indicator_default_value: { type: String, trim: true },
     situation: { type: String, enum: ["init", "ref", "prev", "expost"], trim: true },
     year: { type: Number, trim: true },
     value: { type: String, trim: true },
     source: { type: String, trim: true },
     comment: { type: String, trim: true },
-    default_value: { type: String, trim: true },
   },
   { timestamps: true },
 );
@@ -50,7 +50,7 @@ Schema.pre("save", async function (next) {
 
 Schema.post("save", async function () {
   if (this._shouldUpdateCompleteness && this.action_id) {
-    await updateActionCompleteness(this.action_id);
+    await updateActionCompleteness(this.action_id, mongoose.model(MODELNAME));
   }
 });
 
@@ -65,7 +65,6 @@ Schema.pre("findOneAndUpdate", async function () {
       if (oldDoc) {
         const oldValue = oldDoc.value;
         const newValue = updateValue;
-        
         if (shouldUpdateActionCompleteness(oldValue, newValue)) {
           this._shouldUpdateCompleteness = true;
           this._actionId = oldDoc.action_id;
@@ -77,7 +76,7 @@ Schema.pre("findOneAndUpdate", async function () {
 
 Schema.post("findOneAndUpdate", async function () {
   if (this._shouldUpdateCompleteness && this._actionId) {
-    await updateActionCompleteness(this._actionId);
+    await updateActionCompleteness(this._actionId, mongoose.model(MODELNAME));
   }
 });
 
@@ -92,7 +91,7 @@ Schema.pre("findOneAndDelete", async function () {
 
 Schema.post("findOneAndDelete", async function () {
   if (this._actionIdToUpdate) {
-    await updateActionCompleteness(this._actionIdToUpdate);
+    await updateActionCompleteness(this._actionIdToUpdate, mongoose.model(MODELNAME));
   }
 });
 

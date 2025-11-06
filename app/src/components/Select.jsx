@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FiChevronDown, FiCheck } from "react-icons/fi";
 
-const Select = ({ options = [], value = "", onChange }) => {
+const Select = ({ options = [], value = "", onChange, className = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
 
@@ -19,7 +19,7 @@ const Select = ({ options = [], value = "", onChange }) => {
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="input-primary w-full text-left pr-12"
+          className={`input-primary w-full text-left pr-12 ${className}`}
         >
           <span className="block truncate">
             {value ? options.find(option => option.value === value)?.label : "Sélectionner"}

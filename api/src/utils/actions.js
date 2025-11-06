@@ -1,5 +1,6 @@
 const Action = require("../models/action");
-const IndicatorValue = require("../models/indicator_value");
+
+//IndicatorValue model is imported dynamically to avoid circular dependency
 
 function shouldUpdateActionCompleteness(oldValue, newValue) {
   const wasEmpty = oldValue === null || oldValue === undefined || oldValue === "";
@@ -7,15 +8,15 @@ function shouldUpdateActionCompleteness(oldValue, newValue) {
   return wasEmpty && isFilled;
 }
 
-async function updateMultipleActionsCompleteness(actionsIds) {
+async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue) {
   if (!actionsIds) return;
   for (const actionId of actionsIds) {
-      await updateActionCompleteness(actionId);
+      await updateActionCompleteness(actionId, IndicatorValue);
   }
 }
 
-async function updateActionCompleteness(actionId) {
-  if (!actionId) return;
+async function updateActionCompleteness(actionId, IndicatorValue) {
+  if (!actionId || !IndicatorValue) return;
   const indicatorValues = await IndicatorValue.find({ action_id: actionId });
   if (!indicatorValues || indicatorValues.length === 0) return;
   const totalIndicators = indicatorValues.length;

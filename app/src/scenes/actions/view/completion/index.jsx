@@ -100,7 +100,7 @@ export default function Completion({ action }) {
 
         <SituationTab
           situation={activeTab}
-          values={displayedIndicators}
+          displayedIndicators={displayedIndicators}
           selectedIndicator={selectedIndicator}
           onUpdate={fetchAllIndicators}
         />
