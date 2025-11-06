@@ -36,7 +36,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       await IndicatorValue.updateMany(filters, { $set: { value: indicatorValue.value } });
 
       const actionIds = [...new Set(affectedValues.map(v => v.action_id).filter(Boolean))];
-      await updateMultipleActionsCompleteness(actionIds);
+      await updateMultipleActionsCompleteness(actionIds, IndicatorValue);
     }
     
     return res.status(200).send({ ok: true, data: indicatorValue });
