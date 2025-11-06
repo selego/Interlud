@@ -76,7 +76,7 @@ Schema.pre("findOneAndUpdate", async function () {
 
 Schema.post("findOneAndUpdate", async function () {
   if (this._shouldUpdateCompleteness && this._actionId) {
-    await updateActionCompleteness(this.action_id, mongoose.model(MODELNAME));
+    await updateActionCompleteness(this._action_id, mongoose.model(MODELNAME));
   }
 });
 
@@ -91,7 +91,7 @@ Schema.pre("findOneAndDelete", async function () {
 
 Schema.post("findOneAndDelete", async function () {
   if (this._actionIdToUpdate) {
-    await updateActionCompleteness(this.actionIdToUpdate, mongoose.model(MODELNAME));
+    await updateActionCompleteness(this._actionIdToUpdate, mongoose.model(MODELNAME));
   }
 });
 
