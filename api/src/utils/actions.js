@@ -8,14 +8,14 @@ function shouldUpdateActionCompleteness(oldValue, newValue) {
   return wasEmpty && isFilled;
 }
 
-async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue) {
+async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue, user) {
   if (!actionsIds) return;
   for (const actionId of actionsIds) {
-      await updateActionCompleteness(actionId, IndicatorValue);
+      await updateActionCompleteness(actionId, IndicatorValue, user);
   }
 }
 
-async function updateActionCompleteness(actionId, IndicatorValue) {
+async function updateActionCompleteness(actionId, IndicatorValue, user) {
   if (!actionId || !IndicatorValue) return;
   const indicatorValues = await IndicatorValue.find({ action_id: actionId });
   if (!indicatorValues || indicatorValues.length === 0) return;
@@ -24,7 +24,9 @@ async function updateActionCompleteness(actionId, IndicatorValue) {
   const filledIndicators = indicatorValues.filter(indicatorValue => indicatorValue.value !== null && indicatorValue.value !== "").length;
   const completeness = Math.round((filledIndicators / totalIndicators) * 100);
   
-  await Action.findByIdAndUpdate(actionId, { completeness });
+  const action = await Action.findById(actionId);
+  action.set({ completeness });
+  await action.save({ fromUser: user });
 }
 
 module.exports = { updateMultipleActionsCompleteness, updateActionCompleteness, shouldUpdateActionCompleteness };

@@ -77,6 +77,22 @@ router.get("/:id/patches", passport.authenticate(["admin"], { session: false, fa
   }
 });
 
+router.get("/:id/indicator-patches", passport.authenticate(["admin"], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const action = await Action.findById(req.params.id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const indicatorPatches = await patches.getIndicatorPatchesForAction(req.params.id, IndicatorValue);
+    return res.status(200).send({ ok: true, data: indicatorPatches });
+  } catch (error) {
+    capture(error);
+    if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
+      return res.status(error.message === ERROR_CODES.NOT_FOUND ? 404 : 400).send({ ok: false, code: error.message });
+    }
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 router.delete("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const action = await Action.findByIdAndDelete(req.params.id);

@@ -29,4 +29,49 @@ const get = async (req, model) => {
   }
 };
 
-module.exports = { get };
+const getIndicatorPatchesForAction = async (actionId, IndicatorValue) => {
+  try {
+    if (!actionId) {
+      throw new Error(ERROR_CODES.INVALID_BODY);
+    }
+
+    const indicatorValues = await IndicatorValue.find({ action_id: actionId });
+    
+    if (!indicatorValues || indicatorValues.length === 0) {
+      return [];
+    }
+
+    const allPatches = await Promise.all(
+      indicatorValues.map(async (indicatorValue) => {
+        const patches = await indicatorValue.patches.find({ ref: indicatorValue.id }).sort("-date").lean();
+        
+        patches.forEach((patch) => {
+          patch.ops = patch.ops.filter((op) => {
+            const isAddOperation = op.op === "add";
+            const hasValue = op.value !== null && op.value !== undefined && op.value !== "";
+            const isNotEmptyArray = !Array.isArray(op.value) || op.value.length > 0;
+            return !(isAddOperation && (!hasValue || !isNotEmptyArray));
+          });
+        });
+
+        return patches.map((patch) => ({
+          ...patch,
+          indicator_value_id: indicatorValue._id.toString(),
+          indicator_id: indicatorValue.indicator_id,
+          indicator_name: indicatorValue.indicator_name,
+          situation: indicatorValue.situation,
+          year: indicatorValue.year,
+        }));
+      })
+    );
+
+    const flattenedPatches = allPatches.flat().sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return flattenedPatches;
+  } catch (error) {
+    capture(error);
+    throw error;
+  }
+};
+
+module.exports = { get, getIndicatorPatchesForAction };
