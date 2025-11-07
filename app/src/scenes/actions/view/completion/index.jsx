@@ -17,37 +17,58 @@ export const SITUATION_TABS = [
 ]
 
 export default function Completion({ action }) {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
-  const [selectedIndicator, setSelectedIndicator] = useState(null);
-  const [indicators, setIndicators] = useState([]);
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT)
+  const [selectedIndicator, setSelectedIndicator] = useState(null)
+  const [indicators, setIndicators] = useState([])
+  const [lastPatch, setLastPatch] = useState({ completeness: 0, updatedAt: null, updatedByUser: null })
 
-  const handleIndicatorSelection = useCallback((indicator) => {
-    setSelectedIndicator(indicator);
-  }, []);
+  const handleIndicatorSelection = useCallback(indicator => {
+    setSelectedIndicator(indicator)
+  }, [])
 
   const fetchAllIndicators = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
-      if (!ok) return toast.error(code || "Erreur lors du chargement");
-      setIndicators(data);
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab })
+      if (!ok) return toast.error(code || "Erreur lors du chargement")
+      setIndicators(data)
     } catch (error) {
-      toast.error("Une erreur est survenue");
+      toast.error("Une erreur est survenue")
     }
-  };
+  }
+
+    const fetchLastCompletenessPatch = async () => {
+      try {
+        const { ok, data } = await api.get(`/action/${action._id}/last-patch`)
+        if (ok && data) {
+          setLastPatch(data)
+        }
+      } catch (error) {
+      }
+    }
 
   useEffect(() => {
-    fetchAllIndicators();
-  }, [action._id, activeTab]);
+    fetchAllIndicators()
+  }, [action._id, activeTab])
 
-  const displayedIndicators = getDisplayedIndicators(selectedIndicator, indicators, action._id, activeTab);
+  useEffect(() => {
+    fetchLastCompletenessPatch()
+  }, [action._id])
+
+  const onUpdate = async () => {
+    await fetchAllIndicators()
+    await fetchLastCompletenessPatch()
+  }
+
+
+  const displayedIndicators = getDisplayedIndicators(selectedIndicator, indicators, action._id, activeTab)
 
   if (!action) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg text-gray-600">Chargement...</div>
       </div>
-    );
+    )
   }
 
   return (
@@ -57,12 +78,7 @@ export default function Completion({ action }) {
           <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 pt-4">
-          <IndicatorsList
-            allIndicators={indicators}
-            selectedIndicator={selectedIndicator}
-            onSelectIndicator={handleIndicatorSelection}
-            key={activeTab}
-          />
+          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={handleIndicatorSelection} key={activeTab} />
         </div>
       </div>
 
@@ -80,19 +96,20 @@ export default function Completion({ action }) {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
           <div className="flex gap-2 items-center mt-2">
-            <ProgressCircle percentage={65} size={20} />
-            <p className="text-sm text-gray-900">Complété à <strong>65%</strong></p>
-            <p className="text-sm text-gray-600">- Dernière mise à jour le <strong>{new Date(action.updatedAt).toLocaleDateString()}</strong> par <strong>User1234</strong></p>
+            <ProgressCircle percentage={lastPatch.completeness || 0} size={20} />
+            <p className="text-sm text-gray-900">
+              Complété à <strong>{lastPatch.completeness || 0}%</strong>
+            </p>
+            <p className="text-sm text-gray-600">
+              - Dernière mise à jour le <strong>{lastPatch.updatedAt ? new Date(lastPatch.updatedAt).toLocaleDateString() : "N/A"}</strong>
+              {lastPatch.updatedByUser?.name && <> par <strong>{lastPatch.updatedByUser.name}</strong></>}
+            </p>
           </div>
         </div>
 
         <div className="flex border-b border-gray-200 mb-6">
-          {SITUATION_TABS.map((tab) => (
-            <TabButton
-              key={tab.key}
-              isActive={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
-            >
+          {SITUATION_TABS.map(tab => (
+            <TabButton key={tab.key} isActive={activeTab === tab.key} onClick={() => setActiveTab(tab.key)}>
               {tab.label}
             </TabButton>
           ))}
@@ -102,11 +119,11 @@ export default function Completion({ action }) {
           situation={activeTab}
           displayedIndicators={displayedIndicators}
           selectedIndicator={selectedIndicator}
-          onUpdate={fetchAllIndicators}
+          onUpdate={onUpdate}
         />
       </div>
     </div>
-  );
+  )
 }
 
 function TabButton({ isActive, onClick, children }) {

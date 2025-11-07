@@ -10,15 +10,17 @@ import Settings from "./settings";
 export default function Index() {
   const { id } = useParams();
   const [action, setAction] = useState(null);
+
   const fetchAction = async () => {
     try {
       const { ok, data, code } = await api.get(`/action/${id}`);
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setAction(data);
-  } catch (error) {
+    } catch (error) {
       toast.error("Une erreur est survenue");
     }
   };
+
   useEffect(() => {
     fetchAction();
   }, [id]);

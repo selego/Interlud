@@ -3,9 +3,12 @@ const Action = require("../models/action");
 //IndicatorValue model is imported dynamically to avoid circular dependency
 
 function shouldUpdateActionCompleteness(oldValue, newValue) {
-  const wasEmpty = oldValue === null || oldValue === undefined || oldValue === "";
-  const isFilled = newValue !== null && newValue !== undefined && newValue !== "";
-  return wasEmpty && isFilled;
+  const isEmpty = (v) => v === null || v === undefined || v === "";
+  const wasEmpty = isEmpty(oldValue);
+  const isNowEmpty = isEmpty(newValue);
+
+  // Return true if the value has changed from empty to filled or from filled to empty
+  return wasEmpty !== isNowEmpty;
 }
 
 async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue, user) {

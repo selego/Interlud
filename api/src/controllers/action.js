@@ -77,6 +77,25 @@ router.get("/:id/patches", passport.authenticate(["admin"], { session: false, fa
   }
 });
 
+router.get("/:id/last-patch", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const action = await Action.findById(req.params.id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const allPatches = await patches.get(req, Action);
+    
+    const completenessPatch = allPatches.find(patch => 
+      patch.ops && patch.ops.some(op => op.path === "/completeness")
+    );
+    if (!completenessPatch) return res.status(200).send({ ok: true, data: { completeness: action.completeness, updatedAt: action.updatedAt } });
+    const completeness = completenessPatch.ops.find(op => op.path === "/completeness").value;
+    return res.status(200).send({  ok: true, data: { completeness: completeness, updatedAt: completenessPatch.date, updatedByUser: completenessPatch.user } });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 router.get("/:id/indicator-patches", passport.authenticate(["admin"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const action = await Action.findById(req.params.id);
