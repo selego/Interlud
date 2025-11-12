@@ -81,69 +81,6 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   }
 });
 
-router.post("/apply-defaults", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const { ids } = req.body;
-    
-    if (!ids || !Array.isArray(ids) || ids.length === 0)  return res.status(400).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-    
-    const valuesToUpdate = await IndicatorValue.find({ 
-      _id: { $in: ids },
-      indicator_default_value: { $exists: true, $ne: null, $nin: [null, ""] },
-      $expr: {
-        $cond: [
-          { $isArray: "$indicator_value_possibilities" },
-          { $in: [ "$indicator_default_value", "$indicator_value_possibilities" ] },
-          true // if not array, skip the check 
-        ]
-      }
-    });
-
-    if (valuesToUpdate.length === 0) return res.status(200).send({ ok: true, data: [] });
-
-    const updatedValues = [];
-    const allActionIds = new Set();
-
-    for (const value of valuesToUpdate) {
-      const updatedValue = await IndicatorValue.findByIdAndUpdate(
-        value._id,
-        { $set: { value: value.indicator_default_value } },
-        { new: true }
-      );
-
-      if (updatedValue && updatedValue.indicator_id && updatedValue.situation && updatedValue.collectivity_id) {
-        const filters = {
-          indicator_id: updatedValue.indicator_id,
-          situation: updatedValue.situation,
-          year: updatedValue.year,
-          collectivity_id: updatedValue.collectivity_id,
-          _id: { $ne: updatedValue._id }
-        };
-
-        const affectedValues = await IndicatorValue.find(filters);
-
-        await IndicatorValue.updateMany(filters, { $set: { value: updatedValue.value } });
-
-        affectedValues.forEach(v => {
-          if (v.action_id) allActionIds.add(v.action_id);
-        });
-        if (updatedValue.action_id) allActionIds.add(updatedValue.action_id);
-      }
-
-      updatedValues.push(updatedValue);
-    }
-
-    if (allActionIds.size > 0) {
-      await updateMultipleActionsCompleteness(Array.from(allActionIds), IndicatorValue);
-    }
-
-    return res.status(200).send({ ok: true, data: updatedValues });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = await IndicatorValue.create( req.body );

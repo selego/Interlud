@@ -13,7 +13,9 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
   useEffect(() => {
     if (!allIndicators || allIndicators.length === 0) return;
 
-    const hasSelectedIndicator = selectedIndicator && allIndicators.some(ind => ind._id === selectedIndicator._id);
+    const hasSelectedIndicator = selectedIndicator && allIndicators.some(
+      ind => ind._id === selectedIndicator._id || ind.indicator_id === selectedIndicator.indicator_id
+    );
     if (hasSelectedIndicator) return;
 
     const firstIndicator = findFirstIndicator(grouped, uncategorized);

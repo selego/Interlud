@@ -30,6 +30,17 @@ export default function Completion({ action }) {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
+      
+      if (selectedIndicator && data.length > 0) {
+        const correspondingIndicator = data.find(
+          ind => ind.indicator_id === selectedIndicator.indicator_id
+        );
+        
+        if (correspondingIndicator) {
+          setSelectedIndicator(correspondingIndicator);
+        }
+      }
+      
       setIndicators(data);
     } catch (error) {
       toast.error("Une erreur est survenue");
@@ -57,7 +68,7 @@ export default function Completion({ action }) {
           <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 pt-4">
-          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={handleIndicatorSelection} key={activeTab} />
+          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={handleIndicatorSelection} />
         </div>
       </div>
 
@@ -93,7 +104,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} values={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
       </div>
     </div>
   )

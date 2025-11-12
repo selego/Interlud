@@ -61,23 +61,43 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
   const handleUseDefaultValues = async () => {
     try {
       const valuesToUpdate = localValues.filter(value => {
-        if (!value.indicator_default_value) return false;
+        if (!value.indicator_default_value) return false
         if (Array.isArray(value.indicator_value_possibilities) && value.indicator_value_possibilities.length > 0) {
-          return value.indicator_value_possibilities.includes(value.indicator_default_value);
+          return value.indicator_value_possibilities.includes(value.indicator_default_value)
         }
-        return true;
-      });
+        return true
+      })
 
-      if (valuesToUpdate.length === 0) return toast.error("Aucune valeur par défaut disponible");
-      const ids = valuesToUpdate.map(v => v._id);
-      const { ok, data, code } = await api.post("/indicator_value/apply-defaults", { ids });
-      if (!ok) return toast.error(code || "Une erreur est survenue lors de la mise à jour");
-      toast.success(`${data.length} valeur(s) par défaut appliquée(s)`);
-      await onUpdate();
+      if (valuesToUpdate.length === 0) return toast.error("Aucune valeur par défaut disponible")
+
+      setLocalValues(prev =>
+        prev.map(v => {
+          const toUpdate = valuesToUpdate.find(vtu => vtu._id === v._id)
+          return toUpdate ? { ...v, value: toUpdate.indicator_default_value } : v
+        })
+      )
+
+      const updatePromises = valuesToUpdate.map(value => 
+        api.put(`/indicator_value/${value._id}`, { value: value.indicator_default_value })
+      )
+
+      const results = await Promise.allSettled(updatePromises)
+
+      const successful = results.filter(r => r.status === "fulfilled" && r.value?.ok).length
+      const failed = results.filter(r => r.status === "rejected" || !r.value?.ok).length
+
+      if (failed > 0) {
+        toast.error(`${failed} mise(s) à jour ont échoué`)
+      }
+
+      if (successful > 0) {
+        toast.success(`${successful} valeur(s) par défaut appliquée(s)`)
+      }
+
+      await onUpdate()
     } catch (error) {
-      console.log("error", error);
       toast.error("Une erreur est survenue lors de la mise à jour");
-      setLocalValues(displayedIndicators)
+      setLocalValues(displayedIndicators);
     }
   };
 
