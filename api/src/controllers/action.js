@@ -7,6 +7,7 @@ const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const patches = require("./patch");
 const { updateActionCompleteness } = require("../utils/actions");
+const { createPatches } = require("../utils/patch");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -22,10 +23,9 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findById(req.params.id);
+    const action = await Action.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    action.set(req.body);
-    await action.save({ fromUser: req.user });
+    await createPatches(action, req.user);
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -53,7 +53,8 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const action = await Action.create( req.body );
+    const action = new Action(req.body);
+    await createPatches(action, req.user);
 
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
@@ -62,13 +63,21 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   }
 });
 
-router.get("/:id/patches", passport.authenticate(["admin"], { session: false, failWithError: true }), async (req, res) => {
+router.post("/patches/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findById(req.params.id);
-    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const actionPatches = await patches.get(req, Action);
-    return res.status(200).send({ ok: true, data: actionPatches });
+    const { field_path, limit, offset } = req.body;
+    
+    const result = await patches.search({
+      documentId: req.body.action_id,
+      model: Action,
+      field_path,
+      limit,
+      offset,
+    });
+
+    return res.status(200).send({ ok: true, data: result.data, total: result.total });
   } catch (error) {
     capture(error);
     if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
@@ -78,19 +87,26 @@ router.get("/:id/patches", passport.authenticate(["admin"], { session: false, fa
   }
 });
 
-router.get("/:id/last-patch", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post("/initialize_indicator_values", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findById(req.params.id);
-    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-
-    const allPatches = await patches.get(req, Action);
+    if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.indicator_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     
-    const completenessPatch = allPatches.find(patch => 
-      patch.ops && patch.ops.some(op => op.path === "/completeness")
-    );
-    if (!completenessPatch) return res.status(200).send({ ok: true, data: { completeness: action.completeness, updatedAt: action.updatedAt } });
-    const completeness = completenessPatch.ops.find(op => op.path === "/completeness").value;
-    return res.status(200).send({  ok: true, data: { completeness: completeness, updatedAt: completenessPatch.date, updatedByUser: completenessPatch.user } });
+    const existing = await IndicatorValue.findOne({  action_id: req.body.action_id,  indicator_id: req.body.indicator_id  });
+    if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
+    
+    const situations = ["init", "ref", "prev", "expost"];
+    const createdValues = [];
+    
+    for (const situation of situations) {
+      const indicatorValue = new IndicatorValue({ ...req.body, situation });
+      await createPatches(indicatorValue, req.user);
+      createdValues.push(indicatorValue);
+    }
+
+    await updateActionCompleteness(req.body.action_id, IndicatorValue);
+
+    return res.status(200).send({ ok: true, data: createdValues });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -119,31 +135,6 @@ router.delete("/:id", passport.authenticate(["admin", "user"], { session: false,
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     return res.status(200).send({ ok: true });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.post("/initialize_indicator_values", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    if (!req.body.indicator_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    
-    const existing = await IndicatorValue.findOne({  action_id: req.body.action_id,  indicator_id: req.body.indicator_id  });
-    if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
-    
-    const situations = ["init", "ref", "prev", "expost"];
-    const createdValues = [];
-    
-    for (const situation of situations) {
-      const indicatorValue = await IndicatorValue.create({ ...req.body, situation });
-      createdValues.push(indicatorValue);
-    }
-
-    await updateActionCompleteness(req.body.action_id, IndicatorValue);
-
-    return res.status(200).send({ ok: true, data: createdValues });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { getVirtualUser } = require("../utils/patch");
 const patchHistory = require("mongoose-patch-history").default;
 
 const MODELNAME = "action";
@@ -57,14 +56,6 @@ const Schema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
-Schema.pre("save", function (next, params) {
-  if (params?.fromUser) {
-    this._user = getVirtualUser(params.fromUser);
-  }
-  this.updatedAt = new Date();
-  next();
-});
 
 Schema.set("toObject", { virtuals: true });
 Schema.set("toJSON", { virtuals: true });

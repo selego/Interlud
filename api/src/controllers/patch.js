@@ -74,4 +74,48 @@ const getIndicatorPatchesForAction = async (actionId, IndicatorValue) => {
   }
 };
 
-module.exports = { get, getIndicatorPatchesForAction };
+const search = async ({ documentId, model, field_path, limit, offset }) => {
+  try {
+    if (!documentId) {
+      throw new Error(ERROR_CODES.INVALID_BODY);
+    }
+
+    const elem = await model.findById(documentId);
+    if (!elem) {
+      throw new Error(ERROR_CODES.NOT_FOUND);
+    }
+
+    let patches = await elem.patches.find({ ref: elem.id }).sort("-date").lean();
+    
+    patches.forEach((patch) => {
+      patch.ops = patch.ops.filter((op) => {
+        const isAddOperation = op.op === "add";
+        const hasValue = op.value !== null && op.value !== undefined && op.value !== "";
+        const isNotEmptyArray = !Array.isArray(op.value) || op.value.length > 0;
+        return !(isAddOperation && (!hasValue || !isNotEmptyArray));
+      });
+    });
+
+    if (field_path) {
+      patches = patches.filter((patch) => 
+        patch.ops && patch.ops.some(op => op.path === field_path)
+      );
+    }
+
+    const total = patches.length;
+
+    const skip = offset || 0;
+    const limitValue = limit || 50;
+    const paginatedPatches = patches.slice(skip, skip + limitValue);
+
+    return {
+      data: paginatedPatches,
+      total,
+    };
+  } catch (error) {
+    capture(error);
+    throw error;
+  }
+};
+
+module.exports = { get, getIndicatorPatchesForAction, search };

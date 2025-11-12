@@ -7,4 +7,16 @@ function getVirtualUser(user) {
   return undefined;
 }
 
-module.exports = { getVirtualUser };
+async function createPatches(document, user) {
+  if (user) {
+    document._user = getVirtualUser(user);
+  }
+  
+  document.updatedAt = new Date();
+  
+  await document.save();
+  
+  return document;
+}
+
+module.exports = { getVirtualUser, createPatches };

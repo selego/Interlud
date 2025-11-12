@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const patchHistory = require("mongoose-patch-history").default;
-const { getVirtualUser } = require("../utils/patch");
 
 const MODELNAME = "indicator_value";
 
@@ -28,14 +27,6 @@ const Schema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
-Schema.pre("save", function (next, params) {
-  if (params?.fromUser) {
-    this._user = getVirtualUser(params.fromUser);
-  }
-  this.updatedAt = new Date();
-  next();
-});
 
 Schema.set("toObject", { virtuals: true });
 Schema.set("toJSON", { virtuals: true });

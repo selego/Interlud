@@ -48,15 +48,18 @@ export default function Completion({ action }) {
     }
   }
 
-    const fetchLastCompletenessPatch = async () => {
-      try {
-        const { ok, data } = await api.get(`/action/${action._id}/last-patch`)
-        if (ok && data) {
-          setLastPatch(data)
-        }
-      } catch (error) {
+  const fetchLastCompletenessPatch = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/action/patches/search`, { action_id: action._id, field_path: "/completeness", limit: 1 })
+      if (!ok) return toast.error(code || "Erreur lors du chargement")
+      if (data.length > 0) {
+        const completeness = data[0].ops.find(op => op.path === "/completeness").value
+        setLastPatch({ completeness, updatedAt: data[0].date, updatedBy: data[0].user.name })
       }
+    } catch (error) {
+      toast.error("Une erreur est survenue");
     }
+  }
 
   useEffect(() => {
     fetchAllIndicators()
@@ -113,7 +116,7 @@ export default function Completion({ action }) {
             </p>
             <p className="text-sm text-gray-600">
               - Dernière mise à jour le <strong>{lastPatch.updatedAt ? new Date(lastPatch.updatedAt).toLocaleDateString() : "N/A"}</strong>
-              {lastPatch.updatedByUser?.name && <> par <strong>{lastPatch.updatedByUser.name}</strong></>}
+              {lastPatch.updatedBy && <> par <strong>{lastPatch.updatedBy}</strong></>}
             </p>
           </div>
         </div>
@@ -126,7 +129,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={onUpdate} />
       </div>
     </div>
   )
