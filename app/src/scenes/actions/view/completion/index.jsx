@@ -7,24 +7,39 @@ import ProgressCircle from "@/components/ProgressCircle";
 import { FiArrowLeft } from "react-icons/fi";
 import IndicatorsList from "./IndicatorsList";
 import SituationTab from "./SituationTab";
-import { getDisplayedIndicators } from "./utils";
 
 export const SITUATION_TABS = [
   { key: SITUATION_TYPES.INIT, label: "Initial" },
   { key: SITUATION_TYPES.REF, label: "Référence" },
   { key: SITUATION_TYPES.PREV, label: "Prévisionnel" },
   { key: SITUATION_TYPES.EXPOST, label: "Ex-post" }
-]
+];
+
+const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeTab) => {
+  if (!selectedIndicator || !actionId || !activeTab) {
+    return []
+  }
+
+  const { indicator_category_name: categoryName, indicator_sub_category_name: subCategoryName, indicator_id } = selectedIndicator
+
+  return indicators.filter(indicator => {
+    if (!categoryName) {
+      return indicator.indicator_id === indicator_id
+    }
+
+    if (subCategoryName) {
+      return indicator.indicator_category_name === categoryName && indicator.indicator_sub_category_name === subCategoryName
+    }
+
+    return indicator.indicator_category_name === categoryName
+  })
+};
 
 export default function Completion({ action }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
   const [indicators, setIndicators] = useState([]);
-
-  const handleIndicatorSelection = useCallback((indicator) => {
-    setSelectedIndicator(indicator);
-  }, []);
 
   const fetchAllIndicators = async () => {
     try {
@@ -69,7 +84,11 @@ export default function Completion({ action }) {
           <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 pt-4">
-          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={handleIndicatorSelection} />
+          <IndicatorsList
+            allIndicators={indicators}
+            selectedIndicator={selectedIndicator}
+            onSelectIndicator={setSelectedIndicator}
+          />
         </div>
       </div>
 
