@@ -12,7 +12,6 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
 
   useEffect(() => {
     if (!allIndicators || allIndicators.length === 0) return;
-    if (!selectedIndicator) return;
 
     const hasSelectedIndicator = selectedIndicator && allIndicators.some(
       ind => ind._id === selectedIndicator._id || ind.indicator_id === selectedIndicator.indicator_id
