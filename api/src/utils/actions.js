@@ -1,15 +1,7 @@
 const Action = require("../models/action");
+const { capture } = require("../services/sentry");
 
 //IndicatorValue model is imported dynamically to avoid circular dependency
-
-function shouldUpdateActionCompleteness(oldValue, newValue) {
-  const isEmpty = (v) => v === null || v === undefined || v === "";
-  const wasEmpty = isEmpty(oldValue);
-  const isNowEmpty = isEmpty(newValue);
-
-  // Return true if the value has changed from empty to filled or from filled to empty
-  return wasEmpty !== isNowEmpty;
-}
 
 async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue, user) {
   if (!actionsIds) return;
@@ -20,6 +12,7 @@ async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue, use
 
 async function updateActionCompleteness(actionId, IndicatorValue, user) {
   if (!actionId || !IndicatorValue) return;
+  try {
   const indicatorValues = await IndicatorValue.find({ action_id: actionId });
   if (!indicatorValues || indicatorValues.length === 0) return;
   const totalIndicators = indicatorValues.length;
@@ -30,6 +23,9 @@ async function updateActionCompleteness(actionId, IndicatorValue, user) {
   const action = await Action.findById(actionId);
   action.set({ completeness });
   await action.save({ fromUser: user });
+} catch (error) {
+  capture(error);
+}
 }
 
-module.exports = { updateMultipleActionsCompleteness, updateActionCompleteness, shouldUpdateActionCompleteness };
+module.exports = { updateMultipleActionsCompleteness, updateActionCompleteness };

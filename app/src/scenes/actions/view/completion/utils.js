@@ -5,24 +5,42 @@ export const getDisplayedIndicators = (selectedIndicator, indicators, actionId, 
 
   const { indicator_category_name: categoryName, indicator_sub_category_name: subCategoryName, indicator_id } = selectedIndicator;
 
-  return indicators.filter(indicator => {
+  const filtered = indicators.filter(indicator => {
     if (!categoryName) {
       return indicator.indicator_id === indicator_id;
     }
 
-    if (!subCategoryName) {
-      return indicator.indicator_category_name === categoryName && !indicator.indicator_sub_category_name;
+    if (subCategoryName) {
+      return indicator.indicator_category_name === categoryName && indicator.indicator_sub_category_name === subCategoryName;
     }
 
-    return indicator.indicator_category_name === categoryName && indicator.indicator_sub_category_name === subCategoryName;
+    return indicator.indicator_category_name === categoryName;
+  });
+
+  return filtered.sort((a, b) => {
+    const nameA = (a.indicator_name || "").toLowerCase();
+    const nameB = (b.indicator_name || "").toLowerCase();
+    if (nameA !== nameB) {
+      return nameA.localeCompare(nameB);
+    }
+    return (a.indicator_id || "").localeCompare(b.indicator_id || "");
   });
 };
 
 export const groupIndicatorsByCategory = (indicators) => {
+  const sortedIndicators = [...indicators].sort((a, b) => {
+    const nameA = (a.indicator_name || "").toLowerCase();
+    const nameB = (b.indicator_name || "").toLowerCase();
+    if (nameA !== nameB) {
+      return nameA.localeCompare(nameB);
+    }
+    return (a.indicator_id || "").localeCompare(b.indicator_id || "");
+  });
+
   const grouped = {};
   const uncategorized = [];
 
-  indicators.forEach(indicator => {
+  sortedIndicators.forEach(indicator => {
     const categoryName = indicator.indicator_category_name;
 
     if (!categoryName) {
@@ -50,7 +68,28 @@ export const groupIndicatorsByCategory = (indicators) => {
     }
   });
 
-  return { grouped, uncategorized };
+  const sortedGrouped = {};
+  Object.keys(grouped)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach(categoryName => {
+      const category = grouped[categoryName];
+      
+      const sortedSubCategories = {};
+      Object.keys(category.subCategories)
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(subCategoryName => {
+          sortedSubCategories[subCategoryName] = category.subCategories[subCategoryName];
+        });
+      
+      sortedGrouped[categoryName] = {
+        subCategories: sortedSubCategories,
+        directIndicators: category.directIndicators
+      };
+    });
+
+  const sortedUncategorized = uncategorized;
+
+  return { grouped: sortedGrouped, uncategorized: sortedUncategorized };
 };
 
 export const calculateCompletion = (indicators) => {

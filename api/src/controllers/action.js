@@ -6,6 +6,7 @@ const IndicatorValue = require("../models/indicator_value");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const patches = require("./patch");
+const { updateActionCompleteness } = require("../utils/actions");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -139,12 +140,15 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
       const indicatorValue = await IndicatorValue.create({ ...req.body, situation });
       createdValues.push(indicatorValue);
     }
-    
+
+    await updateActionCompleteness(req.body.action_id, IndicatorValue);
+
     return res.status(200).send({ ok: true, data: createdValues });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
+
 
 module.exports = router;

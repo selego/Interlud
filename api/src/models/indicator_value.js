@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { updateActionCompleteness, shouldUpdateActionCompleteness } = require("../utils/actions");
 const patchHistory = require("mongoose-patch-history").default;
 const { getVirtualUser } = require("../utils/patch");
 
@@ -29,32 +28,6 @@ const Schema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
-Schema.pre("save", async function (next) {
-  if (this.isModified("value")) {
-    let oldValue = null;
-    
-    if (!this.isNew && this._id) {
-      const oldDoc = await this.constructor.findById(this._id);
-      if (oldDoc) {
-        oldValue = oldDoc.value;
-      }
-    }
-    
-    const newValue = this.value;
-    
-    if (shouldUpdateActionCompleteness(oldValue, newValue)) {
-      this._shouldUpdateCompleteness = true;
-    }
-  }
-  next();
-});
-
-Schema.post("save", async function () {
-  if (this._shouldUpdateCompleteness && this.action_id) {
-    await updateActionCompleteness(this.action_id, mongoose.model(MODELNAME), this._user);
-  }
-});
 
 Schema.pre("save", function (next, params) {
   if (params?.fromUser) {

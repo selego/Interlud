@@ -5,6 +5,7 @@ const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
+const { updateMultipleActionsCompleteness } = require("../utils/actions");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -28,14 +29,13 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     
     if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
       const affectedValues = await IndicatorValue.find({ indicator_id: req.params.id });
-       await Promise.all(
-        affectedValues.map(async (value) => {
-          value.indicator_type = req.body.value_type;
-          value.indicator_value_possibilities = req.body.value_possibilities;
-          value.value = null;
-          return value.save({ fromUser: req.user });
-        })
-      );
+      await IndicatorValue.updateMany(
+        { indicator_id: req.params.id }, 
+        { 
+          $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
+        }
+      ).catch(error => { capture(error)});
+      await updateMultipleActionsCompleteness(affectedValues.map(v => v.action_id), IndicatorValue);
     }
   } catch (error) {
     capture(error);
