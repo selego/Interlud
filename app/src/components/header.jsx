@@ -57,7 +57,6 @@ export default function Header() {
       setCollectivity(data);
       localStorage.setItem('selectedCollectivityId', collectivityId);
       navigate(`/`);
-      console.log(data);
     } catch (error) {
       console.error("Error fetching collectivity:", error);
       toast.error("Erreur lors de la récupération de la collectivité");

@@ -110,7 +110,6 @@ export default function Home() {
       const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id })
       if (!ok) return toast.error(data.code || "Une erreur est survenue")
       setActions(data)
-      console.log(data)
     } catch (error) {
       toast.error(error || "Une erreur est survenue")
     }

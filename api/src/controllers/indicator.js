@@ -6,6 +6,7 @@ const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
 const { updateMultipleActionsCompleteness } = require("../utils/actions");
+const { saveAndCreatePatches } = require("../utils/patch");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -28,14 +29,24 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     res.status(200).send({ ok: true, data: indicator });
     
     if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
-      const affectedValues = await IndicatorValue.find({ indicator_id: req.params.id });
-      await IndicatorValue.updateMany(
-        { indicator_id: req.params.id }, 
-        { 
-          $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
+      try {
+        const affectedValues = await IndicatorValue.find({ indicator_id: req.params.id });
+        
+        if (affectedValues && affectedValues.length > 0) {
+          await Promise.all(
+            affectedValues.map(async (value) => {
+              value.indicator_type = req.body.value_type;
+              value.indicator_value_possibilities = req.body.value_possibilities;
+              value.value = null;
+              await saveAndCreatePatches(value, req.user);
+            })
+          );
+          
+          await updateMultipleActionsCompleteness(affectedValues.map(v => v.action_id), IndicatorValue, req.user);
         }
-      ).catch(error => { capture(error)});
-      await updateMultipleActionsCompleteness(affectedValues.map(v => v.action_id), IndicatorValue);
+      } catch (error) {
+        capture(error);
+      }
     }
   } catch (error) {
     capture(error);

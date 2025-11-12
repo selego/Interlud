@@ -7,7 +7,7 @@ function getVirtualUser(user) {
   return undefined;
 }
 
-async function createPatches(document, user) {
+async function saveAndCreatePatches(document, user) {
   if (user) {
     document._user = getVirtualUser(user);
   }
@@ -19,4 +19,4 @@ async function createPatches(document, user) {
   return document;
 }
 
-module.exports = { getVirtualUser, createPatches };
+module.exports = { getVirtualUser, saveAndCreatePatches };

@@ -7,7 +7,7 @@ const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const patches = require("./patch");
 const { updateActionCompleteness } = require("../utils/actions");
-const { createPatches } = require("../utils/patch");
+const { saveAndCreatePatches } = require("../utils/patch");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -23,9 +23,11 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    await createPatches(action, req.user);
+    
+    action.set(req.body);
+    await saveAndCreatePatches(action, req.user);
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -54,7 +56,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = new Action(req.body);
-    await createPatches(action, req.user);
+    await saveAndCreatePatches(action, req.user);
 
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
@@ -65,13 +67,59 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
 
 router.post("/patches/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const actionIds = req.body.action_ids || [];
+    
+    if (actionIds.length === 0) {
+      return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
 
     const { field_path, limit, offset } = req.body;
     
     const result = await patches.search({
-      documentId: req.body.action_id,
+      documentIds: actionIds,
       model: Action,
+      field_path,
+      limit,
+      offset,
+    });
+
+    return res.status(200).send({ ok: true, data: result.data, total: result.total });
+  } catch (error) {
+    capture(error);
+    if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
+      return res.status(error.message === ERROR_CODES.NOT_FOUND ? 404 : 400).send({ ok: false, code: error.message });
+    }
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+router.post("/indicator-patches/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    let indicatorValueIds = [];
+
+    if (req.body.action_id) {
+      const indicatorValues = await IndicatorValue.find({ action_id: req.body.action_id });
+      if (!indicatorValues || indicatorValues.length === 0) {
+        return res.status(200).send({ ok: true, data: [], total: 0 });
+      }
+      indicatorValueIds = indicatorValues.map(iv => iv._id.toString());
+    } else if (req.body.indicator_value_ids) {
+      indicatorValueIds = Array.isArray(req.body.indicator_value_ids) 
+        ? req.body.indicator_value_ids 
+        : [req.body.indicator_value_ids];
+    } else {
+      return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
+
+    if (indicatorValueIds.length === 0) {
+      return res.status(200).send({ ok: true, data: [], total: 0 });
+    }
+
+    const { field_path, limit, offset } = req.body;
+    
+    const result = await patches.search({
+      documentIds: indicatorValueIds,
+      model: IndicatorValue,
       field_path,
       limit,
       offset,
@@ -100,31 +148,15 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
     
     for (const situation of situations) {
       const indicatorValue = new IndicatorValue({ ...req.body, situation });
-      await createPatches(indicatorValue, req.user);
+      await saveAndCreatePatches(indicatorValue, req.user);
       createdValues.push(indicatorValue);
     }
 
-    await updateActionCompleteness(req.body.action_id, IndicatorValue);
+    await updateActionCompleteness(req.body.action_id, IndicatorValue, req.user);
 
     return res.status(200).send({ ok: true, data: createdValues });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.get("/:id/indicator-patches", passport.authenticate(["admin"], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const action = await Action.findById(req.params.id);
-    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-
-    const indicatorPatches = await patches.getIndicatorPatchesForAction(req.params.id, IndicatorValue);
-    return res.status(200).send({ ok: true, data: indicatorPatches });
-  } catch (error) {
-    capture(error);
-    if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
-      return res.status(error.message === ERROR_CODES.NOT_FOUND ? 404 : 400).send({ ok: false, code: error.message });
-    }
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });

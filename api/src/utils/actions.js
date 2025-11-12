@@ -1,5 +1,6 @@
 const Action = require("../models/action");
 const { capture } = require("../services/sentry");
+const { saveAndCreatePatches } = require("./patch");
 
 //IndicatorValue model is imported dynamically to avoid circular dependency
 
@@ -21,8 +22,12 @@ async function updateActionCompleteness(actionId, IndicatorValue, user) {
   const completeness = Math.round((filledIndicators / totalIndicators) * 100);
   
   const action = await Action.findById(actionId);
-  action.set({ completeness });
-  await action.save({ fromUser: user });
+  if (!action) return;
+  
+  if (action.completeness !== completeness) {
+    action.completeness = completeness;
+    await saveAndCreatePatches(action, user);
+  }
 } catch (error) {
   capture(error);
 }

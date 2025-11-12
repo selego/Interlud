@@ -14,7 +14,6 @@ export default function List() {
       const { data, ok, code } = await api.post("/user/search", {});
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setUsers(data);
-      console.log(data)
     } catch (error) {
       toast.error(error || "Une erreur est survenue");
     }

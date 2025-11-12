@@ -6,7 +6,7 @@ const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const { updateActionCompleteness, updateMultipleActionsCompleteness } = require("../utils/actions");
 const patches = require("./patch");
-const { createPatches } = require("../utils/patch");
+const { saveAndCreatePatches } = require("../utils/patch");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -22,9 +22,11 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const indicatorValue = await IndicatorValue.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const indicatorValue = await IndicatorValue.findById(req.params.id);
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    await createPatches(indicatorValue, req.user);
+    
+    indicatorValue.set(req.body);
+    await saveAndCreatePatches(indicatorValue, req.user);
     await updateActionCompleteness(indicatorValue.action_id, IndicatorValue, req.user);
 
     if (indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.collectivity_id) {
@@ -36,13 +38,22 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         _id: { $ne: indicatorValue._id },
       };
             
-      const affectedValues = await IndicatorValue.find(filters);
-      
-      await IndicatorValue.updateMany(filters, { $set: { value: indicatorValue.value } }).catch((error) => {
+      try {
+        const affectedValues = await IndicatorValue.find(filters);
+        
+        if (affectedValues && affectedValues.length > 0) {
+          await Promise.all(
+            affectedValues.map(async (value) => {
+              value.value = indicatorValue.value;
+              await saveAndCreatePatches(value, req.user);
+            })
+          );
+          
+          await updateMultipleActionsCompleteness(affectedValues.map(v => v.action_id), IndicatorValue, req.user);
+        }
+      } catch (error) {
         capture(error);
-      });
-
-      await updateMultipleActionsCompleteness(affectedValues.map(v => v.action_id), IndicatorValue);
+      }
     }
     
     return res.status(200).send({ ok: true, data: indicatorValue });
@@ -52,15 +63,30 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   }
 });
 
-router.get("/:id/patches", passport.authenticate(["admin"], { session: false, failWithError: true }), async (req, res) => {
+router.post("/patches/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const indicatorValue = await IndicatorValue.findById(req.params.id);
-    if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    const indicatorValueIds = req.body.indicator_value_ids || [];
+    
+    if (indicatorValueIds.length === 0) {
+      return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
 
-    const indicatorValuePatches = await patches.get(req, IndicatorValue);
-    return res.status(200).send({ ok: true, data: indicatorValuePatches });
+    const { field_path, limit, offset } = req.body;
+    
+    const result = await patches.search({
+      documentIds: indicatorValueIds,
+      model: IndicatorValue,
+      field_path,
+      limit,
+      offset,
+    });
+
+    return res.status(200).send({ ok: true, data: result.data, total: result.total });
   } catch (error) {
     capture(error);
+    if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
+      return res.status(error.message === ERROR_CODES.NOT_FOUND ? 404 : 400).send({ ok: false, code: error.message });
+    }
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
@@ -100,8 +126,8 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = new IndicatorValue(req.body);
-    await createPatches(indicatorValue, req.user);
-    await updateActionCompleteness(indicatorValue.action_id, IndicatorValue);
+    await saveAndCreatePatches(indicatorValue, req.user);
+    await updateActionCompleteness(indicatorValue.action_id, IndicatorValue, req.user);
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
@@ -115,7 +141,7 @@ router.delete("/:id", passport.authenticate(["admin", "user"], { session: false,
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const actionId = indicatorValue.action_id;
     await IndicatorValue.deleteOne({ _id: req.params.id });
-    await updateActionCompleteness(actionId, IndicatorValue);
+    await updateActionCompleteness(actionId, IndicatorValue, req.user);
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
