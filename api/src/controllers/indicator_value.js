@@ -30,7 +30,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         situation: indicatorValue.situation,
         year: indicatorValue.year,
         collectivity_id: indicatorValue.collectivity_id,
-        _id: { $ne: indicatorValue._id }
+        _id: { $ne: indicatorValue._id },
       };
             
       const affectedValues = await IndicatorValue.find(filters);
