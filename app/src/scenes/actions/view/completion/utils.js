@@ -10,11 +10,11 @@ export const getDisplayedIndicators = (selectedIndicator, indicators, actionId, 
       return indicator.indicator_id === indicator_id;
     }
 
-    if (!subCategoryName) {
-      return indicator.indicator_category_name === categoryName && !indicator.indicator_sub_category_name;
+    if (subCategoryName) {
+      return indicator.indicator_category_name === categoryName && indicator.indicator_sub_category_name === subCategoryName;
     }
 
-    return indicator.indicator_category_name === categoryName && indicator.indicator_sub_category_name === subCategoryName;
+    return indicator.indicator_category_name === categoryName;
   });
 };
 

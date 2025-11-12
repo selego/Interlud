@@ -6,6 +6,7 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import CollectivitySelector from "@/components/CollectivitySelector";
 import Select from "@/components/Select";
+import ProgressCircle from "@/components/ProgressCircle";
 
 const fetchData = async () => {
   await new Promise(resolve => setTimeout(resolve, 100))
@@ -602,10 +603,8 @@ export default function Home() {
                   Voir l'action
                 </button>
                 <div className="flex items-center gap-1">
-                  <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex items-center justify-center">
-                    <div className={`w-2 h-2 rounded-full ${action.completionPourcentage === 100 ? 'bg-gray-600' : ''}`}></div>
-                  </div>
-                  <span className="text-xs text-gray-600">Complété à {action.completionPourcentage}%</span>
+                  <ProgressCircle percentage={action.completeness} size={20} />
+                  <span className="text-xs text-gray-600">Complétée à <strong>{action.completeness}%</strong></span>
                 </div>
               </div>
             </div>

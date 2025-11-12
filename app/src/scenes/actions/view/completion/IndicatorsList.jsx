@@ -65,13 +65,31 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
     });
   };
 
-  const toggleCategory = (categoryName) => {
+  const toggleCategory = (categoryName, categoryData) => {
     toggleSet(setOpenCategories, categoryName);
+    
+    const firstIndicator = categoryData.directIndicators.length > 0
+      ? categoryData.directIndicators[0]
+      : (() => {
+          const firstSubCategory = Object.keys(categoryData.subCategories)[0];
+          if (firstSubCategory && categoryData.subCategories[firstSubCategory].length > 0) {
+            return categoryData.subCategories[firstSubCategory][0];
+          }
+          return null;
+        })();
+    
+    if (firstIndicator) {
+      onSelectIndicator(firstIndicator);
+    }
   };
 
-  const toggleSubCategory = (categoryName, subCategoryName) => {
+  const toggleSubCategory = (categoryName, subCategoryName, indicators) => {
     const key = `${categoryName}-${subCategoryName}`;
     toggleSet(setOpenSubCategories, key);
+    
+    if (indicators && indicators.length > 0) {
+      onSelectIndicator(indicators[0]);
+    }
   };
 
   const isCategoryOpen = (categoryName) => {
@@ -95,7 +113,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
           <div key={categoryName}>
             <div
               className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium hover:bg-gray-50"
-              onClick={() => toggleCategory(categoryName)}
+              onClick={() => toggleCategory(categoryName, categoryData)}
             >
               {isCategoryOpen(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               <span className="flex-1">{categoryName}</span>
@@ -127,7 +145,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
                     <div key={subCategoryName}>
                       <div
                         className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs hover:bg-gray-50"
-                        onClick={() => toggleSubCategory(categoryName, subCategoryName)}
+                        onClick={() => toggleSubCategory(categoryName, subCategoryName, indicators)}
                       >
                         {isSubCategoryOpen(categoryName, subCategoryName) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                         <span className="flex-1 text-gray-700">{subCategoryName}</span>

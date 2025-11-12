@@ -57,12 +57,7 @@ export default function Completion({ action }) {
           <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 pt-4">
-          <IndicatorsList
-            allIndicators={indicators}
-            selectedIndicator={selectedIndicator}
-            onSelectIndicator={handleIndicatorSelection}
-            key={activeTab}
-          />
+          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={handleIndicatorSelection} key={activeTab} />
         </div>
       </div>
 
@@ -80,33 +75,28 @@ export default function Completion({ action }) {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
           <div className="flex gap-2 items-center mt-2">
-            <ProgressCircle percentage={65} size={20} />
-            <p className="text-sm text-gray-900">Complété à <strong>65%</strong></p>
-            <p className="text-sm text-gray-600">- Dernière mise à jour le <strong>{new Date(action.updatedAt).toLocaleDateString()}</strong> par <strong>User1234</strong></p>
+            <ProgressCircle percentage={action.completeness} size={20} />
+            <p className="text-sm text-gray-900">
+              Complété à <strong>{action.completeness}%</strong>
+            </p>
+            <p className="text-sm text-gray-600">
+              - Dernière mise à jour le <strong>{new Date(action.updatedAt).toLocaleDateString()}</strong> par <strong>User1234</strong>
+            </p>
           </div>
         </div>
 
         <div className="flex border-b border-gray-200 mb-6">
-          {SITUATION_TABS.map((tab) => (
-            <TabButton
-              key={tab.key}
-              isActive={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
-            >
+          {SITUATION_TABS.map(tab => (
+            <TabButton key={tab.key} isActive={activeTab === tab.key} onClick={() => setActiveTab(tab.key)}>
               {tab.label}
             </TabButton>
           ))}
         </div>
 
-        <SituationTab
-          situation={activeTab}
-          displayedIndicators={displayedIndicators}
-          selectedIndicator={selectedIndicator}
-          onUpdate={fetchAllIndicators}
-        />
+        <SituationTab situation={activeTab} values={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
       </div>
     </div>
-  );
+  )
 }
 
 function TabButton({ isActive, onClick, children }) {
