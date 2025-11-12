@@ -92,6 +92,9 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
     return res.status(200).send({ ok: true, data: createdValues });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, data: { code: ERROR_CODES.SERVER_ERROR } });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
+
+
+module.exports = router;
