@@ -32,6 +32,7 @@ export default function Completion({ action }) {
       if (!ok) return toast.error(code || "Erreur lors du chargement");
       
       if (selectedIndicator && data.length > 0) {
+        console.log(data)
         const correspondingIndicator = data.find(
           ind => ind.indicator_id === selectedIndicator.indicator_id
         );
