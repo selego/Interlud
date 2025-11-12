@@ -15,14 +15,14 @@ export const SITUATION_TABS = [
   { key: SITUATION_TYPES.EXPOST, label: "Ex-post" }
 ];
 
-const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeTab) => {
+export const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeTab) => {
   if (!selectedIndicator || !actionId || !activeTab) {
     return []
   }
 
   const { indicator_category_name: categoryName, indicator_sub_category_name: subCategoryName, indicator_id } = selectedIndicator
 
-  return indicators.filter(indicator => {
+  const filtered = indicators.filter(indicator => {
     if (!categoryName) {
       return indicator.indicator_id === indicator_id
     }
@@ -33,7 +33,16 @@ const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeT
 
     return indicator.indicator_category_name === categoryName
   })
-};
+
+  return filtered.sort((a, b) => {
+    const nameA = (a.indicator_name || "").toLowerCase()
+    const nameB = (b.indicator_name || "").toLowerCase()
+    if (nameA !== nameB) {
+      return nameA.localeCompare(nameB)
+    }
+    return (a.indicator_id || "").localeCompare(b.indicator_id || "")
+  })
+}
 
 export default function Completion({ action }) {
   const navigate = useNavigate();
