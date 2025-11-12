@@ -12,6 +12,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
 
   useEffect(() => {
     if (!allIndicators || allIndicators.length === 0) return;
+    if (!selectedIndicator) return;
 
     const hasSelectedIndicator = selectedIndicator && allIndicators.some(
       ind => ind._id === selectedIndicator._id || ind.indicator_id === selectedIndicator.indicator_id
@@ -19,18 +20,18 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
     if (hasSelectedIndicator) return;
 
     const firstIndicator = findFirstIndicator(grouped, uncategorized);
-    if (firstIndicator) {
-      onSelectIndicator(firstIndicator);
+    if (!firstIndicator) return;
 
-      const categoryName = firstIndicator.indicator_category_name;
-      if (categoryName) {
-        setOpenCategories(new Set([categoryName]));
+    onSelectIndicator(firstIndicator);
 
-        const subCategoryName = firstIndicator.indicator_sub_category_name;
-        if (subCategoryName) {
-          setOpenSubCategories(new Set([`${categoryName}-${subCategoryName}`]));
-        }
-      }
+    const categoryName = firstIndicator.indicator_category_name;
+    if (!categoryName) return;
+
+    setOpenCategories(new Set([categoryName]));
+
+    const subCategoryName = firstIndicator.indicator_sub_category_name;
+    if (subCategoryName) {
+      setOpenSubCategories(new Set([`${categoryName}-${subCategoryName}`]));
     }
   }, [allIndicators, selectedIndicator]);
 
@@ -46,23 +47,18 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
     });
 
     const subCategoryName = selectedIndicator.indicator_sub_category_name;
-    if (subCategoryName) {
-      const key = `${categoryName}-${subCategoryName}`;
-      setOpenSubCategories(prev => {
-        if (prev.has(key)) return prev;
-        return new Set([...prev, key]);
-      });
-    }
+    if (!subCategoryName) return;
+    const key = `${categoryName}-${subCategoryName}`;
+    setOpenSubCategories(prev => {
+      if (prev.has(key)) return prev;
+      return new Set([...prev, key]);
+    });
   }, [selectedIndicator]);
 
   const toggleSet = (setState, value) => {
     setState(prev => {
       const next = new Set(prev);
-      if (next.has(value)) {
-        next.delete(value);
-      } else {
-        next.add(value);
-      }
+      next.has(value) ? next.delete(value) : next.add(value);
       return next;
     });
   };
@@ -80,9 +76,8 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
           return null;
         })();
     
-    if (firstIndicator) {
-      onSelectIndicator(firstIndicator);
-    }
+    if (!firstIndicator) return;
+    onSelectIndicator(firstIndicator);
   };
 
   const toggleSubCategory = (categoryName, subCategoryName, indicators) => {
@@ -92,14 +87,6 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
     if (indicators && indicators.length > 0) {
       onSelectIndicator(indicators[0]);
     }
-  };
-
-  const isCategoryOpen = (categoryName) => {
-    return openCategories.has(categoryName);
-  };
-
-  const isSubCategoryOpen = (categoryName, subCategoryName) => {
-    return openSubCategories.has(`${categoryName}-${subCategoryName}`);
   };
 
   return (
@@ -117,7 +104,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
               className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium hover:bg-gray-50"
               onClick={() => toggleCategory(categoryName, categoryData)}
             >
-              {isCategoryOpen(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+              {openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               <span className="flex-1">{categoryName}</span>
               <div className="flex items-center gap-2">
                 <ProgressCircle percentage={categoryCompletion} size={20} />
@@ -125,23 +112,18 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
               </div>
             </div>
 
-            {isCategoryOpen(categoryName) && (
+            {openCategories.has(categoryName) && (
               <div className="ml-4 space-y-1">
                 {categoryData.directIndicators.length > 0 && (
                   <div className="space-y-1">
                     {categoryData.directIndicators.map(indicator => (
-                      <IndicatorItem
-                        key={indicator._id}
-                        indicator={indicator}
-                        isSelected={selectedIndicator?._id === indicator._id}
-                        onClick={() => onSelectIndicator(indicator)}
-                      />
+                      <IndicatorItem key={indicator._id} indicator={indicator} isSelected={selectedIndicator?._id === indicator._id} onClick={() => onSelectIndicator(indicator)} />
                     ))}
                   </div>
                 )}
 
                 {Object.entries(categoryData.subCategories).map(([subCategoryName, indicators]) => {
-                  const subCategoryCompletion = calculateCompletion(indicators);
+                  const subCategoryCompletion = calculateCompletion(indicators)
 
                   return (
                     <div key={subCategoryName}>
@@ -149,7 +131,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
                         className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs hover:bg-gray-50"
                         onClick={() => toggleSubCategory(categoryName, subCategoryName, indicators)}
                       >
-                        {isSubCategoryOpen(categoryName, subCategoryName) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                        {openSubCategories.has(`${categoryName}-${subCategoryName}`) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                         <span className="flex-1 text-gray-700">{subCategoryName}</span>
                         <div className="flex items-center gap-2">
                           <ProgressCircle percentage={subCategoryCompletion} size={18} />
@@ -157,7 +139,7 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
                         </div>
                       </div>
 
-                      {isSubCategoryOpen(categoryName, subCategoryName) && (
+                      {openSubCategories.has(`${categoryName}-${subCategoryName}`) && (
                         <div className="ml-4 space-y-1">
                           {indicators.map(indicator => (
                             <IndicatorItem
@@ -170,12 +152,12 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
                         </div>
                       )}
                     </div>
-                  );
+                  )
                 })}
               </div>
             )}
           </div>
-        );
+        )
       })}
 
       {uncategorized.length > 0 && (
