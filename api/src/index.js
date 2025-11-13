@@ -40,6 +40,7 @@ app.use("/indicator_category", require("./controllers/indicator_category"));
 app.use("/log", require("./controllers/log"));
 app.use("/dashboard", require("./controllers/dashboard"));
 // app.use("/excel", require("./controllers/excel"));
+app.use("/excel", require("./controllers/excel"));
 app.use("/user_action_right", require("./controllers/user_action_right"));
 
 setupErrorHandler(app);
