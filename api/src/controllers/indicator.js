@@ -5,8 +5,8 @@ const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
-const { updateMultipleActionsCompleteness } = require("../utils/actions");
 const { saveAndCreatePatches } = require("../utils/patch");
+const { updateActionCompleteness } = require("../utils/actions");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -42,7 +42,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
             })
           );
           
-          await updateMultipleActionsCompleteness(affectedValues.map(v => v.action_id), IndicatorValue, req.user);
+          for (const value of affectedValues) {
+            await updateActionCompleteness(value.action_id, IndicatorValue, req.user);
+          }
         }
       } catch (error) {
         capture(error);

@@ -4,13 +4,6 @@ const { saveAndCreatePatches } = require("./patch");
 
 //IndicatorValue model is imported dynamically to avoid circular dependency
 
-async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue, user) {
-  if (!actionsIds) return;
-  for (const actionId of actionsIds) {
-      await updateActionCompleteness(actionId, IndicatorValue, user);
-  }
-}
-
 async function updateActionCompleteness(actionId, IndicatorValue, user) {
   if (!actionId || !IndicatorValue) return;
   try {
@@ -33,4 +26,4 @@ async function updateActionCompleteness(actionId, IndicatorValue, user) {
 }
 }
 
-module.exports = { updateMultipleActionsCompleteness, updateActionCompleteness };
+module.exports = { updateActionCompleteness };
