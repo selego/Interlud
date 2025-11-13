@@ -5,6 +5,7 @@ const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
+const { updateActionCompleteness } = require("../utils/actions");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -27,12 +28,16 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     res.status(200).send({ ok: true, data: indicator });
     
     if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
-      IndicatorValue.updateMany(
+      const affectedValues = await IndicatorValue.find({ indicator_id: req.params.id });
+      await IndicatorValue.updateMany(
         { indicator_id: req.params.id }, 
         { 
           $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
         }
       ).catch(error => { capture(error)});
+      for (const value of affectedValues) {
+        await updateActionCompleteness(value.action_id, IndicatorValue);
+      }
     }
   } catch (error) {
     capture(error);
