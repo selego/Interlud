@@ -76,11 +76,9 @@ export default function Completion({ action }) {
     try {
       const { ok, data, code } = await api.post(`/action/patches/search`, { action_ids: [action._id], field_path: "/completeness", limit: 1 })
       if (!ok) return toast.error(code || "Erreur lors du chargement")
-      console.log(data)
-      if (data.length > 0) {
-        const completeness = data[0].ops.find(op => op.path === "/completeness").value
-        setLastPatch({ completeness, updatedAt: data[0].date, updatedBy: data[0].user.name })
-      }
+      if (data.length === 0) return
+      const completeness = data[0].ops.find(op => op.path === "/completeness").value
+      setLastPatch({ completeness, updatedAt: data[0].date, updatedBy: data[0].user.name })
     } catch (error) {
       toast.error("Une erreur est survenue");
     }

@@ -93,48 +93,6 @@ router.post("/patches/search", passport.authenticate(["admin", "user"], { sessio
   }
 });
 
-router.post("/indicator-patches/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    let indicatorValueIds = [];
-
-    if (req.body.action_id) {
-      const indicatorValues = await IndicatorValue.find({ action_id: req.body.action_id });
-      if (!indicatorValues || indicatorValues.length === 0) {
-        return res.status(200).send({ ok: true, data: [], total: 0 });
-      }
-      indicatorValueIds = indicatorValues.map(iv => iv._id.toString());
-    } else if (req.body.indicator_value_ids) {
-      indicatorValueIds = Array.isArray(req.body.indicator_value_ids) 
-        ? req.body.indicator_value_ids 
-        : [req.body.indicator_value_ids];
-    } else {
-      return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    }
-
-    if (indicatorValueIds.length === 0) {
-      return res.status(200).send({ ok: true, data: [], total: 0 });
-    }
-
-    const { field_path, limit, offset } = req.body;
-    
-    const result = await patches.search({
-      documentIds: indicatorValueIds,
-      model: IndicatorValue,
-      field_path,
-      limit,
-      offset,
-    });
-
-    return res.status(200).send({ ok: true, data: result.data, total: result.total });
-  } catch (error) {
-    capture(error);
-    if (error.message === ERROR_CODES.NOT_FOUND || error.message === ERROR_CODES.INVALID_BODY) {
-      return res.status(error.message === ERROR_CODES.NOT_FOUND ? 404 : 400).send({ ok: false, code: error.message });
-    }
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
 router.post("/initialize_indicator_values", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
