@@ -3,8 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
-import { FiList, FiSettings, FiArrowLeft } from "react-icons/fi";
+import { FiList, FiSettings, FiArrowLeft, FiClock } from "react-icons/fi";
 import Select from "@/components/Select";
+import History from "./history";
 
 export default function Settings({ action }) {
   const navigate = useNavigate();
@@ -42,12 +43,22 @@ export default function Settings({ action }) {
           <FiSettings size={16} />
           Paramètres de l'Action
         </button>
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === "history" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
+          }`}
+          onClick={() => setActiveTab("history")}
+        >
+          <FiClock size={16} />
+          Historique de l'Action
+        </button>
       </div>
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
       {activeTab === "settings" && <ActionSettingsTab action={action} />}
+      {activeTab === "history" && <History action={action} />}
     </div>
-  );
+  )
 }
 
 function IndicatorsTab({ action }) {
