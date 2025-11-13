@@ -3,13 +3,6 @@ const { capture } = require("../services/sentry");
 
 //IndicatorValue model is imported dynamically to avoid circular dependency
 
-async function updateMultipleActionsCompleteness(actionsIds, IndicatorValue) {
-  if (!actionsIds) return;
-  for (const actionId of actionsIds) {
-      await updateActionCompleteness(actionId, IndicatorValue);
-  }
-}
-
 async function updateActionCompleteness(actionId, IndicatorValue) {
   if (!actionId || !IndicatorValue) return;
   try {
@@ -26,4 +19,4 @@ async function updateActionCompleteness(actionId, IndicatorValue) {
   }
 }
 
-module.exports = { updateMultipleActionsCompleteness, updateActionCompleteness };
+module.exports = { updateActionCompleteness };
