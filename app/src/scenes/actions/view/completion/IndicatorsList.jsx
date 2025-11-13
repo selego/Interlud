@@ -7,12 +7,12 @@ const groupIndicatorsByCategory = indicators => {
   const grouped = {}
   const uncategorized = []
 
-  indicators.forEach(indicator => {
+  for (const indicator of indicators) {
     const categoryName = indicator.indicator_category_name
 
     if (!categoryName) {
       uncategorized.push(indicator)
-      return
+      continue
     }
 
     if (!grouped[categoryName]) {
@@ -30,10 +30,11 @@ const groupIndicatorsByCategory = indicators => {
         category.subCategories[subCategoryName] = []
       }
       category.subCategories[subCategoryName].push(indicator)
-    } else {
-      category.directIndicators.push(indicator)
+      continue
     }
-  })
+    
+    category.directIndicators.push(indicator)
+  }
 
   return { grouped, uncategorized }
 }
