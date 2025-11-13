@@ -17,6 +17,7 @@ const Schema = new mongoose.Schema(
     indicator_category_name: { type: String, trim: true },
     indicator_sub_category_id: { type: String, trim: true },
     indicator_sub_category_name: { type: String, trim: true },
+    indicator_default_value: { type: String, trim: true },
     situation: { type: String, enum: ["init", "ref", "prev", "expost"], trim: true },
     year: { type: Number, trim: true },
     value: { type: String, trim: true },

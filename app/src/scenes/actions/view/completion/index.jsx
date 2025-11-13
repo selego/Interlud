@@ -15,14 +15,14 @@ export const SITUATION_TABS = [
   { key: SITUATION_TYPES.EXPOST, label: "Ex-post" }
 ];
 
-const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeTab) => {
+export const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeTab) => {
   if (!selectedIndicator || !actionId || !activeTab) {
     return []
   }
 
   const { indicator_category_name: categoryName, indicator_sub_category_name: subCategoryName, indicator_id } = selectedIndicator
 
-  return indicators.filter(indicator => {
+  const filtered = indicators.filter(indicator => {
     if (!categoryName) {
       return indicator.indicator_id === indicator_id
     }
@@ -33,7 +33,16 @@ const getDisplayedIndicators = (selectedIndicator, indicators, actionId, activeT
 
     return indicator.indicator_category_name === categoryName
   })
-};
+
+  return filtered.sort((a, b) => {
+    const nameA = (a.indicator_name || "").toLowerCase()
+    const nameB = (b.indicator_name || "").toLowerCase()
+    if (nameA !== nameB) {
+      return nameA.localeCompare(nameB)
+    }
+    return (a.indicator_id || "").localeCompare(b.indicator_id || "")
+  })
+}
 
 export default function Completion({ action }) {
   const navigate = useNavigate();
@@ -45,6 +54,18 @@ export default function Completion({ action }) {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
+      
+      if (selectedIndicator && data.length > 0) {
+        console.log(data)
+        const correspondingIndicator = data.find(
+          ind => ind.indicator_id === selectedIndicator.indicator_id
+        );
+        
+        if (correspondingIndicator) {
+          setSelectedIndicator(correspondingIndicator);
+        }
+      }
+      
       setIndicators(data);
     } catch (error) {
       toast.error("Une erreur est survenue");
@@ -76,7 +97,6 @@ export default function Completion({ action }) {
             allIndicators={indicators}
             selectedIndicator={selectedIndicator}
             onSelectIndicator={setSelectedIndicator}
-            key={activeTab}
           />
         </div>
       </div>
@@ -113,7 +133,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} values={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
       </div>
     </div>
   )

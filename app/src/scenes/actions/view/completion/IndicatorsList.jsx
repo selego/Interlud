@@ -4,10 +4,19 @@ import ProgressCircle from "@/components/ProgressCircle";
 import { HiCheck } from "react-icons/hi";
 
 const groupIndicatorsByCategory = indicators => {
+  const sortedIndicators = [...indicators].sort((a, b) => {
+    const nameA = (a.indicator_name || "").toLowerCase()
+    const nameB = (b.indicator_name || "").toLowerCase()
+    if (nameA !== nameB) {
+      return nameA.localeCompare(nameB)
+    }
+    return (a.indicator_id || "").localeCompare(b.indicator_id || "")
+  })
+
   const grouped = {}
   const uncategorized = []
 
-  for (const indicator of indicators) {
+  for (const indicator of sortedIndicators) {
     const categoryName = indicator.indicator_category_name
 
     if (!categoryName) {
@@ -36,7 +45,28 @@ const groupIndicatorsByCategory = indicators => {
     category.directIndicators.push(indicator)
   }
 
-  return { grouped, uncategorized }
+  const sortedGrouped = {}
+  Object.keys(grouped)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach(categoryName => {
+      const category = grouped[categoryName]
+
+      const sortedSubCategories = {}
+      Object.keys(category.subCategories)
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(subCategoryName => {
+          sortedSubCategories[subCategoryName] = category.subCategories[subCategoryName]
+        })
+
+      sortedGrouped[categoryName] = {
+        subCategories: sortedSubCategories,
+        directIndicators: category.directIndicators
+      }
+    })
+
+  const sortedUncategorized = uncategorized
+
+  return { grouped: sortedGrouped, uncategorized: sortedUncategorized }
 }
 
 const calculateCompletion = indicators => {
@@ -76,8 +106,8 @@ export default function IndicatorsList({ allIndicators, selectedIndicator, onSel
   useEffect(() => {
     if (!allIndicators || allIndicators.length === 0) return;
 
-    const hasSelectedIndicator = allIndicators.some(
-      ind => ind._id === selectedIndicator?._id || ind.indicator_id === selectedIndicator?.indicator_id
+    const hasSelectedIndicator = selectedIndicator && allIndicators.some(
+      ind => ind._id === selectedIndicator._id || ind.indicator_id === selectedIndicator.indicator_id
     );
     if (hasSelectedIndicator) return;
 

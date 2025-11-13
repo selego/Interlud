@@ -32,7 +32,14 @@ export default function Dashboard({ action }) {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id });
       if (!ok) return toast.error(code || "Une erreur est survenue");
-      setIndicatorValues(data);
+      const situationOrder = ["init", "ref", "prev", "expost"];
+      const sortedData = [...data].sort((a, b) => {
+        const aIdx = situationOrder.indexOf(a.situation);
+        const bIdx = situationOrder.indexOf(b.situation);
+        return aIdx - bIdx;
+      });
+
+      setIndicatorValues(sortedData);
       setStats(calculateStats(data));
     } catch (error) {
       toast.error("Une erreur est survenue");

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
-import DebounceInput from "@/components/debounceInput";
 import { SITUATION_TYPES } from "@/utils/constants";
 import IndicatorValueInput from "./IndicatorValueInput";
 
@@ -12,12 +11,12 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
 
-export default function SituationTab({ situation, values, selectedIndicator, onUpdate }) {
-  const [localValues, setLocalValues] = useState(values);
+export default function SituationTab({ situation, displayedIndicators, selectedIndicator, onUpdate }) {
+  const [localValues, setLocalValues] = useState(displayedIndicators);
 
   useEffect(() => {
-    setLocalValues(values);
-  }, [values]);
+    setLocalValues(displayedIndicators)
+  }, [displayedIndicators])
 
   useEffect(() => {
     if (localValues.length > 0) {
@@ -30,12 +29,11 @@ export default function SituationTab({ situation, values, selectedIndicator, onU
   const handleAutoSave = async (updatedValue) => {
     try {
       setLocalValues(prev => prev.map(v => v._id === updatedValue._id ? updatedValue : v));
-      
       const { ok, code } = await api.put(`/indicator_value/${updatedValue._id}`, updatedValue);
       
       if (!ok) {
         toast.error(code || "Une erreur est survenue");
-        setLocalValues(values);
+        setLocalValues(displayedIndicators);
         return;
       }
 
@@ -43,13 +41,12 @@ export default function SituationTab({ situation, values, selectedIndicator, onU
       await onUpdate();
     } catch (error) {
       toast.error("Une erreur est survenue");
-      setLocalValues(values);
+      setLocalValues(displayedIndicators);
     }
   };
 
   const handleValueChange = (valueId, field, newValue) => {
     const updatedValue = localValues.find(v => v._id === valueId);
-    if (!updatedValue) return;
     handleAutoSave({ ...updatedValue, [field]: newValue });
   };
 
@@ -61,48 +58,99 @@ export default function SituationTab({ situation, values, selectedIndicator, onU
     );
   }
 
+  const handleUseDefaultValues = async () => {
+    try {
+      const valuesToUpdate = localValues.filter(value => {
+        if (!value.indicator_default_value) return false
+        if (Array.isArray(value.indicator_value_possibilities) && value.indicator_value_possibilities.length > 0) {
+          return value.indicator_value_possibilities.includes(value.indicator_default_value)
+        }
+        return true
+      })
+
+      if (valuesToUpdate.length === 0) return toast.error("Aucune valeur par défaut disponible")
+
+      setLocalValues(prev =>
+        prev.map(v => {
+          const toUpdate = valuesToUpdate.find(vtu => vtu._id === v._id)
+          return toUpdate ? { ...v, value: toUpdate.indicator_default_value } : v
+        })
+      )
+
+      const updatePromises = valuesToUpdate.map(value => 
+        api.put(`/indicator_value/${value._id}`, { value: value.indicator_default_value })
+      )
+
+      const results = await Promise.allSettled(updatePromises)
+
+      const successful = results.filter(r => r.status === "fulfilled" && r.value?.ok).length
+      const failed = results.filter(r => r.status === "rejected" || !r.value?.ok).length
+
+      if (failed > 0) {
+        toast.error(`${failed} mise(s) à jour ont échoué`)
+      }
+
+      if (successful > 0) {
+        toast.success(`${successful} valeur(s) par défaut appliquée(s)`)
+      }
+
+      await onUpdate()
+    } catch (error) {
+      toast.error("Une erreur est survenue lors de la mise à jour");
+      setLocalValues(displayedIndicators);
+    }
+  };
+
   return (
     <div className="p-4">
-      <div className="mb-4">
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Situation : {SITUATION_LABELS[situation]}</h2>
+        <button
+          className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
+          onClick={handleUseDefaultValues}
+        >
+          Utiliser la valeur par défaut pour tous
+        </button>
       </div>
 
       <div className="space-y-3">
-        {localValues.map((value) => (
-          <div
-            key={value._id}
-            id={`indicator-${value._id}`}
-            className={`bg-white card-shadow ${selectedIndicator?._id === value._id ? "border-primary-green border-2" : ""}`}
-          >
+        {localValues.map(value => (
+          <div key={value._id} id={`indicator-${value._id}`} className={`bg-white card-shadow ${selectedIndicator?._id === value._id ? "border-primary-green border-2" : ""}`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium text-gray-900">{value.indicator_name}</h3>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">Valeur</label>
                 <IndicatorValueInput
+                  key={`${value._id}-${value.value || 'empty'}`}
                   value={value.value}
                   indicatorType={value.indicator_type}
                   options={value.indicator_value_possibilities}
-                  onChange={(newValue) => handleValueChange(value._id, "value", newValue)}
+                  onChange={newValue => handleValueChange(value._id, "value", newValue)}
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Commentaire</label>
-                <DebounceInput
-                  type="text"
-                  value={value.comment || ""}
-                  onChange={(e) => handleValueChange(value._id, "comment", e.target.value)}
-                  placeholder="Commentaire"
-                  debounce={800}
-                />
+              <div className="flex flex-col">
+                <label className="block text-xs font-medium text-gray-600 mb-2">Valeur par défaut</label>
+                {!value.indicator_default_value && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
+                {value.indicator_default_value && (
+                  <div className="flex justify-between items-center gap-2">
+                    <p className="text-gray-600">{value.indicator_default_value}</p>
+                    <button
+                      onClick={() => handleValueChange(value._id, "value", value.indicator_default_value)}
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
+                    >
+                      Utiliser la valeur par défaut
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ))}
       </div>
     </div>
-  );
+  )
 }
