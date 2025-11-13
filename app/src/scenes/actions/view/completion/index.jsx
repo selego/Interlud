@@ -49,6 +49,7 @@ export default function Completion({ action }) {
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
   const [indicators, setIndicators] = useState([]);
+  const [lastPatch, setLastPatch] = useState(null);
 
   const fetchAllIndicators = async () => {
     try {
@@ -56,7 +57,6 @@ export default function Completion({ action }) {
       if (!ok) return toast.error(code || "Erreur lors du chargement");
       
       if (selectedIndicator && data.length > 0) {
-        console.log(data)
         const correspondingIndicator = data.find(
           ind => ind.indicator_id === selectedIndicator.indicator_id
         );
@@ -72,9 +72,39 @@ export default function Completion({ action }) {
     }
   };
 
+  const fetchLastCompletenessPatch = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/action_patch/search`, { 
+        ref: [action._id], 
+        path: "completeness", 
+        limit: 1 
+      });
+      if (!ok) return toast.error(code || "Erreur lors du chargement");
+      if (data.length === 0) return;
+
+      const patch = data[0];
+      setLastPatch({
+        completeness: patch.value,
+        updatedAt: patch.date,
+        updatedBy: patch.user?.name
+      });
+    } catch (error) {
+      toast.error("Une erreur est survenue !");
+    }
+  }
+
   useEffect(() => {
     fetchAllIndicators();
   }, [action._id, activeTab]);
+
+  useEffect(() => {
+    fetchLastCompletenessPatch();
+  }, [action._id])
+
+  const onUpdate = async () => {
+    await fetchAllIndicators()
+    await fetchLastCompletenessPatch()
+  }
 
   const displayedIndicators = getDisplayedIndicators(selectedIndicator, indicators, action._id, activeTab);
 
@@ -119,9 +149,12 @@ export default function Completion({ action }) {
             <p className="text-sm text-gray-900">
               Complété à <strong>{action.completeness}%</strong>
             </p>
-            <p className="text-sm text-gray-600">
-              - Dernière mise à jour le <strong>{new Date(action.updatedAt).toLocaleDateString()}</strong> par <strong>User1234</strong>
-            </p>
+            {lastPatch && (
+              <p className="text-sm text-gray-600">
+                - Dernière mise à jour le <strong>{new Date(lastPatch.updatedAt).toLocaleDateString()}</strong>
+                {lastPatch.updatedBy && <span> par <strong>{lastPatch.updatedBy}</strong></span>}
+              </p>
+            )}
           </div>
         </div>
 
@@ -133,7 +166,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={onUpdate} />
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ const IndicatorValue = require("../models/indicator_value");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const { updateActionCompleteness } = require("../utils/actions");
+const { saveAndCreatePatches } = require("../utils/patch");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -21,8 +22,10 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    action.set(req.body);
+    await saveAndCreatePatches(action, req.user, "actionPatch");
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -51,7 +54,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = await Action.create( req.body );
-
+    await saveAndCreatePatches(action, req.user, "actionPatch");
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -87,7 +90,7 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
       createdValues.push(indicatorValue);
     }
 
-    await updateActionCompleteness(req.body.action_id, IndicatorValue);
+    await updateActionCompleteness(req.body.action_id, IndicatorValue, req.user);
 
     return res.status(200).send({ ok: true, data: createdValues });
   } catch (error) {
