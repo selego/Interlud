@@ -2,7 +2,6 @@ import { useState, useEffect } from "react"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
-import { SITUATION_TYPES } from "@/utils/constants"
 import Loader from "@/components/loader"
 
   const formatDate = dateString => {
@@ -40,14 +39,6 @@ import Loader from "@/components/loader"
     return String(value)
   }
 
-  const situationOptions = [
-    { value: "", label: "Toutes les situations" },
-    { value: SITUATION_TYPES.INIT, label: "Initial" },
-    { value: SITUATION_TYPES.REF, label: "Référence" },
-    { value: SITUATION_TYPES.PREV, label: "Prévisionnel" },
-    { value: SITUATION_TYPES.EXPOST, label: "Ex-post" }
-  ]
-
 export default function History({ action }) {
   const [patches, setPatches] = useState([])
   const [indicatorValues, setIndicatorValues] = useState([])
@@ -73,45 +64,24 @@ export default function History({ action }) {
     try {
       setLoading(true)
 
-      const indicatorValueIds = indicatorValues.map(iv => iv._id);
+      let tempFiltered = indicatorValues;
 
-      let filteredIds = indicatorValueIds;
-
-      if (selectedSituation && selectedIndicator) {
-        filteredIds = indicatorValues
-          .filter(iv => iv.situation === selectedSituation && iv.indicator_name === selectedIndicator)
-          .map(iv => iv._id);
-      } else if (selectedSituation) {
-        filteredIds = indicatorValues
-          .filter(iv => iv.situation === selectedSituation)
-          .map(iv => iv._id);
-      } else if (selectedIndicator) {
-        filteredIds = indicatorValues
-          .filter(iv => iv.indicator_name === selectedIndicator)
-          .map(iv => iv._id);
+      if (selectedSituation) {
+        tempFiltered = tempFiltered.filter(iv => iv.situation === selectedSituation);
       }
+
+      if (selectedIndicator) {
+        tempFiltered = tempFiltered.filter(iv => iv.indicator_name === selectedIndicator);
+      }
+
+      const filteredIds = tempFiltered.map(iv => iv._id);
 
       if (!filteredIds || filteredIds.length === 0) return setPatches([]);
 
-      const { ok, data, code } = await api.post(`/indicator_value_patch/search`, { ref: filteredIds })
+      const { ok, data, code } = await api.post(`/indicator_value_log/search`, { indicator_value_id: filteredIds })
       if (!ok) return toast.error(code || "Une erreur est survenue")
 
-      const indicatorValuesMap = new Map()
-      indicatorValues.forEach(iv => {
-        indicatorValuesMap.set(iv._id, iv)
-      })
-
-      let patchesWithIndicatorInfo = (data || []).map(patch => {
-        const indicatorValue = indicatorValuesMap.get(patch.ref)
-        return {
-          ...patch,
-          indicator_name: indicatorValue?.indicator_name || "Indicateur inconnu",
-          situation: indicatorValue?.situation,
-          year: indicatorValue?.year
-        }
-      })
-
-      setPatches(patchesWithIndicatorInfo || [])
+      setPatches(data || [])
     } catch (error) {
       toast.error("Une erreur est survenue lors du chargement de l'historique")
     } finally {
@@ -127,20 +97,6 @@ export default function History({ action }) {
     fetchPatches()
   }, [indicatorValues, selectedSituation, selectedIndicator])
 
-  const indicatorOptions = (() => {
-    const uniqueIndicators = Array.from(
-      new Set(indicatorValues.map(iv => iv.indicator_name).filter(Boolean))
-    ).sort()
-
-    return [
-      { value: "", label: "Tous les indicateurs" },
-      ...uniqueIndicators.map(name => ({
-        value: name,
-        label: name
-      }))
-    ]
-  })()
-
   return (
     <div className="p-8 card-shadow">
       <div className="mb-6">
@@ -153,7 +109,13 @@ export default function History({ action }) {
             <div className="w-48">
               <Select
                 placeholder="Filtrer par situation"
-                options={situationOptions}
+                options={[
+                  { value: "", label: "Toutes les situations" },
+                  { value: "init", label: "Initial" },
+                  { value: "ref", label: "Référence" },
+                  { value: "prev", label: "Prévisionnel" },
+                  { value: "expost", label: "Ex-post" }
+                ]}
                 value={selectedSituation}
                 onChange={setSelectedSituation}
               />
@@ -161,7 +123,15 @@ export default function History({ action }) {
             <div className="w-64">
               <Select
                 placeholder="Filtrer par indicateur"
-                options={indicatorOptions}
+                options={[
+                  { value: "", label: "Tous les indicateurs" },
+                  ...Array.from(
+                    new Set(indicatorValues.map(iv => iv.indicator_name).filter(Boolean))
+                  ).sort().map(name => ({
+                    value: name,
+                    label: name
+                  }))
+                ]}
                 value={selectedIndicator}
                 onChange={setSelectedIndicator}
               />
@@ -182,27 +152,31 @@ export default function History({ action }) {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="font-semibold text-gray-900">{patch.indicator_name || "Indicateur inconnu"}</span>
-                    {patch.situation && <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">{getSituationLabel(patch.situation)}</span>}
-                    {patch.year && <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">Année {patch.year}</span>}
+                    {patch.indicator_situation && <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">{getSituationLabel(patch.indicator_situation)}</span>}
+                    {patch.indicator_year && <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">Année {patch.indicator_year}</span>}
                   </div>
                   <div className="text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-700">{getOperationLabel(patch.path)}:</span>
-                      {patch.op === "replace" && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-gray-700">{getOperationLabel(patch.field)}:</span>
+                      {patch.operation === "update" && (
                         <>
-                          <span className="text-red-600 line-through">{formatValue(patch.originalValue)}</span>
+                          <span className="text-red-600 line-through">{formatValue(patch.previous_value)}</span>
                           <span className="text-gray-400">→</span>
-                          <span className="text-green-600 font-medium">{formatValue(patch.value)}</span>
+                          <span className="text-green-600 font-medium">{formatValue(patch.new_value)}</span>
                         </>
                       )}
-                      {patch.op === "add" && <span className="text-green-600 font-medium">{formatValue(patch.value)} (ajouté)</span>}
-                      {patch.op === "remove" && <span className="text-red-600 line-through">{formatValue(patch.value)} (supprimé)</span>}
+                      {patch.operation === "add" && <span className="text-green-600 font-medium">{formatValue(patch.new_value)} (ajouté)</span>}
                     </div>
+                    {patch.trigger_action_id && patch.trigger_action_name && (
+                      <div className="text-xs text-gray-500 italic">
+                        Modifié suite à la modification de l'indicateur dans l'action : <span className="font-medium text-gray-700">{patch.trigger_action_name}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right ml-4">
                   <div className="text-sm font-medium text-gray-900">{formatDate(patch.date)}</div>
-                  {patch.user && <div className="text-xs text-gray-500 mt-1">{patch.user.name || patch.user.email || "Utilisateur inconnu"}</div>}
+                  {(patch.user_name || patch.user_email) && <div className="text-xs text-gray-500 mt-1">{patch.user_name || patch.user_email || "Utilisateur inconnu"}</div>}
                 </div>
               </div>
             </div>
