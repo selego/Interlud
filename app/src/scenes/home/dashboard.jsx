@@ -4,6 +4,8 @@ import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
+import ProgressCircle from "@/components/ProgressCircle"
+import Loader from "@/components/loader"
 
 const getStatusInfo = (status) => {
   const statusMap = {
@@ -51,42 +53,83 @@ const getStatutBadgeClass = (status) => getStatusInfo(status).badgeClass;
 const getStatusLabel = (status) => getStatusInfo(status).label;
 
 export default function Dashboard({ collectivity }) {
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState(null)
+  const [loadingSummary, setLoadingSummary] = useState(true)
+  const [loadingEvolution, setLoadingEvolution] = useState(true)
+  const [loadingActions, setLoadingActions] = useState(true)
+  const [summary, setSummary] = useState(null)
+  const [evolution, setEvolution] = useState(null)
+  const [actions, setActions] = useState([])
   const navigate = useNavigate()
   const [actionsToDisplay, setActionsToDisplay] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
   const [timeframe, setTimeframe] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState("all")
-  // État pour gérer la visibilité des courbes dans le graphique d'évolution
   const [visibleLines, setVisibleLines] = useState({
     completed: true,
     in_progress: true,
     upcoming: true,
   })
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!collectivity?._id) return
-      try {
-        setLoading(true)
-        const { ok, data, code } = await api.post(`/collectivity/dashboard`, { collectivity_id: collectivity._id, timeframe: timeframe })
-        if (!ok) return toast.error(code || "Une erreur est survenue lors du chargement du dashboard")
-        setData(data)
-        console.log(data)
-        let initialFiltered = data.actions;
-        if (selectedStatus !== "all") {
-          initialFiltered = initialFiltered.filter(action => action.status === selectedStatus)
-        }
-        setActionsToDisplay(initialFiltered.slice(0, 3))
-      } catch (error) {
-        console.error("Erreur lors du chargement des données:", error)
-        toast.error("Une erreur est survenue lors du chargement du dashboard")
-      } finally {
-        setLoading(false)
-      }
+  const loadSummary = async () => {
+    if (!collectivity?._id) return
+    try {
+      setLoadingSummary(true)
+      const { ok, data, code } = await api.post(`/dashboard/summary`, {
+        collectivity_id: collectivity._id,
+        timeframe: timeframe,
+      })
+      if (!ok) return toast.error(code || "Une erreur est survenue lors du chargement de la synthèse")
+      setSummary(data)
+    } catch (error) {
+      console.error("Erreur lors du chargement de la synthèse:", error)
+      toast.error("Une erreur est survenue lors du chargement de la synthèse")
+    } finally {
+      setLoadingSummary(false)
     }
-    loadData()
+  }
+
+  const loadEvolution = async () => {
+    if (!collectivity?._id) return
+    try {
+      setLoadingEvolution(true)
+      const { ok, data, code } = await api.post(`/dashboard/evolution`, {
+        collectivity_id: collectivity._id,
+        timeframe: timeframe,
+      })
+      if (!ok) return toast.error(code || "Une erreur est survenue lors du chargement de l'évolution")
+      setEvolution(data)
+    } catch (error) {
+      console.error("Erreur lors du chargement de l'évolution:", error)
+      toast.error("Une erreur est survenue lors du chargement de l'évolution")
+    } finally {
+      setLoadingEvolution(false)
+    }
+  }
+
+  const loadActions = async () => {
+    if (!collectivity?._id) return
+    try {
+      setLoadingActions(true)
+      const { ok, data, code } = await api.post(`/action/search`, {
+        collectivity_id: collectivity._id,
+      })
+      if (!ok) return toast.error(code || "Une erreur est survenue lors du chargement des actions")
+      setActions(data)
+    } catch (error) {
+      console.error("Erreur lors du chargement des actions:", error)
+      toast.error("Une erreur est survenue lors du chargement des actions")
+    } finally {
+      setLoadingActions(false)
+    }
+  }
+
+  useEffect(() => {
+    loadActions()
+  }, [collectivity])
+
+  useEffect(() => {
+    loadSummary()
+    loadEvolution()
   }, [collectivity, timeframe])
 
   const handleSearchActions = (search, statusFilter = selectedStatus) => {
@@ -97,9 +140,9 @@ export default function Dashboard({ collectivity }) {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
 
-    if (!data || !data.actions) return
+    if (!actions || actions.length === 0) return
 
-    let filteredActions = data.actions
+    let filteredActions = actions
     
     if (statusFilter && statusFilter !== "all") {
       filteredActions = filteredActions.filter(action => action.status === statusFilter)
@@ -115,12 +158,19 @@ export default function Dashboard({ collectivity }) {
   }
 
   useEffect(() => {
-    if (data && data.actions) {
+    if (actions && actions.length > 0) {
       handleSearchActions(searchQuery, selectedStatus)
     }
-  }, [selectedStatus, data])
+  }, [selectedStatus, actions])
 
-  if (loading || !collectivity) {
+  const distribution = {
+    completed: actions.filter((a) => a.status === "completed").length,
+    toComplete: actions.filter((a) => a.status === "in_progress").length,
+    pending: actions.filter((a) => a.status === "upcoming" || a.status === "no_status").length,
+    blocked: actions.filter((a) => a.status === "blocked").length,
+  }
+
+  if (loadingActions || !collectivity) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-gray-500">Chargement...</div>
@@ -129,23 +179,23 @@ export default function Dashboard({ collectivity }) {
   }
 
   const pieData = [
-    { name: getStatusInfo("completed").labelPlural, value: data?.distribution?.completed || 0, status: "completed" },
-    { name: getStatusInfo("in_progress").labelPlural, value: data?.distribution?.toComplete || 0, status: "in_progress" },
-    { name: getStatusInfo("upcoming").labelPlural + " / " + getStatusInfo("no_status").labelPlural, value: data?.distribution?.pending || 0, status: "pending" },
-    { name: getStatusInfo("blocked").labelPlural, value: data?.distribution?.blocked || 0, status: "blocked" }
+    { name: getStatusInfo("completed").labelPlural, value: distribution.completed || 0, status: "completed" },
+    { name: getStatusInfo("in_progress").labelPlural, value: distribution.toComplete || 0, status: "in_progress" },
+    { name: getStatusInfo("upcoming").labelPlural + " / " + getStatusInfo("no_status").labelPlural, value: distribution.pending || 0, status: "pending" },
+    { name: getStatusInfo("blocked").labelPlural, value: distribution.blocked || 0, status: "blocked" }
   ]
   
   const calculateYDomain = () => {
-    if (!data?.evolution?.data || data.evolution.data.length === 0) {
+    if (!evolution || evolution.length === 0) {
       return [0, 10];
     }
     
     let maxValue = 0;
-    data.evolution.data.forEach((point) => {
+    evolution.forEach((point) => {
       const values = [
         point.completed || 0,
         point.in_progress || 0,
-        point.pending || 0,
+        point.upcoming || 0,
       ];
       const pointMax = Math.max(...values);
       if (pointMax > maxValue) {
@@ -177,7 +227,7 @@ export default function Dashboard({ collectivity }) {
               { value: "all", label: "Tous" },
               { value: "year", label: "Cette année" },
               { value: "month", label: "Ce mois" },
-              { value: "week", label: "Cette semaine" },
+              { value: "week", label: "Cette semaine" }
             ]}
           />
         </div>
@@ -189,29 +239,30 @@ export default function Dashboard({ collectivity }) {
             </div>
 
             <div className="space-y-4">
+              {loadingSummary && <Loader size="small" />}
               <div className=" gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{data?.summary?.actionsCreated || 0}</span>
+                  <span className="text-4xl font-bold text-gray-900">{summary?.actionsCreated || 0}</span>
                 </div>
                 <span className="text-lg text-font-secondary">Actions crées</span>
               </div>
 
               <div className="gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{data?.summary?.actionsUpdated || 0}</span>
+                  <span className="text-4xl font-bold text-gray-900">{summary?.actionsUpdated || 0}</span>
                 </div>
                 <span className="text-lg text-font-secondary">Actions mise à jour</span>
               </div>
 
               <div className="gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{data?.summary?.actionsCompleted || 0}</span>
+                  <span className="text-4xl font-bold text-gray-900">{summary?.actionsCompleted || 0}</span>
                 </div>
                 <span className="text-lg text-font-secondary">Actions terminées</span>
               </div>
               <div className="gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{data?.summary?.actionsBlocked || 0}</span>
+                  <span className="text-4xl font-bold text-gray-900">{summary?.actionsBlocked || 0}</span>
                 </div>
                 <span className="text-lg text-font-secondary">Actions bloquées</span>
               </div>
@@ -223,13 +274,17 @@ export default function Dashboard({ collectivity }) {
             <h3 className="font-bold text-font-primary text-2xl mb-4">Répartition des actions</h3>
 
             <div className="flex gap-2 mb-6 flex-wrap">
-              {["completed", "in_progress", "upcoming", "blocked"].map((status) => {
-                const statusInfo = getStatusInfo(status);
+              {["completed", "in_progress", "upcoming", "blocked"].map(status => {
+                const statusInfo = getStatusInfo(status)
                 return (
-                  <div key={status} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all text-white" style={{ backgroundColor: statusInfo.color }}>
+                  <div
+                    key={status}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all text-white"
+                    style={{ backgroundColor: statusInfo.color }}
+                  >
                     {statusInfo.labelPlural}
                   </div>
-                );
+                )
               })}
             </div>
 
@@ -241,7 +296,15 @@ export default function Dashboard({ collectivity }) {
                     {pieData.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={entry.status === "completed" ? getStatusInfo("completed").color : entry.status === "in_progress" ? getStatusInfo("in_progress").color : entry.status === "pending" ? getStatusInfo("upcoming").color : getStatusInfo("blocked").color}
+                        fill={
+                          entry.status === "completed"
+                            ? getStatusInfo("completed").color
+                            : entry.status === "in_progress"
+                            ? getStatusInfo("in_progress").color
+                            : entry.status === "pending"
+                            ? getStatusInfo("upcoming").color
+                            : getStatusInfo("blocked").color
+                        }
                       />
                     ))}
                   </Pie>
@@ -264,47 +327,47 @@ export default function Dashboard({ collectivity }) {
               </ResponsiveContainer>
 
               <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-center text-xs text-gray-600">
-                {["completed", "in_progress", "upcoming", "blocked"].map((status) => {
-                  const statusInfo = getStatusInfo(status);
+                {["completed", "in_progress", "upcoming", "blocked"].map(status => {
+                  const statusInfo = getStatusInfo(status)
                   return (
                     <div key={status} className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: statusInfo.color }}></div>
                       <span>Actions {statusInfo.labelPlural.toLowerCase()}</span>
                     </div>
-                  );
+                  )
                 })}
               </div>
             </div>
           </div>
 
           <div className="xl:col-span-8 p-6 h-full card-shadow">
+            {loadingEvolution && <Loader size="small" />}
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
             </div>
 
             <div className="flex gap-2 mb-6 flex-wrap">
-              {["completed", "in_progress", "upcoming"].map((status) => {
-                const statusInfo = getStatusInfo(status);
-                const statusKey = status === "in_progress" ? "in_progress" : status;
-                const isVisible = visibleLines[statusKey];
-                
+              {["completed", "in_progress", "upcoming"].map(status => {
+                const statusInfo = getStatusInfo(status)
+                const statusKey = status === "in_progress" ? "in_progress" : status
+                const isVisible = visibleLines[statusKey]
+
                 return (
-                  <div 
-                    key={status} 
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all text-white cursor-pointer hover:opacity-90" 
+                  <div
+                    key={status}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all text-white cursor-pointer hover:opacity-90"
                     style={{ backgroundColor: statusInfo.color }}
                     onClick={() => {
                       setVisibleLines(prev => ({
                         ...prev,
                         [statusKey]: !prev[statusKey]
-                      }));
+                      }))
                     }}
                   >
                     {statusInfo.labelPlural}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       {isVisible ? (
                         <>
-                          {/* Œil ouvert */}
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path
                             strokeLinecap="round"
@@ -315,40 +378,38 @@ export default function Dashboard({ collectivity }) {
                         </>
                       ) : (
                         <>
-                          {/* Œil fermé */}
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                          />
                         </>
                       )}
                     </svg>
                   </div>
-                );
+                )
               })}
             </div>
 
             <div className="h-[260px] rounded-lg overflow-hidden mt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data?.evolution?.data || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={evolution || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="month" 
-                    tick={{ fontSize: 11, fill: "#6b7280" }} 
-                    axisLine={{ stroke: "#e5e7eb" }} 
+                  <XAxis
+                    dataKey="period"
+                    tick={{ fontSize: 11, fill: "#6b7280" }}
+                    axisLine={{ stroke: "#e5e7eb" }}
                     tickLine={{ stroke: "#e5e7eb" }}
-                    angle={timeframe === "week" ? -45 : 0}
-                    textAnchor={timeframe === "week" ? "end" : "middle"}
-                    height={timeframe === "week" ? 60 : 30}
-                    interval={timeframe === "week" ? 0 : "preserveStartEnd"}
-                    tickFormatter={(value) => {
+                    angle={timeframe === "week" ? -45 : timeframe === "all" ? -45 : 0}
+                    textAnchor={timeframe === "week" || timeframe === "all" ? "end" : "middle"}
+                    height={timeframe === "week" || timeframe === "all" ? 60 : 30}
+                    interval={timeframe === "week" ? 0 : timeframe === "all" ? "equidistantPreserveStartEnd" : "preserveStartEnd"}
+                    tickFormatter={value => {
                       return value
                     }}
                   />
-                  <YAxis 
-                    domain={yDomain}
-                    tick={{ fontSize: 11, fill: "#6b7280" }} 
-                    axisLine={{ stroke: "#e5e7eb" }} 
-                    tickLine={{ stroke: "#e5e7eb" }}
-                    allowDecimals={false}
-                  />
+                  <YAxis domain={yDomain} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={{ stroke: "#e5e7eb" }} allowDecimals={false} />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
@@ -368,35 +429,35 @@ export default function Dashboard({ collectivity }) {
                     }}
                   />
                   {visibleLines.completed && (
-                    <Line 
-                      type="monotone" 
-                      dataKey="completed" 
-                      stroke={getStatusInfo("completed").color} 
-                      strokeWidth={3} 
-                      name={getStatusInfo("completed").labelPlural} 
-                      dot={{ fill: getStatusInfo("completed").color, r: 4 }} 
+                    <Line
+                      type="monotone"
+                      dataKey="completed"
+                      stroke={getStatusInfo("completed").color}
+                      strokeWidth={3}
+                      name={getStatusInfo("completed").labelPlural}
+                      dot={{ fill: getStatusInfo("completed").color, r: 4 }}
                       activeDot={{ r: 6 }}
                     />
                   )}
                   {visibleLines.in_progress && (
-                    <Line 
-                      type="monotone" 
-                      dataKey="in_progress" 
-                      stroke={getStatusInfo("in_progress").color} 
-                      strokeWidth={3} 
-                      name={getStatusInfo("in_progress").labelPlural} 
-                      dot={{ fill: getStatusInfo("in_progress").color, r: 4 }} 
+                    <Line
+                      type="monotone"
+                      dataKey="in_progress"
+                      stroke={getStatusInfo("in_progress").color}
+                      strokeWidth={3}
+                      name={getStatusInfo("in_progress").labelPlural}
+                      dot={{ fill: getStatusInfo("in_progress").color, r: 4 }}
                       activeDot={{ r: 6 }}
                     />
                   )}
                   {visibleLines.upcoming && (
-                    <Line 
-                      type="monotone" 
-                      dataKey="pending" 
-                      stroke={getStatusInfo("upcoming").color} 
-                      strokeWidth={3} 
-                      name={getStatusInfo("upcoming").labelPlural} 
-                      dot={{ fill: getStatusInfo("upcoming").color, r: 4 }} 
+                    <Line
+                      type="monotone"
+                      dataKey="upcoming"
+                      stroke={getStatusInfo("upcoming").color}
+                      strokeWidth={3}
+                      name={getStatusInfo("upcoming").labelPlural}
+                      dot={{ fill: getStatusInfo("upcoming").color, r: 4 }}
                       activeDot={{ r: 6 }}
                     />
                   )}
@@ -404,22 +465,20 @@ export default function Dashboard({ collectivity }) {
               </ResponsiveContainer>
             </div>
 
-            {/* Légende */}
             <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-start text-xs text-gray-600">
-              {["completed", "in_progress", "upcoming"].map((status) => {
-                const statusInfo = getStatusInfo(status);
+              {["completed", "in_progress", "upcoming"].map(status => {
+                const statusInfo = getStatusInfo(status)
                 return (
                   <div key={status} className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: statusInfo.color }}></div>
                     <span>Actions {statusInfo.labelPlural.toLowerCase()}</span>
                   </div>
-                );
+                )
               })}
             </div>
           </div>
         </div>
 
-        {/* Toutes les actions */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
@@ -467,10 +526,10 @@ export default function Dashboard({ collectivity }) {
                 <div className="mt-auto pt-3 flex items-center justify-between">
                   <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">Voir l'action</button>
                   <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 rounded-full border-2 border-gray-300 flex items-center justify-center">
-                      <div className={`w-2 h-2 rounded-full ${(action.completionPourcentage || action.completeness || 0) === 100 ? "bg-gray-600" : ""}`}></div>
-                    </div>
-                    <span className="text-xs text-gray-600">Complété à {action.completionPourcentage || action.completeness || 0}%</span>
+                    <ProgressCircle percentage={action.completeness} size={20} />
+                    <p className="text-sm text-gray-900">
+                      Complétée à <strong>{action.completeness}%</strong>
+                    </p>
                   </div>
                 </div>
               </div>

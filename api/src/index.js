@@ -35,6 +35,7 @@ app.use("/user", require("./controllers/user"));
 app.use("/action", require("./controllers/action"));
 app.use("/action_log", require("./controllers/action_log"));
 app.use("/collectivity", require("./controllers/collectivity"));
+app.use("/dashboard", require("./controllers/dashboard"));
 app.use("/indicator", require("./controllers/indicator"));
 app.use("/indicator_value", require("./controllers/indicator_value"));
 app.use("/indicator_value_log", require("./controllers/indicator_value_log"));

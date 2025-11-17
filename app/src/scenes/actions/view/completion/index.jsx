@@ -137,7 +137,7 @@ export default function Completion({ action }) {
           <div className="flex gap-2 items-center mt-2">
             <ProgressCircle percentage={action.completeness} size={20} />
             <p className="text-sm text-gray-900">
-              Complété à <strong>{action.completeness}%</strong>
+              Complétée à <strong>{action.completeness}%</strong>
             </p>
             {lastPatch && (
               <p className="text-sm text-gray-600">
