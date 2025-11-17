@@ -1,17 +1,17 @@
 const express = require("express");
 const router = express.Router();
 const passport = require("passport");
-const ActionPatch = require("../models/action_patch");
+const ActionLog = require("../models/action_log");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
-const { getTimeframeDates } = require("../utils/patch");
+const { getTimeframeDates } = require("../utils");
 
 router.post("/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     let query = {};
 
-    if (req.body.path) query.path = req.body.path;
-    if (req.body.op) query.op = req.body.op;
+    if (req.body.field) query.field = req.body.field;
+    if (req.body.operation) query.operation = req.body.operation;
 
     if (req.body.timeframe && req.body.timeframe !== "all") {
       const { startDate, endDate } = getTimeframeDates(req.body.timeframe);
@@ -24,14 +24,18 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
       if (req.body.date_to) query.date.$lte = new Date(req.body.date_to);
     }
 
-    if (req.body.ref && Array.isArray(req.body.ref) && req.body.ref.length > 0) query.ref = { $in: req.body.ref };
+    if (req.body.action_id && Array.isArray(req.body.action_id) && req.body.action_id.length > 0) {
+      query.action_id = { $in: req.body.action_id };
+    } else if (req.body.action_id) {
+      query.action_id = req.body.action_id;
+    }
 
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
 
-    const total = await ActionPatch.countDocuments(query);
+    const total = await ActionLog.countDocuments(query);
 
-    const data = await ActionPatch.find(query)
+    const data = await ActionLog.find(query)
       .sort({ date: -1 })
       .skip(skip)
       .limit(limit)

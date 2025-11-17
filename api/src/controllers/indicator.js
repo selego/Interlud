@@ -5,8 +5,9 @@ const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
-const { updateActionCompleteness } = require("../utils/actions");
-const { saveAndCreatePatches } = require("../utils/patch");
+const IndicatorValueLog = require("../models/indicator_value_log");
+const Action = require("../models/action");
+const ActionLog = require("../models/action_log");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -34,13 +35,98 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       await Promise.all(
         affectedValues.map(async (value) => {
           try {
+            const originalValue = value.toObject();
             value.set({
               indicator_type: req.body.value_type,
               indicator_value_possibilities: req.body.value_possibilities,
               value: null,
             });
-            await saveAndCreatePatches(value, req.user, "indicatorValuePatch");
-            await updateActionCompleteness(value.action_id, IndicatorValue, req.user);
+            
+            const modifiedPaths = value.modifiedPaths().filter((path) => path !== "updatedAt" && path !== "__v" && path !== "_user");
+            
+            const logs = [];
+            if (modifiedPaths.length > 0) {
+              for (const field of modifiedPaths) {
+                const newValue = value.get(field);
+                const originalFieldValue = originalValue[field];
+                
+                if (JSON.stringify(newValue) === JSON.stringify(originalFieldValue)) continue;
+
+                let operation = "update";
+                if (originalFieldValue === undefined && newValue !== undefined) operation = "add";
+
+                const log = new IndicatorValueLog({
+                  indicator_value_id: value._id,
+                  indicator_value_name: value.name,
+                  indicator_id: value.indicator_id,
+                  indicator_name: value.indicator_name,
+                  action_id: value.action_id,
+                  action_name: value.action_name,
+                  collectivity_id: value.collectivity_id,
+                  collectivity_name: value.collectivity_name,
+                  indicator_situation: value.situation,
+                  indicator_year: value.year,
+                  field: field,
+                  operation: operation,
+                  new_value: newValue,
+                  previous_value: originalFieldValue,
+                  date: new Date(),
+                  user_id: req.user._id,
+                  user_name: req.user.name,
+                  user_email: req.user.email,
+                  user_role: req.user.role,
+                  user_collectivities: req.user.collectivities,
+                  sync_auto: false,
+                });
+                logs.push(log);
+              }
+            }
+            
+            await value.save();
+            
+            if (logs.length > 0) {
+              await IndicatorValueLog.insertMany(logs);
+            }
+            
+            // Update action completeness
+            if (value.action_id) {
+              try {
+                const indicatorValues = await IndicatorValue.find({ action_id: value.action_id });
+                if (indicatorValues && indicatorValues.length > 0) {
+                  const totalIndicators = indicatorValues.length;
+                  const filledIndicators = indicatorValues.filter(
+                    (iv) => iv.value !== null && iv.value !== "",
+                  ).length;
+                  const completeness = Math.round((filledIndicators / totalIndicators) * 100);
+                  
+                  const action = await Action.findById(value.action_id);
+                  if(!action) return;
+                  if(action.completeness === completeness) return;
+                  const log = new ActionLog({
+                    action_id: action._id,
+                    action_name: action.name,
+                    collectivity_id: action.collectivity_id,
+                    collectivity_name: action.collectivity_name,
+                    field: "completeness",
+                    operation: "update",
+                    new_value: completeness,
+                    previous_value: action.completeness,
+                    date: new Date(),
+                    user_id: req.user._id,
+                    user_name: req.user.name,
+                    user_email: req.user.email,
+                    user_role: req.user.role,
+                    user_collectivities: req.user.collectivities,
+                    sync_auto: false,
+                  });
+                    await ActionLog.create(log);
+                    action.set({ completeness });
+                    await action.save();
+                }
+              } catch (error) {
+                capture(error);
+              }
+            }
           } catch (error) {
             capture(error);
           }
