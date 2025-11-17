@@ -46,14 +46,5 @@ const Schema = new mongoose.Schema(
   { timestamps: true },
 );
 
-Schema.set("toObject", { virtuals: true });
-Schema.set("toJSON", { virtuals: true });
-
-Schema.virtual("patches", {
-  ref: "indicatorValuePatch",
-  localField: "_id",
-  foreignField: "ref",
-});
-
 const OBJ = mongoose.model(MODELNAME, Schema);
 module.exports = OBJ;

@@ -74,20 +74,14 @@ export default function Completion({ action }) {
 
   const fetchLastCompletenessPatch = async () => {
     try {
-      const { ok, data, code } = await api.post(`/action_patch/search`, { 
-        ref: [action._id], 
-        path: "completeness", 
+      const { ok, data, code } = await api.post(`/action_log/search`, { 
+        action_id: [action._id], 
+        field: "completeness", 
         limit: 1 
       });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
       if (data.length === 0) return;
-
-      const patch = data[0];
-      setLastPatch({
-        completeness: patch.value,
-        updatedAt: patch.date,
-        updatedBy: patch.user?.name
-      });
+      setLastPatch(data[0]);
     } catch (error) {
       toast.error("Une erreur est survenue !");
     }
@@ -123,11 +117,7 @@ export default function Completion({ action }) {
           <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 pt-4">
-          <IndicatorsList
-            allIndicators={indicators}
-            selectedIndicator={selectedIndicator}
-            onSelectIndicator={setSelectedIndicator}
-          />
+          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={setSelectedIndicator} />
         </div>
       </div>
 
@@ -151,8 +141,12 @@ export default function Completion({ action }) {
             </p>
             {lastPatch && (
               <p className="text-sm text-gray-600">
-                - Dernière mise à jour le <strong>{new Date(lastPatch.updatedAt).toLocaleDateString()}</strong>
-                {lastPatch.updatedBy && <span> par <strong>{lastPatch.updatedBy}</strong></span>}
+                - Dernière mise à jour le <strong>{new Date(lastPatch.date).toLocaleDateString()}</strong>
+                {lastPatch.sync_auto ? (
+                  <span> automatiquement</span>
+                ) : (
+                  <span> par <strong>{lastPatch.user_name || lastPatch.user_email}</strong></span>
+                )}
               </p>
             )}
           </div>
