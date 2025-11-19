@@ -61,6 +61,12 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     await indicatorValue.save();
     if (logs.length > 0) await Log.insertMany(logs);
     
+    const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id });
+    const filledIndicators = await IndicatorValue.countDocuments({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, value: { $ne: null }, value: { $ne: "" } });
+    await Action.updateOne({ _id: indicatorValue.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
+
+
+    
     if (indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id) {
       const otherIndicatorValues = await IndicatorValue.find({
         indicator_id: indicatorValue.indicator_id, 
@@ -96,6 +102,11 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
           };
           syncLogs.push(syncLog);
         }
+
+
+        const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIV.indicator_id, situation: otherIV.situation, year: otherIV.year, collectivity_id: otherIV.collectivity_id });
+        const filledIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIV.indicator_id, situation: otherIV.situation, year: otherIV.year, collectivity_id: otherIV.collectivity_id, value: { $ne: null }, value: { $ne: "" } });
+        await Action.updateOne({ _id: otherIV.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
       }
       
       await IndicatorValue.updateMany( 
