@@ -55,15 +55,9 @@ export default function Completion({ action }) {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
-      
       if (selectedIndicator && data.length > 0) {
-        const correspondingIndicator = data.find(
-          ind => ind.indicator_id === selectedIndicator.indicator_id
-        );
-        
-        if (correspondingIndicator) {
-          setSelectedIndicator(correspondingIndicator);
-        }
+        const correspondingIndicator = data.find( ind => ind.indicator_id === selectedIndicator.indicator_id);
+        if (correspondingIndicator) setSelectedIndicator(correspondingIndicator);
       }
       
       setIndicators(data);
@@ -72,13 +66,9 @@ export default function Completion({ action }) {
     }
   };
 
-  const fetchLastCompletenessPatch = async () => {
+  const fetchLastLog = async () => {
     try {
-      const { ok, data, code } = await api.post(`/action_log/search`, { 
-        action_id: [action._id], 
-        field: "completeness", 
-        limit: 1 
-      });
+      const { ok, data, code } = await api.post(`/log/search`, { action_id: action._id, model_name: "indicator_value",limit: 1 });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
       if (data.length === 0) return;
       setLastPatch(data[0]);
@@ -92,13 +82,8 @@ export default function Completion({ action }) {
   }, [action._id, activeTab]);
 
   useEffect(() => {
-    fetchLastCompletenessPatch();
+    fetchLastLog();
   }, [action._id])
-
-  const onUpdate = async () => {
-    await fetchAllIndicators()
-    await fetchLastCompletenessPatch()
-  }
 
   const displayedIndicators = getDisplayedIndicators(selectedIndicator, indicators, action._id, activeTab);
 
@@ -160,7 +145,10 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={onUpdate} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={() => {
+          fetchAllIndicators()
+          fetchLastLog()
+        }} />
       </div>
     </div>
   )
