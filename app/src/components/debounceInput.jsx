@@ -11,7 +11,7 @@ const DebounceInput = ({debounce = 400,value = "",onChange, placeholder = "", cl
     return () => clearTimeout(timeoutId);
   }, [inputValue, value, onChange, debounce]);
 
-  return <input value={inputValue} onChange={(event) => setInputValue(event.target.value)} className={`w-full input-primary ${className}`} placeholder={placeholder}
+  return <input value={inputValue} onChange={(event) => setInputValue(event.target.value)} className={`input-primary ${className}`} placeholder={placeholder}
   />;
 };
 
