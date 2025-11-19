@@ -43,6 +43,8 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         user_id: req.user._id,
         user_name: req.user.name,
         user_email: req.user.email,
+        action_id: action._id,
+        action_name: action.name,
         collectivity_id: action.collectivity_id,
         collectivity_name: action.collectivity_name,
       });
@@ -91,6 +93,10 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
       user_id: req.user._id,
       user_name: req.user.name,
       user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
     });
     
     return res.status(200).send({ ok: true, data: action });
@@ -114,6 +120,8 @@ router.delete("/:id", passport.authenticate(["admin", "user"], { session: false,
       user_id: req.user._id,
       user_name: req.user.name,
       user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
       collectivity_id: action.collectivity_id,
       collectivity_name: action.collectivity_name,
     });
