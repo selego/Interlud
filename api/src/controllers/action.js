@@ -33,12 +33,12 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
       const log = new Log({
         model_name: "action",
-        entity_id: action._id,
-        entity_name: action.name,
+        name: action.name,
         field: field,
         operation: 'update',
         new_value: newValue,
         previous_value: originalValue,
+        type_value: typeof newValue,
         date: new Date(),
         user_id: req.user._id,
         user_name: req.user.name,
@@ -86,8 +86,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
 
     await Log.create({
       model_name: "action",
-      entity_id: action._id,
-      entity_name: action.name,
+      name: action.name,
       operation: 'add',
       date: new Date(),
       user_id: req.user._id,
@@ -113,8 +112,7 @@ router.delete("/:id", passport.authenticate(["admin", "user"], { session: false,
 
     await Log.create({
       model_name: "action",
-      entity_id: action._id,
-      entity_name: action.name,
+      name: action.name,
       operation: 'delete',
       date: new Date(),
       user_id: req.user._id,
