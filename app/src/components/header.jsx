@@ -11,7 +11,7 @@ export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
   const quickAccessRef = useRef(null);
-  const { user, collectivity, setCollectivity, setUser, setActionRights } = useStore()
+  const { user, collectivity, setCollectivity, setUser, setActionRights, setIndicatorRights } = useStore()
   const [collectivities, setCollectivities] = useState([]);
   const navigate = useNavigate(); 
   const location = useLocation();
@@ -72,6 +72,7 @@ export default function Header() {
       setUser(null);
       setCollectivity(null);
       setActionRights([]);
+      setIndicatorRights([]);
       localStorage.removeItem('selectedCollectivityId');
       navigate("/auth");
     } catch (error) {

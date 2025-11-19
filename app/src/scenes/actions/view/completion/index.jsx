@@ -97,6 +97,7 @@ export default function Completion({ action }) {
             allIndicators={indicators}
             selectedIndicator={selectedIndicator}
             onSelectIndicator={setSelectedIndicator}
+            action={action}
           />
         </div>
       </div>
@@ -133,7 +134,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} action={action} />
       </div>
     </div>
   )

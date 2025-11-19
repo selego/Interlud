@@ -5,12 +5,13 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 
 export default function Dashboard({ action }) {
-  const { userActionRights, user } = useStore()
+  const { userActionRights, userIndicatorRights, user } = useStore()
   const [indicatorValues, setIndicatorValues] = useState([])
   const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, completion: 0, bySituation: { init: 0, ref: 0, prev: 0, expost: 0 } })
   const navigate = useNavigate()
 
   const isAdmin = user.role === "admin" || user.collectivities.some(c => c.id === action.collectivity_id && c.role === "admin");
+  const isActor = user.collectivities.some(c => c.id === action.collectivity_id && c.role === "actor");
   const right = userActionRights.find(right => right.action_id === action._id);
 
   const calculateStats = (data) => {
@@ -50,7 +51,9 @@ export default function Dashboard({ action }) {
     fetchData();
   }, [action]);
 
-  if (!isAdmin && !right?.can_read) {
+  const hasIndicatorAccess = isActor && userIndicatorRights.some(right => right.action_id === action._id && right.can_read);
+  
+  if (!isAdmin && !right?.can_read && !hasIndicatorAccess) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg text-gray-600">Vous n'avez pas les droits pour accéder à cette action</div>
@@ -64,7 +67,7 @@ export default function Dashboard({ action }) {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard de l'action</h1>
           <div className="flex gap-3">
-            {(isAdmin || right?.can_write) && (
+            {(isAdmin || right?.can_write || (isActor && userIndicatorRights.some(r => r.action_id === action._id && r.can_write))) && (
               <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/completion`)}>
               Compléter l'action
             </button>

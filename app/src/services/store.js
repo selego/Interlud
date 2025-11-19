@@ -8,7 +8,10 @@ const store = create(set => ({
   setCollectivity: collectivity => set(() => ({ collectivity })),
 
   userActionRights: [],
-  setActionRights: userActionRights => set(() => ({ userActionRights }))
+  setActionRights: userActionRights => set(() => ({ userActionRights })),
+
+  userIndicatorRights: [],
+  setIndicatorRights: userIndicatorRights => set(() => ({ userIndicatorRights }))
 }))
 
 export default store

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FiChevronDown, FiChevronRight } from "react-icons/fi";
 import ProgressCircle from "@/components/ProgressCircle";
 import { HiCheck } from "react-icons/hi";
+import useStore from "@/services/store";
 
 const groupIndicatorsByCategory = indicators => {
   const sortedIndicators = [...indicators].sort((a, b) => {
@@ -97,11 +98,21 @@ const findFirstIndicator = (groupedData, uncategorized) => {
   return null
 }
 
-export default function IndicatorsList({ allIndicators, selectedIndicator, onSelectIndicator }) {
+export default function IndicatorsList({ allIndicators, selectedIndicator, onSelectIndicator, action }) {
+  const { userIndicatorRights, user } = useStore();
   const [openCategories, setOpenCategories] = useState(new Set());
   const [openSubCategories, setOpenSubCategories] = useState(new Set());
 
-  const { grouped, uncategorized } = groupIndicatorsByCategory(allIndicators);
+  const isActor = user.collectivities.some(c => c.id === action?.collectivity_id && c.role === "actor");
+  
+  const filteredIndicators = isActor
+    ? allIndicators.filter(indicator => {
+        const right = userIndicatorRights.find(r => r.indicator_id === indicator.indicator_id && r.action_id === action?._id);
+        return right?.can_read !== false;
+      })
+    : allIndicators;
+
+  const { grouped, uncategorized } = groupIndicatorsByCategory(filteredIndicators);
 
   useEffect(() => {
     if (!allIndicators || allIndicators.length === 0) return;

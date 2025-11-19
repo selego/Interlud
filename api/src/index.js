@@ -39,6 +39,7 @@ app.use("/indicator_value", require("./controllers/indicator_value"));
 app.use("/indicator_category", require("./controllers/indicator_category"));
 // app.use("/excel", require("./controllers/excel"));
 app.use("/user_action_right", require("./controllers/user_action_right"));
+app.use("/user_indicator_right", require("./controllers/user_indicator_right"));
 
 setupErrorHandler(app);
 require("./services/passport")(app);

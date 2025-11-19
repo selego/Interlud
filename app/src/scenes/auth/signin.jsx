@@ -7,16 +7,17 @@ import api from "@/services/api"
 
 export default () => {
   const [values, setValues] = useState({ email: "admin@selego.co", password: "abc123$$" })
-  const { user, setUser, setCollectivity, setActionRights } = store()
+  const { user, setUser, setCollectivity, setActionRights, setIndicatorRights } = store()
   const navigate = useNavigate()
 
   const login = async () => {
     try {
-      const { ok, code,user, token, userActionRights, collectivity } = await api.post(`/user/signin`, values)
+      const { ok, code,user, token, userActionRights, userIndicatorRights, collectivity } = await api.post(`/user/signin`, values)
       if (!ok) return toast.error(code || "Une erreur est survenue");
       if (token) api.setToken(token)
       if (user) setUser(user)
       if (userActionRights) setActionRights(userActionRights)
+      if (userIndicatorRights) setIndicatorRights(userIndicatorRights)
       if (collectivity) setCollectivity(collectivity)
       localStorage.setItem('selectedCollectivityId', collectivity._id);
     } catch (error) {

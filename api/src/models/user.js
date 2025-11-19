@@ -16,7 +16,7 @@ const Schema = new mongoose.Schema(
     collectivities : [{ 
       id : String, 
       name : String, 
-      role : { type: String, enum: ["user", "admin"], default: "user" },
+      role : { type: String, enum: ["user", "admin", "actor"], default: "user" },
       status: { type: String, enum: ["pending", "approved", "rejected"]},
     }],
 
