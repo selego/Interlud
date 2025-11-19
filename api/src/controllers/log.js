@@ -34,8 +34,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
     if (req.body.model_name) { query.model_name = req.body.model_name; }
     if (req.body.action_id) { query.action_id = req.body.action_id; }
-    if (req.body.entity_id) { query.entity_id = req.body.entity_id; }
-    if (req.body.entity_name) { query.entity_name = req.body.entity_name; }
+    if (req.body.name) { query.name = req.body.name; }
     if (req.body.field) { query.field = req.body.field; }
     if (req.body.operation) { query.operation = req.body.operation; }
     if (req.body.new_value) { query.new_value = req.body.new_value; }

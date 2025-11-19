@@ -107,7 +107,7 @@ export default function History({ action }) {
                     <span className={`px-2 py-1 text-xs font-medium rounded ${getModelColor(log.model_name)}`}>
                       {getModelLabel(log.model_name)}
                     </span>
-                    <span className="font-semibold text-gray-900">{log.entity_name || "Entité inconnue"}</span>
+                    <span className="font-semibold text-gray-900">{log.name || "Entité inconnue"}</span>
                     {log.indicator_name && log.model_name === "indicator_value" && (
                       <span className="text-sm text-gray-600">({log.indicator_name})</span>
                     )}

@@ -34,12 +34,14 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
       const log = {
         model_name: "indicator",
-        entity_id: oldIndicator._id,
-        entity_name: oldIndicator.name,
+        name: oldIndicator.name,
         field: field,
         operation: 'update',
         new_value: newValue,
         previous_value: originalValue,
+        type_value: typeof newValue,
+        indicator_id: oldIndicator._id,
+        indicator_name: oldIndicator.name,
       };
       logs.push(log);
     }
@@ -87,8 +89,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
 
     await Log.create({
       model_name: "indicator",
-      entity_id: indicator._id,
-      entity_name: indicator.name,
+      name: indicator.name,
       operation: 'add',
       new_value: req.body.name,
       previous_value: null,
@@ -96,6 +97,8 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
       user_id: req.user._id,
       user_name: req.user.name,
       user_email: req.user.email,
+      indicator_id: indicator._id,
+      indicator_name: indicator.name,
     });
     
 
@@ -113,13 +116,14 @@ router.delete("/:id", passport.authenticate(["admin", "user"], { session: false,
 
     await Log.create({
       model_name: "indicator",
-      entity_id: indicator._id,
-      entity_name: indicator.name,
+      name: indicator.name,
       operation: 'delete',
       date: new Date(),
       user_id: req.user._id,
       user_name: req.user.name,
       user_email: req.user.email,  
+      indicator_id: indicator._id,
+      indicator_name: indicator.name,
     });
 
     await Indicator.deleteOne({ _id: req.params.id });

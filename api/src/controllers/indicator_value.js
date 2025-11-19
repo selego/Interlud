@@ -34,12 +34,12 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       
       const log = {
         model_name: "indicator_value",
-        entity_id: indicatorValue._id,
-        entity_name: indicatorValue.name,
+        name: indicatorValue.name,
         field: field,
         operation: 'update',
         new_value: newValue,
         previous_value: originalValue,
+        type_value: typeof newValue,
         date: new Date(),
         user_id: req.user._id,
         user_name: req.user.name,
@@ -50,6 +50,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         action_name: indicatorValue.action_name,
         indicator_id: indicatorValue.indicator_id,
         indicator_name: indicatorValue.indicator_name,
+        indicator_value_id: indicatorValue._id,
+        indicator_value_name: indicatorValue.name,
+
       };
       logs.push(log);
     }
@@ -72,12 +75,12 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         if (otherIV.value !== indicatorValue.value) { 
           const syncLog = {
             model_name: "indicator_value",
-            entity_id: otherIV._id,
-            entity_name: otherIV.name,
+            name: otherIV.name,
             field: "value",
             operation: 'update',
             new_value: indicatorValue.value,
             previous_value: otherIV.value,
+            type_value: typeof indicatorValue.value,
             date: new Date(),
             user_id: req.user._id,
             user_name: req.user.name,
@@ -88,6 +91,8 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
             action_name: otherIV.action_name,
             indicator_id: otherIV.indicator_id,
             indicator_name: otherIV.indicator_name,
+            indicator_value_id: otherIV._id,
+            indicator_value_name: otherIV.name,
           };
           syncLogs.push(syncLog);
         }
