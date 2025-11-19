@@ -67,13 +67,16 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
     if (req.body.type) { query.type = req.body.type; }
     if (req.body.collectivity_id) { query.collectivity_id = req.body.collectivity_id; }
+    if (req.body.status) { query.status = req.body.status; }
+    if (req.body.search) { query.name = { $regex: req.body.search, $options: "i" }; }
+    if (req.body.createdAt) { query.createdAt = { $gte: new Date(req.body.createdAt) }; }
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Action.countDocuments(query);
     const data = await Action.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
-    console.log(error);
+    capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
