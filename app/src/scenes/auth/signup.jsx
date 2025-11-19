@@ -8,7 +8,7 @@ import api from "@/services/api"
 export default () => {
   const [values, setValues] = useState({ name: "", email: "", password: "" })
 
-  const { user, setUser, setActionRights, setCollectivity } = store()
+  const { user, setUser, setActionRights, setCollectivity, setIndicatorRights } = store()
   const navigate = useNavigate()
 
   const send = async () => {
@@ -19,6 +19,7 @@ export default () => {
       if (user) setUser(user)
       setActionRights(null)
       setCollectivity(null)
+      setIndicatorRights(null)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }
