@@ -40,38 +40,6 @@ function validatePassword(password) {
   return schema.validate(password);
 }
 
-function getTimeframeDates(timeframe) {
-  const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-
-  const timeframes = {
-    day: () => startOfToday,
-    week: () => {
-      const date = new Date(startOfToday);
-      date.setDate(date.getDate() - 7);
-      return date;
-    },
-    month: () => {
-      const date = new Date(startOfToday);
-      date.setMonth(date.getMonth() - 1);
-      return date;
-    },
-    year: () => {
-      const date = new Date(startOfToday);
-      date.setFullYear(date.getFullYear() - 1);
-      return date;
-    },
-  };
-
-  const getStartDate = timeframes[timeframe];
-  if (!getStartDate) return { startDate: null, endDate: null };
-
-  return {
-    startDate: getStartDate(),
-    endDate: new Date(now),
-  };
-}
 
 const BREVO_TEMPLATES = {};
 
@@ -79,5 +47,4 @@ module.exports = {
   uploadToS3FromBuffer,
   validatePassword,
   BREVO_TEMPLATES,
-  getTimeframeDates,
 };
