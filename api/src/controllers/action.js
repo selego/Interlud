@@ -82,29 +82,17 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
     const action = await Action.create(req.body);
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const logs = [];
-    const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
+    await Log.create({
+      model_name: "action",
+      entity_id: action._id,
+      entity_name: action.name,
+      operation: 'add',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+    });
     
-    for (const field of fieldsToCheck) {
-      const log = {
-        model_name: "action",
-        entity_id: action._id,
-        entity_name: action.name,
-        field: field,
-        operation: 'add',
-        new_value: req.body[field],
-        previous_value: null,
-        date: new Date(),
-        user_id: req.user._id,
-        user_name: req.user.name,
-        user_email: req.user.email,
-        collectivity_id: action.collectivity_id,
-        collectivity_name: action.collectivity_name,
-      };
-      logs.push(log);
-    }
-    
-    if (logs.length > 0) await Log.insertMany(logs);
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
