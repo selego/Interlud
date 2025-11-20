@@ -15,8 +15,8 @@ const Schema = new mongoose.Schema(
     indicator_category_name: { type: String, trim: true },
     indicator_sub_category_id: { type: String, trim: true },
     indicator_sub_category_name: { type: String, trim: true },
-    action_id : { type: String, trim: true },
-    action_name : { type: String, trim: true },
+    linked_action_id : { type: String, trim: true },
+    linked_action_name : { type: String, trim: true },
   },
   { timestamps: true },
 )
