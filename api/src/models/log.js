@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const MODELNAME = "log";
 
+
 const Schema = new mongoose.Schema(
   {
     model_name: { type: String },
@@ -9,8 +10,24 @@ const Schema = new mongoose.Schema(
     
     field: { type: String },
     operation: { type: String, enum: ["add", "update", "delete"] },
-    new_value: { type: mongoose.Schema.Types.Mixed },
-    previous_value: { type: mongoose.Schema.Types.Mixed },
+    new_value: { 
+      string: { type: String, trim: true },
+      array: { type: Array, default: [] },
+      number: { type: Number, default: 0 },
+      date: { type: Date, trim: true },
+      boolean: { type: Boolean, default: false },
+    },
+
+
+    previous_value: { 
+      string: { type: String, trim: true },
+      array: { type: Array, default: [] },
+      number: { type: Number, default: 0 },
+      date: { type: Date, trim: true },
+      boolean: { type: Boolean, default: false },
+    },
+
+
     type_value: { type: String},
     date: { type: Date, default: Date.now },
 

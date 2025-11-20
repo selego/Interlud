@@ -2,13 +2,6 @@ const mongoose = require("mongoose");
 
 const MODELNAME = "indicator_value";
 
-const type = {
-  text: { type: String, trim: true },
-  number: { type: Number, trim: true },
-  radio: { type: Array, default: [] },
-  checkbox: { type: Array, default: [] },
-}
-
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
@@ -29,18 +22,19 @@ const Schema = new mongoose.Schema(
     source: { type: String, trim: true },
     comment: { type: String, trim: true },
 
-    value: {
-      init: { type: type, trim: true },
-      ref: { type: type, trim: true },
-      prev: { type: type, trim: true },
-      expost: { type: type, trim: true },
+    value: {  
+      text: { type: String, trim: true },
+      number: { type: Number, trim: true },
+      radio: { type: Array, default: [] },
+      checkbox: { type: Array, default: [] }
     },
 
-    value_default: {
-      init: { type: type, trim: true },
-      ref: { type: type, trim: true },
-      prev: { type: type, trim: true },
-      expost: { type: type, trim: true },
+
+    value_default: {   
+      text: { type: String, trim: true },
+      number: { type: Number, trim: true },
+      radio: { type: Array, default: [] },
+      checkbox: { type: Array, default: [] }
     },
   },
   { timestamps: true },

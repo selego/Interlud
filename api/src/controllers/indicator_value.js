@@ -32,14 +32,24 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       const originalValue = indicatorValue[field];
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
       
+      let actualNewValue = newValue;
+      let actualOldValue = originalValue;
+      if (field === 'value' && indicatorValue.indicator_type) {
+        actualNewValue = newValue?.[indicatorValue.indicator_type];
+        actualOldValue = originalValue?.[indicatorValue.indicator_type];
+      }
+      
+      let logType = typeof actualNewValue;
+      if (Array.isArray(actualNewValue)) logType = 'array';
+      
       const log = {
         model_name: "indicator_value",
         name: indicatorValue.name,
         field: field,
         operation: 'update',
-        new_value: newValue,
-        previous_value: originalValue,
-        type_value: typeof newValue,
+        new_value: { [logType]: actualNewValue },
+        previous_value: { [logType]: actualOldValue },
+        type_value: logType,
         date: new Date(),
         user_id: req.user._id,
         user_name: req.user.name,
@@ -78,15 +88,21 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       
       const syncLogs = [];
       for (const otherIV of otherIndicatorValues) {
-        if (otherIV.value !== indicatorValue.value) { 
+        if (JSON.stringify(otherIV.value) !== JSON.stringify(indicatorValue.value)) { 
+          const actualNewValue = indicatorValue.value?.[indicatorValue.indicator_type];
+          const actualOldValue = otherIV.value?.[indicatorValue.indicator_type];
+          
+          let logType = typeof actualNewValue;
+          if (Array.isArray(actualNewValue)) logType = 'array';
+          
           const syncLog = {
             model_name: "indicator_value",
             name: otherIV.name,
             field: "value",
             operation: 'update',
-            new_value: indicatorValue.value,
-            previous_value: otherIV.value,
-            type_value: typeof indicatorValue.value,
+            new_value: { [logType]: actualNewValue },
+            previous_value: { [logType]: actualOldValue },
+            type_value: logType,
             date: new Date(),
             user_id: req.user._id,
             user_name: req.user.name,
