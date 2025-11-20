@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const MODELNAME = "indicator";
 
+const type = {
+  text: { type: String, trim: true },
+  number: { type: Number, trim: true },
+  radio: { type: Array, default: [] },
+  checkbox: { type: Array, default: [] },
+}
+
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
@@ -9,14 +16,20 @@ const Schema = new mongoose.Schema(
     value_unit: { type: String, trim: true },
     value_type: { type: String, enum: ["number", "text", "radio", "checkbox"], trim: true },
     value_name: { type: String, trim: true },
-    default_value: { type: String, trim: true },
     value_possibilities: { type: Array, default: [] },
+    value_default: {
+      init: { type: type, trim: true },
+      ref: { type: type, trim: true },
+      prev: { type: type, trim: true },
+      expost: { type: type, trim: true },
+    },
     indicator_category_id: { type: String, trim: true },
     indicator_category_name: { type: String, trim: true },
     indicator_sub_category_id: { type: String, trim: true },
     indicator_sub_category_name: { type: String, trim: true },
-    linked_action_id : { type: String, trim: true },
-    linked_action_name : { type: String, trim: true },
+    linked_action_id: { type: String, trim: true },
+    linked_action_name: { type: String, trim: true },
+
   },
   { timestamps: true },
 )
