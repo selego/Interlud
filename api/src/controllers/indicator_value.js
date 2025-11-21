@@ -32,7 +32,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       const originalValue = indicatorValue[field];
       
       if (originalValue instanceof Date && typeof newValue === 'string') newValue = new Date(newValue);
-      
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
       
       let actualNewValue = newValue;
