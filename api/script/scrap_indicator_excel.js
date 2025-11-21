@@ -8,6 +8,7 @@ const config = require("../src/config");
 const sharePointSiteName = "selegobv";
 const fileId = "01IBL4ADO73TUHKGZ4EJCJATFUR357PVU4";
 const worksheetName = "Remplissage - Sit. Init.";
+const situation = "init";
 
 async function getWorksheetUsedRange(fileId, worksheetName) {
   try {
@@ -55,7 +56,7 @@ async function createIndicatorsFromExcel() {
     const dataRows = data.values.slice(1); // Toutes les lignes sauf la première
     
     const indicators = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 30; i < 31; i++) {
       const row = dataRows[i];
 
       if (row[4] || row[4] === "") {
@@ -102,7 +103,7 @@ async function createIndicatorsFromExcel() {
           excel_indicator_id: row[4] || undefined, // "ID de la variable"
           //value: row[5] || '', // "Valeur"
           value_possibilities: row[6] ? row[6].split(',').map(v => v.trim()).filter(v => v !== '') : undefined, // "Valeurs possibles"
-          value_default: valueDefault, // "Valeur par défaut" dans init[value_type]
+          value_default: { [situation]: { [valueType]: row[7] || undefined } }, // "Valeur par défaut" dans init[value_type]
           value_unit: row[8] || undefined, // "Unité"
           value_type: valueType, // "Type"
           linked_action_id: action?._id,
