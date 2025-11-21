@@ -44,12 +44,10 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
   }
 
   if (indicatorType === "radio") {
-    const selectedValue = Array.isArray(value) ? value[0] : value;
-    
     return (
       <div className="inline-flex rounded-full border border-secondary-green bg-secondary-green/30 w-fit">
         {options?.map((option, index) => {
-          const isSelected = selectedValue === option;
+          const isSelected = value === option;
           const isFirst = index === 0;
           const isLast = index === options.length - 1;
           
@@ -70,7 +68,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
                 type="radio"
                 value={option}
                 checked={isSelected}
-                onChange={(e) => onChange([e.target.value])}
+                onChange={(e) => onChange(e.target.value)}
                 className="sr-only"
               />
               <span className="text-sm whitespace-nowrap">{option}</span>

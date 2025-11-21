@@ -25,7 +25,7 @@ const Schema = new mongoose.Schema(
     value: {  
       text: { type: String, trim: true },
       number: { type: Number, trim: true },
-      radio: { type: Array, default: [] },
+      radio: { type: String, trim: true },
       checkbox: { type: Array, default: [] }
     },
 
@@ -33,7 +33,7 @@ const Schema = new mongoose.Schema(
     value_default: {   
       text: { type: String, trim: true },
       number: { type: Number, trim: true },
-      radio: { type: Array, default: [] },
+      radio: { type: String, trim: true },
       checkbox: { type: Array, default: [] }
     },
   },
