@@ -49,7 +49,6 @@ export default function Completion({ action }) {
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
   const [indicators, setIndicators] = useState([]);
-  const [lastLog, setLastLog] = useState(null);
 
   const fetchAllIndicators = async () => {
     try {
@@ -66,24 +65,10 @@ export default function Completion({ action }) {
     }
   };
 
-  const fetchLastLog = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/log/search`, { action_id: action._id, model_name: "indicator_value",limit: 1 });
-      if (!ok) return toast.error(code || "Erreur lors du chargement");
-      if (data.length === 0) return;
-      setLastLog(data[0]);
-    } catch (error) {
-      toast.error("Une erreur est survenue !");
-    }
-  }
 
   useEffect(() => {
     fetchAllIndicators();
   }, [action._id, activeTab]);
-
-  useEffect(() => {
-    fetchLastLog();
-  }, [action._id])
 
   const displayedIndicators = getDisplayedIndicators(selectedIndicator, indicators, action._id, activeTab);
 
@@ -124,12 +109,10 @@ export default function Completion({ action }) {
             <p className="text-sm text-gray-900">
               Complété à <strong>{action.completeness}%</strong>
             </p>
-            {lastLog && (
               <p className="text-sm text-gray-600">
-                - Dernière mise à jour le <strong>{new Date(lastLog.date).toLocaleDateString()}</strong>
-                <span> par <strong>{lastLog.user_name}</strong></span>
+                - Dernière mise à jour le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong>
+                <span> par <strong>{action.last_modif_by_name || "Inconnu"}</strong></span>
               </p>
-            )}
           </div>
         </div>
 
@@ -143,7 +126,6 @@ export default function Completion({ action }) {
 
         <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={() => {
           fetchAllIndicators()
-          fetchLastLog()
         }} />
       </div>
     </div>

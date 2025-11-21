@@ -25,9 +25,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     if (!oldIndicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const logs = [];
-    const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
     
-    for (const field of fieldsToCheck) {
+    for (const field of Object.keys(req.body)) {
+      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = oldIndicator[field];
       if (originalValue instanceof Date && typeof newValue === 'string')  newValue = new Date(newValue);

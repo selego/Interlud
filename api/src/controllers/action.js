@@ -25,10 +25,14 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     
-    const logs = [];
-    const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
-        
-    for (const field of fieldsToCheck) {
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_date = new Date();
+    await action.save();
+    
+    const logs = [];        
+    for (const field of Object.keys(req.body)) {
+      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = action[field];
       

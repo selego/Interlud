@@ -23,11 +23,19 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   try {
     const indicatorValue = await IndicatorValue.findById(req.params.id);
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const action = await Action.findById(indicatorValue.action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_date = new Date();
+    await action.save();
     
     const logs = [];
-    const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
         
-    for (const field of fieldsToCheck) {
+    for (const field of Object.keys(req.body)) {
+      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = indicatorValue[field];
       
@@ -81,19 +89,13 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
     
     if (indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id) {
-      const otherIndicatorValues = await IndicatorValue.find({
-        indicator_id: indicatorValue.indicator_id, 
-        situation: indicatorValue.situation, 
-        year: indicatorValue.year, 
-        collectivity_id: indicatorValue.collectivity_id,
-        _id: { $ne: indicatorValue._id }
-      });
+      const otherIndicatorValues = await IndicatorValue.find({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, _id: { $ne: indicatorValue._id } });
       
       const syncLogs = [];
-      for (const otherIV of otherIndicatorValues) {
-        if (JSON.stringify(otherIV.value) !== JSON.stringify(indicatorValue.value)) { 
+      for (const otherIndicatorValue of otherIndicatorValues) {
+        if (JSON.stringify(otherIndicatorValue.value) !== JSON.stringify(indicatorValue.value)) { 
           const actualNewValue = indicatorValue.value?.[indicatorValue.indicator_type];
-          const actualOldValue = otherIV.value?.[indicatorValue.indicator_type];
+          const actualOldValue = otherIndicatorValue.value?.[indicatorValue.indicator_type];
           
           let logType = typeof actualNewValue;
           if (actualNewValue instanceof Date) logType = 'date';
@@ -101,7 +103,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
           
           const syncLog = {
             model_name: "indicator_value",
-            name: otherIV.name,
+            name: otherIndicatorValue.name,
             field: "value",
             operation: 'update',
             new_value: { [logType]: actualNewValue },
@@ -111,22 +113,22 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
             user_id: req.user._id,
             user_name: req.user.name,
             user_email: req.user.email,
-            collectivity_id: otherIV.collectivity_id,
-            collectivity_name: otherIV.collectivity_name,
-            action_id: otherIV.action_id,
-            action_name: otherIV.action_name,
-            indicator_id: otherIV.indicator_id,
-            indicator_name: otherIV.indicator_name,
-            indicator_value_id: otherIV._id,
-            indicator_value_name: otherIV.name,
+            collectivity_id: otherIndicatorValue.collectivity_id,
+            collectivity_name: otherIndicatorValue.collectivity_name,
+            action_id: otherIndicatorValue.action_id,
+            action_name: otherIndicatorValue.action_name,
+            indicator_id: otherIndicatorValue.indicator_id,
+            indicator_name: otherIndicatorValue.indicator_name,
+            indicator_value_id: otherIndicatorValue._id,
+            indicator_value_name: otherIndicatorValue.name,
           };
           syncLogs.push(syncLog);
         }
 
 
-        const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIV.indicator_id, situation: otherIV.situation, year: otherIV.year, collectivity_id: otherIV.collectivity_id });
-        const filledIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIV.indicator_id, situation: otherIV.situation, year: otherIV.year, collectivity_id: otherIV.collectivity_id, value: { $ne: null }, value: { $ne: "" } });
-        await Action.updateOne({ _id: otherIV.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
+        const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIndicatorValue.indicator_id, situation: otherIndicatorValue.situation, year: otherIndicatorValue.year, collectivity_id: otherIndicatorValue.collectivity_id });
+        const filledIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIndicatorValue.indicator_id, situation: otherIndicatorValue.situation, year: otherIndicatorValue.year, collectivity_id: otherIndicatorValue.collectivity_id, value: { $ne: null }, value: { $ne: "" } });
+        await Action.updateOne({ _id: otherIndicatorValue.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
       }
       
       await IndicatorValue.updateMany( 

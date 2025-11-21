@@ -14,57 +14,10 @@ const formatDate = dateString => {
   })
 }
 
-const getModelLabel = modelName => {
-  const labels = {
-    action: "Action",
-    indicator_value: "Valeur d'indicateur",
-    indicator: "Indicateur"
-  }
-  return labels[modelName] || modelName
-}
-
-const getOperationLabel = (operation, field) => {
-  const fieldLabels = {
-    value: "Valeur",
-    indicator_type: "Type d'indicateur",
-    indicator_value_possibilities: "Possibilités",
-    name: "Nom",
-    description: "Description",
-    status: "Statut",
-    completeness: "Complétude"
-  }
-  
-  const operationLabels = {
-    add: "Ajout",
-    update: "Modification",
-    delete: "Suppression"
-  }
-  
-  const fieldLabel = fieldLabels[field] || field
-  const operationLabel = operationLabels[operation] || operation
-  
-  return `${operationLabel} - ${fieldLabel}`
-}
-
 const formatValue = value => {
   if (value === null || value === undefined || value === "") return "vide"
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value)
-    } catch {
-      return String(value)
-    }
-  }
+  if (typeof value === "object") return JSON.stringify(value)
   return String(value)
-}
-
-const getModelColor = modelName => {
-const colors = {
-    action: "bg-blue-100 text-blue-800",
-    indicator_value: "bg-green-100 text-green-800",
-    indicator: "bg-purple-100 text-purple-800"
-  }
-  return colors[modelName] || "bg-gray-100 text-gray-800"
 }
 
 export default function History({ action }) {
@@ -104,14 +57,14 @@ export default function History({ action }) {
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${getModelColor(log.model_name)}`}>
-                      {getModelLabel(log.model_name)}
+                    <span className={`px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800`}>
+                      {log.model_name}
                     </span>
                     <span className="font-semibold text-gray-900">{log.name || "Entité inconnue"}</span>
                   </div>
                   <div className="text-sm text-gray-600">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-medium text-gray-700">{getOperationLabel(log.operation, log.field)}:</span>
+                      <span className="font-medium text-gray-700">{log.operation} - {log.field}:</span>
                       {log.operation === "update" && (
                         <>
                           <span className="text-red-600 line-through">{formatValue(log.previous_value[log.type_value])}</span>
