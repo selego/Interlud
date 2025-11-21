@@ -101,4 +101,59 @@ async function updateExcelCell(fileId, worksheetName, cellAddress, value) {
   return result;
 }
 
-module.exports = { getAccessToken, getSharePointExcelFiles, readExcelCells, updateExcelCell };
+async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicatorId, value) {
+  const token = await getAccessToken();
+  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+
+  if (!siteResponse.ok) {
+    const error = await siteResponse.json();
+    throw new Error(error.error?.message || "Site SharePoint not found");
+  }
+
+  const site = await siteResponse.json();
+
+  const usedRangeResponse = await fetch(
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`,
+    {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    },
+  );
+
+  if (!usedRangeResponse.ok) {
+    const error = await usedRangeResponse.json();
+    throw new Error(error.error?.message || "Cannot read worksheet used range");
+  }
+
+  const usedRangeData = await usedRangeResponse.json();
+  const rows = usedRangeData.values || [];
+
+  let rowNumber = null;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row[4] && String(row[4]).trim() === String(excelIndicatorId).trim()) {
+      rowNumber = usedRangeData.address ? parseInt(usedRangeData.address.match(/\d+/)?.[0] || 1) + i :  i + 1;
+      break;
+    }
+  }
+  if (!rowNumber) throw new Error(`Indicator ID "${excelIndicatorId}" not found in column E`);
+
+  const updateResponse = await fetch(
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='F${rowNumber}')`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: [[value]] }),
+    },
+  );
+
+  if (!updateResponse.ok) {
+    const error = await updateResponse.json();
+    console.error("Update error:", error);
+    throw new Error(error.error?.message || "Cannot update Excel cell");
+  }
+}
+
+
+module.exports = { getAccessToken, getSharePointExcelFiles, readExcelCells, updateExcelCell, updateExcelCellByIndicatorId };
