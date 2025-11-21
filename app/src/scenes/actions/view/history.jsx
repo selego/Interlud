@@ -108,25 +108,22 @@ export default function History({ action }) {
                       {getModelLabel(log.model_name)}
                     </span>
                     <span className="font-semibold text-gray-900">{log.name || "Entité inconnue"}</span>
-                    {log.indicator_name && log.model_name === "indicator_value" && (
-                      <span className="text-sm text-gray-600">({log.indicator_name})</span>
-                    )}
                   </div>
                   <div className="text-sm text-gray-600">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-medium text-gray-700">{getOperationLabel(log.operation, log.field)}:</span>
                       {log.operation === "update" && (
                         <>
-                          <span className="text-red-600 line-through">{formatValue(log.previous_value)}</span>
+                          <span className="text-red-600 line-through">{formatValue(log.previous_value[log.type_value])}</span>
                           <span className="text-gray-400">→</span>
-                          <span className="text-green-600 font-medium">{formatValue(log.new_value)}</span>
+                          <span className="text-green-600 font-medium">{formatValue(log.new_value[log.type_value])}</span>
                         </>
                       )}
                       {log.operation === "add" && (
-                        <span className="text-green-600 font-medium">{formatValue(log.new_value)} (ajouté)</span>
+                        <span className="text-green-600 font-medium">{formatValue(log.new_value[log.type_value])} (ajouté)</span>
                       )}
                       {log.operation === "delete" && (
-                        <span className="text-red-600 font-medium">{formatValue(log.previous_value)} (supprimé)</span>
+                        <span className="text-red-600 font-medium">{formatValue(log.previous_value[log.type_value])} (supprimé)</span>
                       )}
                     </div>
                     {log.collectivity_name && (
