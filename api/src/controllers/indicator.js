@@ -28,22 +28,27 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
     
     for (const field of fieldsToCheck) {
-      const newValue = req.body[field];
+      let newValue = req.body[field];
       const originalValue = oldIndicator[field];
+      if (originalValue instanceof Date && typeof newValue === 'string')  newValue = new Date(newValue);
+      
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
 
-      const log = {
+      let logType = typeof newValue;
+      if (newValue instanceof Date) logType = 'date';
+      if (Array.isArray(newValue)) logType = 'array';
+      
+      logs.push(new Log({
         model_name: "indicator",
         name: oldIndicator.name,
         field: field,
         operation: 'update',
-        new_value: newValue,
-        previous_value: originalValue,
-        type_value: typeof newValue,
+        new_value: { [logType]: newValue },
+        previous_value: { [logType]: originalValue },
+        type_value: logType,
         indicator_id: oldIndicator._id,
         indicator_name: oldIndicator.name,
-      };
-      logs.push(log);
+      }));
     }
 
     if (logs.length > 0) await Log.insertMany(logs);
