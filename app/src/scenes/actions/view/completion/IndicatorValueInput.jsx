@@ -35,7 +35,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
       <DebounceInput
         type="number"
         value={value || ""}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        onChange={(e) => onChange(Number(e.target.value))}
         placeholder="Valeur numérique"
         debounce={800}
         className="text-gray-900 font-bold"
