@@ -28,17 +28,25 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
         
     for (const field of fieldsToCheck) {
-      const newValue = req.body[field];
+      let newValue = req.body[field];
       const originalValue = action[field];
+      
+      if (originalValue instanceof Date && typeof newValue === 'string')  newValue = new Date(newValue);
+      
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
-      const log = new Log({
+      
+      let logType = typeof newValue;
+      if (newValue instanceof Date) logType = 'date';
+      if (Array.isArray(newValue)) logType = 'array';
+      
+      logs.push(new Log({
         model_name: "action",
         name: action.name,
         field: field,
         operation: 'update',
-        new_value: newValue,
-        previous_value: originalValue,
-        type_value: typeof newValue,
+        new_value: { [logType]: newValue },
+        previous_value: { [logType]: originalValue },
+        type_value: logType,
         date: new Date(),
         user_id: req.user._id,
         user_name: req.user.name,
@@ -47,8 +55,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         action_name: action.name,
         collectivity_id: action.collectivity_id,
         collectivity_name: action.collectivity_name,
-      });
-      logs.push(log);
+      }));
     }
     
     action.set(req.body);

@@ -28,8 +28,11 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const fieldsToCheck = Object.keys(req.body).filter((field) => !["updatedAt", "__v", "createdAt", "_id"].includes(field));
         
     for (const field of fieldsToCheck) {
-      const newValue = req.body[field];
+      let newValue = req.body[field];
       const originalValue = indicatorValue[field];
+      
+      if (originalValue instanceof Date && typeof newValue === 'string') newValue = new Date(newValue);
+      
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
       
       let actualNewValue = newValue;
@@ -39,8 +42,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         actualOldValue = originalValue?.[indicatorValue.indicator_type];
       }
       
-      let logType = typeof actualNewValue;
-      if (Array.isArray(actualNewValue)) logType = 'array';
+      let logType = typeof newValue;
+      if (newValue instanceof Date) logType = 'date';
+      if (Array.isArray(newValue)) logType = 'array';
       
       const log = {
         model_name: "indicator_value",
@@ -93,6 +97,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
           const actualOldValue = otherIV.value?.[indicatorValue.indicator_type];
           
           let logType = typeof actualNewValue;
+          if (actualNewValue instanceof Date) logType = 'date';
           if (Array.isArray(actualNewValue)) logType = 'array';
           
           const syncLog = {
