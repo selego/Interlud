@@ -42,9 +42,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         actualOldValue = originalValue?.[indicatorValue.indicator_type];
       }
       
-      let logType = typeof newValue;
-      if (newValue instanceof Date) logType = 'date';
-      if (Array.isArray(newValue)) logType = 'array';
+      let logType = typeof actualNewValue;
+      if (actualNewValue instanceof Date) logType = 'date';
+      if (Array.isArray(actualNewValue)) logType = 'array';
       
       const log = {
         model_name: "indicator_value",

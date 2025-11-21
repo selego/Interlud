@@ -35,7 +35,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
       <DebounceInput
         type="number"
         value={value || ""}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
         placeholder="Valeur numérique"
         debounce={800}
         className="text-gray-900 font-bold"
@@ -44,10 +44,12 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
   }
 
   if (indicatorType === "radio") {
+    const selectedValue = Array.isArray(value) ? value[0] : value;
+    
     return (
       <div className="inline-flex rounded-full border border-secondary-green bg-secondary-green/30 w-fit">
         {options?.map((option, index) => {
-          const isSelected = value === option;
+          const isSelected = selectedValue === option;
           const isFirst = index === 0;
           const isLast = index === options.length - 1;
           
@@ -68,7 +70,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
                 type="radio"
                 value={option}
                 checked={isSelected}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => onChange([e.target.value])}
                 className="sr-only"
               />
               <span className="text-sm whitespace-nowrap">{option}</span>
@@ -80,12 +82,10 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
   }
 
   if (indicatorType === "checkbox") {
-    const selectedValues = value && typeof value === "string" ? value.split(",").filter(v => v.trim()) : [];
+    const selectedValues = Array.isArray(value) ? value : [];
 
     const handleCheckboxChange = (option, isChecked) => {
-      const newValues = isChecked
-        ? [...selectedValues, option].join(",")
-        : selectedValues.filter(v => v !== option).join(",");
+      const newValues = isChecked ? [...selectedValues, option] : selectedValues.filter(v => v !== option);
       onChange(newValues);
     };
 
