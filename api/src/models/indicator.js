@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const MODELNAME = "indicator";
 
+const type = {
+  text: { type: String, trim: true },
+  number: { type: Number, trim: true },
+  radio: { type: Array, default: [] },
+  checkbox: { type: Array, default: [] },
+}
 
 const Schema = new mongoose.Schema(
   {
