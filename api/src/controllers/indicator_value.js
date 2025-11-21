@@ -82,9 +82,14 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     await indicatorValue.save();
     if (logs.length > 0) await Log.insertMany(logs);
     
-    const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id });
-    const filledIndicators = await IndicatorValue.countDocuments({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, value: { $ne: null }, value: { $ne: "" } });
-    await Action.updateOne({ _id: indicatorValue.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
+    const totalIndicators = await IndicatorValue.countDocuments({ action_id: indicatorValue.action_id });
+    const allIndicators = await IndicatorValue.find({ action_id: indicatorValue.action_id });
+    const filledIndicators = allIndicators.filter(indicatorValue => {
+      const val = indicatorValue.value?.[indicatorValue.indicator_type];
+      if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
+      return val !== null && val !== undefined && val !== '';
+    }).length;
+    await Action.updateOne({ _id: indicatorValue.action_id }, { $set: { completeness: totalIndicators > 0 ? Math.round((filledIndicators / totalIndicators) * 100) : 0 } });
 
 
     
@@ -125,10 +130,14 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
           syncLogs.push(syncLog);
         }
 
-
-        const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIndicatorValue.indicator_id, situation: otherIndicatorValue.situation, year: otherIndicatorValue.year, collectivity_id: otherIndicatorValue.collectivity_id });
-        const filledIndicators = await IndicatorValue.countDocuments({ indicator_id: otherIndicatorValue.indicator_id, situation: otherIndicatorValue.situation, year: otherIndicatorValue.year, collectivity_id: otherIndicatorValue.collectivity_id, value: { $ne: null }, value: { $ne: "" } });
-        await Action.updateOne({ _id: otherIndicatorValue.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
+        const totalIndicatorsOther = await IndicatorValue.countDocuments({ action_id: otherIndicatorValue.action_id });
+        const allIndicatorsOther = await IndicatorValue.find({ action_id: otherIndicatorValue.action_id });
+        const filledIndicatorsOther = allIndicatorsOther.filter(indicatorValue => {
+          const val = indicatorValue.value?.[indicatorValue.indicator_type];
+          if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
+          return val !== null && val !== undefined && val !== '';
+        }).length;
+        await Action.updateOne({ _id: otherIndicatorValue.action_id }, { $set: { completeness: totalIndicatorsOther > 0 ? Math.round((filledIndicatorsOther / totalIndicatorsOther) * 100) : 0 } });
       }
       
       await IndicatorValue.updateMany( 
