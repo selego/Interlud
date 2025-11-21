@@ -6,6 +6,7 @@ const IndicatorValue = require("../models/indicator_value");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const Log = require("../models/log");
+const Indicator = require("../models/indicator");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -150,16 +151,22 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
     
     const existing = await IndicatorValue.findOne({  action_id: req.body.action_id,  indicator_id: req.body.indicator_id  });
     if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
+
+    const indicator = await Indicator.findById(req.body.indicator_id);
+    if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     
     const situations = ["init", "ref", "prev", "expost"];
-    const createdValues = [];
-    
+    const createdIndicatorValues = [];
+
     for (const situation of situations) {
-      const indicatorValue = await IndicatorValue.create({ ...req.body, situation });
-      createdValues.push(indicatorValue);
+      const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+      const indicatorValue = { ...req.body, situation, value_default: { [indicator.value_type]: defaultValue } };
+      createdIndicatorValues.push(indicatorValue);
     }
+    await IndicatorValue.insertMany(createdIndicatorValues);
+
     
-    return res.status(200).send({ ok: true, data: createdValues });
+    return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
