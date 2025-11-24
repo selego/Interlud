@@ -39,18 +39,20 @@ export default function List() {
         <thead className="bg-gray-100">
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Population</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Department</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Unité</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Catégorie</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Sous-catégorie</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {indicators.map((indicator) => (
             <tr key={indicator._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/indicator/${indicator._id}`)}>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{indicator.name}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{indicator.description}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{indicator.value_unit}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{indicator.value_type}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{indicator.indicator_category_name}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{indicator.indicator_sub_category_name}</td>
             </tr>
           ))}
         </tbody>
