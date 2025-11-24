@@ -87,20 +87,19 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     await Action.updateOne({ _id: indicatorValue.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
 
 
+    if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
+    const otherIndicatorValues = await IndicatorValue.find({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, _id: { $ne: indicatorValue._id } });
     
-    if (indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id) {
-      const otherIndicatorValues = await IndicatorValue.find({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, _id: { $ne: indicatorValue._id } });
-      
-      const syncLogs = [];
-      for (const otherIndicatorValue of otherIndicatorValues) {
-        if (JSON.stringify(otherIndicatorValue.value) !== JSON.stringify(indicatorValue.value)) { 
-          const actualNewValue = indicatorValue.value?.[indicatorValue.indicator_type];
-          const actualOldValue = otherIndicatorValue.value?.[indicatorValue.indicator_type];
-          
-          let logType = typeof actualNewValue;
-          if (actualNewValue instanceof Date) logType = 'date';
-          if (Array.isArray(actualNewValue)) logType = 'array';
-          
+    const syncLogs = [];
+    for (const otherIndicatorValue of otherIndicatorValues) {
+      if (JSON.stringify(otherIndicatorValue.value) !== JSON.stringify(indicatorValue.value)) { 
+        const actualNewValue = indicatorValue.value?.[indicatorValue.indicator_type];
+        const actualOldValue = otherIndicatorValue.value?.[indicatorValue.indicator_type];
+        
+        let logType = typeof actualNewValue;
+        if (actualNewValue instanceof Date) logType = 'date';
+        if (Array.isArray(actualNewValue)) logType = 'array';
+        
           const syncLog = {
             model_name: "indicator_value",
             name: otherIndicatorValue.name,
@@ -137,7 +136,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       );
       
       if (syncLogs.length > 0)  await Log.insertMany(syncLogs);
-    }
     
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
