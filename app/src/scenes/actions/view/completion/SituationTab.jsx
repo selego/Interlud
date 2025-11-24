@@ -38,6 +38,7 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
       }
 
       toast.success("Enregistrement automatique effectué");
+      if (onUpdate) await onUpdate();
     } catch (error) {
       toast.error("Une erreur est survenue");
       setLocalValues(displayedIndicators);

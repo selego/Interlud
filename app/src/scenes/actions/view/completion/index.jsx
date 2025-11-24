@@ -44,7 +44,7 @@ export const getDisplayedIndicators = (selectedIndicator, indicators, actionId, 
   })
 }
 
-export default function Completion({ action }) {
+export default function Completion({ action, onActionUpdate }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
@@ -124,9 +124,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={() => {
-          fetchAllIndicators()
-        }} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={onActionUpdate} />
       </div>
     </div>
   )
