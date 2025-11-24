@@ -95,7 +95,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (action.type === "reference" && !action.action_parent_id) return toast.error("Veuillez sélectionner une action référence")
         if (action.type === "custom" && !action.name.trim()) return toast.error("Veuillez entrer un nom pour l'action")
 
-        const { ok, data } = await api.post("/action", { ...action, collectivity_id: collectivity._id, collectivity_name: collectivity.name})
+        const { ok, data } = await api.post("/action/create_action_with_default_indicators", { ...action, collectivity_id: collectivity._id, collectivity_name: collectivity.name})
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {

@@ -120,6 +120,58 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   }
 });
 
+
+router.post("/create_action_with_default_indicators", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const action = await Action.create(req.body);
+    if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const indicators = await Indicator.find({ linked_action_id: action.action_parent_id });
+    const situations = ["init", "ref", "prev", "expost"];
+    const createdIndicatorValues = [];
+
+    for (const indicator of indicators) {
+      for (const situation of situations) {
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = { 
+          action_id: action._id,
+          action_name: action.name,
+          collectivity_id: action.collectivity_id,
+          collectivity_name: action.collectivity_name,
+          indicator_id: indicator._id,
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || []
+        };
+        createdIndicatorValues.push(indicatorValue);
+      }
+    }
+    await IndicatorValue.insertMany(createdIndicatorValues);
+
+    await Log.create({
+      model_name: "action",
+      name: action.name,
+      operation: 'add',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+    
+    return res.status(200).send({ ok: true, data: action });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 router.delete("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     const action = await Action.findOne({ _id: req.params.id });
@@ -164,7 +216,7 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
 
     for (const situation of situations) {
       const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
-      const indicatorValue = { ...req.body, situation, value_default: { [indicator.value_type]: defaultValue } };
+      const indicatorValue = {  ...req.body,  situation,  value_default: { [indicator.value_type]: defaultValue }, indicator_value_possibilities: indicator.value_possibilities || [] };
       createdIndicatorValues.push(indicatorValue);
     }
     await IndicatorValue.insertMany(createdIndicatorValues);

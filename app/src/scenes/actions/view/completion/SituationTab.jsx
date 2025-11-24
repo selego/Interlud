@@ -13,10 +13,18 @@ export const SITUATION_LABELS = {
 
 export default function SituationTab({ situation, displayedIndicators, selectedIndicator, onUpdate }) {
   const [localValues, setLocalValues] = useState(displayedIndicators);
+  const [isSaving, setIsSaving] = useState(false);
+  const [prevDisplayedIndicatorsKey, setPrevDisplayedIndicatorsKey] = useState('');
 
   useEffect(() => {
-    setLocalValues(displayedIndicators)
-  }, [displayedIndicators])
+    if (isSaving) return;
+    const newKey = displayedIndicators.map(v => v._id).sort().join(',');
+    
+    if (newKey !== prevDisplayedIndicatorsKey) {
+      setLocalValues(displayedIndicators);
+      setPrevDisplayedIndicatorsKey(newKey);
+    }
+  }, [displayedIndicators, isSaving, prevDisplayedIndicatorsKey])
 
   useEffect(() => {
     if (localValues.length > 0) {
@@ -28,20 +36,26 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
 
   const handleAutoSave = async (updatedValue) => {
     try {
+      setIsSaving(true);
       setLocalValues(prev => prev.map(v => v._id === updatedValue._id ? updatedValue : v));
-      const { ok, code } = await api.put(`/indicator_value/${updatedValue._id}`, updatedValue);
+      const { ok, code, data } = await api.put(`/indicator_value/${updatedValue._id}`, updatedValue);
       
       if (!ok) {
         toast.error(code || "Une erreur est survenue");
         setLocalValues(displayedIndicators);
+        setIsSaving(false);
         return;
       }
 
+      setLocalValues(prev => prev.map(v => v._id === data._id ? { ...v, ...data } : v));
+      
       toast.success("Enregistrement automatique effectué");
       if (onUpdate) await onUpdate();
+      setIsSaving(false);
     } catch (error) {
       toast.error("Une erreur est survenue");
       setLocalValues(displayedIndicators);
+      setIsSaving(false);
     }
   };
 
@@ -65,9 +79,9 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
   const handleUseDefaultValues = async () => {
     try {
       const valuesToUpdate = localValues.filter(value => {
-        if (!value.indicator_default_value) return false
+        if (!value.value_default?.[value.indicator_type]) return false
         if (Array.isArray(value.indicator_value_possibilities) && value.indicator_value_possibilities.length > 0) {
-          return value.indicator_value_possibilities.includes(value.indicator_default_value)
+          return value.indicator_value_possibilities.includes(value.value_default?.[value.indicator_type])
         }
         return true
       })
@@ -78,17 +92,19 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
         prev.map(v => {
           const toUpdate = valuesToUpdate.find(vtu => vtu._id === v._id)
           if (toUpdate) {
-            return { ...v, value: {  ...v.value,[toUpdate.indicator_type]: toUpdate.indicator_default_value }  }
+            const defaultValue = toUpdate.value_default?.[toUpdate.indicator_type]
+            return { ...v, value: {  ...v.value,[toUpdate.indicator_type]: defaultValue }  }
           }
           return v
         })
       )
 
-      const updatePromises = valuesToUpdate.map(value => 
-        api.put(`/indicator_value/${value._id}`, { 
-          value: {  ...value.value,  [value.indicator_type]: value.indicator_default_value } 
+      const updatePromises = valuesToUpdate.map(value => {
+        const defaultValue = value.value_default?.[value.indicator_type]
+        return api.put(`/indicator_value/${value._id}`, { 
+          value: {  ...value.value,  [value.indicator_type]: defaultValue } 
         })
-      )
+      })
 
       const results = await Promise.allSettled(updatePromises)
 
@@ -143,12 +159,17 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
 
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">Valeur par défaut</label>
-                {!value.indicator_default_value && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
-                {value.indicator_default_value && (
+                {!value.value_default?.[value.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
+                {value.value_default?.[value.indicator_type] && (
                   <div className="flex justify-between items-center gap-2">
-                    <p className="text-gray-600">{value.indicator_default_value}</p>
+                    <p className="text-gray-600">
+                      {Array.isArray(value.value_default[value.indicator_type]) 
+                        ? value.value_default[value.indicator_type].join(', ')
+                        : value.value_default[value.indicator_type]
+                      }
+                    </p>
                     <button
-                      onClick={() => handleValueChange(value._id, value.indicator_default_value)}
+                      onClick={() => handleValueChange(value._id, value.value_default[value.indicator_type])}
                       className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
                     >
                       Utiliser la valeur par défaut
