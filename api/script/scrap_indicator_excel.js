@@ -91,7 +91,8 @@ async function createIndicatorsFromExcel() {
         if (defaultValueRaw !== undefined && defaultValueRaw !== "") {
           if (valueType === "number") valueDefault = { init: { [valueType]: parseFloat(defaultValueRaw) || undefined } };
           if (valueType === "text") valueDefault = { init: { [valueType]: String(defaultValueRaw).trim() || undefined } };
-          if (valueType === "radio" || valueType === "checkbox") valueDefault = { init: { [valueType]: String(defaultValueRaw).split(',').map(v => v.trim()).filter(v => v !== '') || undefined } };
+          if (valueType === "radio") valueDefault = { init: { [valueType]: String(defaultValueRaw).trim() || undefined } };
+          if (valueType === "checkbox") valueDefault = { init: { [valueType]: String(defaultValueRaw).split(',').map(v => v.trim()).filter(v => v !== '') || undefined } };
         }
 
         const indicatorData = new Indicator({

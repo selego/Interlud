@@ -5,7 +5,7 @@ const MODELNAME = "indicator";
 const type = {
   text: { type: String, trim: true },
   number: { type: Number, trim: true },
-  radio: { type: Array, default: [] },
+  radio: { type: String, trim: true },
   checkbox: { type: Array, default: [] },
 }
 
