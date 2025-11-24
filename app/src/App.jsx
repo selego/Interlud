@@ -7,7 +7,7 @@ import toast from "react-hot-toast"
 import Auth from "@/scenes/auth"
 import Home from "@/scenes/home"
 import Actions from "@/scenes/actions"
-// import Test from "@/scenes/test"
+import Test from "@/scenes/test"
 import AdminAction from "@/scenes/admin/action"
 import AdminCollectivity from "@/scenes/admin/collectivity"
 import AdminIndicator from "@/scenes/admin/indicator"
@@ -40,7 +40,7 @@ export default function App() {
           <Route path="/admin/users/*" element={<AdminUsers />} />
           <Route path="/recherche" element={<div>Page de recherche</div>} />
           <Route path="/settings" element={<Settings />} />
-          {/* <Route path="/test" element={<Test />} /> */}
+          <Route path="/test" element={<Test />} />
           <Route path="/collectivity/*" element={<Collectivity />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/contact" element={<div>Contact</div>} />

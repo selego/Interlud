@@ -6,6 +6,8 @@ const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const Log = require("../models/log");
 const Action = require("../models/action");
+const Indicator = require("../models/indicator");
+const { updateExcelCellByIndicatorId } = require("../services/microsoftGraph");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -31,6 +33,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     action.last_modif_by_name = req.user.name;
     action.last_modif_date = new Date();
     await action.save();
+    const indicator = await Indicator.findById(indicatorValue.indicator_id);
+    if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    
     
     const logs = [];
         
@@ -80,6 +85,11 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     
     indicatorValue.set(req.body);
     await indicatorValue.save();
+
+    res.status(200).send({ ok: true, data: indicatorValue });
+    await updateExcelCellByIndicatorId('01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77', 'Remplissage - Sit. Init.', indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type]);
+
+
     if (logs.length > 0) await Log.insertMany(logs);
     
     const totalIndicators = await IndicatorValue.countDocuments({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id });
@@ -137,7 +147,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       
       if (syncLogs.length > 0)  await Log.insertMany(syncLogs);
     
-    return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
