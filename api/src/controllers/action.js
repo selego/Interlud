@@ -32,7 +32,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     
     const logs = [];        
     for (const field of Object.keys(req.body)) {
-      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
+      if (["updatedAt", "__v", "createdAt", "_id", "last_modif_by_name"].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = action[field];
       
