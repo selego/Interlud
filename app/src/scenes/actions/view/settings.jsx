@@ -162,14 +162,14 @@ function ActionSettingsTab({ action }) {
     related_initiatives: "",
     comment: ""
   });
-  const [referenceAction, setReferenceAction] = useState([]);
+  const [parentActions, setParentActions] = useState([]);
   const [collectivities, setCollectivities] = useState([]);
 
-  const fetchReferenceAction = async () => {
+  const fetchParentActions = async () => {
     try {
-      const { ok, data, code } = await api.post(`/action/search`, { type: "reference" });
+      const { ok, data, code } = await api.post(`/action/search`, { type: "global" });
       if (!ok) return toast.error(code || "Une erreur est survenue");
-      setReferenceAction(data);
+      setParentActions(data);
     } catch (error) {
       toast.error(error || "Une erreur est survenue");
     }
@@ -186,7 +186,7 @@ function ActionSettingsTab({ action }) {
   };
 
   useEffect(() => {
-    fetchReferenceAction();
+    fetchParentActions();
     fetchCollectivities();
   }, []);
 
@@ -290,18 +290,18 @@ function ActionSettingsTab({ action }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
+            <label className="block text-sm font-semibold mb-2">Parent Action liée</label>
             <Select
-              value={actionData.action_reference_id || ""}
+              value={actionData.action_parent_id || ""}
               onChange={(value) => {
-                const selectedAction = referenceAction.find(ref => ref._id === value);
-                setActionData({ ...actionData, action_reference_id: value, action_reference_name: selectedAction?.name });
+                const selectedAction = parentActions.find(action => action._id === value);
+                setActionData({ ...actionData, action_parent_id: value, action_parent_name: selectedAction?.name || "" });
               }}
               options={[
                 { value: "", label: "Sélectionner" },
-                ...referenceAction.map((refAction) => ({
-                  value: refAction._id,
-                  label: refAction.name
+                ...parentActions.map((parentAction) => ({
+                  value: parentAction._id,
+                  label: parentAction.name
                 }))
               ]}
             />
@@ -549,7 +549,7 @@ const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => { onClose(); setSelectedIndicatorId("")}}
+      onClose={() => { onClose(); setSelectedIndicator(null)}}
       className="max-w-lg"
     >
       <div className="p-6">
