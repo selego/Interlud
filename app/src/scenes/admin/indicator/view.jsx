@@ -18,7 +18,8 @@ export default function View() {
       indicator_category_id: "",
       indicator_category_name: "",
       indicator_sub_category_id: "",
-      indicator_sub_category_name: ""
+      indicator_sub_category_name: "",
+      linked_action_name: ""
     });
 
     const getIndicator = async () => {
@@ -247,22 +248,31 @@ function InfoTab({ indicator, setIndicator }) {
           </div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium mb-2">Sous-catégorie</label>
-          <Select
-            value={indicator.indicator_sub_category_id || ""}
-            onChange={(value) => {
-              const selectedCategory = subCategories.find(cat => cat._id === value);
-              setIndicator({ ...indicator, indicator_sub_category_id: value, indicator_sub_category_name: selectedCategory?.name });
-            }}
-            options={[
-              { value: "", label: "Sélectionner" },
-              ...subCategories.map((cat) => ({
-                value: cat._id,
-                label: cat.name
-              }))
-            ]}
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Sous-catégorie</label>
+            <Select
+              value={indicator.indicator_sub_category_id || ""}
+              onChange={(value) => {
+                const selectedCategory = subCategories.find(cat => cat._id === value);
+                setIndicator({ ...indicator, indicator_sub_category_id: value, indicator_sub_category_name: selectedCategory?.name });
+              }}
+              options={[
+                { value: "", label: "Sélectionner" },
+                ...subCategories.map((cat) => ({
+                  value: cat._id,
+                  label: cat.name
+                }))
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Action liée</label>
+            <div className="w-full input-primary bg-gray-50">
+              {indicator.linked_action_name || "Aucune action"}
+            </div>
+          </div>
         </div>
 
         <div>
