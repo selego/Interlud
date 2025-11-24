@@ -5,7 +5,7 @@ const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
-const { updateActionCompleteness } = require("../utils/actions");
+const Log = require("../models/log");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -24,21 +24,47 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const oldIndicator = await Indicator.findById(req.params.id);
     if (!oldIndicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    const logs = [];
+    
+    for (const field of Object.keys(req.body)) {
+      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
+      let newValue = req.body[field];
+      const originalValue = oldIndicator[field];
+      if (originalValue instanceof Date && typeof newValue === 'string')  newValue = new Date(newValue);
+      
+      if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
+
+      let logType = typeof newValue;
+      if (newValue instanceof Date) logType = 'date';
+      if (Array.isArray(newValue)) logType = 'array';
+      
+      logs.push(new Log({
+        model_name: "indicator",
+        name: oldIndicator.name,
+        field: field,
+        operation: 'update',
+        new_value: { [logType]: newValue },
+        previous_value: { [logType]: originalValue },
+        type_value: logType,
+        indicator_id: oldIndicator._id,
+        indicator_name: oldIndicator.name,
+      }));
+    }
+
+    if (logs.length > 0) await Log.insertMany(logs);
+
     const indicator = await Indicator.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.status(200).send({ ok: true, data: indicator });
     
     if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
-      const affectedValues = await IndicatorValue.find({ indicator_id: req.params.id });
-      await IndicatorValue.updateMany(
+      IndicatorValue.updateMany(
         { indicator_id: req.params.id }, 
         { 
           $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
         }
       ).catch(error => { capture(error)});
-      for (const value of affectedValues) {
-        await updateActionCompleteness(value.action_id, IndicatorValue);
-      }
     }
+
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -66,6 +92,21 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const indicator = await Indicator.create( req.body );
 
+    await Log.create({
+      model_name: "indicator",
+      name: indicator.name,
+      operation: 'add',
+      new_value: req.body.name,
+      previous_value: null,
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      indicator_id: indicator._id,
+      indicator_name: indicator.name,
+    });
+    
+
     return res.status(200).send({ ok: true, data: indicator });
   } catch (error) {
     capture(error);
@@ -75,8 +116,22 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
 
 router.delete("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const indicator = await Indicator.findByIdAndDelete(req.params.id);
+    const indicator = await Indicator.findOne({ _id: req.params.id });
     if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    await Log.create({
+      model_name: "indicator",
+      name: indicator.name,
+      operation: 'delete',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,  
+      indicator_id: indicator._id,
+      indicator_name: indicator.name,
+    });
+
+    await Indicator.deleteOne({ _id: req.params.id });
 
     return res.status(200).send({ ok: true });
   } catch (error) {

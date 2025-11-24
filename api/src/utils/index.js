@@ -40,6 +40,7 @@ function validatePassword(password) {
   return schema.validate(password);
 }
 
+
 const BREVO_TEMPLATES = {};
 
 module.exports = {

@@ -5,7 +5,8 @@ const Action = require("../models/action");
 const IndicatorValue = require("../models/indicator_value");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
-const { updateActionCompleteness } = require("../utils/actions");
+const Log = require("../models/log");
+const Indicator = require("../models/indicator");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -21,8 +22,50 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_date = new Date();
+    await action.save();
+    
+    const logs = [];        
+    for (const field of Object.keys(req.body)) {
+      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
+      let newValue = req.body[field];
+      const originalValue = action[field];
+      
+      if (originalValue instanceof Date && typeof newValue === 'string')  newValue = new Date(newValue);
+      
+      if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
+      
+      let logType = typeof newValue;
+      if (newValue instanceof Date) logType = 'date';
+      if (Array.isArray(newValue)) logType = 'array';
+      
+      logs.push(new Log({
+        model_name: "action",
+        name: action.name,
+        field: field,
+        operation: 'update',
+        new_value: { [logType]: newValue },
+        previous_value: { [logType]: originalValue },
+        type_value: logType,
+        date: new Date(),
+        user_id: req.user._id,
+        user_name: req.user.name,
+        user_email: req.user.email,
+        action_id: action._id,
+        action_name: action.name,
+        collectivity_id: action.collectivity_id,
+        collectivity_name: action.collectivity_name,
+      }));
+    }
+    
+    action.set(req.body);
+    await action.save();
+    if (logs.length > 0) { await Log.insertMany(logs) }
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -36,13 +79,16 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
     if (req.body.type) { query.type = req.body.type; }
     if (req.body.collectivity_id) { query.collectivity_id = req.body.collectivity_id; }
+    if (req.body.status) { query.status = req.body.status; }
+    if (req.body.search) { query.name = { $regex: req.body.search, $options: "i" }; }
+    if (req.body.createdAt) { query.createdAt = { $gte: new Date(req.body.createdAt) }; }
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Action.countDocuments(query);
     const data = await Action.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
-    console.log(error);
+    capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
@@ -50,19 +96,50 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const action = await Action.create( req.body );
+    const action = await Action.create(req.body);
+    if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    await Log.create({
+      model_name: "action",
+      name: action.name,
+      operation: 'add',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+    
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, data: { code: ERROR_CODES.SERVER_ERROR } });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
 router.delete("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const action = await Action.findByIdAndDelete(req.params.id);
+    const action = await Action.findOne({ _id: req.params.id });
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    await Log.create({
+      model_name: "action",
+      name: action.name,
+      operation: 'delete',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+
+    await Action.deleteOne({ _id: req.params.id });
 
     return res.status(200).send({ ok: true });
   } catch (error) {
@@ -78,18 +155,22 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
     
     const existing = await IndicatorValue.findOne({  action_id: req.body.action_id,  indicator_id: req.body.indicator_id  });
     if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
+
+    const indicator = await Indicator.findById(req.body.indicator_id);
+    if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     
     const situations = ["init", "ref", "prev", "expost"];
-    const createdValues = [];
-    
+    const createdIndicatorValues = [];
+
     for (const situation of situations) {
-      const indicatorValue = await IndicatorValue.create({ ...req.body, situation });
-      createdValues.push(indicatorValue);
+      const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+      const indicatorValue = { ...req.body, situation, value_default: { [indicator.value_type]: defaultValue } };
+      createdIndicatorValues.push(indicatorValue);
     }
+    await IndicatorValue.insertMany(createdIndicatorValues);
 
-    await updateActionCompleteness(req.body.action_id, IndicatorValue);
-
-    return res.status(200).send({ ok: true, data: createdValues });
+    
+    return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

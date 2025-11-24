@@ -38,16 +38,19 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
       }
 
       toast.success("Enregistrement automatique effectué");
-      await onUpdate();
     } catch (error) {
       toast.error("Une erreur est survenue");
       setLocalValues(displayedIndicators);
     }
   };
 
-  const handleValueChange = (valueId, field, newValue) => {
+  const handleValueChange = (valueId, newValue) => {
     const updatedValue = localValues.find(v => v._id === valueId);
-    handleAutoSave({ ...updatedValue, [field]: newValue });
+    const updatedValueObject = {
+      ...updatedValue.value,
+      [updatedValue.indicator_type]: newValue
+    };
+    handleAutoSave({ ...updatedValue, value: updatedValueObject });
   };
 
   if (localValues.length === 0) {
@@ -73,12 +76,17 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
       setLocalValues(prev =>
         prev.map(v => {
           const toUpdate = valuesToUpdate.find(vtu => vtu._id === v._id)
-          return toUpdate ? { ...v, value: toUpdate.indicator_default_value } : v
+          if (toUpdate) {
+            return { ...v, value: {  ...v.value,[toUpdate.indicator_type]: toUpdate.indicator_default_value }  }
+          }
+          return v
         })
       )
 
       const updatePromises = valuesToUpdate.map(value => 
-        api.put(`/indicator_value/${value._id}`, { value: value.indicator_default_value })
+        api.put(`/indicator_value/${value._id}`, { 
+          value: {  ...value.value,  [value.indicator_type]: value.indicator_default_value } 
+        })
       )
 
       const results = await Promise.allSettled(updatePromises)
@@ -124,11 +132,11 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">Valeur</label>
                 <IndicatorValueInput
-                  key={`${value._id}-${value.value || 'empty'}`}
-                  value={value.value}
+                  key={`${value._id}-${value.value?.[value.indicator_type] || 'empty'}`}
+                  value={value.value?.[value.indicator_type]}
                   indicatorType={value.indicator_type}
                   options={value.indicator_value_possibilities}
-                  onChange={newValue => handleValueChange(value._id, "value", newValue)}
+                  onChange={newValue => handleValueChange(value._id, newValue)}
                 />
               </div>
 
@@ -139,7 +147,7 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
                   <div className="flex justify-between items-center gap-2">
                     <p className="text-gray-600">{value.indicator_default_value}</p>
                     <button
-                      onClick={() => handleValueChange(value._id, "value", value.indicator_default_value)}
+                      onClick={() => handleValueChange(value._id, value.indicator_default_value)}
                       className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
                     >
                       Utiliser la valeur par défaut

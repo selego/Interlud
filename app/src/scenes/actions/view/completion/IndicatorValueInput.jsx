@@ -35,7 +35,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
       <DebounceInput
         type="number"
         value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(Number(e.target.value))}
         placeholder="Valeur numérique"
         debounce={800}
         className="text-gray-900 font-bold"
@@ -80,12 +80,10 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
   }
 
   if (indicatorType === "checkbox") {
-    const selectedValues = value && typeof value === "string" ? value.split(",").filter(v => v.trim()) : [];
+    const selectedValues = Array.isArray(value) ? value : [];
 
     const handleCheckboxChange = (option, isChecked) => {
-      const newValues = isChecked
-        ? [...selectedValues, option].join(",")
-        : selectedValues.filter(v => v !== option).join(",");
+      const newValues = isChecked ? [...selectedValues, option] : selectedValues.filter(v => v !== option);
       onChange(newValues);
     };
 

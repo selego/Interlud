@@ -7,87 +7,7 @@ import useStore from "@/services/store"
 import CollectivitySelector from "@/components/CollectivitySelector";
 import Select from "@/components/Select";
 import ProgressCircle from "@/components/ProgressCircle";
-
-const fetchData = async () => {
-  await new Promise(resolve => setTimeout(resolve, 100))
-  
-  return {
-    collectivite: "Collectivité",
-    synthese: {
-      actionsCreees: 3,
-      actionsMisesAJour: 12,
-      actionsTerminees: 6,
-    },
-    repartitionActions: {
-      terminees: 6,
-      aCompleter: 12,
-      enAttente: 39,
-    },
-    evolutionStatuts: {
-      data: [
-        { mois: "Jan 2025", terminees: 5, enAttente: 20 },
-        { mois: "Fev 2025", terminees: 8, enAttente: 25 },
-        { mois: "Mar 2025", terminees: 12, enAttente: 28 },
-        { mois: "Avr 2025", terminees: 15, enAttente: 30 },
-        { mois: "Mai 2025", terminees: 18, enAttente: 32 },
-        { mois: "Juin 2025", terminees: 22, enAttente: 33 },
-        { mois: "Juil 2025", terminees: 25, enAttente: 34 },
-        { mois: "Aout 2025", terminees: 28, enAttente: 34 },
-      ]
-    },
-    actions: [
-      {
-        id: "68f6453bbfdfb486bd415c5d",
-        nom: "Décarbonnation du fret routier",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 66,
-        statut: "À compléter",
-      },
-      {
-        id: "68f0fc288459830dcd4b3e8e",
-        nom: "Aménagement d'espace vert",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 100,
-        statut: "Terminée",
-      },
-      {
-        id: "68f0fc288459830dcd4b3e8e",
-        nom: "Décarbonnation du fret maritime...",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 100,
-        statut: "Terminée",
-      },
-      {
-        id: "68f0fc288459830dcd4b3e8e",
-        nom: "Remplacement des chauffage...",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 66,
-        statut: "En attente",
-      },
-      {
-        id: "68f0fc288459830dcd4b3e8e",
-        nom: "Rénovation des écoles et des...",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 66,
-        statut: "En attente",
-      },
-      {
-        id: 6,
-        nom: "Rénovation des écoles et des...",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 66,
-        statut: "Terminée",
-      },
-      {
-        id: 7,
-        nom: "Rénovation des écoles et des...",
-        description: "Une description à hauteur fixe qui peut tenir en une ou deux lignes puis le texte...",
-        completionPourcentage: 66,
-        statut: "En attente",
-      },
-    ],
-  }
-}
+import DebouncedInput from "@/components/debounceInput";
 
 const getStatutBadgeClass = (statut) => {
   if (statut === "completed") return "bg-primary-green/10 text-primary-green"
@@ -98,21 +18,42 @@ const getStatutBadgeClass = (statut) => {
 }
 
 export default function Home() {
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState(null)
   const [actions, setActions] = useState([])
   const navigate = useNavigate()
   const { collectivity, user, setUser } = useStore();
   const [selectedCollectivity, setSelectedCollectivity] = useState(null);
+  const [filters, setFilters] = useState({search: "", status: ""})
+  const [synthese, setSynthese] = useState( { actionsCreees: 0, actionsACompleter: 0, actionsTerminees: 0, actionsBloquees: 0 } )
+  const [evolutionStatuts, setEvolutionStatuts] = useState([])
+  const [period, setPeriod] = useState("month")
+
+  const fetchEvolutionStatuts = async () => {
+    try {
+      const { ok, data, code } = await api.post("/dashboard/evolution-statuts", { collectivity_id: collectivity._id, period: period });
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      setEvolutionStatuts(data)
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue")
+    }
+  }
+
+  const fetchSynthese = async () => {
+    try {
+      const { ok, data, code } = await api.post("/dashboard/synthese", { collectivity_id: collectivity._id, period: period });
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      setSynthese(data)
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue")
+    }
+  }
 
   const fetchActions = async () => {
     try {
-      const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id })
-      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id, ...filters })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
       setActions(data)
-      console.log(data)
     } catch (error) {
-      toast.error(error || "Une erreur est survenue")
+      toast.error(error.code || "Une erreur est survenue")
     }
   }
   const handleRequestAccess = async () => {
@@ -128,28 +69,12 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        const result = await fetchData()
-        setData(result)
-      } catch (error) {
-        console.error("Erreur lors du chargement des données:", error)
-      } finally {
-        setLoading(false)
-      }
+    if (collectivity) {
+      fetchActions()
+      fetchSynthese()
+      fetchEvolutionStatuts()
     }
-    loadData()
-    if (collectivity) fetchActions()
-  }, [collectivity])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-500">Chargement...</div>
-      </div>
-    )
-  }
+  }, [collectivity, filters, period])
 
   if (!collectivity) {
     return (
@@ -165,10 +90,8 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
-            {/* Left Column - Collectivity Selection */}
             <div className="space-y-6">
               <div className="card-shadow p-8">
                 <h3 className="text-2xl font-bold text-gray-900 mb-6">
@@ -233,7 +156,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right Column - Pending Requests */}
             <div className="space-y-6">
               <div className="card-shadow p-8">
                 <h3 className="text-2xl font-bold text-gray-900 mb-6">
@@ -290,43 +212,48 @@ export default function Home() {
   }
 
 
-  // Données pour le graphique donut
   const pieData = [
-    { name: 'Terminées', value: data?.repartitionActions.terminees || 0 },
-    { name: 'À compléter', value: data?.repartitionActions.aCompleter || 0 },
-    { name: 'En attente', value: data?.repartitionActions.enAttente || 0 },
+    { name: 'Terminées', value: synthese.actionsTerminees || 0 },
+    { name: 'À compléter', value: synthese.actionsACompleter || 0 },
+    { name: 'En attente', value: synthese.actionsBloquees || 0 },
+    { name: 'Créées', value: synthese.actionsCreees || 0 },
+    { name: 'Bloquées', value: synthese.actionsBloquees || 0 },
   ]
 
   return (
     <div className="">
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
         <div className="mb-8">
-          <h1 className="text-font-primary text-4xl">
-            Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
-          </h1>
-          <p className="text-base mt-1">Ce tableau de bord est personnel</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-font-primary text-4xl">
+                Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
+              </h1>
+              <p className="text-base mt-1">Ce tableau de bord est personnel</p>
+            </div>
+            <Select 
+              value={period}
+              onChange={(value) => setPeriod(value)}
+              options={[
+                { value: "today", label: "Aujourd'hui" },
+                { value: "week", label: "Cette semaine" },
+                { value: "month", label: "Ce mois-ci" },
+                { value: "year", label: "Cette année" }
+              ]}
+            />
+          </div>
         </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-15 gap-6 mb-12">
-        <div className="xl:col-span-3 p-6 h-[340px] card-shadow">
+        <div className="xl:col-span-3 p-6 h-[430px] card-shadow">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
-            <Select 
-              value="Ce mois-ci"
-              onChange={(value) => console.log(value)}
-              options={[
-                { value: "Ce mois-ci", label: "Mois-ci" },
-                { value: "Semaine", label: "Semaine" },
-                { value: "Jour", label: "Jour" }
-              ]}
-            />
           </div>
           
           <div className="space-y-4">
             <div className=" gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-4xl font-bold text-gray-900">{data.synthese.actionsCreees}</span>
-                <span className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-sm font-medium">=</span>
+                <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreees}</span>
               </div>
               <span className="text-lg text-font-secondary">Actions crées</span>
 
@@ -334,21 +261,27 @@ export default function Home() {
             
             <div className="gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-4xl font-bold text-gray-900">{data.synthese.actionsMisesAJour}</span>
-                <span className="w-6 h-6 bg-primary-green rounded-full flex items-center justify-center text-white text-xs font-bold">+2</span>
+                <span className="text-4xl font-bold text-gray-900">{synthese.actionsACompleter}</span>
               </div>
 
-              <span className="text-lg text-font-secondary">Actions mise à jour</span>
+              <span className="text-lg text-font-secondary">Actions à compléter</span>
 
             </div>
             
             <div className="gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-4xl font-bold text-gray-900">{data.synthese.actionsTerminees}</span>
-                <span className="w-6 h-6 bg-primary-orange rounded-full flex items-center justify-center text-white text-xs font-bold">-3</span>
+                <span className="text-4xl font-bold text-gray-900">{synthese.actionsTerminees}</span>
               </div>
 
               <span className="text-lg text-font-secondary">Actions terminées</span>
+
+            </div>
+            <div className="gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-4xl font-bold text-gray-900">{synthese.actionsBloquees}</span>
+              </div>
+
+              <span className="text-lg text-font-secondary">Actions bloquées</span>
 
             </div>
           </div>
@@ -357,39 +290,9 @@ export default function Home() {
         {/* Card Répartition des actions */}
         <div className="xl:col-span-4 p-6 h-full card-shadow">
           <h3 className="font-bold text-font-primary text-2xl mb-4">Répartition des actions</h3>
-          
-          <div className="flex gap-2 mb-6 flex-wrap">
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all bg-primary-green text-white"
-            >
-              Terminées 
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all bg-primary-orange text-white"
-            >
-              À compléter 
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all bg-primary-teal text-white"
-            >
-              En attente 
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-          </div>
 
           {/* Donut Chart */}
-          <div className="h-[260px] flex flex-col items-center justify-center relative">
+          <div className="h-[340px] flex flex-col items-center justify-center relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -404,8 +307,11 @@ export default function Home() {
                   {pieData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={
                       entry.name === 'Terminées' ? "#2DAC6A" :
-                      entry.name === 'À compléter' ? "#F59600" :
-                      "#56BDB8"
+                        entry.name === 'À compléter' ? "#F59600" :
+                        entry.name === 'En attente' ? "#56BDB8" :
+                        entry.name === 'Créées' ? "#2DAC6A" :
+                        entry.name === 'Bloquées' ? "#EE4B2B" :
+                        "#56BDB8"
                     } />
                   ))}
                 </Pie>
@@ -438,6 +344,14 @@ export default function Home() {
                 <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
                 <span>Actions en attente</span>
               </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span>Actions bloquées</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-primary-green"></div>
+                <span>Actions créées</span>
+              </div>
             </div>
           </div>
         </div>
@@ -445,15 +359,6 @@ export default function Home() {
         <div className="xl:col-span-8 p-6 h-full card-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
-            <Select 
-              value="Mois"
-              onChange={(value) => console.log(value)}
-              options={[
-                { value: "Mois", label: "Mois" },
-                { value: "Semaine", label: "Semaine" },
-                { value: "Jour", label: "Jour" }
-              ]}
-            />
           </div>
           
           <div className="flex gap-2 mb-6 flex-wrap">
@@ -481,7 +386,7 @@ export default function Home() {
 
           <div className="h-[260px] rounded-lg overflow-hidden mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.evolutionStatuts.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <LineChart data={evolutionStatuts} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 
                   dataKey="mois" 
@@ -528,6 +433,15 @@ export default function Home() {
                   dot={{ fill: "#F59600", r: 4 }}
                   activeDot={{ r: 6 }}
                 />
+                <Line 
+                  type="monotone" 
+                  dataKey="aCompleter" 
+                  stroke="#F59600" 
+                  strokeWidth={3}
+                  name="À compléter"
+                  dot={{ fill: "#F59600", r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -539,24 +453,29 @@ export default function Home() {
               <span>Actions terminées</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
+              <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
               <span>Actions en attente</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
+              <span>Actions à compléter</span>
             </div>
           </div>
         </div>
       </div> 
 
 
-      {/* Toutes les actions */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
           <h2 className="font-bold text-font-primary text-3xl">Toutes les actions</h2>
           <div className="relative">
-              <input
+              <DebouncedInput
                 type="text"
                 placeholder="Rechercher une action..."
-                value={""}
+                debounce={500}
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
                 className="pl-10 pr-4 py-2 input-primary text-sm w-96"
               />
               <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -565,18 +484,14 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white">
-              Masquer les actions terminées ✕
-            </button>
-
-
             <Select
-              value=""
-              onChange={(value) => console.log(value)}
+              value={filters.status}
+              onChange={(value) => setFilters({...filters, status: value})}
               options={[
-                { value: "Terminée", label: "Terminée" },
-                { value: "À compléter", label: "À compléter" },
-                { value: "En attente", label: "En attente" }
+                { value: "", label: "Tous" },
+                { value: "completed", label: "Terminée" },
+                { value: "in_progress", label: "À compléter" },
+                { value: "upcoming", label: "En attente" }
               ]}
             />
           </div>

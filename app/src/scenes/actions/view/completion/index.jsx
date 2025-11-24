@@ -54,16 +54,9 @@ export default function Completion({ action }) {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
-      
       if (selectedIndicator && data.length > 0) {
-        console.log(data)
-        const correspondingIndicator = data.find(
-          ind => ind.indicator_id === selectedIndicator.indicator_id
-        );
-        
-        if (correspondingIndicator) {
-          setSelectedIndicator(correspondingIndicator);
-        }
+        const correspondingIndicator = data.find( ind => ind.indicator_id === selectedIndicator.indicator_id);
+        if (correspondingIndicator) setSelectedIndicator(correspondingIndicator);
       }
       
       setIndicators(data);
@@ -71,6 +64,7 @@ export default function Completion({ action }) {
       toast.error("Une erreur est survenue");
     }
   };
+
 
   useEffect(() => {
     fetchAllIndicators();
@@ -93,11 +87,7 @@ export default function Completion({ action }) {
           <h3 className="text-lg font-semibold text-gray-900">Indicateurs</h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 pt-4">
-          <IndicatorsList
-            allIndicators={indicators}
-            selectedIndicator={selectedIndicator}
-            onSelectIndicator={setSelectedIndicator}
-          />
+          <IndicatorsList allIndicators={indicators} selectedIndicator={selectedIndicator} onSelectIndicator={setSelectedIndicator} />
         </div>
       </div>
 
@@ -119,9 +109,10 @@ export default function Completion({ action }) {
             <p className="text-sm text-gray-900">
               Complété à <strong>{action.completeness}%</strong>
             </p>
-            <p className="text-sm text-gray-600">
-              - Dernière mise à jour le <strong>{new Date(action.updatedAt).toLocaleDateString()}</strong> par <strong>User1234</strong>
-            </p>
+              <p className="text-sm text-gray-600">
+                - Dernière mise à jour le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong>
+                <span> par <strong>{action.last_modif_by_name || "Inconnu"}</strong></span>
+              </p>
           </div>
         </div>
 
@@ -133,7 +124,9 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={fetchAllIndicators} />
+        <SituationTab situation={activeTab} displayedIndicators={displayedIndicators} selectedIndicator={selectedIndicator} onUpdate={() => {
+          fetchAllIndicators()
+        }} />
       </div>
     </div>
   )
