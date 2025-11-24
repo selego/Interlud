@@ -67,16 +67,16 @@ export default function History({ action }) {
                       <span className="font-medium text-gray-700">{log.operation} - {log.field}:</span>
                       {log.operation === "update" && (
                         <>
-                          <span className="text-red-600 line-through">{formatValue(log.previous_value[log.type_value])}</span>
+                          <span className="text-red-600 line-through">{formatValue(log.previous_value?.[log.type_value])}</span>
                           <span className="text-gray-400">→</span>
-                          <span className="text-green-600 font-medium">{formatValue(log.new_value[log.type_value])}</span>
+                          <span className="text-green-600 font-medium">{formatValue(log.new_value?.[log.type_value])}</span>
                         </>
                       )}
                       {log.operation === "add" && (
-                        <span className="text-green-600 font-medium">{formatValue(log.new_value[log.type_value])} (ajouté)</span>
+                        <span className="text-green-600 font-medium">{formatValue(log.new_value?.[log.type_value])} (ajouté)</span>
                       )}
                       {log.operation === "delete" && (
-                        <span className="text-red-600 font-medium">{formatValue(log.previous_value[log.type_value])} (supprimé)</span>
+                        <span className="text-red-600 font-medium">{formatValue(log.previous_value?.[log.type_value])} (supprimé)</span>
                       )}
                     </div>
                     {log.collectivity_name && (
