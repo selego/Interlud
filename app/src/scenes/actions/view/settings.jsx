@@ -550,7 +550,7 @@ const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
     <Modal
       isOpen={isOpen}
       onClose={() => { onClose(); setSelectedIndicator(null)}}
-      className="max-w-lg"
+      className="max-w-lg min-h-[45vh]"
     >
       <div className="p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un indicateur</h2>

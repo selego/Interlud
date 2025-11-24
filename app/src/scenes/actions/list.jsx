@@ -111,7 +111,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg min-h-[45vh]">
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
