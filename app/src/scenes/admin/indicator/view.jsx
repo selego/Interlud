@@ -75,19 +75,9 @@ export default function View() {
               </button>
             </div>
 
-            {/* Tab Content */}
             <div>
-              {activeTab === "info" && (
-                <InfoTab 
-                  indicator={indicator} 
-                  setIndicator={setIndicator}
-                />
-              )}
-              {activeTab === "values" && (
-                <ValueIndicator 
-                  indicator={indicator} 
-                />
-              )}
+              {activeTab === "info" &&  <InfoTab indicator={indicator} setIndicator={setIndicator} />}
+              {activeTab === "values" && <ValueIndicator indicator={indicator} />}
             </div>
 
           </div>
@@ -315,6 +305,18 @@ function ValueIndicator({ indicator }) {
     }
   }, [indicator._id])
 
+  const formatValue = (value, indicatorType) => {
+    if (!value || !value.value || !indicatorType) return null;
+    const actualValue = value.value[indicatorType];
+    if (actualValue === null || actualValue === undefined || actualValue === "") return null;
+    
+    if (indicatorType === "checkbox" && Array.isArray(actualValue)) {
+      if (actualValue.length === 0) return null;
+      return actualValue.join(", ");
+    }
+    return actualValue;
+  };
+
   if (valueIndicators.length === 0) {
     return (
       <div className="bg-deco-background-green rounded-lg p-8 text-center border border-secondary-green">
@@ -374,50 +376,51 @@ function ValueIndicator({ indicator }) {
                   {/* Grille des situations - Plus compacte */}
                   <div className="grid grid-cols-4 gap-2">
                     {situations.map((situation) => {
-                      const value = action.situations[situation];
+                      const IndicatorValue = action.situations[situation];
+                      const displayValue = IndicatorValue ? formatValue(IndicatorValue, IndicatorValue.indicator_type) : null;
                       
                       return (
                         <div 
                           key={situation} 
                           className={`rounded-lg p-2 border ${
-                            value?.value 
+                            displayValue
                               ? 'bg-deco-background-green border-secondary-green' 
                               : 'bg-gray-50 border-gray-200'
                           }`}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className={`text-[10px] font-bold uppercase ${
-                              value?.value ? 'text-primary-green' : 'text-gray-500'
+                              displayValue ? 'text-primary-green' : 'text-gray-500'
                             }`}>
                               {situationLabels[situation]}
                             </span>
-                            {value?.year && (
+                            {IndicatorValue?.year && (
                               <span className="text-[9px] text-gray-500 bg-white px-1.5 py-0.5 rounded-full">
-                                {value.year}
+                                {IndicatorValue.year}
                               </span>
                             )}
                           </div>
                           
                           <div className={`text-lg font-bold ${
-                            value?.value ? 'text-gray-900' : 'text-gray-400'
+                            displayValue ? 'text-gray-900' : 'text-gray-400'
                           }`}>
-                            {value?.value || "—"}
-                            {value?.value && indicator.value_unit && (
+                            {displayValue || "—"}
+                            {displayValue && indicator.value_unit && indicator.value_type === "number" && (
                               <span className="text-xs font-normal text-gray-600 ml-0.5">
                                 {indicator.value_unit}
                               </span>
                             )}
                           </div>
                           
-                          {value?.source && (
-                            <div className="text-[9px] text-gray-600 mt-1 truncate" title={value.source}>
-                              📊 {value.source}
+                          {IndicatorValue?.source && (
+                            <div className="text-[9px] text-gray-600 mt-1 truncate" title={IndicatorValue.source}>
+                              📊 {IndicatorValue.source}
                             </div>
                           )}
                           
-                          {value?.comment && (
-                            <div className="text-[9px] text-gray-500 italic mt-0.5 truncate" title={value.comment}>
-                              💬 {value.comment}
+                          {IndicatorValue?.comment && (
+                            <div className="text-[9px] text-gray-500 italic mt-0.5 truncate" title={IndicatorValue.comment}>
+                              💬 {IndicatorValue.comment}
                             </div>
                           )}
                         </div>

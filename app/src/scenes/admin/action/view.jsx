@@ -8,12 +8,12 @@ import { FiArrowLeft } from "react-icons/fi"
 export default function View() {
   const {id} = useParams()
   const navigate = useNavigate()
-  const [referenceAction, setReferenceAction] = useState([])
+  const [parentActions, setParentActions] = useState([])
   const [collectivities, setCollectivities] = useState([])
   const [action, setAction] = useState({
     type: "custom",
-    action_reference_id: "",
-    action_reference_name: "",
+    action_parent_id: "",
+    action_parent_name: "",
     name: "",
     description: "",
     status: "no_status",
@@ -45,11 +45,11 @@ export default function View() {
     }
   }
 
-  const fetchReferenceAction = async () => {
+  const fetchParentActions = async () => {
     try {
-      const { ok, data, code } = await api.post(`/action/search`, {type: "reference"} );
+      const { ok, data, code } = await api.post(`/action/search`, {type: "global"} );
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setReferenceAction(data)
+      setParentActions(data)
     } catch (error) {
       toast.error(error || "Une erreur est survenue")
     }
@@ -90,7 +90,7 @@ export default function View() {
   useEffect(() => {
     getAction()
     fetchCollectivities()
-    fetchReferenceAction()
+    fetchParentActions()
   }, [id])
 
   const ActionButtons = () => (
@@ -214,18 +214,18 @@ export default function View() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2">Charte Action liée</label>
+                <label className="block text-sm font-semibold mb-2">Parent Action liée</label>
                 <Select
-                  value={action.action_reference_id || ""}
+                  value={action.action_parent_id || ""}
                   onChange={(value) => {
-                    const selectedAction = referenceAction.find(ref => ref._id === value);
-                    setAction({ ...action, action_reference_id: value, action_reference_name: selectedAction?.name });
+                    const selectedAction = parentActions.find(action => action._id === value);
+                    setAction({ ...action, action_parent_id: value, action_parent_name: selectedAction?.name || "" });
                   }}
                   options={[
                     { value: "", label: "Sélectionner" },
-                    ...referenceAction.map((refAction) => ({
-                      value: refAction._id,
-                      label: refAction.name
+                    ...parentActions.map((parentAction) => ({
+                      value: parentAction._id,
+                      label: parentAction.name
                     }))
                   ]}
                 />
