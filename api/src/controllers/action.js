@@ -124,10 +124,16 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
 router.post("/create_action_with_default_indicators", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const action = await Action.create(req.body);
+    if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const parentAction = await Action.findById(req.body.action_parent_id);
+    if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const action = await Action.create({...req.body, excel_sheet_id: parentAction.excel_sheet_id, excel_sheet_name: parentAction.excel_sheet_name, });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const indicators = await Indicator.find({ linked_action_id: action.action_parent_id });
+    const indicators = await Indicator.find({ linked_action_id: parentAction._id });
+
     const situations = ["init", "ref", "prev", "expost"];
     const createdIndicatorValues = [];
 
