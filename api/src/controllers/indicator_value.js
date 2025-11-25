@@ -60,7 +60,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       
       const log = {
         model_name: "indicator_value",
-        name: indicatorValue.name,
+        name: indicator.name,
         field: field,
         operation: 'update',
         new_value: { [logType]: actualNewValue },
