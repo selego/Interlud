@@ -56,9 +56,6 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
   return (
     <div className="space-y-1">
       {Object.entries(grouped).map(([categoryName, categoryData]) => {
-        const allCategoryIndicatorValues = [  ...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat() ];
-        const categoryCompletion = calculateCompletion(allCategoryIndicatorValues);
-
         return (
           <div key={categoryName}>
             <div
@@ -68,8 +65,8 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
               {openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               <span className="flex-1">{categoryName}</span>
               <div className="flex items-center gap-2">
-                <ProgressCircle percentage={categoryCompletion} size={20} />
-                <span className="text-xs text-gray-500">{categoryCompletion}%</span>
+                <ProgressCircle percentage={calculateCompletion([  ...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat() ])} size={20} />
+                <span className="text-xs text-gray-500">{calculateCompletion([  ...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat() ])}%</span>
               </div>
             </div>
 
@@ -93,7 +90,6 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
                 )}
 
                 {Object.entries(categoryData.subCategories).map(([subCategoryName, indicatorValues]) => {
-                  const subCategoryCompletion = calculateCompletion(indicatorValues)
 
                   return (
                     <div key={subCategoryName}>
@@ -104,8 +100,8 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
                         {openSubCategories.has(`${categoryName}-${subCategoryName}`) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                         <span className="flex-1 text-gray-700">{subCategoryName}</span>
                         <div className="flex items-center gap-2">
-                          <ProgressCircle percentage={subCategoryCompletion} size={18} />
-                          <span className="text-xs text-gray-500">{subCategoryCompletion}%</span>
+                          <ProgressCircle percentage={calculateCompletion(indicatorValues)} size={18} />
+                          <span className="text-xs text-gray-500">{calculateCompletion(indicatorValues)}%</span>
                         </div>
                       </div>
 
