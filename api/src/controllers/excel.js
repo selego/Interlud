@@ -43,12 +43,15 @@ router.post("/webhook", async (req, res) => {
     // Docs: https://learn.microsoft.com/fr-fr/graph/change-notifications-delivery-webhooks
     const validationToken = req.query.validationToken;
 
-    console.log(req.body);
-    
     if (validationToken) {
       console.log('Validation webhook reçue');
       return res.status(200).send(validationToken);
     }
+    
+    // Afficher toutes les données de la notification
+    console.log('=== WEBHOOK NOTIFICATION ===');
+    console.log(JSON.stringify(req.body, null, 2));
+    console.log('===========================');
     
     return res.status(202).send();
   } catch (error) {
