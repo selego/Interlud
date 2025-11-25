@@ -11,118 +11,25 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
 
-export default function SituationTab({ situation, displayedIndicators, selectedIndicator, onUpdate }) {
-  const [localValues, setLocalValues] = useState(displayedIndicators);
-  const [isSaving, setIsSaving] = useState(false);
-  const [prevDisplayedIndicatorsKey, setPrevDisplayedIndicatorsKey] = useState('');
+export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
 
   useEffect(() => {
-    if (isSaving) return;
-    const newKey = displayedIndicators.map(v => v._id).sort().join(',');
-    
-    if (newKey !== prevDisplayedIndicatorsKey) {
-      setLocalValues(displayedIndicators);
-      setPrevDisplayedIndicatorsKey(newKey);
-    }
-  }, [displayedIndicators, isSaving, prevDisplayedIndicatorsKey])
-
-  useEffect(() => {
-    if (localValues.length > 0) {
-      const firstValue = localValues[0];
-      const element = document.getElementById(`indicator-${firstValue._id}`);
-      if (element) element.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [localValues]);
-
-  const handleAutoSave = async (updatedValue) => {
-    try {
-      setIsSaving(true);
-      setLocalValues(prev => prev.map(v => v._id === updatedValue._id ? updatedValue : v));
-      const { ok, code, data } = await api.put(`/indicator_value/${updatedValue._id}`, updatedValue);
-      
-      if (!ok) {
-        toast.error(code || "Une erreur est survenue");
-        setLocalValues(displayedIndicators);
-        setIsSaving(false);
-        return;
+    if (selectedIndicatorValue) {
+      const element = document.getElementById(`indicator-${selectedIndicatorValue._id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+    }
+  }, [selectedIndicatorValue]);
 
-      setLocalValues(prev => prev.map(v => v._id === data._id ? { ...v, ...data } : v));
-      
-      toast.success("Enregistrement automatique effectué");
-      if (onUpdate) await onUpdate();
-      setIsSaving(false);
+  const handleSaveIndicatorValue = async (indicatorValue) => {
+    try {
+      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, indicatorValue);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Valeur enregistrée avec succès");
+      await onUpdate();
     } catch (error) {
       toast.error("Une erreur est survenue");
-      setLocalValues(displayedIndicators);
-      setIsSaving(false);
-    }
-  };
-
-  const handleValueChange = (valueId, newValue) => {
-    const updatedValue = localValues.find(v => v._id === valueId);
-    const updatedValueObject = {
-      ...updatedValue.value,
-      [updatedValue.indicator_type]: newValue
-    };
-    handleAutoSave({ ...updatedValue, value: updatedValueObject });
-  };
-
-  if (localValues.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Aucune valeur trouvée</div>
-      </div>
-    );
-  }
-
-  const handleUseDefaultValues = async () => {
-    try {
-      const valuesToUpdate = localValues.filter(value => {
-        if (!value.value_default?.[value.indicator_type]) return false
-        if (Array.isArray(value.indicator_value_possibilities) && value.indicator_value_possibilities.length > 0) {
-          return value.indicator_value_possibilities.includes(value.value_default?.[value.indicator_type])
-        }
-        return true
-      })
-
-      if (valuesToUpdate.length === 0) return toast.error("Aucune valeur par défaut disponible")
-
-      setLocalValues(prev =>
-        prev.map(v => {
-          const toUpdate = valuesToUpdate.find(vtu => vtu._id === v._id)
-          if (toUpdate) {
-            const defaultValue = toUpdate.value_default?.[toUpdate.indicator_type]
-            return { ...v, value: {  ...v.value,[toUpdate.indicator_type]: defaultValue }  }
-          }
-          return v
-        })
-      )
-
-      const updatePromises = valuesToUpdate.map(value => {
-        const defaultValue = value.value_default?.[value.indicator_type]
-        return api.put(`/indicator_value/${value._id}`, { 
-          value: {  ...value.value,  [value.indicator_type]: defaultValue } 
-        })
-      })
-
-      const results = await Promise.allSettled(updatePromises)
-
-      const successful = results.filter(r => r.status === "fulfilled" && r.value?.ok).length
-      const failed = results.filter(r => r.status === "rejected" || !r.value?.ok).length
-
-      if (failed > 0) {
-        toast.error(`${failed} mise(s) à jour ont échoué`)
-      }
-
-      if (successful > 0) {
-        toast.success(`${successful} valeur(s) par défaut appliquée(s)`)
-      }
-
-      await onUpdate()
-    } catch (error) {
-      toast.error("Une erreur est survenue lors de la mise à jour");
-      setLocalValues(displayedIndicators);
     }
   };
 
@@ -132,44 +39,47 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
         <h2 className="text-lg font-semibold text-gray-900">Situation : {SITUATION_LABELS[situation]}</h2>
         <button
           className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
-          onClick={handleUseDefaultValues}
+          onClick={ () => console.log("use default values")}
         >
           Utiliser la valeur par défaut pour tous
-        </button>
+        </button  >
       </div>
 
       <div className="space-y-3">
-        {localValues.map(value => (
-          <div key={value._id} id={`indicator-${value._id}`} className={`bg-white card-shadow ${selectedIndicator?._id === value._id ? "border-primary-green border-2" : ""}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium text-gray-900">{value.indicator_name}</h3>
-            </div>
+        {indicatorValues.map(indicatorValue => {
+          const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
+          return (
+            <div 
+              key={indicatorValue._id} 
+              id={`indicator-${indicatorValue._id}`} 
+              className={`bg-white card-shadow transition-all ${isSelected ? 'ring-2 ring-primary-green shadow-lg' : ''}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
+              </div>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">Valeur</label>
                 <IndicatorValueInput
-                  key={`${value._id}-${value.value?.[value.indicator_type] || 'empty'}`}
-                  value={value.value?.[value.indicator_type]}
-                  indicatorType={value.indicator_type}
-                  options={value.indicator_value_possibilities}
-                  onChange={newValue => handleValueChange(value._id, newValue)}
+                  key={`${indicatorValue._id}-${indicatorValue.value?.[indicatorValue.indicator_type] || 'empty'}`}
+                  value={indicatorValue.value?.[indicatorValue.indicator_type]}
+                  indicatorType={indicatorValue.indicator_type}
+                  options={indicatorValue.indicator_value_possibilities}
+                  onChange={newValue => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: newValue } })}
                 />
               </div>
 
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">Valeur par défaut</label>
-                {!value.value_default?.[value.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
-                {value.value_default?.[value.indicator_type] && (
+                  {!indicatorValue.value_default?.[indicatorValue.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
+                {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
                   <div className="flex justify-between items-center gap-2">
                     <p className="text-gray-600">
-                      {Array.isArray(value.value_default[value.indicator_type]) 
-                        ? value.value_default[value.indicator_type].join(', ')
-                        : value.value_default[value.indicator_type]
-                      }
+                      {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
                     </p>
                     <button
-                      onClick={() => handleValueChange(value._id, value.value_default[value.indicator_type])}
+                      onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] } })}
                       className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
                     >
                       Utiliser la valeur par défaut
@@ -179,7 +89,8 @@ export default function SituationTab({ situation, displayedIndicators, selectedI
               </div>
             </div>
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   )

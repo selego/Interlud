@@ -502,7 +502,6 @@ function ActionSettingsTab({ action }) {
   );
 }
 
-// Modal pour ajouter un indicateur
 const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
   const [allIndicators, setAllIndicators] = useState([]);
   const [selectedIndicator, setSelectedIndicator] = useState(null);

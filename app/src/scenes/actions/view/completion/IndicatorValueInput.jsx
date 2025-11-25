@@ -3,20 +3,6 @@ import DebounceInput from "@/components/debounceInput";
 import Select from "@/components/Select";
 
 export default function IndicatorValueInput({ value, indicatorType, options, onChange }) {
-  if((indicatorType === "text" || indicatorType === "number") && options.length !== 0) {
-    return (
-      <Select
-        value={value || ""}
-        onChange={(option) => onChange(option)}
-        options={options.map((option) => ({
-          value: option,
-          label: option,
-        }))}
-        className="text-gray-900 font-bold"
-      />
-    );
-  }
-
   if (indicatorType === "text" || indicatorType === undefined) {
     return (
       <DebounceInput
@@ -46,28 +32,21 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
   if (indicatorType === "radio") {
     return (
       <div className="inline-flex rounded-full border border-secondary-green bg-secondary-green/30 w-fit">
-        {options?.map((option, index) => {
-          const isSelected = value === option;
-          const isFirst = index === 0;
-          const isLast = index === options.length - 1;
-          
+        {options?.map((option, index) => {          
           return (
             <label
               key={index}
               className={`
                 relative flex items-center justify-center px-4 py-2 cursor-pointer transition-all
-                ${isSelected 
-                  ? "bg-primary-green text-white font-medium" 
-                  : "bg-transparent text-gray-400"
-                }
-                ${isFirst ? "rounded-l-full" : ""}
-                ${isLast ? "rounded-r-full" : ""}
+                ${value === option ? "bg-primary-green text-white font-medium"  : "bg-transparent text-gray-400"}
+                ${index === 0 ? "rounded-l-full" : ""}
+                ${index === options.length - 1 ? "rounded-r-full" : ""}
               `}
             >
               <input
                 type="radio"
                 value={option}
-                checked={isSelected}
+                checked={value === option}
                 onChange={(e) => onChange(e.target.value)}
                 className="sr-only"
               />
@@ -81,7 +60,6 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
 
   if (indicatorType === "checkbox") {
     const selectedValues = Array.isArray(value) ? value : [];
-
     const handleCheckboxChange = (option, isChecked) => {
       const newValues = isChecked ? [...selectedValues, option] : selectedValues.filter(v => v !== option);
       onChange(newValues);
