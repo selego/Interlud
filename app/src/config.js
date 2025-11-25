@@ -3,7 +3,7 @@ const environment = getEnvironment()
 let apiURL = ""
 if (environment === "development") apiURL = "http://localhost:8080"
 if (environment === "production") {
-  apiURL = "your production url"
+  apiURL = "https://interlud-api.cleverapps.io/"
 }
 
 const SENTRY_URL = "YOUR_SENTRY_URL"
