@@ -42,39 +42,15 @@ router.post("/webhook", async (req, res) => {
     // Validation initiale du webhook par Microsoft Graph
     // Docs: https://learn.microsoft.com/fr-fr/graph/change-notifications-delivery-webhooks
     const validationToken = req.query.validationToken;
+
+    console.log(req.body);
     
     if (validationToken) {
-      // Microsoft Graph envoie un validationToken lors de la création de l'abonnement
-      // Il faut répondre avec ce token en texte brut (pas JSON) et status 200
       console.log('Validation webhook reçue');
       return res.status(200).send(validationToken);
     }
     
-    // Vérification du clientState pour sécuriser les notifications
-    const notifications = req.body.value;
-    console.log('notifications', notifications);
-    if (notifications && notifications.length > 0) {
-      for (const notification of notifications) {
-        console.log('Notification reçue:', {
-          subscriptionId: notification.subscriptionId,
-          changeType: notification.changeType,
-          resource: notification.resource,
-          clientState: notification.clientState
-        });
-        
-        // Vérifier que le clientState correspond à celui défini lors de la création
-        if (notification.clientState !== "secretClientValue") {
-          console.warn('clientState invalide, notification ignorée');
-          continue;
-        }
-        
-        // TODO: Traiter la notification de changement Excel ici
-        // Par exemple: lire le fichier Excel modifié, mettre à jour la base de données, etc.
-      }
-    }
-    
-    // Répondre rapidement (< 3 secondes) pour éviter les retry de Microsoft Graph
-    res.status(202).send();
+    return res.status(202).send();
   } catch (error) {
     console.error("Error webhook:", error);
     res.status(500).send();
