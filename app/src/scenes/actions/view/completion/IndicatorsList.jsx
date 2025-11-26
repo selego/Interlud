@@ -20,9 +20,8 @@ const groupIndicatorValuesByCategory = indicatorValues => {
       if (subCategoryName) {
         if (!acc[categoryName].subCategories[subCategoryName]) acc[categoryName].subCategories[subCategoryName] = [];
         acc[categoryName].subCategories[subCategoryName].push(indicatorValue);
-      } else {
-        acc[categoryName].directIndicatorValues.push(indicatorValue);
       }
+      if (!subCategoryName) acc[categoryName].directIndicatorValues.push(indicatorValue);
       return acc;
     }, {});
 
@@ -36,6 +35,14 @@ const calculateCompletion = indicatorValues => {
     return val !== null && val !== undefined && val !== '';
   }).length;
   return Math.round((filledCount / indicatorValues.length) * 100);
+};
+
+const getAllCategoryIndicators = categoryData => {
+  const allIndicators = [...categoryData.directIndicatorValues];
+  for (const subCategoryIndicators of Object.values(categoryData.subCategories)) {
+    allIndicators.push(...subCategoryIndicators);
+  }
+  return allIndicators;
 };
 
 
@@ -65,8 +72,8 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
               {openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               <span className="flex-1">{categoryName}</span>
               <div className="flex items-center gap-2">
-                <ProgressCircle percentage={calculateCompletion([  ...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat() ])} size={20} />
-                <span className="text-xs text-gray-500">{calculateCompletion([  ...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat() ])}%</span>
+                <ProgressCircle percentage={calculateCompletion(getAllCategoryIndicators(categoryData))} size={20} />
+                <span className="text-xs text-gray-500">{calculateCompletion(getAllCategoryIndicators(categoryData))}%</span>
               </div>
             </div>
 
