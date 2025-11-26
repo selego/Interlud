@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import DebounceInput from "@/components/debounceInput";
 import Select from "@/components/Select";
 
@@ -60,6 +60,9 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
 
   if (indicatorType === "checkbox") {
     const selectedValues = Array.isArray(value) ? value : [];
+    const [showAll, setShowAll] = useState(false);
+    const visibleOptions = options && options.length > 5 && !showAll ? options.slice(0, 5) : options;
+
     const handleCheckboxChange = (option, isChecked) => {
       const newValues = isChecked ? [...selectedValues, option] : selectedValues.filter(v => v !== option);
       onChange(newValues);
@@ -67,7 +70,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
 
     return (
       <div className="space-y-2">
-        {options?.map((option, index) => (
+        {visibleOptions?.map((option, index) => (
           <label key={index} className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -80,8 +83,16 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
             <span className="text-sm text-gray-700">{option}</span>
           </label>
         ))}
+        {options && options.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="text-sm text-primary-green hover:text-primary-green/80 font-medium mt-2"
+          >
+            {showAll ? "Voir moins" : `Voir plus (${options.length - 5} autres)`}
+          </button>
+        )}
       </div>
-      
     );
   }
 

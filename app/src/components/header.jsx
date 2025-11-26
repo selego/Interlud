@@ -88,6 +88,10 @@ export default function Header() {
       text: "Gérer ma collectivité",
       linkProps: { to: "/collectivity" },
     },
+    (user.role === "admin" || user.collectivities?.find(c => c.id === collectivity?._id)?.role === "admin") && {
+      text: "Mes Actions",
+      linkProps: { to: "/actions" },
+    },
   ] : [];
 
   const quickAccessItems = user ? [
