@@ -7,7 +7,7 @@ import useStore from "@/services/store"
 export default function Dashboard({ action }) {
   const { userActionRights, user } = useStore()
   const [indicatorValues, setIndicatorValues] = useState([])
-  const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, bySituation: { init: 0, ref: 0, prev: 0, expost: 0 } })
+  const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, completeness: 0, bySituation: { init: 0, ref: 0, prev: 0, expost: 0 } })
   const navigate = useNavigate()
 
   const isAdmin = user.role === "admin" || user.collectivities.some(c => c.id === action.collectivity_id && c.role === "admin");
@@ -26,8 +26,7 @@ export default function Dashboard({ action }) {
       prev: data.filter(v => v.situation === "prev" && isIndicatorFilled(v)).length,
       expost: data.filter(v => v.situation === "expost" && isIndicatorFilled(v)).length,
     };
-    
-    return { total : data.length, filled : data.filter(isIndicatorFilled).length , empty: data.length - data.filter(isIndicatorFilled).length, bySituation };
+    return { total : data.length, filled : data.filter(isIndicatorFilled).length , empty: data.length - data.filter(isIndicatorFilled).length, completeness : Math.round((data.filter(isIndicatorFilled).length / data.length) * 100), bySituation };
   };
 
   const fetchData = async () => {
@@ -88,7 +87,7 @@ export default function Dashboard({ action }) {
 
           <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Complétion</p>
-            <p className="text-4xl font-bold text-green-600">{action.completeness || 0}%</p>
+            <p className="text-4xl font-bold text-green-600">{stats.completeness}%</p>
             <p className="text-xs text-gray-500 mt-1">{stats.filled} / {stats.total} valeurs</p>
           </div>
 
@@ -110,9 +109,9 @@ export default function Dashboard({ action }) {
           <div className="w-full bg-gray-200 rounded-full h-6">
             <div 
               className="bg-primary-green h-6 rounded-full flex items-center justify-center text-white text-sm font-medium"
-              style={{ width: `${action.completeness || 0}%` }}
+              style={{ width: `${stats.completeness}%` }}
             >
-              {action.completeness > 10 && `${action.completeness}%`}
+              {stats.completeness > 10 && `${stats.completeness}%`}
             </div>
           </div>
         </div>

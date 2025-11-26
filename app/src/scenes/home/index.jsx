@@ -47,11 +47,26 @@ export default function Home() {
     }
   }
 
+  const isIndicatorValueFilled = (indicatorValue) => {
+    if (!indicatorValue || !indicatorValue.value) return false;
+    if (indicatorValue.indicator_type === "text") return !!indicatorValue.value.text && indicatorValue.value.text.trim() !== "";
+    if (indicatorValue.indicator_type === "number") return indicatorValue.value.number !== null && indicatorValue.value.number !== undefined;
+    if (indicatorValue.indicator_type === "radio") return !!indicatorValue.value.radio && indicatorValue.value.radio.trim() !== "";
+    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(indicatorValue.value.checkbox) && indicatorValue.value.checkbox.length > 0;
+    return false;
+  };
+
   const fetchActions = async () => {
     try {
       const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id, ...filters })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setActions(data)
+      const actionsWithCompleteness = await Promise.all(data.map(async (action) => {
+        const { ok: okIndicators, data: indicatorValues } = await api.post("/indicator_value/search", { action_id: action._id });
+        if (!okIndicators || !indicatorValues || indicatorValues.length === 0) return { ...action, completeness: 0 };
+        return { ...action, completeness : Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)};
+      }));
+      
+      setActions(actionsWithCompleteness)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }

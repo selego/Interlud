@@ -36,7 +36,6 @@ const Schema = new mongoose.Schema(
     is_subsidized_by_program: { type: Boolean, default: false },
     related_initiatives: { type: String, trim: true },
     comment: { type: String, trim: true },
-    completeness: { type: Number, default: 0 },
     attached_documents: [
       {
         filename: { type: String, trim: true },

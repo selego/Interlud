@@ -238,7 +238,6 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
       if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
       return val !== null && val !== undefined && val !== '';
     }).length;
-    await Action.updateOne({ _id: req.body.action_id }, { $set: { completeness: Math.round((filledIndicators / totalIndicators) * 100) } });
     
     return res.status(200).send({ ok: true });
   } catch (error) {

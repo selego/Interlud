@@ -20,6 +20,7 @@ export default function Completion({ action }) {
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicatorValue, setSelectedIndicatorValue] = useState(null);
   const [indicatorValues, setIndicatorValues] = useState([]);
+  const [allIndicatorValues, setAllIndicatorValues] = useState([]);
 
   const fetchIndicatorsValues = async () => {
     try {
@@ -31,10 +32,32 @@ export default function Completion({ action }) {
     }
   };
 
+  const fetchAllIndicatorsValues = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id });
+      if (!ok) return toast.error(code || "Erreur lors du chargement");
+      setAllIndicatorValues(data);
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const isIndicatorValueFilled = (indicatorValue) => {
+    if (!indicatorValue || !indicatorValue.value) return false;
+    if (indicatorValue.indicator_type === "text") return !!indicatorValue.value.text && indicatorValue.value.text.trim() !== "";
+    if (indicatorValue.indicator_type === "number") return indicatorValue.value.number !== null && indicatorValue.value.number !== undefined;
+    if (indicatorValue.indicator_type === "radio") return !!indicatorValue.value.radio && indicatorValue.value.radio.trim() !== "";
+    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(indicatorValue.value.checkbox) && indicatorValue.value.checkbox.length > 0;
+    return false;
+  };
 
   useEffect(() => {
     fetchIndicatorsValues();
   }, [action._id, activeTab]);
+
+  useEffect(() => {
+    fetchAllIndicatorsValues();
+  }, [action._id]);
 
 
 
@@ -63,9 +86,9 @@ export default function Completion({ action }) {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
           <div className="flex gap-2 items-center mt-2">
-            <ProgressCircle percentage={action.completeness} size={20} />
+            <ProgressCircle percentage={ Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)} size={20} />
             <p className="text-sm text-gray-900">
-              Complété à <strong>{action.completeness}%</strong>
+              Complété à <strong>{Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)}%</strong>
             </p>
               <p className="text-sm text-gray-600">
                 - Dernière mise à jour le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong>
@@ -82,7 +105,7 @@ export default function Completion({ action }) {
           ))}
         </div>
 
-        <SituationTab situation={activeTab} indicatorValues={indicatorValues} onUpdate={fetchIndicatorsValues} selectedIndicatorValue={selectedIndicatorValue} />
+        <SituationTab situation={activeTab} indicatorValues={indicatorValues} onUpdate={() => { fetchIndicatorsValues(); fetchAllIndicatorsValues()}} selectedIndicatorValue={selectedIndicatorValue} />
       </div>
     </div>
   )

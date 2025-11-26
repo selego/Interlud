@@ -99,7 +99,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
       if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
       return val !== null && val !== undefined && val !== '';
     }).length;
-    await Action.updateOne({ _id: indicatorValue.action_id }, { $set: { completeness: totalIndicators > 0 ? Math.round((filledIndicators / totalIndicators) * 100) : 0 } });
 
 
     if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
@@ -146,7 +145,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
           if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
           return val !== null && val !== undefined && val !== '';
         }).length;
-        await Action.updateOne({ _id: otherIndicatorValue.action_id }, { $set: { completeness: totalIndicatorsOther > 0 ? Math.round((filledIndicatorsOther / totalIndicatorsOther) * 100) : 0 } });
       }
       
       await IndicatorValue.updateMany( 
