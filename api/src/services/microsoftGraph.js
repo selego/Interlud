@@ -139,12 +139,15 @@ async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicato
   }
   if (!rowNumber) throw new Error(`Indicator ID "${excelIndicatorId}" not found in column E`);
 
+  let cellValue = value;
+  if (Array.isArray(cellValue)) cellValue = cellValue.join(", ");
+
   const updateResponse = await fetch(
     `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='F${rowNumber}')`,
     {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [[value]] }),
+      body: JSON.stringify({ values: [[cellValue]] }),
     },
   );
 
