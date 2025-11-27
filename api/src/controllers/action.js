@@ -129,16 +129,17 @@ router.post("/create_action_with_default_indicators", passport.authenticate(["ad
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const action = await Action.create({...req.body, excel_sheet_id: parentAction.excel_sheet_id, excel_sheet_name: parentAction.excel_sheet_name, });
+    const action = await Action.create({...req.body, excel_worksheetname: parentAction.excel_worksheetname });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const indicators = await Indicator.find({ linked_action_id: parentAction._id });
 
-    const situations = ["init", "ref", "prev", "expost"];
+    const allSituations = ["init", "ref", "prev", "expost"];
     const createdIndicatorValues = [];
 
     for (const indicator of indicators) {
-      for (const situation of situations) {
+      const situationsForIndicator = allSituations.filter(situation => indicator.presence_in_excel?.[situation] === true );
+      for (const situation of situationsForIndicator) {
         const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
         const indicatorValue = { 
           action_id: action._id,
@@ -159,7 +160,7 @@ router.post("/create_action_with_default_indicators", passport.authenticate(["ad
         createdIndicatorValues.push(indicatorValue);
       }
     }
-    await IndicatorValue.insertMany(createdIndicatorValues);
+    if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
     await Log.create({
       model_name: "action",

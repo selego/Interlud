@@ -8,6 +8,7 @@ const Log = require("../models/log");
 const Action = require("../models/action");
 const Indicator = require("../models/indicator");
 const { updateExcelCellByIndicatorId } = require("../services/microsoftGraph");
+const Collectivity = require("../models/collectivity");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -28,6 +29,9 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
     const action = await Action.findById(indicatorValue.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const collectivity = await Collectivity.findById(action.collectivity_id);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
@@ -87,7 +91,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     await indicatorValue.save();
 
     res.status(200).send({ ok: true, data: indicatorValue });
-    await updateExcelCellByIndicatorId('01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77', 'Remplissage - Sit. Init.', indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type]);
+    await updateExcelCellByIndicatorId(collectivity.excelFileId, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation);
 
 
     if (logs.length > 0) await Log.insertMany(logs);

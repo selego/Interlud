@@ -52,7 +52,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
     const collectivity = await Collectivity.create( req.body );
 
     try {
-      collectivity.excelFileId = await duplicateExcelFile("01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77", `${collectivity.name}.xlsx`);
+      collectivity.excelFileId = await duplicateExcelFile(`${collectivity.name}.xlsx`);
       await collectivity.save();
     } catch (excelError) {
       console.error("Error duplicating Excel file:", excelError);

@@ -2,6 +2,14 @@ const tenantId = "efa89c5e-5599-439d-8f01-b4da9ded0a55";
 const clientId = "f2924bbc-a975-49fe-a2ca-df4ff711be14";
 const clientSecret = "9aG8Q~chbn5ywMYUtx6zd3Z8zUelSoQjsHuiTdq9";
 const sharePointSiteName = "selegobv";
+const masterExcelFileId = "01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77";
+
+  const worksheetsToProcess = [
+    { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
+    { worksheetName: "Remplissage - Sit. Ref.", situation: "ref" },
+    { worksheetName: "Remplissage - Sit. Prev.", situation: "prev" },
+    { worksheetName: "Remplissage - Sit. Expost", situation: "expost" },
+  ];
 
 async function getAccessToken() {
   const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
@@ -101,7 +109,11 @@ async function updateExcelCell(fileId, worksheetName, cellAddress, value) {
   return result;
 }
 
-async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicatorId, value) {
+async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation) {
+  
+  const worksheetToProcess = worksheetsToProcess.find(ws => ws.situation === situation);
+  if (!worksheetToProcess) throw new Error(`No worksheet found for situation: ${situation}`);
+
   const token = await getAccessToken();
   const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -115,7 +127,7 @@ async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicato
   const site = await siteResponse.json();
 
   const usedRangeResponse = await fetch(
-    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`,
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetToProcess.worksheetName}/usedRange`,
     {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     },
@@ -143,7 +155,7 @@ async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicato
   if (Array.isArray(cellValue)) cellValue = cellValue.join(", ");
 
   const updateResponse = await fetch(
-    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='F${rowNumber}')`,
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetToProcess.worksheetName}/range(address='F${rowNumber}')`,
     {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -158,7 +170,7 @@ async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicato
   }
 }
 
-async function duplicateExcelFile(sourceFileId, newFileName) {
+async function duplicateExcelFile(newFileName) {
   const token = await getAccessToken();
   
   const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
@@ -170,7 +182,7 @@ async function duplicateExcelFile(sourceFileId, newFileName) {
 
   const site = await siteResponse.json();
 
-  const sourceFileResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${sourceFileId}`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
+  const sourceFileResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${masterExcelFileId}`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
 
   if (!sourceFileResponse.ok) {
     const error = await sourceFileResponse.json();
@@ -181,7 +193,7 @@ async function duplicateExcelFile(sourceFileId, newFileName) {
   const sourceFile = await sourceFileResponse.json();
   const parentReference = sourceFile.parentReference;
 
-  const copyResponse = await fetch( `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${sourceFileId}/copy`,
+  const copyResponse = await fetch( `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${masterExcelFileId}/copy`,
     {
       method: "POST",
       headers: { 
