@@ -17,6 +17,7 @@ export default function Header() {
   const location = useLocation();
 
   const fetchCollectivities = async () => {
+    if (!user) return;
     try {
       const { ok, data, code } = await api.post("/collectivity/search");
       if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités");
@@ -28,7 +29,7 @@ export default function Header() {
   
   useEffect(() => {
     fetchCollectivities();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     function handleClickOutside(event) {
