@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft } from "react-icons/fi"
+import { FiArrowLeft } from "react-icons/fi";
 
 export default function View() {
     const {id} = useParams()
@@ -49,23 +49,33 @@ export default function View() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <button
-          onClick={() => navigate("/admin/collectivity")}
-          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
-        >
-          <FiArrowLeft size={16} />
-          Retour à la liste des collectivités
-        </button>
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <button
+            onClick={() => navigate("/admin/collectivity")}
+            className="hover:text-primary-green transition-colors"
+          >
+            Collectivités
+          </button>
+          <span>/</span>
+          <span className="text-gray-900 font-medium truncate max-w-[150px]">
+            {collectivity.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+            aria-label="Revenir à la page précédente"
+          >
+            <FiArrowLeft size={18} />
+          </button>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            {collectivity.name || "Détails de la collectivité"}
+          </h1>
+        </div>
       </div>
       
       <div className="card-shadow">
-        {/* En-tête + boutons (haut) */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de la collectivité</h1>
-            <p className="text-gray-500 mt-1">Gère les informations de la collectivité.</p>
-          </div>
-        </div>
 
         {/* Informations générales */}
         <div className="pt-6 mt-6 border-t border-light-border">

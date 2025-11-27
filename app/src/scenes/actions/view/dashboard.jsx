@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
+import { FiArrowLeft } from "react-icons/fi"
 
 export default function Dashboard({ action }) {
   const { userActionRights, user } = useStore()
@@ -62,19 +63,42 @@ export default function Dashboard({ action }) {
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard de l'action</h1>
-          <div className="flex gap-3">
-            {(isAdmin || right?.can_write) && (
-              <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/completion`)}>
-              Compléter l'action
+        <div className="mb-8">
+          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+            <button 
+              onClick={() => navigate('/actions')} 
+              className="hover:text-primary-green transition-colors"
+            >
+              Actions
             </button>
-            )}
-            {isAdmin && (
-              <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/settings`)}>
-              Gérer l'action
-            </button>
-            )}
+            <span>/</span>
+            <span className="text-gray-900 font-medium truncate max-w-[150px]">{action.name}</span>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+                aria-label="Revenir à la page précédente"
+              >
+                <FiArrowLeft size={18} />
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {action.name}
+              </h1>
+            </div>
+            <div className="flex gap-3 shrink-0">
+              {(isAdmin || right?.can_write) && (
+                <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/completion`)}>
+                Compléter l'action
+              </button>
+              )}
+              {isAdmin && (
+                <button className="button-primary" onClick={() => navigate(`/actions/${action._id}/settings`)}>
+                Gérer l'action
+              </button>
+              )}
+            </div>
           </div>
         </div>
 

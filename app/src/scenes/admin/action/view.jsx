@@ -111,17 +111,34 @@ export default function View() {
   )
 
   return (
-        <div className="w-full max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-6">
+    <div className="w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
           <button
             onClick={() => navigate("/admin/action")}
-            className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
+            className="hover:text-primary-green transition-colors"
           >
-            <FiArrowLeft size={16} />
-            Retour à la liste des actions
+            Actions
           </button>
+          <span>/</span>
+          <span className="text-gray-900 font-medium truncate max-w-[150px]">
+            {action.name}
+          </span>
         </div>
-        <div className="card-shadow">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+            aria-label="Revenir à la page précédente"
+          >
+            <FiArrowLeft size={18} />
+          </button>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            {action.name}
+          </h1>
+        </div>
+      </div>
+      <div className="card-shadow">
           {/* En-tête + boutons (haut) */}
           <div className="flex items-start justify-between gap-4">
             <div>

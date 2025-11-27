@@ -4,6 +4,7 @@ const passport = require("passport");
 const Collectivity = require("../models/collectivity");
 const ERROR_CODES = require("../utils/errorCodes");
 const { capture } = require("../services/sentry");
+const { duplicateExcelFile } = require("../services/microsoftGraph");
 
 router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -49,6 +50,14 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const collectivity = await Collectivity.create( req.body );
+
+    try {
+      collectivity.excelFileId = await duplicateExcelFile("01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77", `${collectivity.name}.xlsx`);
+      await collectivity.save();
+    } catch (excelError) {
+      console.error("Error duplicating Excel file:", excelError);
+      capture(excelError);
+    }
 
     return res.status(200).send({ ok: true, data: collectivity });
   } catch (error) {
