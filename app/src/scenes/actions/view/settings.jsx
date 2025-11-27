@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
-import { FiList, FiSettings, FiArrowLeft, FiClock } from "react-icons/fi";
+import { FiList, FiSettings, FiClock, FiArrowLeft } from "react-icons/fi";
 import Select from "@/components/Select";
 import History from "./history";
 
@@ -12,15 +12,37 @@ export default function Settings({ action }) {
   const [activeTab, setActiveTab] = useState("indicators");
 
   return (
-    <div className="p-8">
+    <div className="min-h-screen p-8">
+    <div className="max-w-7xl mx-auto">
       <div className="mb-6">
-        <button
-          onClick={() => navigate(`/actions/${action._id}/dashboard`)}
-          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
-        >
-          <FiArrowLeft size={16} />
-          Retour au dashboard
-        </button>
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+          <button 
+            onClick={() => navigate('/actions')} 
+            className="hover:text-primary-green transition-colors"
+          >
+            Actions
+          </button>
+          <span>/</span>
+          <button 
+            onClick={() => navigate(`/actions/${action._id}/dashboard`)} 
+            className="hover:text-primary-green transition-colors truncate max-w-[150px]"
+          >
+            {action.name}
+          </button>
+          <span>/</span>
+          <span className="text-gray-900 font-medium">Paramètres</span>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+            aria-label="Revenir à la page précédente"
+          >
+            <FiArrowLeft size={18} />
+          </button>
+          <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
+        </div>
       </div>
 
       <div className="flex mb-6">
@@ -57,6 +79,7 @@ export default function Settings({ action }) {
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
       {activeTab === "settings" && <ActionSettingsTab action={action} />}
       {activeTab === "history" && <History action={action} />}
+    </div>
     </div>
   )
 }

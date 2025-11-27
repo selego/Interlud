@@ -34,27 +34,27 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
   };
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="card-shadow p-6">
+      <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Situation : {SITUATION_LABELS[situation]}</h2>
         <button
           className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
-          onClick={ () => console.log("use default values")}
+          onClick={() => console.log("use default values")}
         >
           Utiliser la valeur par défaut pour tous
-        </button  >
+        </button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {indicatorValues.map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           return (
             <div 
               key={indicatorValue._id} 
               id={`indicator-${indicatorValue._id}`} 
-              className={`bg-white card-shadow transition-all ${isSelected ? 'ring-2 ring-primary-green shadow-lg' : ''}`}
+              className={`bg-white p-4 rounded-lg border border-gray-200 transition-all ${isSelected ? 'ring-2 ring-primary-green shadow-lg border-primary-green' : ''}`}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
               </div>
 

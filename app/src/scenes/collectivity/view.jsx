@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft } from "react-icons/fi";
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX } from "react-icons/fi";
 import useStore from "@/services/store";
 
 import Modal from "@/components/modal";
@@ -36,13 +36,21 @@ export default function View() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <button
-          onClick={() => navigate("/collectivity")}
-          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
-        >
-          <FiArrowLeft size={16} />
-          Retour à la liste des utilisateurs
-        </button>
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <button
+            onClick={() => navigate("/collectivity")}
+            className="hover:text-primary-green transition-colors"
+          >
+            Utilisateurs
+          </button>
+          <span>/</span>
+          <span className="text-gray-900 font-medium truncate max-w-[150px]">
+            {user.name}
+          </span>
+        </div>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          {user.name || "Détails de l'utilisateur"}
+        </h1>
       </div>
 
       <div className="flex border-b border-gray-200 mb-6">

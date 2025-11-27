@@ -37,13 +37,30 @@ export default function View() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <button
-          onClick={() => navigate("/admin/users")}
-          className="flex items-center gap-2 text-gray-600 hover:text-primary-green transition-colors text-sm font-medium"
-        >
-          <FiArrowLeft size={16} />
-          Retour à la liste des utilisateurs
-        </button>
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <button
+            onClick={() => navigate("/admin/users")}
+            className="hover:text-primary-green transition-colors"
+          >
+            Utilisateurs
+          </button>
+          <span>/</span>
+          <span className="text-gray-900 font-medium truncate max-w-[150px]">
+            {user.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+            aria-label="Revenir à la page précédente"
+          >
+            <FiArrowLeft size={18} />
+          </button>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            {user.name || "Détails de l'utilisateur"}
+          </h1>
+        </div>
       </div>
 
       <div className="flex border-b border-gray-200 mb-6">
