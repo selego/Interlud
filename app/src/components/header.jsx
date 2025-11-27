@@ -175,7 +175,7 @@ export default function Header() {
             <div className="fr-header__tools">
               <div className="fr-header__tools-links">
                 <ul className="fr-btns-group">
-                  {quickAccessItems.map((item, index) => (
+                  {quickAccessItems.filter(Boolean).map((item, index) => (
                     <li key={index} className="relative" ref={index === openQuickAccessDropdown ? quickAccessRef : null}>
                       {item.menuItems ? (
                         <>
@@ -245,10 +245,10 @@ export default function Header() {
       <div className="fr-header__menu">
         <div className="fr-container">
           <div className="flex items-center justify-between">
-            {navigation.length > 0 && (
+            {navigation.filter(Boolean).length > 0 && (
               <nav className="fr-nav" role="navigation" aria-label="Menu principal">
                 <ul className="fr-nav__list">
-                  {navigation.map((item, index) => {
+                  {navigation.filter(Boolean).map((item, index) => {
                     const isActive = item.menuLinks 
                       ? item.menuLinks?.some(subItem => subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + '/')))
                       : item.linkProps?.to && (location.pathname === item.linkProps.to || location.pathname.startsWith(item.linkProps.to + '/'));
