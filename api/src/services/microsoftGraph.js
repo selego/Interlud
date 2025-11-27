@@ -212,13 +212,13 @@ async function duplicateExcelFile(sourceFileId, newFileName) {
     const searchResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root/children?$filter=name eq '${newFileName}'`,
       { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
 
-    if (searchResponse.ok) {
-      const searchResult = await searchResponse.json();
-      if (searchResult.value && searchResult.value.length > 0) {
-        copiedFileId = searchResult.value[0].id;
-        console.log("Found copied file:", copiedFileId);
-        break;
-      }
+    if (!searchResponse.ok) throw new Error("Cannot search for copied file");
+
+    const searchResult = await searchResponse.json();
+    if (searchResult.value && searchResult.value.length > 0) {
+      copiedFileId = searchResult.value[0].id;
+      console.log("Found copied file:", copiedFileId);
+      break;
     }
     
     attempts++;
