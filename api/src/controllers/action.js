@@ -229,16 +229,7 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
       const indicatorValue = {  ...req.body,  situation,  value_default: { [indicator.value_type]: defaultValue }, indicator_value_possibilities: indicator.value_possibilities || [], indicator_category_id: indicator.indicator_category_id, indicator_category_name: indicator.indicator_category_name, indicator_sub_category_id: indicator.indicator_sub_category_id, indicator_sub_category_name: indicator.indicator_sub_category_name };
       createdIndicatorValues.push(indicatorValue);
     }
-    await IndicatorValue.insertMany(createdIndicatorValues);
-
-    const totalIndicators = await IndicatorValue.countDocuments({ action_id: req.body.action_id });
-    const allIndicators = await IndicatorValue.find({ action_id: req.body.action_id });
-    const filledIndicators = allIndicators.filter(indicatorValue => {
-      const val = indicatorValue.value?.[indicatorValue.indicator_type];
-      if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
-      return val !== null && val !== undefined && val !== '';
-    }).length;
-    
+    await IndicatorValue.insertMany(createdIndicatorValues);    
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);

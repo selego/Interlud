@@ -43,12 +43,9 @@ export default function Completion({ action }) {
   };
 
   const isIndicatorValueFilled = (indicatorValue) => {
-    if (!indicatorValue || !indicatorValue.value) return false;
-    if (indicatorValue.indicator_type === "text") return !!indicatorValue.value.text && indicatorValue.value.text.trim() !== "";
-    if (indicatorValue.indicator_type === "number") return indicatorValue.value.number !== null && indicatorValue.value.number !== undefined;
-    if (indicatorValue.indicator_type === "radio") return !!indicatorValue.value.radio && indicatorValue.value.radio.trim() !== "";
-    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(indicatorValue.value.checkbox) && indicatorValue.value.checkbox.length > 0;
-    return false;
+    const val = indicatorValue.value?.[indicatorValue.indicator_type];
+    if (indicatorValue.indicator_type === 'checkbox')  return Array.isArray(val) && val.length > 0;
+    return val !== null && val !== undefined && val !== '';
   };
 
   useEffect(() => {
