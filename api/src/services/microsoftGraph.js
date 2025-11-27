@@ -158,5 +158,74 @@ async function updateExcelCellByIndicatorId(fileId, worksheetName, excelIndicato
   }
 }
 
+async function duplicateExcelFile(sourceFileId, newFileName) {
+  const token = await getAccessToken();
+  
+  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
 
-module.exports = { getAccessToken, getSharePointExcelFiles, readExcelCells, updateExcelCell, updateExcelCellByIndicatorId };
+  if (!siteResponse.ok) {
+    const error = await siteResponse.json();
+    throw new Error(error.error?.message || "Site SharePoint not found");
+  }
+
+  const site = await siteResponse.json();
+
+  const sourceFileResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${sourceFileId}`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
+
+  if (!sourceFileResponse.ok) {
+    const error = await sourceFileResponse.json();
+    console.error("Source file error:", error);
+    throw new Error(error.error?.message || "Cannot access source file");
+  }
+
+  const sourceFile = await sourceFileResponse.json();
+  const parentReference = sourceFile.parentReference;
+
+  const copyResponse = await fetch( `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${sourceFileId}/copy`,
+    {
+      method: "POST",
+      headers: { 
+        Authorization: `Bearer ${token}`, 
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ name: newFileName, parentReference: {
+        driveId: parentReference.driveId, id: parentReference.id } }),
+  });
+
+  if (!copyResponse.ok) {
+    const error = await copyResponse.json();
+    console.error("Copy error:", error);
+    throw new Error(error.error?.message || "Cannot copy Excel file");
+  }
+
+  const monitorUrl = copyResponse.headers.get('Location');
+  
+  if (!monitorUrl) throw new Error("No monitor URL returned for copy operation");
+
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  let copiedFileId = null;
+  let attempts = 0;
+
+  while (!copiedFileId && attempts < 20) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const searchResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root/children?$filter=name eq '${newFileName}'`,
+      { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
+
+    if (!searchResponse.ok) throw new Error("Cannot search for copied file");
+
+    const searchResult = await searchResponse.json();
+    if (searchResult.value && searchResult.value.length > 0) {
+      copiedFileId = searchResult.value[0].id;
+      console.log("Found copied file:", copiedFileId);
+      break;
+    }
+    
+    attempts++;
+  }
+  if (!copiedFileId) throw new Error("Copy operation timed out - could not find copied file");
+  return copiedFileId;
+}
+
+
+module.exports = { getAccessToken, getSharePointExcelFiles, readExcelCells, updateExcelCell, updateExcelCellByIndicatorId, duplicateExcelFile };

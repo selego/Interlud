@@ -8,6 +8,7 @@ const Schema = new mongoose.Schema(
     description: { type: String, trim: true },
     department: { type: Number, trim: true },
     population: { type: Number, trim: true },
+    excelFileId: { type: String, trim: true },
   },
   { timestamps: true },
 );
