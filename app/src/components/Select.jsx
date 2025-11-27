@@ -32,7 +32,7 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-max min-w-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {options.length > 0 ? (
             options.map((option) => (
               <div
@@ -42,10 +42,10 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
                   ${value === option.value ? 'bg-primary/10 text-primary' : 'text-gray-900'}
                 `}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">{option.label}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm whitespace-nowrap">{option.label}</span>
                   {value === option.value && (
-                    <FiCheck className="w-4 h-4 text-primary" />
+                    <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />
                   )}
                 </div>
               </div>
