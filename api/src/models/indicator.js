@@ -29,6 +29,7 @@ const Schema = new mongoose.Schema(
     indicator_sub_category_name: { type: String, trim: true },
     linked_action_id: { type: String, trim: true },
     linked_action_name: { type: String, trim: true },
+    presence_in_excel: { init: { type: Boolean, default: false }, ref: { type: Boolean, default: false }, prev: { type: Boolean, default: false }, expost: { type: Boolean, default: false } },
   },
   { timestamps: true },
 )

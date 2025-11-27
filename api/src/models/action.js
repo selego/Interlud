@@ -5,8 +5,7 @@ const MODELNAME = "action";
 const Schema = new mongoose.Schema(
   {
     type: { type: String, enum: ["custom", "reference", "global"], trim: true },
-    excel_sheet_id: { type: String, trim: true },
-    excel_sheet_name: { type: String, trim: true },
+    excel_worksheetname: { type: String, trim: true },
     
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },
