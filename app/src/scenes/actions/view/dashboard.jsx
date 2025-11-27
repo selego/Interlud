@@ -8,13 +8,13 @@ import { FiArrowLeft } from "react-icons/fi"
 export default function Dashboard({ action }) {
   const { userActionRights, user } = useStore()
   const [indicatorValues, setIndicatorValues] = useState([])
-  const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, bySituation: { init: 0, ref: 0, prev: 0, expost: 0 } })
+  const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, completeness: 0, bySituation: { init: 0, ref: 0, prev: 0, expost: 0 } })
   const navigate = useNavigate()
 
   const isAdmin = user.role === "admin" || user.collectivities.some(c => c.id === action.collectivity_id && c.role === "admin");
   const right = userActionRights.find(right => right.action_id === action._id);
 
-  const isIndicatorFilled = (indicatorValue) => {
+  const isIndicatorValueFilled = (indicatorValue) => {
     const val = indicatorValue.value?.[indicatorValue.indicator_type];
     if (indicatorValue.indicator_type === 'checkbox')  return Array.isArray(val) && val.length > 0;
     return val !== null && val !== undefined && val !== '';
@@ -22,13 +22,12 @@ export default function Dashboard({ action }) {
 
   const calculateStats = (data) => {
     const bySituation = {
-      init: data.filter(v => v.situation === "init" && isIndicatorFilled(v)).length,
-      ref: data.filter(v => v.situation === "ref" && isIndicatorFilled(v)).length,
-      prev: data.filter(v => v.situation === "prev" && isIndicatorFilled(v)).length,
-      expost: data.filter(v => v.situation === "expost" && isIndicatorFilled(v)).length,
+      init: data.filter(v => v.situation === "init" && isIndicatorValueFilled(v)).length,
+      ref: data.filter(v => v.situation === "ref" && isIndicatorValueFilled(v)).length,
+      prev: data.filter(v => v.situation === "prev" && isIndicatorValueFilled(v)).length,
+      expost: data.filter(v => v.situation === "expost" && isIndicatorValueFilled(v)).length,
     };
-    
-    return { total : data.length, filled : data.filter(isIndicatorFilled).length , empty: data.length - data.filter(isIndicatorFilled).length, bySituation };
+    return { total : data.length, filled : data.filter(isIndicatorValueFilled).length , empty: data.length - data.filter(isIndicatorValueFilled).length, completeness : Math.round((data.filter(isIndicatorValueFilled).length / data.length) * 100), bySituation };
   };
 
   const fetchData = async () => {
@@ -112,7 +111,7 @@ export default function Dashboard({ action }) {
 
           <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Complétion</p>
-            <p className="text-4xl font-bold text-green-600">{action.completeness || 0}%</p>
+            <p className="text-4xl font-bold text-green-600">{stats.completeness}%</p>
             <p className="text-xs text-gray-500 mt-1">{stats.filled} / {stats.total} valeurs</p>
           </div>
 
@@ -134,9 +133,9 @@ export default function Dashboard({ action }) {
           <div className="w-full bg-gray-200 rounded-full h-6">
             <div 
               className="bg-primary-green h-6 rounded-full flex items-center justify-center text-white text-sm font-medium"
-              style={{ width: `${action.completeness || 0}%` }}
+              style={{ width: `${stats.completeness}%` }}
             >
-              {action.completeness > 10 && `${action.completeness}%`}
+              {stats.completeness > 10 && `${stats.completeness}%`}
             </div>
           </div>
         </div>
@@ -182,10 +181,10 @@ export default function Dashboard({ action }) {
             <tbody className="divide-y divide-gray-200">
               {indicatorValues.map((indicatorValue) => (
                 <tr key={indicatorValue._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{indicatorValue.indicator_name}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900 truncate max-w-[500px]">{indicatorValue.indicator_name}</td>
                   <td className="px-6 py-4 text-sm text-gray-600 capitalize">{indicatorValue.situation}</td>
                   <td className="px-6 py-4 text-sm">
-                    {isIndicatorFilled(indicatorValue) ? (
+                    {isIndicatorValueFilled(indicatorValue) ? (
                       <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
                         Rempli
                       </span>

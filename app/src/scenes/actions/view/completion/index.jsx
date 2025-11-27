@@ -20,6 +20,7 @@ export default function Completion({ action }) {
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicatorValue, setSelectedIndicatorValue] = useState(null);
   const [indicatorValues, setIndicatorValues] = useState([]);
+  const [allIndicatorValues, setAllIndicatorValues] = useState([]);
 
   const fetchIndicatorsValues = async () => {
     try {
@@ -31,9 +32,31 @@ export default function Completion({ action }) {
     }
   };
 
+  const fetchAllIndicatorsValues = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id });
+      if (!ok) return toast.error(code || "Erreur lors du chargement");
+      setAllIndicatorValues(data);
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const isIndicatorValueFilled = (indicatorValue) => {
+    const val = indicatorValue.value?.[indicatorValue.indicator_type];
+    if (indicatorValue.indicator_type === 'checkbox')  return Array.isArray(val) && val.length > 0;
+    return val !== null && val !== undefined && val !== '';
+  };
+
   useEffect(() => {
     fetchIndicatorsValues();
   }, [action._id, activeTab]);
+
+  useEffect(() => {
+    fetchAllIndicatorsValues();
+  }, [action._id]);
+
+
 
   return (
     <div className="min-h-screen p-8">
@@ -72,10 +95,12 @@ export default function Completion({ action }) {
             </div>
           </div>
 
-          <div className="flex gap-2 items-center mt-4">
-            <ProgressCircle percentage={action.completeness} size={20} />
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
+          <div className="flex gap-2 items-center mt-2">
+            <ProgressCircle percentage={ Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)} size={20} />
             <p className="text-sm text-gray-900">
-              Complété à <strong>{action.completeness}%</strong>
+              Complété à <strong>{Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)}%</strong>
             </p>
             <p className="text-sm text-gray-600">
               - Dernière mise à jour le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong>

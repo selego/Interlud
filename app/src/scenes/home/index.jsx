@@ -499,30 +499,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {actions.map((action) => (
-            <div
-              key={action._id}
-              className="card-shadow p-6 h-full flex flex-col"
-              onClick={() => navigate(`/actions/${action._id}/dashboard`)}
-            >
-              <div className="mb-3">
-                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.status)}`}>
-                  {action.status}
-                </span>
-              </div>
-
-              <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>
-              <p className="text-sm text-gray-500 mb-3 line-clamp-2">{action.description}</p>
-
-              <div className="mt-auto pt-3 flex items-center justify-between">
-                <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">
-                  Voir l'action
-                </button>
-                <div className="flex items-center gap-1">
-                  <ProgressCircle percentage={action.completeness} size={20} />
-                  <span className="text-xs text-gray-600">Complétée à <strong>{action.completeness}%</strong></span>
-                </div>
-              </div>
-            </div>
+            <CardAction action={action} />
           ))}
 
           <div
@@ -542,6 +519,56 @@ export default function Home() {
           </div>
         </div>
       </div>
+      </div>
+    </div>
+  )
+}
+
+
+function CardAction({ action }) {
+  const [indicatorValues, setIndicatorValues] = useState([])
+    const navigate = useNavigate()
+
+  const fetchIndicatorValues = async () => {
+    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id });
+    if (!ok) return toast.error(code || "Une erreur est survenue")
+    setIndicatorValues(data)
+  }
+
+  const isIndicatorValueFilled = (indicatorValue) => {
+    const val = indicatorValue.value?.[indicatorValue.indicator_type];
+    if (indicatorValue.indicator_type === 'checkbox')  return Array.isArray(val) && val.length > 0;
+    return val !== null && val !== undefined && val !== '';
+  };
+
+  useEffect(() => {
+    fetchIndicatorValues()
+  }, [action._id])
+
+
+  return (
+    <div
+      key={action._id}
+      className="card-shadow p-6 h-full flex flex-col"
+      onClick={() => navigate(`/actions/${action._id}/dashboard`)}
+    >
+      <div className="mb-3">
+        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.status)}`}>
+          {action.status}
+        </span>
+      </div>
+
+      <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>
+      <p className="text-sm text-gray-500 mb-3 line-clamp-2">{action.description}</p>
+
+      <div className="mt-auto pt-3 flex items-center justify-between">
+        <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">
+          Voir l'action
+        </button>
+        <div className="flex items-center gap-1">
+          <ProgressCircle percentage={Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)} size={20} />
+          <span className="text-xs text-gray-600">Complétée à <strong>{Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)}%</strong></span>
+        </div>
       </div>
     </div>
   )

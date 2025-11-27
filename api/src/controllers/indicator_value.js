@@ -92,16 +92,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
     if (logs.length > 0) await Log.insertMany(logs);
     
-    const totalIndicators = await IndicatorValue.countDocuments({ action_id: indicatorValue.action_id });
-    const allIndicators = await IndicatorValue.find({ action_id: indicatorValue.action_id });
-    const filledIndicators = allIndicators.filter(indicatorValue => {
-      const val = indicatorValue.value?.[indicatorValue.indicator_type];
-      if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
-      return val !== null && val !== undefined && val !== '';
-    }).length;
-    await Action.updateOne({ _id: indicatorValue.action_id }, { $set: { completeness: totalIndicators > 0 ? Math.round((filledIndicators / totalIndicators) * 100) : 0 } });
-
-
     if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
     const otherIndicatorValues = await IndicatorValue.find({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, _id: { $ne: indicatorValue._id } });
     
@@ -138,15 +128,6 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
           };
           syncLogs.push(syncLog);
         }
-
-        const totalIndicatorsOther = await IndicatorValue.countDocuments({ action_id: otherIndicatorValue.action_id });
-        const allIndicatorsOther = await IndicatorValue.find({ action_id: otherIndicatorValue.action_id });
-        const filledIndicatorsOther = allIndicatorsOther.filter(indicatorValue => {
-          const val = indicatorValue.value?.[indicatorValue.indicator_type];
-          if (indicatorValue.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
-          return val !== null && val !== undefined && val !== '';
-        }).length;
-        await Action.updateOne({ _id: otherIndicatorValue.action_id }, { $set: { completeness: totalIndicatorsOther > 0 ? Math.round((filledIndicatorsOther / totalIndicatorsOther) * 100) : 0 } });
       }
       
       await IndicatorValue.updateMany( 
