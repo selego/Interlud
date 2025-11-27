@@ -61,44 +61,43 @@ export default function Completion({ action }) {
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
+        <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+          <button 
+            onClick={() => navigate('/actions')} 
+            className="hover:text-primary-green transition-colors"
+          >
+            Actions
+          </button>
+          <span>/</span>
+          <button 
+            onClick={() => navigate(`/actions/${action._id}/dashboard`)} 
+            className="hover:text-primary-green transition-colors truncate max-w-[150px]"
+          >
+            {action.name}
+          </button>
+          <span>/</span>
+          <span className="text-gray-900 font-medium">Complétion</span>
+        </div>
+        
         <div className="mb-8">
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-            <button 
-              onClick={() => navigate('/actions')} 
-              className="hover:text-primary-green transition-colors"
+          <div className="flex items-center gap-3 mb-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+              aria-label="Revenir à la page précédente"
             >
-              Actions
+              <FiArrowLeft size={18} />
             </button>
-            <span>/</span>
-            <button 
-              onClick={() => navigate(`/actions/${action._id}/dashboard`)} 
-              className="hover:text-primary-green transition-colors truncate max-w-[150px]"
-            >
+            <h1 className="text-3xl font-bold text-gray-900">
               {action.name}
-            </button>
-            <span>/</span>
-            <span className="text-gray-900 font-medium">Complétion</span>
+            </h1>
           </div>
           
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate(-1)}
-                className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
-                aria-label="Revenir à la page précédente"
-              >
-                <FiArrowLeft size={18} />
-              </button>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {action.name}
-              </h1>
-            </div>
-          </div>
-
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
-          <div className="flex gap-2 items-center mt-2">
-            <ProgressCircle percentage={ Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)} size={20} />
+          <div className="flex gap-2 items-center ml-14">
+            <ProgressCircle 
+              percentage={Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)} 
+              size={20} 
+            />
             <p className="text-sm text-gray-900">
               Complété à <strong>{Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)}%</strong>
             </p>
@@ -113,7 +112,9 @@ export default function Completion({ action }) {
           {SITUATION_TABS.map(tab => (
             <button 
               key={tab.key} 
-              className={`px-6 py-3 text-sm font-semibold transition-all ${activeTab === tab.key ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"}`} 
+              className={`px-6 py-3 text-sm font-semibold transition-all ${
+                activeTab === tab.key  ? "text-primary-green border-b-2 border-primary-green"  : "text-gray-500 hover:text-primary-green"
+              }`} 
               onClick={() => setActiveTab(tab.key)}
             >
               {tab.label}
@@ -132,7 +133,7 @@ export default function Completion({ action }) {
           </div>
 
           <div className="flex-1">
-            <SituationTab situation={activeTab} indicatorValues={indicatorValues} onUpdate={fetchIndicatorsValues} selectedIndicatorValue={selectedIndicatorValue} />
+            <SituationTab situation={activeTab} indicatorValues={indicatorValues} onUpdate={() => { fetchIndicatorsValues(); fetchAllIndicatorsValues(); }} selectedIndicatorValue={selectedIndicatorValue} />
           </div>
         </div>
       </div>
