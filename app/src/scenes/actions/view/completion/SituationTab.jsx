@@ -33,13 +33,29 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
     }
   };
 
+  const handleUseAllDefaultValues = async () => {
+    try {
+      const indicatorsWithDefaults = indicatorValues.filter( iv => iv.value_default?.[iv.indicator_type] !== undefined && iv.value_default?.[iv.indicator_type] !== null);
+      if (indicatorsWithDefaults.length === 0) return toast.error("Aucune valeur par défaut disponible");
+
+      await Promise.all(indicatorsWithDefaults.map(async indicatorValue => {
+        await api.put(`/indicator_value/${indicatorValue._id}`, { ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] }})
+      }));
+      toast.success("Valeurs par défaut appliquées avec succès");
+
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
+    await onUpdate();
+  };
+
   return (
     <div className="card-shadow p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Situation : {SITUATION_LABELS[situation]}</h2>
         <button
           className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
-          onClick={() => console.log("use default values")}
+          onClick={handleUseAllDefaultValues}
         >
           Utiliser la valeur par défaut pour tous
         </button>
