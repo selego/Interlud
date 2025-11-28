@@ -67,11 +67,12 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
 
     const createCollectivity = async () => {
       try {
+        if (!name.trim()) return toast.error("Veuillez entrer un nom pour la collectivité")
         const { ok, data } = await api.post("/collectivity/", { name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
         navigate(`/admin/collectivity/${data._id}`)
       } catch (error) {
-        toast.error(data.code || "Une erreur est survenue")
+        toast.error(error || "Une erreur est survenue")
       }
     }
 

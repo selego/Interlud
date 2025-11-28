@@ -69,11 +69,12 @@ const AddIndicatorModal = ({ isOpen, onClose }) => {
 
     const createIndicator = async () => {
       try {
+        if (!name.trim()) return toast.error("Veuillez entrer un nom pour l'indicateur")
         const { ok, data } = await api.post("/indicator/", { name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
         navigate(`/admin/indicator/${data._id}`)
       } catch (error) {
-        toast.error(data.code || "Une erreur est survenue")
+        toast.error(error || "Une erreur est survenue")
       }
     }
 

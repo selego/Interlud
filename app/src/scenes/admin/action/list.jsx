@@ -67,11 +67,12 @@ const AddActionModal = ({ isOpen, onClose }) => {
 
     const createAction = async () => {
       try {
+        if (!name.trim()) return toast.error("Veuillez entrer un nom pour l'action")
         const { ok, data } = await api.post("/action", { name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
         navigate(`/admin/action/${data._id}`)
       } catch (error) {
-        toast.error(data.code || "Une erreur est survenue")
+        toast.error(error || "Une erreur est survenue")
       }
     }
 

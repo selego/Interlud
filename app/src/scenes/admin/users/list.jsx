@@ -76,6 +76,7 @@ const AddUserModal = ({ isOpen, onClose }) => {
 
   const createUser = async () => {
     try {
+      if (!name.trim()) return toast.error("Veuillez entrer un nom pour l'utilisateur")
       const { ok, data, code } = await api.post("/user/", { name, email: `${name.toLowerCase().replace(/\s/g, '')}@temp.com`, password: "Password123!" });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       navigate(`/admin/users/${data._id}`);
