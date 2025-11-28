@@ -127,6 +127,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
             value={selectedActionId}
             onChange={(value) => setSelectedActionId(value)}
             placeholder="Sélectionner une action"
+            constrained={true}
           />
         </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FiChevronDown, FiCheck } from "react-icons/fi";
 
-const Select = ({ options = [], value = "", onChange, className = "", placeholder = "Sélectionner" }) => {
+const Select = ({ options = [], value = "", onChange, className = "", placeholder = "Sélectionner", constrained = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
 
@@ -32,7 +32,9 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-max min-w-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className={`absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+          constrained ? 'w-full' : 'w-max min-w-full left-1/2 -translate-x-1/2'
+        }`}>
           {options.length > 0 ? (
             options.map((option) => (
               <div
@@ -43,7 +45,7 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
                 `}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-sm whitespace-nowrap">{option.label}</span>
+                  <span className={`text-sm ${constrained ? 'truncate' : 'whitespace-nowrap'}`}>{option.label}</span>
                   {value === option.value && (
                     <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />
                   )}

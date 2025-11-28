@@ -63,7 +63,9 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               <div className="flex flex-col">
-                <label className="block text-xs font-medium text-gray-600 mb-2">Valeur</label>
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  Valeur{indicatorValue.indicator_value_unit ? ` (${indicatorValue.indicator_value_unit})` : ''}
+                </label>
                 <IndicatorValueInput
                   key={`${indicatorValue._id}-${indicatorValue.value?.[indicatorValue.indicator_type] || 'empty'}`}
                   value={indicatorValue.value?.[indicatorValue.indicator_type]}
@@ -74,7 +76,9 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
               </div>
 
               <div className="flex flex-col">
-                <label className="block text-xs font-medium text-gray-600 mb-2">Valeur par défaut</label>
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  Valeur par défaut{indicatorValue.indicator_value_unit ? ` (${indicatorValue.indicator_value_unit})` : ''}
+                </label>
                   {!indicatorValue.value_default?.[indicatorValue.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
                 {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
                   <div className="flex justify-between items-center gap-2">

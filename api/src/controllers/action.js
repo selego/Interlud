@@ -150,6 +150,7 @@ router.post("/create_action_with_default_indicators", passport.authenticate(["ad
           indicator_name: indicator.name,
           indicator_type: indicator.value_type,
           situation,
+          indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_category_id: indicator.indicator_category_id,
@@ -227,7 +228,7 @@ router.post("/initialize_indicator_values", passport.authenticate(["admin", "use
 
     for (const situation of situations) {
       const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
-      const indicatorValue = {  ...req.body,  situation,  value_default: { [indicator.value_type]: defaultValue }, indicator_value_possibilities: indicator.value_possibilities || [], indicator_category_id: indicator.indicator_category_id, indicator_category_name: indicator.indicator_category_name, indicator_sub_category_id: indicator.indicator_sub_category_id, indicator_sub_category_name: indicator.indicator_sub_category_name };
+      const indicatorValue = {  ...req.body,  situation,  value_default: { [indicator.value_type]: defaultValue }, indicator_value_possibilities: indicator.value_possibilities || [], indicator_category_id: indicator.indicator_category_id, indicator_category_name: indicator.indicator_category_name, indicator_sub_category_id: indicator.indicator_sub_category_id, indicator_sub_category_name: indicator.indicator_sub_category_name, indicator_value_unit: indicator.value_unit };
       createdIndicatorValues.push(indicatorValue);
     }
     await IndicatorValue.insertMany(createdIndicatorValues);    
