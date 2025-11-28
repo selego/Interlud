@@ -6,15 +6,26 @@ import store from "@/services/store"
 import api from "@/services/api"
 
 export default () => {
-  const [values, setValues] = useState({ name: "", email: "", password: "" })
+  const [values, setValues] = useState({ name: "", email: "", password: "", entityName: "" })
+  const [accountType, setAccountType] = useState("user")
 
   const { user, setUser, setActionRights, setCollectivity } = store()
   const navigate = useNavigate()
 
   const send = async () => {
+    const payload = {
+      email: values.email,
+      password: values.password,
+      role: accountType
+    }
+
+    if (accountType === "economic_actor") {
+      payload.economic_actor_name = values.entityName
+    }
+
     try {
-      const { ok, code, user, token } = await api.post(`/user/signup`, values)
-      if (!ok) return toast.error(code || "Une erreur est survenue");
+      const { ok, code, user, token } = await api.post(`/user/signup`, payload)
+      if (!ok) return toast.error(code || "Une erreur est survenue")
       if (token) api.setToken(token)
       if (user) setUser(user)
       setActionRights(null)
@@ -27,34 +38,60 @@ export default () => {
   if (user) navigate("/")
 
   return (
-    <div className="relative overflow-hidden flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">        
+    <div className="relative overflow-hidden flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Créer un compte
-          </h2>
-          <p className="text-sm text-gray-600">
-            Rejoignez InTerLUD+ dès maintenant
-          </p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Créer un compte</h2>
+          <p className="text-sm text-gray-600">Rejoignez InTerLUD+ dès maintenant</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
-          <form onSubmit={(e) => { e.preventDefault(); send()}}>
-            <div className="mb-6">
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Nom
-              </label>
-              <input
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-                type="text"
-                id="name"
-                value={values.name}
-                onChange={e => setValues({ ...values, name: e.target.value })}
-                placeholder="Votre nom"
-                required
-              />
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-700">Je suis :</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className={`w-full px-4 py-2 text-sm font-medium border rounded-lg transition-colors ${
+                  accountType === "user" ? "bg-primary-green text-white border-primary-green" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => setAccountType("user")}
+              >
+                Acteur public
+              </button>
+              <button
+                type="button"
+                className={`w-full px-4 py-2 text-sm font-medium border rounded-lg transition-colors ${
+                  accountType === "economic_actor" ? "bg-primary-green text-white border-primary-green" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => setAccountType("economic_actor")}
+              >
+                Acteur économique
+              </button>
             </div>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              send()
+            }}
+          >
+            {accountType === "economic_actor" && (
+              <div className="mb-6">
+                <label htmlFor="entityName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Nom de l'entité
+                </label>
+                <input
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+                  type="text"
+                  id="entityName"
+                  value={values.entityName}
+                  onChange={(e) => setValues({ ...values, entityName: e.target.value })}
+                  placeholder="Nom de votre structure"
+                  required={accountType === "economic_actor"}
+                />
+              </div>
+            )}
 
             <div className="mb-6">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -66,7 +103,7 @@ export default () => {
                 type="email"
                 id="email"
                 value={values.email}
-                onChange={e => setValues({ ...values, email: e.target.value })}
+                onChange={(e) => setValues({ ...values, email: e.target.value })}
                 placeholder="votre@email.fr"
                 required
               />
@@ -82,16 +119,13 @@ export default () => {
                 type="password"
                 id="password"
                 value={values.password}
-                onChange={e => setValues({ ...values, password: e.target.value })}
+                onChange={(e) => setValues({ ...values, password: e.target.value })}
                 placeholder="••••••••"
                 required
               />
             </div>
 
-            <button
-              type="submit"
-              className="button-primary w-full"
-            >
+            <button type="submit" className="button-primary w-full">
               Créer mon compte
             </button>
           </form>
@@ -108,10 +142,7 @@ export default () => {
           <div className="text-center">
             <p className="text-sm text-gray-600">
               Vous avez déjà un compte ? &nbsp;
-              <Link 
-                className="text-primary-green hover:text-primary-green font-medium transition-colors" 
-                to="/auth"
-              >
+              <Link className="text-primary-green hover:text-primary-green font-medium transition-colors" to="/auth">
                 Se connecter
               </Link>
             </p>
@@ -122,13 +153,15 @@ export default () => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-secondary-green" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-primary-green">
-                Accédez aux outils et ressources pour la logistique urbaine durable
-              </p>
+              <p className="text-sm text-primary-green">Accédez aux outils et ressources pour la logistique urbaine durable</p>
             </div>
           </div>
         </div>

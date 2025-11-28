@@ -42,6 +42,7 @@ app.use("/dashboard", require("./controllers/dashboard"));
 // app.use("/excel", require("./controllers/excel"));
 app.use("/excel", require("./controllers/excel"));
 app.use("/user_action_right", require("./controllers/user_action_right"));
+app.use("/economic_actor", require("./controllers/economic_actor"));
 
 setupErrorHandler(app);
 require("./services/passport")(app);

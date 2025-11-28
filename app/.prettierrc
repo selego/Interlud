@@ -6,7 +6,7 @@
   "bracketSpacing": true,
   "jsxBracketSameLine": false,
   "useTabs": false,
-  "arrowParens": "avoid",
+  "arrowParens": "always",
   "jsxSingleQuote": false,
   "trailingComma": "none",
   "endOfLine": "auto"

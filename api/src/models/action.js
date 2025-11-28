@@ -6,12 +6,10 @@ const Schema = new mongoose.Schema(
   {
     type: { type: String, enum: ["custom", "reference", "global"], trim: true },
     excel_worksheetname: { type: String, trim: true },
-    
+
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },
     name: { type: String, trim: true },
-    collectivity_id: { type: String, trim: true },
-    collectivity_name: { type: String, trim: true },
     description: { type: String, trim: true },
     status: {
       type: String,
@@ -19,6 +17,17 @@ const Schema = new mongoose.Schema(
       default: "no_status",
       trim: true,
     },
+    owner: {
+      type: String,
+      enum: ["collectivity", "economic_actor"],
+      default: "collectivity",
+      trim: true,
+    },
+
+    collectivity_id: { type: String, trim: true },
+    collectivity_name: { type: String, trim: true },
+    economic_actor_id: { type: String, trim: true },
+    economic_actor_name: { type: String, trim: true },
     blocked_reason: { type: String, trim: true },
     step_description: { type: String, trim: true },
     date_start: { type: Date, trim: true },
@@ -57,7 +66,7 @@ const Schema = new mongoose.Schema(
     last_modif_by_name: { type: String, trim: true },
     last_modif_date: { type: Date, default: Date.now },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);

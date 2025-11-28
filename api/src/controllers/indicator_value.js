@@ -39,34 +39,33 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     await action.save();
     const indicator = await Indicator.findById(indicatorValue.indicator_id);
     if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    
-    
+
     const logs = [];
-        
+
     for (const field of Object.keys(req.body)) {
       if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = indicatorValue[field];
-      
-      if (originalValue instanceof Date && typeof newValue === 'string') newValue = new Date(newValue);
+
+      if (originalValue instanceof Date && typeof newValue === "string") newValue = new Date(newValue);
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
-      
+
       let actualNewValue = newValue;
       let actualOldValue = originalValue;
-      if (field === 'value' && indicatorValue.indicator_type) {
+      if (field === "value" && indicatorValue.indicator_type) {
         actualNewValue = newValue?.[indicatorValue.indicator_type];
         actualOldValue = originalValue?.[indicatorValue.indicator_type];
       }
-      
+
       let logType = typeof actualNewValue;
-      if (actualNewValue instanceof Date) logType = 'date';
-      if (Array.isArray(actualNewValue)) logType = 'array';
-      
+      if (actualNewValue instanceof Date) logType = "date";
+      if (Array.isArray(actualNewValue)) logType = "array";
+
       const log = {
         model_name: "indicator_value",
         name: indicator.name,
         field: field,
-        operation: 'update',
+        operation: "update",
         new_value: { [logType]: actualNewValue },
         previous_value: { [logType]: actualOldValue },
         type_value: logType,
@@ -82,65 +81,72 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         indicator_name: indicatorValue.indicator_name,
         indicator_value_id: indicatorValue._id,
         indicator_value_name: indicatorValue.name,
-
       };
       logs.push(log);
     }
-    
+
     indicatorValue.set(req.body);
     await indicatorValue.save();
 
     res.status(200).send({ ok: true, data: indicatorValue });
     await updateExcelCellByIndicatorId(collectivity.excelFileId, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation);
 
-
     if (logs.length > 0) await Log.insertMany(logs);
-    
+
     if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
-    const otherIndicatorValues = await IndicatorValue.find({ indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id, _id: { $ne: indicatorValue._id } });
-    
+    const payload = {
+      indicator_id: indicatorValue.indicator_id,
+      situation: indicatorValue.situation,
+      year: indicatorValue.year,
+      collectivity_id: indicatorValue.collectivity_id,
+      source_type: indicatorValue.source_type,
+      _id: { $ne: indicatorValue._id },
+    };
+
+    if (indicatorValue.economic_actor_id) payload.economic_actor_id = indicatorValue.economic_actor_id;
+    const otherIndicatorValues = await IndicatorValue.find(payload);
+
     const syncLogs = [];
     for (const otherIndicatorValue of otherIndicatorValues) {
-      if (JSON.stringify(otherIndicatorValue.value) !== JSON.stringify(indicatorValue.value)) { 
+      if (JSON.stringify(otherIndicatorValue.value) !== JSON.stringify(indicatorValue.value)) {
         const actualNewValue = indicatorValue.value?.[indicatorValue.indicator_type];
         const actualOldValue = otherIndicatorValue.value?.[indicatorValue.indicator_type];
-        
+
         let logType = typeof actualNewValue;
-        if (actualNewValue instanceof Date) logType = 'date';
-        if (Array.isArray(actualNewValue)) logType = 'array';
-        
-          const syncLog = {
-            model_name: "indicator_value",
-            name: otherIndicatorValue.name,
-            field: "value",
-            operation: 'update',
-            new_value: { [logType]: actualNewValue },
-            previous_value: { [logType]: actualOldValue },
-            type_value: logType,
-            date: new Date(),
-            user_id: req.user._id,
-            user_name: req.user.name,
-            user_email: req.user.email,
-            collectivity_id: otherIndicatorValue.collectivity_id,
-            collectivity_name: otherIndicatorValue.collectivity_name,
-            action_id: otherIndicatorValue.action_id,
-            action_name: otherIndicatorValue.action_name,
-            indicator_id: otherIndicatorValue.indicator_id,
-            indicator_name: otherIndicatorValue.indicator_name,
-            indicator_value_id: otherIndicatorValue._id,
-            indicator_value_name: otherIndicatorValue.name,
-          };
-          syncLogs.push(syncLog);
-        }
+        if (actualNewValue instanceof Date) logType = "date";
+        if (Array.isArray(actualNewValue)) logType = "array";
+
+        const syncLog = {
+          model_name: "indicator_value",
+          name: otherIndicatorValue.name,
+          field: "value",
+          operation: "update",
+          new_value: { [logType]: actualNewValue },
+          previous_value: { [logType]: actualOldValue },
+          type_value: logType,
+          date: new Date(),
+          user_id: req.user._id,
+          user_name: req.user.name,
+          user_email: req.user.email,
+          collectivity_id: otherIndicatorValue.collectivity_id,
+          collectivity_name: otherIndicatorValue.collectivity_name,
+          action_id: otherIndicatorValue.action_id,
+          action_name: otherIndicatorValue.action_name,
+          indicator_id: otherIndicatorValue.indicator_id,
+          indicator_name: otherIndicatorValue.indicator_name,
+          indicator_value_id: otherIndicatorValue._id,
+          indicator_value_name: otherIndicatorValue.name,
+        };
+        syncLogs.push(syncLog);
       }
-      
-      await IndicatorValue.updateMany( 
-        { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id },
-        { $set: {value: indicatorValue.value} } 
-      );
-      
-      if (syncLogs.length > 0)  await Log.insertMany(syncLogs);
-    
+    }
+
+    await IndicatorValue.updateMany(
+      { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id },
+      { $set: { value: indicatorValue.value } }
+    );
+
+    if (syncLogs.length > 0) await Log.insertMany(syncLogs);
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -151,19 +157,21 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   try {
     let query = {};
 
-    if (req.body.indicator_id) { query.indicator_id = req.body.indicator_id; }
-    if (req.body.action_id) { query.action_id = req.body.action_id; }
-    if (req.body.situation) { query.situation = req.body.situation; }
-    if (req.body.indicator_category_name) { query.indicator_category_name = req.body.indicator_category_name; }
-    if (req.body.indicator_sub_category_name !== undefined) { 
+    if (req.body.indicator_id) {
+      query.indicator_id = req.body.indicator_id;
+    }
+    if (req.body.action_id) {
+      query.action_id = req.body.action_id;
+    }
+    if (req.body.situation) {
+      query.situation = req.body.situation;
+    }
+    if (req.body.indicator_category_name) {
+      query.indicator_category_name = req.body.indicator_category_name;
+    }
+    if (req.body.indicator_sub_category_name !== undefined) {
       if (req.body.indicator_sub_category_name === null) {
-        query.$and = [
-          { $or: [
-            { indicator_sub_category_name: null },
-            { indicator_sub_category_name: "" },
-            { indicator_sub_category_name: { $exists: false } }
-          ]}
-        ];
+        query.$and = [{ $or: [{ indicator_sub_category_name: null }, { indicator_sub_category_name: "" }, { indicator_sub_category_name: { $exists: false } }] }];
       } else {
         query.indicator_sub_category_name = req.body.indicator_sub_category_name;
       }

@@ -2,8 +2,6 @@ const mongoose = require("mongoose");
 
 const MODELNAME = "indicator_value";
 
-
-
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
@@ -11,6 +9,14 @@ const Schema = new mongoose.Schema(
     action_name: { type: String, trim: true },
     collectivity_id: { type: String, trim: true },
     collectivity_name: { type: String, trim: true },
+    owner_type: {
+      type: String,
+      enum: ["collectivity", "economic_actor"],
+      default: "collectivity",
+      trim: true
+    },
+    economic_actor_id: { type: String, trim: true },
+    economic_actor_name: { type: String, trim: true },
     indicator_id: { type: String, trim: true },
     indicator_name: { type: String, trim: true },
     indicator_type: { type: String, enum: ["number", "text", "radio", "checkbox"], trim: true },
@@ -24,22 +30,21 @@ const Schema = new mongoose.Schema(
     source: { type: String, trim: true },
     comment: { type: String, trim: true },
 
-    value: {  
+    value: {
       text: { type: String, trim: true },
       number: { type: Number, trim: true },
       radio: { type: String, trim: true },
       checkbox: { type: Array, default: [] }
     },
 
-
-    value_default: {   
+    value_default: {
       text: { type: String, trim: true },
       number: { type: Number, trim: true },
       radio: { type: String, trim: true },
       checkbox: { type: Array, default: [] }
-    },
+    }
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);

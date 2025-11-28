@@ -22,8 +22,8 @@ module.exports = function (app) {
       try {
         const user = await User.findOne({ _id: jwtPayload._id });
         if (!user) return done(null, false);
-        if (user.role !== "user") return done(null, false);
-        Sentry.setUser({ id: user._id.toString(), username: user.first_name + user.last_name, email: user.email });
+        if (user.role !== "user" && user.role !== "economic_actor") return done(null, false);
+        Sentry.setUser({ id: user._id.toString(), username: user.name, email: user.email });
         return done(null, user);
       } catch (error) {
         return done(error, false);
@@ -38,7 +38,7 @@ module.exports = function (app) {
         const user = await User.findOne({ _id: jwtPayload._id });
         if (!user) return done(null, false);
         if (user.role !== "admin") return done(null, false);
-        Sentry.setUser({ id: user._id.toString(), username: user.first_name + user.last_name, email: user.email });
+        Sentry.setUser({ id: user._id.toString(), username: user.name, email: user.email });
         return done(null, user);
       } catch (error) {
         return done(error, false);

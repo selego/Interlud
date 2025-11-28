@@ -5,6 +5,7 @@ const router = express.Router();
 const crypto = require("crypto");
 
 const Collectivity = require("../models/collectivity");
+const EconomicActor = require("../models/economic_actor");
 const UserObject = require("../models/user");
 const UserActionRightObject = require("../models/user_action_right");
 const config = require("../config");
@@ -45,20 +46,17 @@ router.post("/signin", async (req, res) => {
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
 
-    const approvedCollectivities = user.collectivities?.filter(c => c.status === 'approved') || [];
+    const approvedCollectivities = user.collectivities?.filter((c) => c.status === "approved") || [];
     let collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
     if (user.role === "admin") collectivity = await Collectivity.findOne();
 
-
-
-    
     const match = config.ENVIRONMENT === "development" || (await user.comparePassword(password));
     if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     user.set({ last_login_at: Date.now() });
     await user.save();
 
-    const token = jwt.sign({ _id: user.id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
+    const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie("jwt", token, cookieOptions());
 
     return res.status(200).send({ ok: true, token, user, userActionRights, collectivity });
@@ -69,7 +67,7 @@ router.post("/signin", async (req, res) => {
 });
 
 router.post("/signup", async (req, res) => {
-  let { password, email, name } = req.body;
+  let { password, email, economic_actor_name, role } = req.body;
   email = (email || "").trim().toLowerCase();
 
   try {
@@ -79,7 +77,15 @@ router.post("/signup", async (req, res) => {
 
     if (password && !validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
 
-    const user = await UserObject.create({ name, password, email });
+    let payload = { password, email, role: "user" };
+    if (role === "economic_actor") {
+      const economic_actor = await EconomicActor.create({ name: economic_actor_name });
+      payload.economic_actor_id = economic_actor._id;
+      payload.economic_actor_name = economic_actor.name;
+      payload.role = "economic_actor";
+    }
+
+    const user = await UserObject.create(payload);
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie("jwt", token, cookieOptions());
 
@@ -148,8 +154,7 @@ router.post("/forgot_password_reset", async (req, res) => {
 
     if (!obj) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_TOKEN_EXPIRED_OR_INVALID });
 
-    if (!validatePassword(req.body.password))
-      return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
+    if (!validatePassword(req.body.password)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
 
     obj.password = req.body.password;
     obj.forgot_password_reset_token = "";
@@ -230,7 +235,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
     const total = await UserObject.countDocuments(query);
 
-    return res.status(200).send({ ok: true, data: users,  total : total });
+    return res.status(200).send({ ok: true, data: users, total: total });
   } catch (error) {
     capture(error);
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
@@ -241,8 +246,7 @@ router.post("/", passport.authenticate(["admin"], { session: false }), async (re
   try {
     const { password } = req.body;
 
-    if (!validatePassword(password))
-      return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
+    if (!validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
 
     const user = await UserObject.create(req.body);
 
@@ -290,7 +294,6 @@ router.delete("/:id", passport.authenticate("admin", { session: false }), async 
   }
 });
 
-
 router.post("/reset_password/:id", passport.authenticate(["admin"], { session: false }), async (req, res) => {
   try {
     if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
@@ -306,30 +309,24 @@ router.post("/reset_password/:id", passport.authenticate(["admin"], { session: f
   }
 });
 
-
 router.post("/request-collectivity-access", passport.authenticate(["user", "applicant"], { session: false }), async (req, res) => {
   try {
     const { collectivityId } = req.body;
     if (!collectivityId) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    
+
     const collectivity = await Collectivity.findById(collectivityId);
-    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND }); 
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const user = await UserObject.findById(req.user._id);
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    if (user.collectivities?.find(c => c.id === collectivityId)) return res.status(409).send({ ok: false, code: "ALREADY_REQUESTED" });
+    if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: "ALREADY_REQUESTED" });
 
-    user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: "user", status: "pending"}];
+    user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: user.role || "user", status: "pending" }];
     await user.save();
 
-    
-    await brevo.sendEmail(
-      [{ email: "axel@selego.co"}],
-      "Demande de collectivité",
-      `<p>uwu</p>`
-    );
-    
+    await brevo.sendEmail([{ email: "axel@selego.co" }], "Demande de collectivité", `<p>uwu</p>`);
+
     res.status(200).send({ ok: true, data: user });
   } catch (error) {
     capture(error);
