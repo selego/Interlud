@@ -55,7 +55,10 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
               className={`bg-white p-4 rounded-lg border border-gray-200 transition-all ${isSelected ? 'ring-2 ring-primary-green shadow-lg border-primary-green' : ''}`}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
+                  <Tooltip content="Saisissez la valeur de l'indicateur pour cette situation"/>
+                </div>
               </div>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -94,4 +97,35 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       </div>
     </div>
   )
+}
+
+
+function Tooltip({ content }) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div className="relative inline-flex items-center">
+      <div
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+        className="cursor-help"
+      >
+        <svg  className="w-4 h-4 text-gray-400 hover:text-gray-600"  fill="currentColor" viewBox="0 0 20 20">
+            <path 
+              fillRule="evenodd" 
+              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" 
+              clipRule="evenodd" 
+            />
+          </svg>
+      </div>
+      {isVisible && (
+        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg whitespace-nowrap">
+          {content}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+            <div className="border-4 border-transparent border-t-gray-900"></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
