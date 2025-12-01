@@ -3,17 +3,20 @@ import { useNavigate } from "react-router-dom"
 import Modal from "@/components/modal"
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import Pagination from "@/components/pagination"
 
 export default function List() {
   const navigate = useNavigate()
   const [indicators, setIndicators] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
-
+  const [filters, setFilters] = useState({ page : 0, limit : 10 })
+  const [total, setTotal] = useState(0)
   const fetchIndicators = async () => {
     try {
-      const { ok, data } = await api.post("/indicator/search")
-      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      const { ok, data, code, total } = await api.post("/indicator/search", filters)
+      if (!ok) return toast.error(code || "Une erreur est survenue")
       setIndicators(data)
+      setTotal(total)
     } catch (error) {
       toast.error(error || "Une erreur est survenue")
     }
@@ -21,7 +24,7 @@ export default function List() {
 
   useEffect(() => {
     fetchIndicators()
-  }, [])
+  }, [filters])
 
   return (
     <div className="p-8">
@@ -58,6 +61,7 @@ export default function List() {
         </tbody>
       </table>
       <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <Pagination total={total} per_page={filters.limit} currentPage={filters.page + 1} onNext={() => setFilters({ ...filters, page: filters.page + 1 })} onPrevious={() => setFilters({ ...filters, page: filters.page - 1 })}/>
     </div>
   )
 }
