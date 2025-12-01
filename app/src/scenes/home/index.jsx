@@ -24,6 +24,7 @@ export default function Home() {
   const [synthese, setSynthese] = useState({ actionsCreees: 0, actionsACompleter: 0, actionsTerminees: 0, actionsBloquees: 0 })
   const [evolutionStatuts, setEvolutionStatuts] = useState([])
   const [period, setPeriod] = useState("month")
+  const [visibleLines, setVisibleLines] = useState({ terminees: true, aCompleter: true,enAttente: true})
 
   const fetchEvolutionStatuts = async () => {
     try {
@@ -215,39 +216,88 @@ export default function Home() {
             </div>
 
             <div className="flex gap-2 mb-6 flex-wrap">
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-primary-green text-white transition-all">
+              <button 
+                onClick={() => setVisibleLines({ ...visibleLines, terminees: !visibleLines.terminees })}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  visibleLines.terminees  ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
+                }`}
+              >
                 Terminées
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                  />
+                  {visibleLines.terminees ? (
+                    <>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </>
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                    />
+                  )}
                 </svg>
               </button>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-primary-orange text-white transition-all">
+              <button 
+                onClick={() => setVisibleLines({ ...visibleLines, aCompleter: !visibleLines.aCompleter })}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  visibleLines.aCompleter ? "bg-primary-orange text-white"  : "border border-gray-300 text-gray-700 bg-white"
+                }`}
+              >
                 À compléter
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                  />
+                  {visibleLines.aCompleter ? (
+                    <>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </>
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                    />
+                  )}
                 </svg>
               </button>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border border-gray-300 text-gray-700 bg-white transition-all">
+              <button 
+                onClick={() => setVisibleLines({ ...visibleLines, enAttente: !visibleLines.enAttente })}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  visibleLines.enAttente  ? "bg-primary-teal text-white"  : "border border-gray-300 text-gray-700 bg-white"
+                }`}
+              >
                 En attente
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                  />
+                  {visibleLines.enAttente ? (
+                    <>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </>
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                    />
+                  )}
                 </svg>
               </button>
             </div>
@@ -276,9 +326,9 @@ export default function Home() {
                       return null
                     }}
                   />
-                  <Line type="monotone" dataKey="terminees" stroke="#2DAC6A" strokeWidth={3} name="Terminées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="enAttente" stroke="#F59600" strokeWidth={3} name="En attente" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="aCompleter" stroke="#F59600" strokeWidth={3} name="À compléter" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />
+                  {visibleLines.terminees && <Line type="monotone" dataKey="terminees" stroke="#2DAC6A" strokeWidth={3} name="Terminées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />}
+                  {visibleLines.enAttente && <Line type="monotone" dataKey="enAttente" stroke="#56BDB8" strokeWidth={3} name="En attente" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />}
+                  {visibleLines.aCompleter && <Line type="monotone" dataKey="aCompleter" stroke="#F59600" strokeWidth={3} name="À compléter" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />}
                 </LineChart>
               </ResponsiveContainer>
             </div>
