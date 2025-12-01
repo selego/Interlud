@@ -200,6 +200,7 @@ function InfoTab({ indicator, setIndicator }) {
             <label className="block text-sm font-medium mb-2">Catégorie principale</label>
             <Select
               value={indicator.indicator_category_id || ""}
+              selectedLabel={indicator.indicator_category_name}
               onChange={(value) => {
                 const selectedCategory = principalCategories.find(cat => cat._id === value);
                 setIndicator({ ...indicator, indicator_category_id: value, indicator_category_name: selectedCategory?.name });
@@ -259,6 +260,7 @@ function InfoTab({ indicator, setIndicator }) {
             <label className="block text-sm font-medium mb-2">Sous-catégorie</label>
             <Select
               value={indicator.indicator_sub_category_id || ""}
+              selectedLabel={indicator.indicator_sub_category_name}
               onChange={(value) => {
                 const selectedCategory = subCategories.find(cat => cat._id === value);
                 setIndicator({ ...indicator, indicator_sub_category_id: value, indicator_sub_category_name: selectedCategory?.name });

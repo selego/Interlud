@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FiChevronDown, FiCheck } from "react-icons/fi";
 
-const Select = ({ options = [], value = "", onChange, className = "", placeholder = "Sélectionner", constrained = false }) => {
+const Select = ({ options = [], value = "", onChange, className = "", placeholder = "Sélectionner", constrained = false, selectedLabel = null }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
 
@@ -22,7 +22,7 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
           className={`input-primary w-full text-left pr-12 ${className}`}
         >
           <span className="block truncate">
-            {value ? options.find(option => option.value === value)?.label : placeholder}
+            {value ? (selectedLabel || options.find(option => option.value === value)?.label) : placeholder}
           </span>
         </button>
         
