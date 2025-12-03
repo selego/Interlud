@@ -50,12 +50,12 @@ export default function Completion({ action }) {
     try {
       if (!collectivity.excelFileId) return toast.error("Aucun fichier Excel associé");
       setIsExporting(true);
-      const response = await api.download("/excel/exportIndicatorTemplate", { fileId: collectivity.excelFileId });
+      const response = await api.download("/action/export_indicator_values_excel", { action_id: action._id });
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `indicateurs_${action.name}.xlsx`;
+      link.download = `valeurs_indicateurs_${action.name}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -79,7 +79,6 @@ export default function Completion({ action }) {
         try {
           const base64 = reader.result.split(',')[1];
           const { ok, code } = await api.post("/excel/importIndicatorValues", { 
-            targetFileId: collectivity.excelFileId, 
             fileBase64: base64,
             collectivity: collectivity
           });
