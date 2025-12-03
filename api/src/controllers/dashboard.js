@@ -17,11 +17,12 @@ router.post("/synthese",passport.authenticate(["admin", "user"], { session: fals
     if (period === "week") startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     if (period === "year") startDate = new Date(now.getFullYear(), 0, 1);
     const actions = await Action.find({ collectivity_id, createdAt: { $gte: startDate } });
-    const actionsCreees = actions.length;
-    const actionsACompleter = actions.filter(action => action.status === "in_progress").length;
-    const actionsTerminees = actions.filter(action => action.status === "completed").length;
-    const actionsBloquees = actions.filter(action => action.status === "blocked").length;
-    return res.status(200).send({ ok: true, data: { actionsCreees, actionsACompleter, actionsTerminees, actionsBloquees } });
+    const actionsCreated = actions.length;
+    const actionsInProgress = actions.filter(action => action.status === "in_progress").length;
+    const actionsCompleted = actions.filter(action => action.status === "completed").length;
+    const actionsBlocked = actions.filter(action => action.status === "blocked").length;
+    const actionsUpcoming = actions.filter(action => action.status === "upcoming").length;
+    return res.status(200).send({ ok: true, data: { actionsCreated, actionsInProgress, actionsCompleted, actionsBlocked, actionsUpcoming } });
 
   } catch (error) {
     capture(error);
@@ -84,11 +85,12 @@ router.post("/evolution-statuts", passport.authenticate(["admin", "user"], { ses
           return actionDate >= periodStart && actionDate < periodEnd;
         });
         
-        const terminees = actionsInPeriod.filter(a => a.status === "completed").length;
-        const enAttente = actionsInPeriod.filter(a => a.status === "upcoming").length;
-        const aCompleter = actionsInPeriod.filter(a => a.status === "in_progress").length;
+        const actionsCompleted = actionsInPeriod.filter(a => a.status === "completed").length;
+        const actionsUpcoming = actionsInPeriod.filter(a => a.status === "upcoming").length;
+        const actionsInProgress = actionsInPeriod.filter(a => a.status === "in_progress").length;
+        const actionsBlocked = actionsInPeriod.filter(a => a.status === "blocked").length;
 
-        evolutionData.push({ mois: label, terminees, enAttente, aCompleter });
+        evolutionData.push({ mois: label, actionsCompleted, actionsUpcoming, actionsInProgress, actionsBlocked });
       }
       
       return res.status(200).send({ ok: true, data: evolutionData });
