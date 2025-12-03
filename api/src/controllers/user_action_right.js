@@ -27,7 +27,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
     const data = await UserActionRight.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
-    console.log(error);
+    capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
