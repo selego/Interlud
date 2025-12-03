@@ -1,154 +1,157 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import api from "@/services/api";
-import useStore from "@/services/store";
-import toast from "react-hot-toast";
-import { FiChevronDown } from "react-icons/fi";
-import Logo from "@/assets/primary_logo.png";
-import Select from "@/components/Select";
+import React, { useState, useEffect, useRef } from "react"
+import { Link, useNavigate, useLocation } from "react-router-dom"
+import api from "@/services/api"
+import useStore from "@/services/store"
+import toast from "react-hot-toast"
+import { FiChevronDown } from "react-icons/fi"
+import Logo from "@/assets/primary_logo.png"
+import Select from "@/components/Select"
 
 export default function Header() {
-  const [openDropdown, setOpenDropdown] = useState(null);
-  const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null);
-  const quickAccessRef = useRef(null);
+  const [openDropdown, setOpenDropdown] = useState(null)
+  const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null)
+  const quickAccessRef = useRef(null)
   const { user, collectivity, setCollectivity, setUser, setActionRights } = useStore()
-  const [collectivities, setCollectivities] = useState([]);
-  const navigate = useNavigate(); 
-  const location = useLocation();
+  const [collectivities, setCollectivities] = useState([])
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const fetchCollectivities = async () => {
-    if (!user) return;
+    if (!user) return
     try {
-      const { ok, data, code } = await api.post("/collectivity/search");
-      if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités");
-      setCollectivities(data);
+      const { ok, data, code } = await api.post("/collectivity/search")
+      if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités")
+      setCollectivities(data)
     } catch (error) {
-      console.error("Error fetching collectivities:", error);
+      console.error("Error fetching collectivities:", error)
     }
-  };
-  
+  }
+
   useEffect(() => {
-    fetchCollectivities();
-  }, [user]);
+    fetchCollectivities()
+  }, [user])
 
   useEffect(() => {
     function handleClickOutside(event) {
       if (quickAccessRef.current && !quickAccessRef.current.contains(event.target)) {
-        setOpenQuickAccessDropdown(null);
+        setOpenQuickAccessDropdown(null)
       }
     }
 
     if (openQuickAccessDropdown !== null) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside)
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
+        document.removeEventListener("mousedown", handleClickOutside)
+      }
     }
-  }, [openQuickAccessDropdown]);
+  }, [openQuickAccessDropdown])
 
   const handleCollectivityChange = async (collectivityId) => {
     if (!collectivityId) {
-      setCollectivity(null);
-      localStorage.removeItem('selectedCollectivityId');
-      return;
+      setCollectivity(null)
+      localStorage.removeItem("selectedCollectivityId")
+      return
     }
     try {
-      const { ok, data, code } = await api.get(`/collectivity/${collectivityId}`);
-      if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité");
-      setCollectivity(data);
-      localStorage.setItem('selectedCollectivityId', collectivityId);
-      navigate(`/`);
-      console.log(data);
+      const { ok, data, code } = await api.get(`/collectivity/${collectivityId}`)
+      if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité")
+      setCollectivity(data)
+      localStorage.setItem("selectedCollectivityId", collectivityId)
+      navigate(`/`)
     } catch (error) {
-      console.error("Error fetching collectivity:", error);
-      toast.error("Erreur lors de la récupération de la collectivité");
-    }
-  };
-
-  async function handleLogout() {
-    try {
-      console.log("Déconnexion");
-      await api.post(`/user/logout`);
-      api.removeToken();
-      setUser(null);
-      setCollectivity(null);
-      setActionRights([]);
-      localStorage.removeItem('selectedCollectivityId');
-      navigate("/auth");
-    } catch (error) {
-      console.log(error);
+      console.error("Error fetching collectivity:", error)
+      toast.error("Erreur lors de la récupération de la collectivité")
     }
   }
 
-  const navigation = (user?.role === "admin" || user?.collectivities?.find(c => c.status === 'approved')) ? [
-    {
-      text: "Accueil",
-      linkProps: { to: "/" },
-    },
-    (user.role === "admin" || user.collectivities?.find(c => c.id === collectivity?._id)?.role === "admin") && {
-      text: "Gérer ma collectivité",
-      linkProps: { to: "/collectivity" },
-    },
-    (user.role === "admin" || user.collectivities?.find(c => c.id === collectivity?._id)?.role === "admin") && {
-      text: "Mes Actions",
-      linkProps: { to: "/actions" },
-    },
-  ] : [];
+  async function handleLogout() {
+    try {
+      await api.post(`/user/logout`)
+      api.removeToken()
+      setUser(null)
+      setCollectivity(null)
+      setActionRights([])
+      localStorage.removeItem("selectedCollectivityId")
+      navigate("/auth")
+    } catch (error) {
+      console.log(error)
+    }
+  }
 
-  const quickAccessItems = user ? [
-    {
-      iconId: "fr-icon-leaf-line",
-      linkProps: {
-        to: "/collectivites",
-      },
-      text: "Collectivités",
-    },
-    user.role === "admin" && {
-      iconId: "fr-icon-settings-5-line",
-      text: "Admin",
-      menuItems: [
+  const navigation =
+    user?.role === "admin" || user?.collectivities?.find((c) => c.status === "approved")
+      ? [
+          {
+            text: "Accueil",
+            linkProps: { to: "/" }
+          },
+          (user.role === "admin" || user.collectivities?.find((c) => c.id === collectivity?._id)?.role === "admin") && {
+            text: "Gérer ma collectivité",
+            linkProps: { to: "/collectivity" }
+          },
+          (user.role === "admin" || user.collectivities?.find((c) => c.id === collectivity?._id)?.role === "admin") && {
+            text: "Mes Actions",
+            linkProps: { to: "/actions" }
+          }
+        ]
+      : []
+
+  const quickAccessItems = user
+    ? [
         {
-          linkProps: { to: "/admin/collectivity" },
-          text: "Collectivités",
-        },
-        {
-          linkProps: { to: "/admin/action" },
-          text: "Actions",
-        },
-        {
-          linkProps: { to: "/admin/indicator" },
-          text: "Indicateurs",
-        },
-        {
-          linkProps: { to: "/admin/users" },
-          text: "Utilisateurs",
-        },
-      ],
-    },
-    {
-      iconId: "fr-icon-account-circle-line",
-      text: user?.name || "Mon compte",
-      menuItems: [
-        {
-          iconId: "fr-icon-settings-5-line",
+          iconId: "fr-icon-leaf-line",
           linkProps: {
-            to: "/settings",
+            to: "/collectivites"
           },
-          text: "Paramètres",
+          text: "Collectivités"
+        },
+        user.role === "admin" && {
+          iconId: "fr-icon-settings-5-line",
+          text: "Admin",
+          menuItems: [
+            {
+              linkProps: { to: "/admin/collectivity" },
+              text: "Collectivités"
+            },
+            {
+              linkProps: { to: "/admin/action" },
+              text: "Actions"
+            },
+            {
+              linkProps: { to: "/admin/indicator" },
+              text: "Indicateurs"
+            },
+            {
+              linkProps: { to: "/admin/users" },
+              text: "Utilisateurs"
+            }
+          ]
         },
         {
-          iconId: "fr-icon-logout-box-r-line",
-          text: "Se déconnecter",
-          buttonProps: {
-            onClick: (e) => {
-              e.preventDefault();
-              handleLogout();
+          iconId: "fr-icon-account-circle-line",
+          text: user?.name || "Mon compte",
+          menuItems: [
+            {
+              iconId: "fr-icon-settings-5-line",
+              linkProps: {
+                to: "/settings"
+              },
+              text: "Paramètres"
             },
-          },
-        },
-      ],
-    },
-  ] : [];
+            {
+              iconId: "fr-icon-logout-box-r-line",
+              text: "Se déconnecter",
+              buttonProps: {
+                onClick: (e) => {
+                  e.preventDefault()
+                  handleLogout()
+                }
+              }
+            }
+          ]
+        }
+      ]
+    : []
 
   return (
     <header role="banner" className="fr-header">
@@ -186,7 +189,7 @@ export default function Header() {
                           >
                             <span className={item.iconId} aria-hidden="true"></span>
                             <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
-                            <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? 'rotate-180' : ''}`} />
+                            <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? "rotate-180" : ""}`} />
                           </button>
                           {openQuickAccessDropdown === index && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
@@ -194,10 +197,7 @@ export default function Header() {
                                 {item.menuItems.map((subItem, subIndex) => (
                                   <li key={subIndex}>
                                     {subItem.buttonProps ? (
-                                      <button
-                                        {...subItem.buttonProps}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                                      >
+                                      <button {...subItem.buttonProps} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
                                         {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
                                         {subItem.text}
                                       </button>
@@ -218,18 +218,12 @@ export default function Header() {
                           )}
                         </>
                       ) : item.buttonProps ? (
-                        <button
-                          className="fr-btn fr-btn--tertiary-no-outline"
-                          {...item.buttonProps}
-                        >
+                        <button className="fr-btn fr-btn--tertiary-no-outline" {...item.buttonProps}>
                           <span className={item.iconId} aria-hidden="true"></span>
                           <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
                         </button>
                       ) : (
-                        <Link
-                          {...item.linkProps}
-                          className="fr-btn fr-btn--tertiary-no-outline"
-                        >
+                        <Link {...item.linkProps} className="fr-btn fr-btn--tertiary-no-outline">
                           <span className={item.iconId} aria-hidden="true"></span>
                           <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
                         </Link>
@@ -250,83 +244,76 @@ export default function Header() {
               <nav className="fr-nav" role="navigation" aria-label="Menu principal">
                 <ul className="fr-nav__list">
                   {navigation.filter(Boolean).map((item, index) => {
-                    const isActive = item.menuLinks 
-                      ? item.menuLinks?.some(subItem => subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + '/')))
-                      : item.linkProps?.to && (location.pathname === item.linkProps.to || location.pathname.startsWith(item.linkProps.to + '/'));
-                    
+                    const isActive = item.menuLinks
+                      ? item.menuLinks?.some(
+                          (subItem) => subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + "/"))
+                        )
+                      : item.linkProps?.to && (location.pathname === item.linkProps.to || location.pathname.startsWith(item.linkProps.to + "/"))
+
                     return (
                       <li key={index} className="fr-nav__item m-0 text-base">
                         {item.menuLinks ? (
                           <>
                             <button
-                              className={`fr-nav__btn p-4 ${isActive ? 'border-b-2 !border-primary-green !text-primary-green' : ''}`}
+                              className={`fr-nav__btn p-4 ${isActive ? "border-b-2 !border-primary-green !text-primary-green" : ""}`}
                               aria-expanded={openDropdown === index}
                               aria-controls={`menu-${index}`}
-                              onClick={() => setOpenDropdown(openDropdown === index ? null : index) }
+                              onClick={() => setOpenDropdown(openDropdown === index ? null : index)}
                             >
                               {item.text}
                             </button>
-                            <div
-                              className={`fr-collapse fr-menu ${openDropdown === index ? "fr-collapse--expanded" : ""}`}
-                              id={`menu-${index}`}
-                            >
+                            <div className={`fr-collapse fr-menu ${openDropdown === index ? "fr-collapse--expanded" : ""}`} id={`menu-${index}`}>
                               <ul className="fr-menu__list w-48">
                                 {item.menuLinks.map((subItem, subIndex) => {
-                                  const isSubActive = subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + '/'));
+                                  const isSubActive =
+                                    subItem.linkProps?.to && (location.pathname === subItem.linkProps.to || location.pathname.startsWith(subItem.linkProps.to + "/"))
                                   return (
                                     <li key={subIndex}>
-                                      <Link 
-                                        {...subItem.linkProps} 
-                                        className={`fr-nav__link text-base ${isSubActive ? 'bg-gray-100' : ''}`}
-                                      >
+                                      <Link {...subItem.linkProps} className={`fr-nav__link text-base ${isSubActive ? "bg-gray-100" : ""}`}>
                                         {subItem.text}
                                       </Link>
                                     </li>
-                                  );
+                                  )
                                 })}
                               </ul>
                             </div>
                           </>
                         ) : (
-                          <Link 
-                            {...item.linkProps} 
-                            className={`fr-nav__link text-base p-4 ${isActive ? 'border-b-2 !border-primary-green !text-primary-green' : ''}`}
-                          >
+                          <Link {...item.linkProps} className={`fr-nav__link text-base p-4 ${isActive ? "border-b-2 !border-primary-green !text-primary-green" : ""}`}>
                             {item.text}
                           </Link>
                         )}
                       </li>
-                    );
+                    )
                   })}
                 </ul>
               </nav>
             )}
-            
-            {(user?.role === "admin" || (user?.collectivities && user.collectivities.filter(c => c.status === 'approved').length > 0)) && (
+
+            {(user?.role === "admin" || (user?.collectivities && user.collectivities.filter((c) => c.status === "approved").length > 0)) && (
               <div className="flex items-center gap-3">
-                <Select 
+                <Select
                   value={collectivity?._id || ""}
                   onChange={handleCollectivityChange}
                   options={[
-                    ...(user.role === "admin" 
+                    ...(user.role === "admin"
                       ? collectivities.map((collectivity) => ({
                           value: collectivity._id,
                           label: `#${collectivity.name}`
                         }))
                       : user.collectivities
-                          .filter(c => c.status === 'approved')
+                          .filter((c) => c.status === "approved")
                           .map((collectivity) => ({
                             value: collectivity.id,
                             label: `#${collectivity.name}`
-                          }))
-                      )
+                          })))
                   ]}
                 />
 
                 {collectivity && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
                     <span className="text-sm font-semibold text-primary-green capitalize">
-                      {user.role === "admin" ? "admin" : user.collectivities.find(uc => uc.id === collectivity._id).role}
+                      {user.role === "admin" ? "admin" : user.collectivities.find((uc) => uc.id === collectivity._id).role}
                     </span>
                   </div>
                 )}
@@ -337,5 +324,5 @@ export default function Header() {
         </div>
       </div>
     </header>
-  );
+  )
 }

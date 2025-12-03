@@ -537,7 +537,6 @@ function UserCollectivitiesTab({ user, setUser }) {
       const { ok, data, code } = await api.post("/collectivity/search", {})
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setCollectivities(data)
-      console.log("collectivities", data)
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")
@@ -674,10 +673,7 @@ function UserCollectivitiesTab({ user, setUser }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">Collectivité</label>
               <Select
                 value={addValues.collectivity_id}
-                onChange={(value) => {
-                  setAddValues({ ...addValues, collectivity_id: value })
-                  console.log("collectivity_id", value)
-                }}
+                onChange={(value) => setAddValues({ ...addValues, collectivity_id: value })}
                 options={[
                   { value: "", label: "Sélectionner une collectivité" },
                   ...collectivities
@@ -694,10 +690,7 @@ function UserCollectivitiesTab({ user, setUser }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">Rôle dans cette collectivité</label>
               <Select
                 value={addValues.role}
-                onChange={(value) => {
-                  setAddValues({ ...addValues, role: value })
-                  console.log("role", value)
-                }}
+                onChange={(value) => setAddValues({ ...addValues, role: value })}
                 options={[
                   { value: "user", label: "Utilisateur" },
                   { value: "admin", label: "Administrateur" }

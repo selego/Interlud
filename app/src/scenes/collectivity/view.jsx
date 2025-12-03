@@ -132,7 +132,6 @@ function UserInfoTab({ user, setUser }) {
 
       const payload = { economic_actors: collectivity.economic_actors || [] }
       payload.economic_actors.push({ economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name, joined_at: new Date() })
-      console.log("payload", payload)
 
       const { ok, code } = await api.put(`/collectivity/${collectivity._id}`, payload)
       if (!ok) throw new Error(code || "FAILED_TO_LINK_ECONOMIC_ACTOR")
@@ -161,13 +160,10 @@ function UserInfoTab({ user, setUser }) {
 
   const duplicateIndicatorValuesForEconomicActor = async () => {
     try {
-      console.log("collectivity", collectivity)
-      console.log("economic_actor", user.economic_actor_id, user.economic_actor_name)
       const { ok } = await api.post("/indicator_value/duplicate_for_economic_actor", {
         collectivity,
         economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }
       })
-      console.log("ok", ok)
       if (!ok) return toast.error("Une erreur est survenue")
     } catch (e) {
       console.log(e)

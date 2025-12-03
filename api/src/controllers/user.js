@@ -1,42 +1,42 @@
-const express = require("express");
-const passport = require("passport");
-const jwt = require("jsonwebtoken");
+const express = require('express');
+const passport = require('passport');
+const jwt = require('jsonwebtoken');
 const router = express.Router();
-const crypto = require("crypto");
+const crypto = require('crypto');
 
-const Collectivity = require("../models/collectivity");
-const EconomicActor = require("../models/economic_actor");
-const UserObject = require("../models/user");
-const UserActionRightObject = require("../models/user_action_right");
-const config = require("../config");
-const { validatePassword } = require("../utils");
-const { BREVO_TEMPLATES } = require("../utils/constants");
-const ERROR_CODES = require("../utils/errorCodes");
+const Collectivity = require('../models/collectivity');
+const EconomicActor = require('../models/economic_actor');
+const UserObject = require('../models/user');
+const UserActionRightObject = require('../models/user_action_right');
+const config = require('../config');
+const { validatePassword } = require('../utils');
+const { BREVO_TEMPLATES } = require('../utils/constants');
+const ERROR_CODES = require('../utils/errorCodes');
 
-const brevo = require("../services/brevo");
-const { capture } = require("../services/sentry");
+const brevo = require('../services/brevo');
+const { capture } = require('../services/sentry');
 
 // 1 year
 const COOKIE_MAX_AGE = 31557600000;
-const JWT_MAX_AGE = "1y";
+const JWT_MAX_AGE = '1y';
 
 const cookieOptions = () => {
-  if (config.ENVIRONMENT === "development") {
-    return { maxAge: COOKIE_MAX_AGE, httpOnly: true, secure: false, sameSite: "Lax" };
+  if (config.ENVIRONMENT === 'development') {
+    return { maxAge: COOKIE_MAX_AGE, httpOnly: true, secure: false, sameSite: 'Lax' };
   } else {
     return {
       maxAge: COOKIE_MAX_AGE,
       httpOnly: true,
       secure: true,
-      origin: "YOUR PROD URL",
-      sameSite: "none",
+      origin: 'YOUR PROD URL',
+      sameSite: 'none',
     };
   }
 };
 
-router.post("/signin", async (req, res) => {
+router.post('/signin', async (req, res) => {
   let { password, email } = req.body;
-  email = (email || "").trim().toLowerCase();
+  email = (email || '').trim().toLowerCase();
 
   if (!email || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
 
@@ -46,18 +46,18 @@ router.post("/signin", async (req, res) => {
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
 
-    const approvedCollectivities = user.collectivities?.filter((c) => c.status === "approved") || [];
+    const approvedCollectivities = user.collectivities?.filter((c) => c.status === 'approved') || [];
     let collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
-    if (user.role === "admin") collectivity = await Collectivity.findOne();
+    if (user.role === 'admin') collectivity = await Collectivity.findOne();
 
-    const match = config.ENVIRONMENT === "development" || (await user.comparePassword(password));
+    const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
     if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     user.set({ last_login_at: Date.now() });
     await user.save();
 
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
-    res.cookie("jwt", token, cookieOptions());
+    res.cookie('jwt', token, cookieOptions());
 
     return res.status(200).send({ ok: true, token, user, userActionRights, collectivity });
   } catch (error) {
@@ -66,28 +66,27 @@ router.post("/signin", async (req, res) => {
   }
 });
 
-router.post("/signup", async (req, res) => {
+router.post('/signup', async (req, res) => {
   let { password, email, economic_actor_name, role } = req.body;
-  email = (email || "").trim().toLowerCase();
+  email = (email || '').trim().toLowerCase();
 
   try {
     const existingUser = await UserObject.findOne({ email });
-    console.log("existingUser", existingUser);
     if (existingUser) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
 
     if (password && !validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
 
-    let payload = { password, email, role: "user" };
-    if (role === "economic_actor") {
+    let payload = { password, email, role: 'user' };
+    if (role === 'economic_actor') {
       const economic_actor = await EconomicActor.create({ name: economic_actor_name });
       payload.economic_actor_id = economic_actor._id;
       payload.economic_actor_name = economic_actor.name;
-      payload.role = "economic_actor";
+      payload.role = 'economic_actor';
     }
 
     const user = await UserObject.create(payload);
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
-    res.cookie("jwt", token, cookieOptions());
+    res.cookie('jwt', token, cookieOptions());
 
     return res.status(200).send({ user, token, ok: true });
   } catch (error) {
@@ -97,9 +96,9 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.post("/logout", async (_, res) => {
+router.post('/logout', async (_, res) => {
   try {
-    res.clearCookie("jwt", cookieOptions());
+    res.clearCookie('jwt', cookieOptions());
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
@@ -107,14 +106,14 @@ router.post("/logout", async (_, res) => {
   }
 });
 
-router.get("/signin_token", passport.authenticate(["user", "admin"], { session: false }), async (req, res) => {
+router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: false }), async (req, res) => {
   try {
     const { user } = req;
     user.set({ last_login_at: Date.now() });
     await user.save();
 
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
-    res.cookie("jwt", token, cookieOptions());
+    res.cookie('jwt', token, cookieOptions());
 
     return res.status(200).send({ user, token, ok: true });
   } catch (error) {
@@ -123,13 +122,13 @@ router.get("/signin_token", passport.authenticate(["user", "admin"], { session: 
   }
 });
 
-router.post("/forgot_password", async (req, res) => {
+router.post('/forgot_password', async (req, res) => {
   try {
     const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
 
     if (!obj) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
-    const token = await crypto.randomBytes(20).toString("hex");
+    const token = await crypto.randomBytes(20).toString('hex');
     obj.set({ forgot_password_reset_token: token, forgot_password_reset_expires: Date.now() + 7200000 }); //2h
     await obj.save();
 
@@ -145,7 +144,7 @@ router.post("/forgot_password", async (req, res) => {
   }
 });
 
-router.post("/forgot_password_reset", async (req, res) => {
+router.post('/forgot_password_reset', async (req, res) => {
   try {
     const obj = await UserObject.findOne({
       forgot_password_reset_token: req.body.token,
@@ -157,8 +156,8 @@ router.post("/forgot_password_reset", async (req, res) => {
     if (!validatePassword(req.body.password)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
 
     obj.password = req.body.password;
-    obj.forgot_password_reset_token = "";
-    obj.forgot_password_reset_expires = "";
+    obj.forgot_password_reset_token = '';
+    obj.forgot_password_reset_expires = '';
     await obj.save();
     return res.status(200).send({ ok: true });
   } catch (error) {
@@ -167,7 +166,7 @@ router.post("/forgot_password_reset", async (req, res) => {
   }
 });
 
-router.post("/reset_password", passport.authenticate("user", { session: false }), async (req, res) => {
+router.post('/reset_password', passport.authenticate('user', { session: false }), async (req, res) => {
   try {
     const match = await req.user.comparePassword(req.body.password);
     if (!match) {
@@ -190,7 +189,7 @@ router.post("/reset_password", passport.authenticate("user", { session: false })
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const data = await UserObject.findOne({ _id: req.params.id });
     return res.status(200).send({ ok: true, data });
@@ -200,9 +199,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.get("/", passport.authenticate(["admin", "user"], { session: false }), async (req, res) => {
+router.get('/', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const data = await UserObject.find({ role: "normal" });
+    const data = await UserObject.find({ role: 'normal' });
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
@@ -210,18 +209,18 @@ router.get("/", passport.authenticate(["admin", "user"], { session: false }), as
   }
 });
 
-router.post("/search", passport.authenticate(["admin", "user"], { session: false }), async (req, res) => {
+router.post('/search', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
     const { search, sort, per_page, page } = req.body;
     let query = {};
 
     if (req.body.collectivity_id) query = { ...query, collectivities: { $elemMatch: { id: req.body.collectivity_id } } };
 
-    const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, "\\$&");
+    const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, '\\$&');
     if (search) {
       query = {
         ...query,
-        $or: [{ name: { $regex: searchValue, $options: "i" } }, { email: { $regex: searchValue, $options: "i" } }],
+        $or: [{ name: { $regex: searchValue, $options: 'i' } }, { email: { $regex: searchValue, $options: 'i' } }],
       };
     }
 
@@ -242,7 +241,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   }
 });
 
-router.post("/", passport.authenticate(["admin"], { session: false }), async (req, res) => {
+router.post('/', passport.authenticate(['admin'], { session: false }), async (req, res) => {
   try {
     const { password } = req.body;
 
@@ -259,7 +258,7 @@ router.post("/", passport.authenticate(["admin"], { session: false }), async (re
 });
 
 //@check
-router.put("/:id", passport.authenticate(["admin", "user"], { session: false }), async (req, res) => {
+router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
     const user = await UserObject.findById(req.params.id);
     const obj = req.body;
@@ -273,7 +272,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false }),
   }
 });
 
-router.put("/", passport.authenticate(["admin", "user", "applicant"], { session: false }), async (req, res) => {
+router.put('/', passport.authenticate(['admin', 'user', 'applicant'], { session: false }), async (req, res) => {
   try {
     const obj = req.body;
     const data = await UserObject.findByIdAndUpdate(req.user._id, obj, { new: true });
@@ -284,7 +283,7 @@ router.put("/", passport.authenticate(["admin", "user", "applicant"], { session:
   }
 });
 
-router.delete("/:id", passport.authenticate("admin", { session: false }), async (req, res) => {
+router.delete('/:id', passport.authenticate('admin', { session: false }), async (req, res) => {
   try {
     await UserObject.findOneAndRemove({ _id: req.params.id });
     res.status(200).send({ ok: true });
@@ -294,7 +293,7 @@ router.delete("/:id", passport.authenticate("admin", { session: false }), async 
   }
 });
 
-router.post("/reset_password/:id", passport.authenticate(["admin"], { session: false }), async (req, res) => {
+router.post('/reset_password/:id', passport.authenticate(['admin'], { session: false }), async (req, res) => {
   try {
     if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
     if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
@@ -309,7 +308,7 @@ router.post("/reset_password/:id", passport.authenticate(["admin"], { session: f
   }
 });
 
-router.post("/request-collectivity-access", passport.authenticate(["user", "applicant"], { session: false }), async (req, res) => {
+router.post('/request-collectivity-access', passport.authenticate(['user', 'applicant'], { session: false }), async (req, res) => {
   try {
     const { collectivityId } = req.body;
     if (!collectivityId) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
@@ -320,12 +319,12 @@ router.post("/request-collectivity-access", passport.authenticate(["user", "appl
     const user = await UserObject.findById(req.user._id);
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: "ALREADY_REQUESTED" });
+    if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: 'ALREADY_REQUESTED' });
 
-    user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: user.role || "user", status: "pending" }];
+    user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: user.role || 'user', status: 'pending' }];
     await user.save();
 
-    await brevo.sendEmail([{ email: "axel@selego.co" }], "Demande de collectivité", `<p>uwu</p>`);
+    await brevo.sendEmail([{ email: 'axel@selego.co' }], 'Demande de collectivité', `<p>uwu</p>`);
 
     res.status(200).send({ ok: true, data: user });
   } catch (error) {
