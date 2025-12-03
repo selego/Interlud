@@ -68,9 +68,6 @@ router.post("/importIndicatorValues", passport.authenticate(["admin", "user"], {
 
     const { extractedData } = await importSheetsToExcelFile(collectivity.excelFileId, fileBuffer, SITUATION_SHEETS);
     if (!extractedData || extractedData.length === 0) return res.status(200).json({ ok: true });
-
-    console.log(extractedData);
-
     const indicators = await Indicator.find({ excel_indicator_id: { $in: [...new Set(extractedData.map((d) => d.excel_indicator_id))] } });
     const indicatorMap = new Map(indicators.map((ind) => [ind.excel_indicator_id, ind]));
 
@@ -109,18 +106,15 @@ router.post("/importIndicatorValues", passport.authenticate(["admin", "user"], {
 
         const oldValue = indicatorValue.value?.[indicatorValue.indicator_type];
         if (JSON.stringify(oldValue) === JSON.stringify(data.value)) continue;
-
-        const newLogType = Array.isArray(data.value) ? "array" : typeof data.value;
-        const oldLogType = Array.isArray(oldValue) ? "array" : typeof oldValue;
         logs.push(
           new Log({
             model_name: "indicator_value",
             name: indicator.name,
             field: "value",
             operation: "update",
-            new_value: { [newLogType]: data.value },
-            previous_value: { [oldLogType]: oldValue },
-            type_value: newLogType,
+            new_value: { [Array.isArray(data.value) ? "array" : typeof data.value]: data.value },
+            previous_value: { [Array.isArray(oldValue) ? "array" : typeof oldValue]: oldValue },
+            type_value: Array.isArray(data.value) ? "array" : typeof data.value,
             date: new Date(),
             user_id: req.user.id,
             user_name: req.user.name,

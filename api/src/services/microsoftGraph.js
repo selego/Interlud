@@ -276,17 +276,15 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
     importedDataBySituation[situation] = new Map();
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
-      const excelIndicatorId = row.getCell(5).value;
       const value = row.getCell(6).value;
-      if (excelIndicatorId) importedDataBySituation[situation].set(String(excelIndicatorId).trim(), value ?? "");
+      if (row.getCell(5).value) importedDataBySituation[situation].set(String(row.getCell(5).value).trim(), value ?? "");
     });
   }
 
   const extractedData = [];
 
   for (const { sheetName, situation } of sheets) {
-    const importedValues = importedDataBySituation[situation];
-    if (!importedValues || importedValues.size === 0) continue;
+    if (!importedDataBySituation[situation] || importedDataBySituation[situation].size === 0) continue;
 
     const usedRangeResponse = await fetch(
       `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`,
@@ -304,9 +302,9 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
 
     for (let i = 0; i < rows.length; i++) {
       const excelIndicatorId = rows[i][4] ? String(rows[i][4]).trim() : "";
-      if (!excelIndicatorId || !importedValues.has(excelIndicatorId)) continue;
+      if (!excelIndicatorId || !importedDataBySituation[situation].has(excelIndicatorId)) continue;
 
-      const newValue = importedValues.get(excelIndicatorId);
+      const newValue = importedDataBySituation[situation].get(excelIndicatorId);
       const cellValue = Array.isArray(newValue) ? newValue.join(", ") : newValue;
 
       const updateResponse = await fetch(
