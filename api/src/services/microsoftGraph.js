@@ -2,7 +2,7 @@ const tenantId = "efa89c5e-5599-439d-8f01-b4da9ded0a55";
 const clientId = "f2924bbc-a975-49fe-a2ca-df4ff711be14";
 const clientSecret = "9aG8Q~chbn5ywMYUtx6zd3Z8zUelSoQjsHuiTdq9";
 const sharePointSiteName = "selegobv";
-const masterExcelFileId = "01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77";
+const masterExcelFileId = "01IBL4ADMGCIMMRJMFQ5EZRZUPEE63ZCTI";
 
   const worksheetsToProcess = [
     { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -200,7 +200,6 @@ async function exportExcelFile(fileId) {
   }
   const site = await siteResponse.json();
   
-  // Récupérer le lien de téléchargement du fichier
   const downloadResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}?select=@microsoft.graph.downloadUrl,name`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -210,11 +209,97 @@ async function exportExcelFile(fileId) {
   }
   const fileData = await downloadResponse.json();
   
-  return {
-    downloadUrl: fileData["@microsoft.graph.downloadUrl"],
-    fileName: fileData.name,
-  };
+  return { downloadUrl: fileData["@microsoft.graph.downloadUrl"], fileName: fileData.name };
 }
 
+async function exportExcelFileWithSpecificSheets(fileId, sheetsToKeep) {
+  const ExcelJS = require('exceljs');
+  const token = await getAccessToken();
+  
+  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+  if (!siteResponse.ok) {
+    const error = await siteResponse.json();
+    throw new Error(error.error?.message || "Site SharePoint not found");
+  }
+  const site = await siteResponse.json();
+  
+  const downloadResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}?select=@microsoft.graph.downloadUrl,name`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!downloadResponse.ok) {
+    const error = await downloadResponse.json();
+    throw new Error(error.error?.message || "Cannot get download URL");
+  }
+  const fileData = await downloadResponse.json();
+  
+  const fileResponse = await fetch(fileData["@microsoft.graph.downloadUrl"]);
+  if (!fileResponse.ok) throw new Error("Cannot download file from SharePoint");
+  
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(await fileResponse.arrayBuffer()));
+  
+  const sheetsToRemove = [];
+  workbook.eachSheet((ws) => {
+    if (!sheetsToKeep.includes(ws.name)) sheetsToRemove.push(ws.id);
+  });
+  sheetsToRemove.forEach(id => workbook.removeWorksheet(id));
+  
+  return { buffer: Buffer.from(await workbook.xlsx.writeBuffer()),  fileName: fileData.name };
+}
 
-module.exports = { getAccessToken, readExcelCells, updateExcelCellByIndicatorId, duplicateExcelFile, exportExcelFile };
+async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheetsToImport) {
+  const ExcelJS = require('exceljs');
+  const token = await getAccessToken();
+  
+  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }});
+  if (!siteResponse.ok) {
+    const error = await siteResponse.json();
+    throw new Error(error.error?.message || "Site SharePoint not found");
+  }
+  const site = await siteResponse.json();
+  
+  const importedWorkbook = new ExcelJS.Workbook();
+  await importedWorkbook.xlsx.load(importedFileBuffer);
+
+  const extractedData = [];
+
+  for (const sheetName of sheetsToImport) {
+    const importedSheet = importedWorkbook.getWorksheet(sheetName);
+    if (!importedSheet) continue;
+    
+    const situation = worksheetsToProcess.find(ws => ws.worksheetName === sheetName)?.situation || null;
+    
+    const columnFValues = [];
+
+    for (let r = 1; r <= importedSheet.rowCount; r++) {
+      
+      const excelIndicatorId = importedSheet.getCell(r, 5).value !== null ? String(importedSheet.getCell(r, 5).value).trim() : "";
+      const value = importedSheet.getCell(r, 6).value !== null ? importedSheet.getCell(r, 6).value : "";
+      columnFValues.push([value]);
+      
+      if (excelIndicatorId && situation) extractedData.push({ excel_indicator_id: excelIndicatorId, value: value, situation: situation });
+    }
+    
+    if (columnFValues.length === 0) continue;
+        
+    const updateResponse = await fetch(
+      `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${`F1:F${importedSheet.rowCount}`}')`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: columnFValues }),
+      }
+    );
+    
+    if (!updateResponse.ok) {
+      const error = await updateResponse.json();
+      throw new Error(error.error?.message || `Cannot update sheet ${sheetName}`);
+    }
+  }
+  
+  return { success: true, extractedData };
+}
+
+module.exports = { getAccessToken, readExcelCells, updateExcelCellByIndicatorId, duplicateExcelFile, exportExcelFile, exportExcelFileWithSpecificSheets, importSheetsToExcelFile };
