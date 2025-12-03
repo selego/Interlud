@@ -5,7 +5,7 @@ const MONGODB_ENDPOINT =
   process.env.MONGODB_ENDPOINT || "mongodb+srv://axel_db_user:EbubtALClwn4lrZR@interlud.zt98xxe.mongodb.net/db";
 const SECRET = process.env.SECRET || "not-so-secret";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
-const SENTRY_DSN = process.env.SENTRY_DSN || "https://cb113131239df8207706baaf99145330@sentry.selego.co/212";
+const SENTRY_DSN = process.env.SENTRY_DSN || "https://c59cb0d9a0baefe0bd28ad58d45bd5fe@sentry.selego.co/212";
 
 const S3_ENDPOINT = process.env.S3_ENDPOINT || "";
 const S3_ACCESSKEYID = process.env.S3_ACCESSKEYID || "";
