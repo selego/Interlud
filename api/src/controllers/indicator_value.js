@@ -1,16 +1,17 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const passport = require("passport");
-const IndicatorValue = require("../models/indicator_value");
-const ERROR_CODES = require("../utils/errorCodes");
-const { capture } = require("../services/sentry");
-const Log = require("../models/log");
-const Action = require("../models/action");
-const Indicator = require("../models/indicator");
-const { updateExcelCellByIndicatorId } = require("../services/microsoftGraph");
-const Collectivity = require("../models/collectivity");
+const passport = require('passport');
+const IndicatorValue = require('../models/indicator_value');
+const ERROR_CODES = require('../utils/errorCodes');
+const { capture } = require('../services/sentry');
+const Log = require('../models/log');
+const Action = require('../models/action');
+const Indicator = require('../models/indicator');
+const { updateExcelCellByIndicatorId } = require('../services/microsoftGraph');
+const Collectivity = require('../models/collectivity');
+const EconomicActor = require('../models/economic_actor');
 
-router.get("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = await IndicatorValue.findById(req.params.id);
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
@@ -22,7 +23,7 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   }
 });
 
-router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = await IndicatorValue.findById(req.params.id);
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
@@ -43,29 +44,29 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const logs = [];
 
     for (const field of Object.keys(req.body)) {
-      if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
+      if (['updatedAt', '__v', 'createdAt', '_id'].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = indicatorValue[field];
 
-      if (originalValue instanceof Date && typeof newValue === "string") newValue = new Date(newValue);
+      if (originalValue instanceof Date && typeof newValue === 'string') newValue = new Date(newValue);
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
 
       let actualNewValue = newValue;
       let actualOldValue = originalValue;
-      if (field === "value" && indicatorValue.indicator_type) {
+      if (field === 'value' && indicatorValue.indicator_type) {
         actualNewValue = newValue?.[indicatorValue.indicator_type];
         actualOldValue = originalValue?.[indicatorValue.indicator_type];
       }
 
       let logType = typeof actualNewValue;
-      if (actualNewValue instanceof Date) logType = "date";
-      if (Array.isArray(actualNewValue)) logType = "array";
+      if (actualNewValue instanceof Date) logType = 'date';
+      if (Array.isArray(actualNewValue)) logType = 'array';
 
       const log = {
-        model_name: "indicator_value",
+        model_name: 'indicator_value',
         name: indicator.name,
         field: field,
-        operation: "update",
+        operation: 'update',
         new_value: { [logType]: actualNewValue },
         previous_value: { [logType]: actualOldValue },
         type_value: logType,
@@ -113,14 +114,14 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
         const actualOldValue = otherIndicatorValue.value?.[indicatorValue.indicator_type];
 
         let logType = typeof actualNewValue;
-        if (actualNewValue instanceof Date) logType = "date";
-        if (Array.isArray(actualNewValue)) logType = "array";
+        if (actualNewValue instanceof Date) logType = 'date';
+        if (Array.isArray(actualNewValue)) logType = 'array';
 
         const syncLog = {
-          model_name: "indicator_value",
+          model_name: 'indicator_value',
           name: otherIndicatorValue.name,
-          field: "value",
-          operation: "update",
+          field: 'value',
+          operation: 'update',
           new_value: { [logType]: actualNewValue },
           previous_value: { [logType]: actualOldValue },
           type_value: logType,
@@ -153,25 +154,17 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   }
 });
 
-router.post("/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     let query = {};
 
-    if (req.body.indicator_id) {
-      query.indicator_id = req.body.indicator_id;
-    }
-    if (req.body.action_id) {
-      query.action_id = req.body.action_id;
-    }
-    if (req.body.situation) {
-      query.situation = req.body.situation;
-    }
-    if (req.body.indicator_category_name) {
-      query.indicator_category_name = req.body.indicator_category_name;
-    }
+    if (req.body.indicator_id) query.indicator_id = req.body.indicator_id;
+    if (req.body.action_id) query.action_id = req.body.action_id;
+    if (req.body.situation) query.situation = req.body.situation;
+    if (req.body.indicator_category_name) query.indicator_category_name = req.body.indicator_category_name;
     if (req.body.indicator_sub_category_name !== undefined) {
       if (req.body.indicator_sub_category_name === null) {
-        query.$and = [{ $or: [{ indicator_sub_category_name: null }, { indicator_sub_category_name: "" }, { indicator_sub_category_name: { $exists: false } }] }];
+        query.$and = [{ $or: [{ indicator_sub_category_name: null }, { indicator_sub_category_name: '' }, { indicator_sub_category_name: { $exists: false } }] }];
       } else {
         query.indicator_sub_category_name = req.body.indicator_sub_category_name;
       }
@@ -187,7 +180,65 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   }
 });
 
-router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity, economic_actor } = req.body;
+    if (!collectivity || !economic_actor) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const sourceIndicatorValues = await IndicatorValue.find({ collectivity_id: collectivity._id, owner: 'collectivity' });
+    if (!sourceIndicatorValues.length) return res.status(200).send({ ok: true, data: [] });
+    const economicActorActions = await Action.find({ collectivity_id: collectivity._id, owner: 'economic_actor', economic_actor_id: economic_actor._id });
+    if (!economicActorActions.length) return res.status(200).send({ ok: true, data: [] });
+
+    const payloads = [];
+    for (const economicActorAction of economicActorActions) {
+      for (const sourceIndicatorValue of sourceIndicatorValues) {
+        if (sourceIndicatorValue.action_id !== economicActorAction.action_collectivity_id) continue;
+
+        payloads.push({
+          ...sourceIndicatorValue.toObject(),
+          owner: 'economic_actor',
+          economic_actor_id: economic_actor._id,
+          economic_actor_name: economic_actor.name,
+          action_id: economicActorAction._id,
+          action_name: economicActorAction.name,
+          indicator_value_collectivity_id: sourceIndicatorValue._id,
+          value: { text: null, number: null, radio: null, checkbox: [] },
+          _id: undefined,
+          __v: undefined,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+      }
+    }
+
+    if (!payloads.length) return res.status(200).send({ ok: true, data: [] });
+    const duplicatedIndicatorValues = await IndicatorValue.insertMany(payloads);
+
+    const logs = duplicatedIndicatorValues.map((duplicatedIndicatorValue) => ({
+      model_name: 'indicator_value',
+      name: duplicatedIndicatorValue.name,
+      operation: 'duplicate',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      indicator_value_id: duplicatedIndicatorValue._id,
+      indicator_value_name: duplicatedIndicatorValue.name,
+      collectivity_id: duplicatedIndicatorValue.collectivity_id,
+      collectivity_name: duplicatedIndicatorValue.collectivity_name,
+      economic_actor_id: economic_actor._id,
+      economic_actor_name: economic_actor.name,
+    }));
+
+    if (logs.length) await Log.insertMany(logs);
+    return res.status(200).send({ ok: true, data: duplicatedIndicatorValues });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = await IndicatorValue.create(req.body);
     return res.status(200).send({ ok: true, data: indicatorValue });
