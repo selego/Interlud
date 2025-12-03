@@ -298,11 +298,10 @@ router.post("/export_indicator_values_excel", passport.authenticate(["admin", "u
         const indicator = indicatorMap.get(indicatorValue.indicator_id);
         if (!indicator) continue;
 
-        const valueType = indicator.value_type;
-        let value = indicatorValue.value?.[valueType];
+        let value = indicatorValue.value?.[indicator.value_type];
         if (Array.isArray(value)) value = value.join(", ");
 
-        let defaultValue = indicatorValue.value_default?.[valueType];
+        let defaultValue = indicatorValue.value_default?.[indicator.value_type];
         if (Array.isArray(defaultValue)) defaultValue = defaultValue.join(", ");
 
         sheet.addRow({
@@ -315,7 +314,7 @@ router.post("/export_indicator_values_excel", passport.authenticate(["admin", "u
           possibilities: indicatorValue.indicator_value_possibilities?.join(", ") || "",
           default_value: defaultValue ?? "",
           unit: indicator.value_unit || "",
-          type: valueType || "",
+          type: indicator.value_type || "",
         });
       }
     }
