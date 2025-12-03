@@ -72,6 +72,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 });
 
 router.post("/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+  capture(new Error("My first Sentry error!"));
   try {
     let query = {};
     
