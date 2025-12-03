@@ -1,38 +1,48 @@
 const express = require("express");
 const router = express.Router();
-const { getSharePointExcelFiles, readExcelCells, updateExcelCell } = require("../services/microsoftGraph");
+const { capture } = require("../services/sentry");
+const { readExcelCells, exportExcelFile } = require("../services/microsoftGraph");
 
-router.get("/sharepoint", async (req, res) => {
+const FIXED_RANGES = [
+  { name: "gains_environnementaux", range: "C13:H18" },
+  { name: "emissions_GES", range: "E26:H29" },
+  { name: "emissions_PM", range: "J26:M29" },
+  { name: "emissions_NOx", range: "O26:R29" },
+  { name: "emissions_HC", range: "T26:W29" },
+  { name: "emissions_CO", range: "Y26:AB29" },
+  { name: "emissions_Energie", range: "AD26:AG29" },
+  { name: "calculs_Surface_de_la_ZFE", range: "E39:H41" },
+  { name: "calculs_Seuil_de_la_ZFE", range: "K39:N41" },
+  { name: "calculs_Part_des_distance_effectuée_dans_la_ZFE", range: "P39:S41" },
+];
+
+router.post("/values", async (req, res) => {
   try {
-    const result = await getSharePointExcelFiles();
-    console.log('result', result);
-    res.json({ ok: true, data: result });
+    const { worksheetName, excelFileId } = req.body;
+    if (!worksheetName) return res.json({ ok: false, data: { error: "worksheetName is required" } });
+    if (!excelFileId) return res.json({ ok: false, data: { error: "excelFileId is required" } });
+    
+    const ranges = await Promise.all(
+      FIXED_RANGES.map(async (descriptor) => {
+        const result = await readExcelCells(excelFileId, worksheetName, descriptor.range);
+        return { name: descriptor.name,values: result.values || []};
+      }),
+    );
+    res.json({ ok: true, data: ranges });
   } catch (error) {
-    console.error("Error:", error);
+    capture(error);
     res.json({ ok: false, data: { error: error.message } });
   }
 });
 
-router.get("/cells/:fileId", async (req, res) => {
+router.post("/export", async (req, res) => {
   try {
-    const fileId = req.params.fileId;
-    const { worksheetName, range } = req.query;
-    const result = await readExcelCells(fileId, worksheetName, range);
+    const { fileId } = req.body;
+    if (!fileId) return res.json({ ok: false, data: { error: "fileId is required" } });
+    const result = await exportExcelFile(fileId);
     res.json({ ok: true, data: result });
   } catch (error) {
-    console.error("Error:", error);
-    res.json({ ok: false, data: { error: error.message } });
-  }
-});
-
-router.post("/cell/:fileId", async (req, res) => {
-  try {
-    const fileId = req.params.fileId;
-    const { sheet, cell, value } = req.body;
-    const result = await updateExcelCell(fileId, sheet, cell, value);
-    res.json({ ok: true, data: result });
-  } catch (error) {
-    console.error("Error:", error);
+    capture(error);
     res.json({ ok: false, data: { error: error.message } });
   }
 });
@@ -55,7 +65,7 @@ router.post("/webhook", async (req, res) => {
     
     return res.status(202).send();
   } catch (error) {
-    console.error("Error webhook:", error);
+    capture(error);
     res.status(500).send();
   }
 });

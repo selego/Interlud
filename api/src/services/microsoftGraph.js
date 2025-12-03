@@ -31,32 +31,6 @@ async function getAccessToken() {
   return res.access_token;
 }
 
-async function getSharePointExcelFiles() {
-  const token = await getAccessToken();
-  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  if (!siteResponse.ok) {
-    const error = await siteResponse.json();
-    console.error("Site error:", error);
-    throw new Error(error.error?.message || "Site SharePoint not found");
-  }
-  const site = await siteResponse.json();
-  const filesResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root/children`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  if (!filesResponse.ok) {
-    const error = await filesResponse.json();
-    console.error("Files error:", error);
-    throw new Error(error.error?.message || "Cannot access SharePoint files");
-  }
-  const filesData = await filesResponse.json();
-  const excelFiles = filesData.value.filter(
-    (file) => file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls"),
-  );
-  return excelFiles;
-}
-
 async function readExcelCells(fileId, worksheetName, range) {
   const token = await getAccessToken();
 
@@ -81,32 +55,6 @@ async function readExcelCells(fileId, worksheetName, range) {
 
   const cellsData = await cellsResponse.json();
   return cellsData;
-}
-
-async function updateExcelCell(fileId, worksheetName, cellAddress, value) {
-  const token = await getAccessToken();
-  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-
-  const site = await siteResponse.json();
-  const updateResponse = await fetch(
-    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='${cellAddress}')`,
-    {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [[value]] }),
-    },
-  );
-
-  if (!updateResponse.ok) {
-    const error = await updateResponse.json();
-    console.error("Update error:", error);
-    throw new Error(error.error?.message || "Cannot update Excel cell");
-  }
-
-  const result = await updateResponse.json();
-  return result;
 }
 
 async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation) {
@@ -239,5 +187,34 @@ async function duplicateExcelFile(newFileName) {
   return copiedFileId;
 }
 
+async function exportExcelFile(fileId) {
+  console.log("fileId", fileId);
+  const token = await getAccessToken();
+  
+  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+  if (!siteResponse.ok) {
+    const error = await siteResponse.json();
+    throw new Error(error.error?.message || "Site SharePoint not found");
+  }
+  const site = await siteResponse.json();
+  
+  // Récupérer le lien de téléchargement du fichier
+  const downloadResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}?select=@microsoft.graph.downloadUrl,name`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!downloadResponse.ok) {
+    const error = await downloadResponse.json();
+    throw new Error(error.error?.message || "Cannot get download URL");
+  }
+  const fileData = await downloadResponse.json();
+  
+  return {
+    downloadUrl: fileData["@microsoft.graph.downloadUrl"],
+    fileName: fileData.name,
+  };
+}
 
-module.exports = { getAccessToken, getSharePointExcelFiles, readExcelCells, updateExcelCell, updateExcelCellByIndicatorId, duplicateExcelFile };
+
+module.exports = { getAccessToken, readExcelCells, updateExcelCellByIndicatorId, duplicateExcelFile, exportExcelFile };
