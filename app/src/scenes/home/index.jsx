@@ -423,7 +423,7 @@ function CardAction({ action }) {
   const navigate = useNavigate()
 
   const fetchIndicatorValues = async () => {
-    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id })
+    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id, limit: 10000 })
     if (!ok) return toast.error(code || "Une erreur est survenue")
     setIndicatorValues(data)
   }

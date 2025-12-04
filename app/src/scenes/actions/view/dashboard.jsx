@@ -39,7 +39,7 @@ export default function Dashboard({ action }) {
 
   const fetchIndicatorValues = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id })
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       const situationOrder = ["init", "ref", "prev", "expost"]
       const sortedData = [...data].sort((a, b) => {
