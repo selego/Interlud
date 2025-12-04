@@ -105,6 +105,9 @@ router.post("/importIndicatorValues", passport.authenticate(["admin", "user"], {
         if (indicatorValue.indicator_type === "radio" || indicatorValue.indicator_type === "text") data.value = data.value != null ? String(data.value).trim() : "";
 
         const oldValue = indicatorValue.value?.[indicatorValue.indicator_type];
+        const isOldEmpty = oldValue == null || oldValue === "" || (Array.isArray(oldValue) && oldValue.length === 0);
+        const isNewEmpty = data.value == null || data.value === "" || (Array.isArray(data.value) && data.value.length === 0);
+        if (isOldEmpty && isNewEmpty) continue;
         if (JSON.stringify(oldValue) === JSON.stringify(data.value)) continue;
         logs.push(
           new Log({
