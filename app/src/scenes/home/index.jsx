@@ -10,10 +10,11 @@ import DebouncedInput from "@/components/debounceInput"
 import Loader from "@/components/loader"
 
 const getStatutBadgeClass = (statut) => {
-  if (statut === "completed") return "bg-primary-green/10 text-primary-green"
-  if (statut === "upcoming") return "bg-primary-orange/10 text-primary-orange"
-  if (statut === "in_progress") return "bg-primary-teal/10 text-primary-teal"
-  return "bg-gray-100 text-gray-700"
+  if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
+  if (statut === "upcoming") return { class: "bg-primary-teal/10 text-primary-teal", text: "À venir" }
+  if (statut === "in_progress") return { class: "bg-primary-orange/10 text-primary-orange", text: "En cours" }
+  if (statut === "blocked") return { class: "bg-red-100 text-red-700", text: "Bloquée" }
+  return { class: "bg-gray-100 text-gray-700", text: "Nouvelle" }
 }
 
 export default function Home() {
@@ -21,16 +22,17 @@ export default function Home() {
   const navigate = useNavigate()
   const { collectivity, user } = useStore()
   const [filters, setFilters] = useState({ search: "", status: "" })
-  const [synthese, setSynthese] = useState({ actionsCreees: 0, actionsACompleter: 0, actionsTerminees: 0, actionsBloquees: 0 })
+  const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
   const [evolutionStatuts, setEvolutionStatuts] = useState([])
   const [period, setPeriod] = useState("month")
-  const [visibleLines, setVisibleLines] = useState({ terminees: true, aCompleter: true,enAttente: true})
+  const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true })
 
   const fetchEvolutionStatuts = async () => {
     try {
       const { ok, data, code } = await api.post("/dashboard/evolution-statuts", { collectivity_id: collectivity._id, period: period })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setEvolutionStatuts(data)
+      console.log("evolutionStatuts", data)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }
@@ -41,6 +43,7 @@ export default function Home() {
       const { ok, data, code } = await api.post("/dashboard/synthese", { collectivity_id: collectivity._id, period: period })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setSynthese(data)
+      console.log("synthese", data)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }
@@ -72,7 +75,6 @@ export default function Home() {
   }
 
   useEffect(() => {
-    // Trouver au moins un status "approved", sinon rediriger vers /collectivity/join (sauf admin)
     if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin")
       return navigate("/collectivity/join", { replace: true })
     if (!collectivity) return
@@ -84,11 +86,11 @@ export default function Home() {
   if (!collectivity) return <Loader />
 
   const pieData = [
-    { name: "Terminées", value: synthese.actionsTerminees || 0 },
-    { name: "À compléter", value: synthese.actionsACompleter || 0 },
-    { name: "En attente", value: synthese.actionsBloquees || 0 },
-    { name: "Créées", value: synthese.actionsCreees || 0 },
-    { name: "Bloquées", value: synthese.actionsBloquees || 0 }
+    { name: "Terminées", value: synthese.actionsCompleted || 0 },
+    { name: "À venir", value: synthese.actionsUpcoming || 0 },
+    { name: "En progression", value: synthese.actionsInProgress || 0 },
+    { name: "Sans statut", value: synthese.actionsWithoutStatus || 0 },
+    { name: "Bloquées", value: synthese.actionsBlocked || 0 }
   ]
 
   return (
@@ -132,29 +134,29 @@ export default function Home() {
             <div className="space-y-4">
               <div className=" gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreees}</span>
+                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreated}</span>
                 </div>
-                <span className="text-lg text-font-secondary">Actions crées</span>
+                <span className="text-lg text-font-secondary">Total actions</span>
               </div>
 
               <div className="gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsACompleter}</span>
+                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsInProgress}</span>
                 </div>
 
-                <span className="text-lg text-font-secondary">Actions à compléter</span>
+                <span className="text-lg text-font-secondary">Actions en progression</span>
               </div>
 
               <div className="gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsTerminees}</span>
+                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCompleted}</span>
                 </div>
 
-                <span className="text-lg text-font-secondary">Actions terminées</span>
+                <span className="text-lg text-font-secondary">Actions complétées</span>
               </div>
               <div className="gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsBloquees}</span>
+                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsBlocked}</span>
                 </div>
 
                 <span className="text-lg text-font-secondary">Actions bloquées</span>
@@ -175,14 +177,14 @@ export default function Home() {
                       <Cell
                         key={`cell-${index}`}
                         fill={
-                          entry.name === "Terminées"
+                          entry.name === "Complétées"
                             ? "#2DAC6A"
-                            : entry.name === "À compléter"
+                            : entry.name === "En progression"
                             ? "#F59600"
-                            : entry.name === "En attente"
+                            : entry.name === "À venir"
                             ? "#56BDB8"
-                            : entry.name === "Créées"
-                            ? "#2DAC6A"
+                            : entry.name === "Sans statut"
+                            ? "#9CA3AF"
                             : entry.name === "Bloquées"
                             ? "#EE4B2B"
                             : "#56BDB8"
@@ -211,23 +213,23 @@ export default function Home() {
               <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-center text-xs text-gray-600">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                  <span>Actions terminées</span>
+                  <span>Actions complétées</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
-                  <span>Actions à compléter</span>
+                  <span>Actions en progression</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
-                  <span>Actions en attente</span>
+                  <span>Actions à venir</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-red-500"></div>
                   <span>Actions bloquées</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                  <span>Actions créées</span>
+                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                  <span>Sans statut</span>
                 </div>
               </div>
             </div>
@@ -239,15 +241,15 @@ export default function Home() {
             </div>
 
             <div className="flex gap-2 mb-6 flex-wrap">
-              <button 
-                onClick={() => setVisibleLines({ ...visibleLines, terminees: !visibleLines.terminees })}
+              <button
+                onClick={() => setVisibleLines({ ...visibleLines, actionsCompleted: !visibleLines.actionsCompleted })}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.terminees  ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
+                  visibleLines.actionsCompleted ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
                 }`}
               >
-                Terminées
+                Complétées
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.terminees ? (
+                  {visibleLines.actionsCompleted ? (
                     <>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path
@@ -267,15 +269,15 @@ export default function Home() {
                   )}
                 </svg>
               </button>
-              <button 
-                onClick={() => setVisibleLines({ ...visibleLines, aCompleter: !visibleLines.aCompleter })}
+              <button
+                onClick={() => setVisibleLines({ ...visibleLines, actionsInProgress: !visibleLines.actionsInProgress })}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.aCompleter ? "bg-primary-orange text-white"  : "border border-gray-300 text-gray-700 bg-white"
+                  visibleLines.actionsInProgress ? "bg-primary-orange text-white" : "border border-gray-300 text-gray-700 bg-white"
                 }`}
               >
-                À compléter
+                En progression
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.aCompleter ? (
+                  {visibleLines.actionsInProgress ? (
                     <>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path
@@ -295,15 +297,15 @@ export default function Home() {
                   )}
                 </svg>
               </button>
-              <button 
-                onClick={() => setVisibleLines({ ...visibleLines, enAttente: !visibleLines.enAttente })}
+              <button
+                onClick={() => setVisibleLines({ ...visibleLines, actionsUpcoming: !visibleLines.actionsUpcoming })}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.enAttente  ? "bg-primary-teal text-white"  : "border border-gray-300 text-gray-700 bg-white"
+                  visibleLines.actionsUpcoming ? "bg-primary-teal text-white" : "border border-gray-300 text-gray-700 bg-white"
                 }`}
               >
-                En attente
+                À venir
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.enAttente ? (
+                  {visibleLines.actionsUpcoming ? (
                     <>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path
@@ -349,9 +351,15 @@ export default function Home() {
                       return null
                     }}
                   />
-                  {visibleLines.terminees && <Line type="monotone" dataKey="terminees" stroke="#2DAC6A" strokeWidth={3} name="Terminées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />}
-                  {visibleLines.enAttente && <Line type="monotone" dataKey="enAttente" stroke="#56BDB8" strokeWidth={3} name="En attente" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />}
-                  {visibleLines.aCompleter && <Line type="monotone" dataKey="aCompleter" stroke="#F59600" strokeWidth={3} name="À compléter" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />}
+                  {visibleLines.actionsCompleted && (
+                    <Line type="monotone" dataKey="actionsCompleted" stroke="#2DAC6A" strokeWidth={3} name="Complétées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />
+                  )}
+                  {visibleLines.actionsUpcoming && (
+                    <Line type="monotone" dataKey="actionsUpcoming" stroke="#56BDB8" strokeWidth={3} name="À venir" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />
+                  )}
+                  {visibleLines.actionsInProgress && (
+                    <Line type="monotone" dataKey="actionsInProgress" stroke="#F59600" strokeWidth={3} name="En progression" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -360,15 +368,15 @@ export default function Home() {
             <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-start text-xs text-gray-600">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                <span>Actions terminées</span>
+                <span>Actions complétées</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
-                <span>Actions en attente</span>
+                <span>Actions à venir</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
-                <span>Actions à compléter</span>
+                <span>Actions en progression</span>
               </div>
             </div>
           </div>
@@ -408,7 +416,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {actions.map((action) => (
-              <CardAction action={action} />
+              <CardAction key={action._id} action={action} />
             ))}
 
             <div
@@ -438,7 +446,7 @@ function CardAction({ action }) {
   const navigate = useNavigate()
 
   const fetchIndicatorValues = async () => {
-    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id })
+    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id, limit: 10000 })
     if (!ok) return toast.error(code || "Une erreur est survenue")
     setIndicatorValues(data)
   }
@@ -453,10 +461,12 @@ function CardAction({ action }) {
     fetchIndicatorValues()
   }, [action._id])
 
+  const statutBadge = getStatutBadgeClass(action.status)
+
   return (
     <div key={action._id} className="card-shadow p-6 h-full flex flex-col" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
       <div className="mb-3">
-        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.status)}`}>{action.status}</span>
+        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${statutBadge.class}`}>{statutBadge.text}</span>
       </div>
 
       <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>

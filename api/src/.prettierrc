@@ -2,10 +2,8 @@
   "arrowParens": "always",
   "printWidth": 180,
   "semi": true,
-  "singleQuote": false,
-  "bracketSpacing": true,
+  "singleQuote": true,
   "quoteProps": "preserve",
   "tabWidth": 2,
-  "jsxBracketSameLine": true,
   "endOfLine": "auto"
 }

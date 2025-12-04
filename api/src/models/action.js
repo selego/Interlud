@@ -1,10 +1,10 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const MODELNAME = "action";
+const MODELNAME = 'action';
 
 const Schema = new mongoose.Schema(
   {
-    type: { type: String, enum: ["custom", "reference", "global"], trim: true },
+    type: { type: String, enum: ['custom', 'reference', 'global'], trim: true },
     excel_worksheetname: { type: String, trim: true },
 
     action_parent_id: { type: String, trim: true },
@@ -13,21 +13,24 @@ const Schema = new mongoose.Schema(
     description: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["upcoming", "in_progress", "blocked", "completed", "no_status"],
-      default: "no_status",
+      enum: ['upcoming', 'in_progress', 'blocked', 'completed', 'no_status'],
+      default: 'no_status',
       trim: true,
     },
     owner: {
       type: String,
-      enum: ["collectivity", "economic_actor"],
-      default: "collectivity",
+      enum: ['collectivity', 'economic_actor'],
+      default: 'collectivity',
       trim: true,
     },
 
     collectivity_id: { type: String, trim: true },
     collectivity_name: { type: String, trim: true },
+
+    action_collectivity_id: { type: String, trim: true },
     economic_actor_id: { type: String, trim: true },
     economic_actor_name: { type: String, trim: true },
+
     blocked_reason: { type: String, trim: true },
     step_description: { type: String, trim: true },
     date_start: { type: Date, trim: true },
@@ -36,11 +39,11 @@ const Schema = new mongoose.Schema(
     budget_description: { type: String, trim: true },
     financial_aid: { type: Number, trim: true },
     financial_aid_description: { type: String, trim: true },
-    pilote: { type: String, enum: ["epci", "acteur_economique"], trim: true },
+    pilote: { type: String, enum: ['epci', 'acteur_economique'], trim: true },
     pilote_description: { type: String, trim: true },
-    partners: { type: String, enum: ["epci", "acteur_economique"], trim: true },
+    partners: { type: String, enum: ['epci', 'acteur_economique'], trim: true },
     partners_description: { type: String, trim: true },
-    priority: { type: String, enum: ["high", "medium", "low"], trim: true },
+    priority: { type: String, enum: ['high', 'medium', 'low'], trim: true },
     is_subsidized_by_program: { type: Boolean, default: false },
     related_initiatives: { type: String, trim: true },
     comment: { type: String, trim: true },
@@ -58,7 +61,7 @@ const Schema = new mongoose.Schema(
     custom_fields: [
       {
         name: { type: String, trim: true },
-        type: { type: String, enum: ["text", "number", "date"], trim: true },
+        type: { type: String, enum: ['text', 'number', 'date'], trim: true },
         value: { type: String, trim: true },
       },
     ],

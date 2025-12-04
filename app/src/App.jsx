@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom"
 import { Toaster } from "react-hot-toast"
 import * as Sentry from "@sentry/browser"
 import toast from "react-hot-toast"
@@ -71,8 +71,7 @@ const AuthLayout = () => {
 
 const UserLayout = () => {
   const [loading, setLoading] = useState(true)
-  const { user, setUser, setCollectivity } = useStore()
-
+  const { user, setUser, setCollectivity, setEconomicActor } = useStore()
   async function fetchUser() {
     try {
       const { ok, token, user } = await api.get("/user/signin_token")
@@ -91,21 +90,38 @@ const UserLayout = () => {
   }
 
   const loadCollectivity = async () => {
-    const savedCollectivityId = localStorage.getItem('selectedCollectivityId');
-    if (!savedCollectivityId) return;
+    if (!user) return
+    const savedCollectivityId = localStorage.getItem("selectedCollectivityId")
+    if (!savedCollectivityId) return
     try {
-      const { ok, data, code } = await api.get(`/collectivity/${savedCollectivityId}`);
-      if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité");  
-      setCollectivity(data);
+      const { ok, data, code } = await api.get(`/collectivity/${savedCollectivityId}`)
+      if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité")
+      setCollectivity(data)
     } catch (error) {
-      toast.error(error || "Erreur lors de la récupération de la collectivité");
+      toast.error(error || "Erreur lors de la récupération de la collectivité")
+    }
+  }
+
+  const loadEconomicActor = async () => {
+    if (!user) return
+    try {
+      const { ok, data, code } = await api.get(`/economic_actor/${user.economic_actor_id}`)
+      if (!ok) return toast.error(code || "Erreur lors de la récupération de l'acteur économique")
+      console.log(data)
+      setEconomicActor(data)
+    } catch (error) {
+      toast.error(error || "Erreur lors de la récupération de l'acteur économique")
     }
   }
 
   useEffect(() => {
-    loadCollectivity()
     fetchUser()
   }, [])
+
+  useEffect(() => {
+    loadCollectivity()
+    if (user && user?.role === "economic_actor") loadEconomicActor()
+  }, [user])
 
   if (loading) return <Loader />
 

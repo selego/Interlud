@@ -1,16 +1,15 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const MODELNAME = "log";
-
+const MODELNAME = 'log';
 
 const Schema = new mongoose.Schema(
   {
     model_name: { type: String },
     name: { type: String },
-    
+
     field: { type: String },
-    operation: { type: String, enum: ["add", "update", "delete"] },
-    new_value: { 
+    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate'] },
+    new_value: {
       string: { type: String, trim: true },
       array: { type: Array, default: [] },
       number: { type: Number, default: 0 },
@@ -18,8 +17,7 @@ const Schema = new mongoose.Schema(
       boolean: { type: Boolean, default: false },
     },
 
-
-    previous_value: { 
+    previous_value: {
       string: { type: String, trim: true },
       array: { type: Array, default: [] },
       number: { type: Number, default: 0 },
@@ -27,8 +25,7 @@ const Schema = new mongoose.Schema(
       boolean: { type: Boolean, default: false },
     },
 
-
-    type_value: { type: String},
+    type_value: { type: String },
     date: { type: Date, default: Date.now },
 
     user_id: { type: String },
@@ -49,6 +46,9 @@ const Schema = new mongoose.Schema(
 
     action_id: { type: String },
     action_name: { type: String },
+
+    economic_actor_id: { type: String },
+    economic_actor_name: { type: String },
 
     indicator_id: { type: String },
     indicator_name: { type: String },

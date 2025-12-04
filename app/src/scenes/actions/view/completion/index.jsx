@@ -28,7 +28,7 @@ export default function Completion({ action }) {
 
   const fetchIndicatorsValues = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab });
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab, limit: 10000 });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
       setIndicatorValues(data);
     } catch (error) {
@@ -38,7 +38,7 @@ export default function Completion({ action }) {
 
   const fetchAllIndicatorsValues = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id });
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 });
       if (!ok) return toast.error(code || "Erreur lors du chargement");
       setAllIndicatorValues(data);
     } catch (error) {

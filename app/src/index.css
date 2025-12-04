@@ -1,8 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&display=swap");
 @import url(../node_modules/@codegouvfr/react-dsfr/main.css) layer(dsfr);
 @import url(../node_modules/@codegouvfr/react-dsfr/dsfr/utility/colors/colors.min.css) layer(dsfr);
-
 
 @tailwind base;
 @tailwind components;
@@ -51,15 +50,15 @@
 
     --blue: #5395d7;
 
-    --font-space-grostesk: 'Space Grotesk', sans-serif;
+    --font-space-grostesk: "Space Grotesk", sans-serif;
   }
 
   .button-primary {
-    @apply px-4 py-2 rounded-full bg-primary-green text-white text-base
+    @apply px-4 py-2 rounded-full bg-primary-green text-white text-base;
   }
 
   .input-primary {
-    @apply pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none
+    @apply pl-4 pr-4 py-2 border border-secondary-green bg-deco-background-green rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none;
   }
 
   .card-shadow {
@@ -75,38 +74,37 @@
 
   body {
     @apply text-[#123314];
-    font-family: 'GOTHAM', sans-serif;
+    font-family: "GOTHAM", sans-serif;
     font-weight: 400;
     font-size: 14px;
     line-height: 1;
     letter-spacing: 0;
     color: #123314;
     overscroll-behavior-y: none;
-
   }
-  
+
   html {
     overscroll-behavior-y: none;
   }
 
   h1 {
-    font-family: 'GOTHAM', sans-serif;
+    font-family: "GOTHAM", sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
   h2 {
-    font-family: 'GOTHAM', sans-serif;
+    font-family: "GOTHAM", sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
   h3 {
-    font-family: 'GOTHAM', sans-serif;
+    font-family: "GOTHAM", sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
 
   button {
-    font-family: 'GOTHAM', sans-serif;
+    font-family: "GOTHAM", sans-serif;
     line-height: 1;
     letter-spacing: 0;
   }
@@ -133,7 +131,7 @@
 }
 
 .fc-daygrid-day.fc-day-today::before {
-  content: '';
+  content: "";
   width: 80%;
   height: 4px;
   background-color: #027af2;
@@ -158,11 +156,11 @@
   @apply !bg-gray-100;
 }
 
-.fc-view th[role='presentation'] {
+.fc-view th[role="presentation"] {
   border: 0;
 }
 
-.fc-view td[role='presentation'] {
+.fc-view td[role="presentation"] {
   border: 0;
 }
 
@@ -170,15 +168,15 @@
   border: 0 !important;
 }
 
-.fc-view td[role='gridcell'] {
+.fc-view td[role="gridcell"] {
   border-left: 0 !important;
 }
 
-.fc-view tr[role='row'] td:last-child {
+.fc-view tr[role="row"] td:last-child {
   border-right: 0 !important;
 }
 
-.fc-view tr[role='row']:last-child td {
+.fc-view tr[role="row"]:last-child td {
   border-bottom: 0 !important;
 }
 
@@ -198,11 +196,11 @@
   @apply !bg-light-color/20 !border-none !py-1.5 !px-3 !capitalize !shadow-none !text-[#273237];
 }
 
-.fc-button[title='month view']:first-child {
+.fc-button[title="month view"]:first-child {
   @apply !rounded-l-lg;
 }
 
-.fc-button[title='day view'] {
+.fc-button[title="day view"] {
   @apply !rounded-r-lg;
 }
 
@@ -220,6 +218,6 @@
   @apply text-base;
 }
 
-.fc-button[aria-pressed='true'] {
+.fc-button[aria-pressed="true"] {
   @apply !bg-primary !text-white;
 }

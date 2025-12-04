@@ -319,7 +319,7 @@ function ValueIndicator({ indicator }) {
 
   const fetchValueIndicators = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_id: indicator._id });
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_id: indicator._id, limit: 10000 });
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setValueIndicators(data)
     } catch (error) {

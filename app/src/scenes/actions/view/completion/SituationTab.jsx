@@ -11,6 +11,14 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
 
+const sortIndicatorValues = (a, b) => {
+  if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
+  const subCatA = a.indicator_sub_category_name || '';
+  const subCatB = b.indicator_sub_category_name || '';
+  if (subCatA !== subCatB) return subCatA.localeCompare(subCatB);
+  return (a.indicator_name || "").toLowerCase().localeCompare((b.indicator_name || "").toLowerCase());
+};
+
 export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
 
   useEffect(() => {
@@ -62,7 +70,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       </div>
 
       <div className="space-y-4">
-        {indicatorValues.map(indicatorValue => {
+        {[...indicatorValues].sort(sortIndicatorValues).map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           return (
             <div 
