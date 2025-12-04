@@ -76,11 +76,13 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = {
-      owner: 'collectivity',
-    };
+    let query = { owner: 'collectivity' };
 
-    if (req.body.type) query.type = req.body.type;
+    if (req.body.type) {
+      query.type = req.body.type;
+      if (req.body.type === 'global') delete query.owner;
+    }
+
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };

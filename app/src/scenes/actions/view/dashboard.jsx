@@ -37,9 +37,9 @@ export default function Dashboard({ action }) {
     }
   }
 
-  const fetchData = async () => {
+  const fetchIndicatorValues = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id })
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       const situationOrder = ["init", "ref", "prev", "expost"]
       const sortedData = [...data].sort((a, b) => {
@@ -56,7 +56,7 @@ export default function Dashboard({ action }) {
   }
 
   useEffect(() => {
-    fetchData()
+    fetchIndicatorValues()
   }, [action])
 
   if (!isAdmin && !isEconomicActorAsRight && !right?.can_read) {
@@ -107,7 +107,9 @@ export default function Dashboard({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Indicateurs</p>
-            <p className="text-4xl font-bold text-blue-600">{indicatorValues.length / 4}</p>
+            <p className="text-4xl font-bold text-blue-600">
+              {new Set(indicatorValues.map((v) => v.indicator_id)).size}
+            </p>
             <p className="text-xs text-gray-500 mt-1">Nombre d'indicateurs</p>
           </div>
 

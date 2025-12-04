@@ -30,7 +30,8 @@ router.post('/synthese', passport.authenticate(['admin', 'user'], { session: fal
     const actionsCompleted = actions.filter((action) => action.status === 'completed').length;
     const actionsBlocked = actions.filter((action) => action.status === 'blocked').length;
     const actionsUpcoming = actions.filter((action) => action.status === 'upcoming').length;
-    return res.status(200).send({ ok: true, data: { actionsCreated, actionsInProgress, actionsCompleted, actionsBlocked, actionsUpcoming } });
+    const actionsWithoutStatus = actions.filter((action) => action.status === 'no_status' || !action.status).length;
+    return res.status(200).send({ ok: true, data: { actionsCreated, actionsInProgress, actionsCompleted, actionsBlocked, actionsUpcoming, actionsWithoutStatus } });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
