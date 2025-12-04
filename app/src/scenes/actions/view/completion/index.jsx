@@ -6,7 +6,8 @@ import { SITUATION_TYPES } from "@/utils/constants";
 import ProgressCircle from "@/components/ProgressCircle";
 import IndicatorsList from "./IndicatorsList";
 import SituationTab from "./SituationTab";
-import { FiArrowLeft } from "react-icons/fi";
+import { FiArrowLeft, FiDownload, FiUpload, FiLoader } from "react-icons/fi";
+import useStore from "@/services/store";
 
 export const SITUATION_TABS = [
   { key: SITUATION_TYPES.INIT, label: "Initial" },
@@ -16,11 +17,14 @@ export const SITUATION_TABS = [
 ];
 
 export default function Completion({ action }) {
+  const { collectivity } = useStore();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT);
   const [selectedIndicatorValue, setSelectedIndicatorValue] = useState(null);
   const [indicatorValues, setIndicatorValues] = useState([]);
   const [allIndicatorValues, setAllIndicatorValues] = useState([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const fetchIndicatorsValues = async () => {
     try {
@@ -39,6 +43,55 @@ export default function Completion({ action }) {
       setAllIndicatorValues(data);
     } catch (error) {
       toast.error("Une erreur est survenue");
+    }
+  };
+
+  const exportIndicatorTemplate = async () => {
+    try {
+      if (!collectivity.excelFileId) return toast.error("Aucun fichier Excel associé");
+      setIsExporting(true);
+      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `valeurs_indicateurs_${action.name}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error("Erreur lors de l'export");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const importIndicatorValues = async (file) => {
+    try {
+      if (!collectivity.excelFileId) return toast.error("Aucun fichier Excel associé");
+      if (!file) return;
+      
+      setIsImporting(true);
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        try {
+          const base64 = reader.result.split(',')[1];
+          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: base64, collectivity: collectivity });
+          if (!ok) return toast.error(code || "Erreur lors de l'import");
+          toast.success("Valeurs importées avec succès");
+          fetchIndicatorsValues();
+          fetchAllIndicatorsValues();
+        } catch (error) {
+          toast.error("Erreur lors de l'import");
+        } finally {
+          setIsImporting(false);
+        }
+      };
+    } catch (error) {
+      toast.error("Erreur lors de l'import");
+      setIsImporting(false);
     }
   };
 
@@ -80,17 +133,48 @@ export default function Completion({ action }) {
         </div>
         
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
-              aria-label="Revenir à la page précédente"
-            >
-              <FiArrowLeft size={18} />
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {action.name}
-            </h1>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+                aria-label="Revenir à la page précédente"
+              >
+                <FiArrowLeft size={18} />
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {action.name}
+              </h1>
+            </div>
+            
+            <div className="flex items-center gap-2  p-2 ">
+              
+              <button
+                onClick={exportIndicatorTemplate}
+                disabled={isExporting}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Téléchargez le fichier Excel pour le remplir hors ligne"
+              >
+                {isExporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
+                <span className="hidden sm:inline">Exporter les indicateurs</span>
+                <span className="sm:hidden">Exporter</span>
+              </button>
+
+              <label className={`inline-flex items-center gap-2 px-3 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 transition-all cursor-pointer ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Importez le fichier Excel rempli pour mettre à jour les valeurs"
+              >
+                {isImporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiUpload className="w-4 h-4" />}
+                <span className="hidden sm:inline">Importer les valeurs</span>
+                <span className="sm:hidden">Importer</span>
+                <input 
+                  type="file" 
+                  accept=".xlsx" 
+                  className="hidden" 
+                  disabled={isImporting}
+                  onChange={(e) => e.target.files[0] && importIndicatorValues(e.target.files[0])}
+                />
+              </label>
+            </div>
           </div>
           
           <div className="flex gap-2 items-center ml-14">

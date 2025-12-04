@@ -1,7 +1,18 @@
 const express = require("express");
 const router = express.Router();
+const passport = require("passport");
 const { capture } = require("../services/sentry");
-const { readExcelCells, exportExcelFile } = require("../services/microsoftGraph");
+const { readExcelCells, exportExcelFile, exportExcelFileWithSpecificSheets, importSheetsToExcelFile } = require("../services/microsoftGraph");
+const Indicator = require("../models/indicator");
+const IndicatorValue = require("../models/indicator_value");
+const Log = require("../models/log");
+
+const SITUATION_SHEETS = [
+  { sheetName: "Remplissage - Sit. Init.", situation: "init" },
+  { sheetName: "Remplissage - Sit. Ref.", situation: "ref" },
+  { sheetName: "Remplissage - Sit. Prev.", situation: "prev" },
+  { sheetName: "Remplissage - Sit. Expost", situation: "expost" },
+];
 
 const FIXED_RANGES = [
   { name: "gains_environnementaux", range: "C13:H18" },
@@ -21,12 +32,12 @@ router.post("/values", async (req, res) => {
     const { worksheetName, excelFileId } = req.body;
     if (!worksheetName) return res.json({ ok: false, data: { error: "worksheetName is required" } });
     if (!excelFileId) return res.json({ ok: false, data: { error: "excelFileId is required" } });
-    
+
     const ranges = await Promise.all(
       FIXED_RANGES.map(async (descriptor) => {
         const result = await readExcelCells(excelFileId, worksheetName, descriptor.range);
-        return { name: descriptor.name,values: result.values || []};
-      }),
+        return { name: descriptor.name, values: result.values || [] };
+      })
     );
     res.json({ ok: true, data: ranges });
   } catch (error) {
@@ -54,19 +65,20 @@ router.post("/webhook", async (req, res) => {
     const validationToken = req.query.validationToken;
 
     if (validationToken) {
-      console.log('Validation webhook reçue');
+      console.log("Validation webhook reçue");
       return res.status(200).send(validationToken);
     }
-    
+
     // Afficher toutes les données de la notification
-    console.log('=== WEBHOOK NOTIFICATION ===');
+    console.log("=== WEBHOOK NOTIFICATION ===");
     console.log(JSON.stringify(req.body, null, 2));
-    console.log('===========================');
-    
+    console.log("===========================");
+
     return res.status(202).send();
   } catch (error) {
     capture(error);
     res.status(500).send();
   }
 });
+
 module.exports = router;
