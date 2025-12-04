@@ -99,13 +99,6 @@ export default function Header() {
 
   const quickAccessItems = user
     ? [
-        {
-          iconId: "fr-icon-leaf-line",
-          linkProps: {
-            to: "/collectivites"
-          },
-          text: "Collectivités"
-        },
         user.role === "admin" && {
           iconId: "fr-icon-settings-5-line",
           text: "Admin",
@@ -185,7 +178,7 @@ export default function Header() {
                       {item.menuItems ? (
                         <>
                           <button
-                            className="fr-btn fr-btn--tertiary-no-outline mt-0 ml-2 hover:bg-gray-100 transition-colors"
+                            className="fr-btn mt-0 ml-2 px-2 rounded hover:bg-primary-green/10 transition-colors"
                             onClick={() => setOpenQuickAccessDropdown(openQuickAccessDropdown === index ? null : index)}
                           >
                             <span className={item.iconId} aria-hidden="true"></span>
@@ -238,7 +231,7 @@ export default function Header() {
         </div>
       </div>
 
-      <div className="fr-header__menu">
+      <div className="border-t border-gray-200">
         <div className="fr-container">
           <div className="flex items-center justify-between">
             {navigation.filter(Boolean).length > 0 && (
@@ -280,7 +273,12 @@ export default function Header() {
                             </div>
                           </>
                         ) : (
-                          <Link {...item.linkProps} className={`fr-nav__link text-base p-4 ${isActive ? "border-b-2 !border-primary-green !text-primary-green" : ""}`}>
+                          <Link
+                            {...item.linkProps}
+                            className={`p-4 text-base ${
+                              isActive ? "border-b-2 border-primary-green text-primary-green" : "hover:bg-gray-100/50 hover:border-gray-200 hover:border-b-2"
+                            }`}
+                          >
                             {item.text}
                           </Link>
                         )}
@@ -293,31 +291,27 @@ export default function Header() {
 
             {(user?.role === "admin" || (user?.collectivities && user.collectivities.filter((c) => c.status === "approved").length > 0)) && (
               <div className="flex items-center gap-3">
-                <Select
-                  value={collectivity?._id || ""}
-                  onChange={handleCollectivityChange}
-                  options={[
-                    ...(user.role === "admin"
-                      ? collectivities.map((collectivity) => ({
-                          value: collectivity._id,
-                          label: `#${collectivity.name}`
-                        }))
-                      : user.collectivities
-                          .filter((c) => c.status === "approved")
-                          .map((collectivity) => ({
-                            value: collectivity.id,
-                            label: `#${collectivity.name}`
-                          })))
-                  ]}
-                />
-
-                {collectivity && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
-                    <span className="text-sm font-semibold text-primary-green capitalize">
-                      {COLLECTIVITY_ROLES[user.role === "admin" ? "admin" : user.collectivities?.find((uc) => uc.id === collectivity._id)?.role]}
-                    </span>
-                  </div>
-                )}
+                <div className="w-52">
+                  <Select
+                    value={collectivity?._id || ""}
+                    onChange={handleCollectivityChange}
+                    constrained={true}
+                    options={[
+                      ...(user.role === "admin"
+                        ? collectivities.map((collectivity) => ({
+                            value: collectivity._id,
+                            label: collectivity.name
+                          }))
+                        : user.collectivities
+                            .filter((c) => c.status === "approved")
+                            .map((collectivity) => ({
+                              value: collectivity.id,
+                              label: collectivity.name
+                            })))
+                    ]}
+                    className="truncate"
+                  />
+                </div>
               </div>
             )}
           </div>
