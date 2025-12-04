@@ -10,10 +10,11 @@ import DebouncedInput from "@/components/debounceInput"
 import Loader from "@/components/loader"
 
 const getStatutBadgeClass = (statut) => {
-  if (statut === "completed") return "bg-primary-green/10 text-primary-green"
-  if (statut === "upcoming") return "bg-primary-orange/10 text-primary-orange"
-  if (statut === "in_progress") return "bg-primary-teal/10 text-primary-teal"
-  return "bg-gray-100 text-gray-700"
+  if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
+  if (statut === "upcoming") return { class: "bg-primary-teal/10 text-primary-teal", text: "À venir" }
+  if (statut === "in_progress") return { class: "bg-primary-orange/10 text-primary-orange", text: "En cours" }
+  if (statut === "blocked") return { class: "bg-red-100 text-red-700", text: "Bloquée" }
+  return { class: "bg-gray-100 text-gray-700", text: "Nouvelle" }
 }
 
 export default function Home() {
@@ -21,7 +22,7 @@ export default function Home() {
   const navigate = useNavigate()
   const { collectivity, user } = useStore()
   const [filters, setFilters] = useState({ search: "", status: "" })
-  const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0 })
+  const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
   const [evolutionStatuts, setEvolutionStatuts] = useState([])
   const [period, setPeriod] = useState("month")
   const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true })
@@ -73,7 +74,7 @@ export default function Home() {
     { name: "Terminées", value: synthese.actionsCompleted || 0 },
     { name: "À venir", value: synthese.actionsUpcoming || 0 },
     { name: "En progression", value: synthese.actionsInProgress || 0 },
-    { name: "Créées", value: synthese.actionsCreated || 0 },
+    { name: "Sans statut", value: synthese.actionsWithoutStatus || 0 },
     { name: "Bloquées", value: synthese.actionsBlocked || 0 }
   ]
 
@@ -112,7 +113,7 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreated}</span>
                 </div>
-                <span className="text-lg text-font-secondary">Actions crées</span>
+                <span className="text-lg text-font-secondary">Total actions</span>
               </div>
 
               <div className="gap-3">
@@ -159,8 +160,8 @@ export default function Home() {
                             ? "#F59600"
                             : entry.name === "À venir"
                             ? "#56BDB8"
-                            : entry.name === "Créées"
-                            ? "#2DAC6A"
+                            : entry.name === "Sans statut"
+                            ? "#9CA3AF"
                             : entry.name === "Bloquées"
                             ? "#EE4B2B"
                             : "#56BDB8"
@@ -204,8 +205,8 @@ export default function Home() {
                   <span>Actions bloquées</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                  <span>Actions créées</span>
+                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                  <span>Sans statut</span>
                 </div>
               </div>
             </div>
@@ -437,10 +438,12 @@ function CardAction({ action }) {
     fetchIndicatorValues()
   }, [action._id])
 
+  const statutBadge = getStatutBadgeClass(action.status)
+
   return (
     <div key={action._id} className="card-shadow p-6 h-full flex flex-col" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
       <div className="mb-3">
-        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatutBadgeClass(action.status)}`}>{action.status}</span>
+        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${statutBadge.class}`}>{statutBadge.text}</span>
       </div>
 
       <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>

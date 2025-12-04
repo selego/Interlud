@@ -177,7 +177,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       query.owner = 'economic_actor';
     }
 
-    const limit = req.body.limit || 50;
+    const limit = req.body.limit || 10000;
     const skip = req.body.offset || 0;
     const total = await IndicatorValue.countDocuments(query);
     const data = await IndicatorValue.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);

@@ -62,7 +62,13 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       </div>
 
       <div className="space-y-4">
-        {indicatorValues.map(indicatorValue => {
+        {[...indicatorValues].sort((a, b) => {
+          if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
+          if (!a.indicator_sub_category_name && b.indicator_sub_category_name) return -1;
+          if (a.indicator_sub_category_name && !b.indicator_sub_category_name) return 1;
+          if (a.indicator_sub_category_name !== b.indicator_sub_category_name) return a.indicator_sub_category_name.localeCompare(b.indicator_sub_category_name);
+          return (a.indicator_name || "").toLowerCase().localeCompare((b.indicator_name || "").toLowerCase());
+        }).map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           return (
             <div 
