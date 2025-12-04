@@ -59,6 +59,21 @@ export default function Home() {
     }
   }
 
+  const exportExcelFile = async () => {
+    try {
+      const { ok, data, code } = await api.post("/excel/export", { fileId: collectivity.excelFileId })
+      if (!ok) return toast.error(code || "Erreur lors de l'export")
+      const link = document.createElement("a");
+      link.href = data.downloadUrl
+      link.download = data.fileName || "export.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue");
+    }
+  }
+
   useEffect(() => {
     if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin")
       return navigate("/collectivity/join", { replace: true })
@@ -89,16 +104,24 @@ export default function Home() {
               </h1>
               <p className="text-base mt-1">Ce tableau de bord est personnel</p>
             </div>
-            <Select
-              value={period}
-              onChange={(value) => setPeriod(value)}
-              options={[
-                { value: "today", label: "Aujourd'hui" },
-                { value: "week", label: "Cette semaine" },
-                { value: "month", label: "Ce mois-ci" },
-                { value: "year", label: "Cette année" }
-              ]}
-            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={ exportExcelFile }
+                className="button-primary"
+              >
+                Export Excel
+              </button>
+              <Select
+                value={period}
+                onChange={(value) => setPeriod(value)}
+                options={[
+                  { value: "today", label: "Aujourd'hui" },
+                  { value: "week", label: "Cette semaine" },
+                  { value: "month", label: "Ce mois-ci" },
+                  { value: "year", label: "Cette année" }
+                ]}
+              />
+            </div>
           </div>
         </div>
 
