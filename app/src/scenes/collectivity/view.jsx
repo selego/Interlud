@@ -124,20 +124,30 @@ function UserInfoTab({ user, setUser }) {
     }
   }
 
-  const attachEconomicActorToCollectivity = async () => {
+  const attachCollectivityToEconomicActor = async () => {
     try {
       if (!collectivity?._id || !user?.economic_actor_id) return
       if (user.collectivities?.find((c) => c.id === collectivity._id)?.role !== "economic_actor") return
-      if (collectivity.economic_actors?.some((c) => c.economic_actor_id === user.economic_actor_id)) return
-      const payload = { economic_actors: collectivity.economic_actors || [] }
-      payload.economic_actors.push({ economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name, joined_at: new Date() })
 
-      const { ok, code } = await api.put(`/collectivity/${collectivity._id}`, payload)
-      if (!ok) throw new Error(code || "FAILED_TO_LINK_ECONOMIC_ACTOR")
+      const economicActor = await getEconomicActor()
+      if (!economicActor || economicActor?.collectivities?.some((c) => c.id === collectivity._id)) return
+      const payload = { collectivities: [...(economicActor?.collectivities || []), { id: collectivity._id, name: collectivity.name, joined_at: new Date() }] }
+      const { ok } = await api.put(`/economic_actor/${economicActor._id}`, payload)
+      if (!ok) return toast.error("Une erreur est survenue")
 
       await duplicateActionsForEconomicActor()
       await duplicateIndicatorValuesForEconomicActor()
-      toast.success("Acteur économique rattaché à la collectivité")
+    } catch (e) {
+      console.log(e)
+      toast.error("Une erreur est survenue")
+    }
+  }
+
+  const getEconomicActor = async () => {
+    try {
+      const { ok, data } = await api.get(`/economic_actor/${user.economic_actor_id}`)
+      if (!ok) return null
+      return data
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")
@@ -180,9 +190,7 @@ function UserInfoTab({ user, setUser }) {
       setUser(data)
       toast.success(`Utilisateur ${status === "approved" ? "approuvé" : "rejeté"}`)
 
-      if (status === "approved") {
-        await attachEconomicActorToCollectivity()
-      }
+      if (status === "approved") await attachCollectivityToEconomicActor()
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")

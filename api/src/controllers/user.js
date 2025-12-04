@@ -50,6 +50,9 @@ router.post('/signin', async (req, res) => {
     let collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
     if (user.role === 'admin') collectivity = await Collectivity.findOne();
 
+    let economicActor = null;
+    if (user.role === 'economic_actor') economicActor = await EconomicActor.findById(user.economic_actor_id);
+
     const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
     if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
@@ -59,7 +62,7 @@ router.post('/signin', async (req, res) => {
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie('jwt', token, cookieOptions());
 
-    return res.status(200).send({ ok: true, token, user, userActionRights, collectivity });
+    return res.status(200).send({ ok: true, token, user, userActionRights, collectivity, economicActor });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });

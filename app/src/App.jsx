@@ -71,7 +71,7 @@ const AuthLayout = () => {
 
 const UserLayout = () => {
   const [loading, setLoading] = useState(true)
-  const { user, setUser, setCollectivity } = useStore()
+  const { user, setUser, setCollectivity, setEconomicActor } = useStore()
   async function fetchUser() {
     try {
       const { ok, token, user } = await api.get("/user/signin_token")
@@ -102,12 +102,25 @@ const UserLayout = () => {
     }
   }
 
+  const loadEconomicActor = async () => {
+    if (!user) return
+    try {
+      const { ok, data, code } = await api.get(`/economic_actor/${user.economic_actor_id}`)
+      if (!ok) return toast.error(code || "Erreur lors de la récupération de l'acteur économique")
+      console.log(data)
+      setEconomicActor(data)
+    } catch (error) {
+      toast.error(error || "Erreur lors de la récupération de l'acteur économique")
+    }
+  }
+
   useEffect(() => {
     fetchUser()
   }, [])
 
   useEffect(() => {
     loadCollectivity()
+    if (user && user?.role === "economic_actor") loadEconomicActor()
   }, [user])
 
   if (loading) return <Loader />

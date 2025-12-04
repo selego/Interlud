@@ -24,14 +24,14 @@ export default function Home() {
   const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0 })
   const [evolutionStatuts, setEvolutionStatuts] = useState([])
   const [period, setPeriod] = useState("month")
-  const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true})
+  const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true })
 
   const fetchEvolutionStatuts = async () => {
     try {
       const { ok, data, code } = await api.post("/dashboard/evolution-statuts", { collectivity_id: collectivity._id, period: period })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setEvolutionStatuts(data)
-    console.log("evolutionStatuts", data)
+      console.log("evolutionStatuts", data)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }
@@ -217,10 +217,10 @@ export default function Home() {
             </div>
 
             <div className="flex gap-2 mb-6 flex-wrap">
-              <button 
+              <button
                 onClick={() => setVisibleLines({ ...visibleLines, actionsCompleted: !visibleLines.actionsCompleted })}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsCompleted  ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
+                  visibleLines.actionsCompleted ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
                 }`}
               >
                 Complétées
@@ -245,10 +245,10 @@ export default function Home() {
                   )}
                 </svg>
               </button>
-              <button 
+              <button
                 onClick={() => setVisibleLines({ ...visibleLines, actionsInProgress: !visibleLines.actionsInProgress })}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsInProgress ? "bg-primary-orange text-white"  : "border border-gray-300 text-gray-700 bg-white"
+                  visibleLines.actionsInProgress ? "bg-primary-orange text-white" : "border border-gray-300 text-gray-700 bg-white"
                 }`}
               >
                 En progression
@@ -273,10 +273,10 @@ export default function Home() {
                   )}
                 </svg>
               </button>
-              <button 
+              <button
                 onClick={() => setVisibleLines({ ...visibleLines, actionsUpcoming: !visibleLines.actionsUpcoming })}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsUpcoming  ? "bg-primary-teal text-white"  : "border border-gray-300 text-gray-700 bg-white"
+                  visibleLines.actionsUpcoming ? "bg-primary-teal text-white" : "border border-gray-300 text-gray-700 bg-white"
                 }`}
               >
                 À venir
@@ -327,9 +327,15 @@ export default function Home() {
                       return null
                     }}
                   />
-                  {visibleLines.actionsCompleted && <Line type="monotone" dataKey="actionsCompleted" stroke="#2DAC6A" strokeWidth={3} name="Complétées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />}
-                  {visibleLines.actionsUpcoming && <Line type="monotone" dataKey="actionsUpcoming" stroke="#56BDB8" strokeWidth={3} name="À venir" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />}
-                  {visibleLines.actionsInProgress && <Line type="monotone" dataKey="actionsInProgress" stroke="#F59600" strokeWidth={3} name="En progression" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />}
+                  {visibleLines.actionsCompleted && (
+                    <Line type="monotone" dataKey="actionsCompleted" stroke="#2DAC6A" strokeWidth={3} name="Complétées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />
+                  )}
+                  {visibleLines.actionsUpcoming && (
+                    <Line type="monotone" dataKey="actionsUpcoming" stroke="#56BDB8" strokeWidth={3} name="À venir" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />
+                  )}
+                  {visibleLines.actionsInProgress && (
+                    <Line type="monotone" dataKey="actionsInProgress" stroke="#F59600" strokeWidth={3} name="En progression" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -386,7 +392,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {actions.map((action) => (
-              <CardAction action={action} />
+              <CardAction key={action._id} action={action} />
             ))}
 
             <div
