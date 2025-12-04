@@ -129,7 +129,6 @@ function UserInfoTab({ user, setUser }) {
       if (!collectivity?._id || !user?.economic_actor_id) return
       if (user.collectivities?.find((c) => c.id === collectivity._id)?.role !== "economic_actor") return
       if (collectivity.economic_actors?.some((c) => c.economic_actor_id === user.economic_actor_id)) return
-
       const payload = { economic_actors: collectivity.economic_actors || [] }
       payload.economic_actors.push({ economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name, joined_at: new Date() })
 

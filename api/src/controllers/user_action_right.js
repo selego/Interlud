@@ -1,11 +1,11 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const passport = require("passport");
-const UserActionRight = require("../models/user_action_right");
-const ERROR_CODES = require("../utils/errorCodes");
-const { capture } = require("../services/sentry");
+const passport = require('passport');
+const UserActionRight = require('../models/user_action_right');
+const ERROR_CODES = require('../utils/errorCodes');
+const { capture } = require('../services/sentry');
 
-router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const userActionRight = await UserActionRight.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!userActionRight) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
@@ -16,7 +16,7 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   }
 });
 
-router.post("/search", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     let query = {};
 
@@ -32,10 +32,9 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   }
 });
 
-router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    
-    const userActionRight = await UserActionRight.create( req.body );
+    const userActionRight = await UserActionRight.create(req.body);
 
     return res.status(200).send({ ok: true, data: userActionRight });
   } catch (error) {
@@ -44,7 +43,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   }
 });
 
-router.delete("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const userActionRight = await UserActionRight.findByIdAndDelete(req.params.id);
     if (!userActionRight) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });

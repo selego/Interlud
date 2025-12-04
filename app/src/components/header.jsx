@@ -313,7 +313,7 @@ export default function Header() {
                 {collectivity && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
                     <span className="text-sm font-semibold text-primary-green capitalize">
-                      {user.role === "admin" ? "admin" : user.collectivities.find((uc) => uc.id === collectivity._id).role}
+                      {COLLECTIVITY_ROLES[user.role === "admin" ? "admin" : user.collectivities?.find((uc) => uc.id === collectivity._id)?.role]}
                     </span>
                   </div>
                 )}
@@ -325,4 +325,10 @@ export default function Header() {
       </div>
     </header>
   )
+}
+
+const COLLECTIVITY_ROLES = {
+  admin: "Administrateur",
+  user: "Utilisateur",
+  economic_actor: "acteur économique"
 }

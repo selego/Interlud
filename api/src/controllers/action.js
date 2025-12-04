@@ -76,13 +76,21 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = {};
+    let query = {
+      owner: 'collectivity',
+    };
 
     if (req.body.type) query.type = req.body.type;
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
     if (req.body.createdAt) query.createdAt = { $gte: new Date(req.body.createdAt) };
+
+    if (req.user.role === 'economic_actor') {
+      query.economic_actor_id = req.user.economic_actor_id;
+      query.owner = 'economic_actor';
+    }
+
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Action.countDocuments(query);
@@ -197,6 +205,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
       payloads.push({
         ...action.toObject(),
         owner: 'economic_actor',
+        status: 'no_status',
         economic_actor_id: economic_actor._id,
         economic_actor_name: economic_actor.name,
         action_collectivity_id: action._id,

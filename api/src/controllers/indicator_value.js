@@ -156,7 +156,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = {};
+    let query = {
+      owner: 'collectivity',
+    };
 
     if (req.body.indicator_id) query.indicator_id = req.body.indicator_id;
     if (req.body.action_id) query.action_id = req.body.action_id;
@@ -169,6 +171,12 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
         query.indicator_sub_category_name = req.body.indicator_sub_category_name;
       }
     }
+
+    if (req.user.role === 'economic_actor') {
+      query.economic_actor_id = req.user.economic_actor_id;
+      query.owner = 'economic_actor';
+    }
+
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await IndicatorValue.countDocuments(query);
