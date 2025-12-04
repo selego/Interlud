@@ -300,6 +300,8 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
     const rows = usedRangeData.values || [];
     const startRow = usedRangeData.address ? parseInt(usedRangeData.address.match(/\d+/)?.[0] || 1) : 1;
 
+    const updates = [];
+
     for (let i = 0; i < rows.length; i++) {
       const excelIndicatorId = rows[i][4] ? String(rows[i][4]).trim() : "";
       if (!excelIndicatorId || !importedDataBySituation[situation].has(excelIndicatorId)) continue;
@@ -307,21 +309,40 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
       const newValue = importedDataBySituation[situation].get(excelIndicatorId);
       const cellValue = Array.isArray(newValue) ? newValue.join(", ") : newValue;
 
-      const updateResponse = await fetch(
-        `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='F${startRow + i}')`,
-        {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ values: [[cellValue]] }),
-        }
-      );
+      updates.push({ rowIndex: i, cellValue, excelIndicatorId, newValue });
+    }
 
-      if (!updateResponse.ok) {
-        const error = await updateResponse.json();
-        throw new Error(error.error?.message || `Cannot update cell F${startRow + i} in sheet ${sheetName}`);
+    if (updates.length === 0) continue;
+
+    const minRowIndex = Math.min(...updates.map((u) => u.rowIndex));
+    const maxRowIndex = Math.max(...updates.map((u) => u.rowIndex));
+
+    const rangeValues = [];
+    const updateMap = new Map(updates.map((u) => [u.rowIndex, u.cellValue]));
+
+    for (let i = minRowIndex; i <= maxRowIndex; i++) {
+      if (updateMap.has(i)) rangeValues.push([updateMap.get(i)]);
+      if (!updateMap.has(i)) rangeValues.push([rows[i][5] ?? ""]);
+    }
+
+    const updateResponse = await fetch(
+      `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${`F${
+        startRow + minRowIndex
+      }:F${startRow + maxRowIndex}`}')`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: rangeValues }),
       }
+    );
 
-      extractedData.push({ excel_indicator_id: excelIndicatorId, value: newValue, situation });
+    if (!updateResponse.ok) {
+      const error = await updateResponse.json();
+      throw new Error(error.error?.message || `Cannot update range`);
+    }
+
+    for (const update of updates) {
+      extractedData.push({ excel_indicator_id: update.excelIndicatorId, value: update.newValue, situation });
     }
   }
 
