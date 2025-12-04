@@ -50,7 +50,7 @@ export default function Completion({ action }) {
     try {
       if (!collectivity.excelFileId) return toast.error("Aucun fichier Excel associé");
       setIsExporting(true);
-      const response = await api.download("/action/export_indicator_values_excel", { action_id: action._id });
+      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id });
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -78,7 +78,7 @@ export default function Completion({ action }) {
       reader.onload = async () => {
         try {
           const base64 = reader.result.split(',')[1];
-          const { ok, code } = await api.post("/excel/importIndicatorValues", { fileBase64: base64, collectivity: collectivity });
+          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: base64, collectivity: collectivity });
           if (!ok) return toast.error(code || "Erreur lors de l'import");
           toast.success("Valeurs importées avec succès");
           fetchIndicatorsValues();
