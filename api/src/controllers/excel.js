@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const { capture } = require('../services/sentry');
-const { readExcelCells, exportExcelFile } = require('../services/microsoftGraph');
+const { graphFetch, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
 const Indicator = require('../models/indicator');
 const IndicatorValue = require('../models/indicator_value');
 const Log = require('../models/log');
@@ -33,9 +33,10 @@ router.post('/values', async (req, res) => {
     if (!worksheetName) return res.json({ ok: false, data: { error: 'worksheetName is required' } });
     if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
 
+    const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
     const ranges = await Promise.all(
       FIXED_RANGES.map(async (descriptor) => {
-        const result = await readExcelCells(excelFileId, worksheetName, descriptor.range);
+        const result = await graphFetch(`/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${worksheetName}/range(address='${descriptor.range}')`);
         return { name: descriptor.name, values: result.values || [] };
       })
     );
