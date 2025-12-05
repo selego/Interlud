@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
+const ExcelJS = require('exceljs');
 const IndicatorValue = require('../models/indicator_value');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
@@ -256,7 +257,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
   }
 });
 
-router.post("/export_indicator_values_excel", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = await Action.findById(req.body.action_id);
@@ -270,23 +271,23 @@ router.post("/export_indicator_values_excel", passport.authenticate(["admin", "u
     const workbook = new ExcelJS.Workbook();
 
     const situations = [
-      { key: "init", label: "Remplissage - Sit. Init." },
-      { key: "ref", label: "Remplissage - Sit. Ref." },
-      { key: "prev", label: "Remplissage - Sit. Prev." },
-      { key: "expost", label: "Remplissage - Sit. Expost" },
+      { key: 'init', label: 'Remplissage - Sit. Init.' },
+      { key: 'ref', label: 'Remplissage - Sit. Ref.' },
+      { key: 'prev', label: 'Remplissage - Sit. Prev.' },
+      { key: 'expost', label: 'Remplissage - Sit. Expost' },
     ];
 
     const columns = [
-      { header: "Catégorie", key: "category", width: 20 },
-      { header: "Sous-catégorie", key: "sub_category", width: 20 },
-      { header: "Titre", key: "title", width: 30 },
-      { header: "Description", key: "description", width: 40 },
-      { header: "Nom de la variable", key: "excel_id", width: 20 },
-      { header: "Valeur", key: "value", width: 15 },
-      { header: "Valeurs possibles", key: "possibilities", width: 25 },
-      { header: "Valeur par défaut", key: "default_value", width: 15 },
-      { header: "Unité", key: "unit", width: 10 },
-      { header: "Type", key: "type", width: 10 },
+      { header: 'Catégorie', key: 'category', width: 20 },
+      { header: 'Sous-catégorie', key: 'sub_category', width: 20 },
+      { header: 'Titre', key: 'title', width: 30 },
+      { header: 'Description', key: 'description', width: 40 },
+      { header: 'Nom de la variable', key: 'excel_id', width: 20 },
+      { header: 'Valeur', key: 'value', width: 15 },
+      { header: 'Valeurs possibles', key: 'possibilities', width: 25 },
+      { header: 'Valeur par défaut', key: 'default_value', width: 15 },
+      { header: 'Unité', key: 'unit', width: 10 },
+      { header: 'Type', key: 'type', width: 10 },
     ];
 
     for (const situation of situations) {
@@ -294,7 +295,7 @@ router.post("/export_indicator_values_excel", passport.authenticate(["admin", "u
       sheet.columns = columns;
 
       sheet.getRow(1).font = { bold: true };
-      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
       const situationValues = indicatorValues.filter((iv) => iv.situation === situation.key);
 
@@ -303,31 +304,31 @@ router.post("/export_indicator_values_excel", passport.authenticate(["admin", "u
         if (!indicator) continue;
 
         let value = indicatorValue.value?.[indicator.value_type];
-        if (Array.isArray(value)) value = value.join(", ");
+        if (Array.isArray(value)) value = value.join(', ');
 
         let defaultValue = indicatorValue.value_default?.[indicator.value_type];
-        if (Array.isArray(defaultValue)) defaultValue = defaultValue.join(", ");
+        if (Array.isArray(defaultValue)) defaultValue = defaultValue.join(', ');
 
         sheet.addRow({
-          category: indicator.indicator_category_name || "",
-          sub_category: indicator.indicator_sub_category_name || "",
-          title: indicator.name || "",
-          description: indicator.description || "",
-          excel_id: indicator.excel_indicator_id || "",
-          value: value ?? "",
-          possibilities: indicatorValue.indicator_value_possibilities?.join(", ") || "",
-          default_value: defaultValue ?? "",
-          unit: indicator.value_unit || "",
-          type: indicator.value_type || "",
+          category: indicator.indicator_category_name || '',
+          sub_category: indicator.indicator_sub_category_name || '',
+          title: indicator.name || '',
+          description: indicator.description || '',
+          excel_id: indicator.excel_indicator_id || '',
+          value: value ?? '',
+          possibilities: indicatorValue.indicator_value_possibilities?.join(', ') || '',
+          default_value: defaultValue ?? '',
+          unit: indicator.value_unit || '',
+          type: indicator.value_type || '',
         });
       }
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
 
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(`indicateurs_${action.name}.xlsx`)}"`);
-    res.setHeader("Content-Length", buffer.length);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(`indicateurs_${action.name}.xlsx`)}"`);
+    res.setHeader('Content-Length', buffer.length);
     res.end(buffer);
   } catch (error) {
     capture(error);
@@ -335,13 +336,13 @@ router.post("/export_indicator_values_excel", passport.authenticate(["admin", "u
   }
 });
 
-router.post("/importIndicatorValues", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { fileBase64, collectivity } = req.body;
-    if (!fileBase64) return res.status(400).json({ ok: false, data: { error: "fileBase64 is required" } });
-    if (!collectivity) return res.status(400).json({ ok: false, data: { error: "collectivity is required" } });
+    if (!fileBase64) return res.status(400).json({ ok: false, data: { error: 'fileBase64 is required' } });
+    if (!collectivity) return res.status(400).json({ ok: false, data: { error: 'collectivity is required' } });
 
-    const fileBuffer = Buffer.from(fileBase64, "base64");
+    const fileBuffer = Buffer.from(fileBase64, 'base64');
 
     const { extractedData } = await importSheetsToExcelFile(collectivity.excelFileId, fileBuffer, SITUATION_SHEETS);
     if (!extractedData || extractedData.length === 0) return res.status(200).json({ ok: true });
@@ -371,30 +372,30 @@ router.post("/importIndicatorValues", passport.authenticate(["admin", "user"], {
       const matchingValues = indicatorValueMap.get(`${indicator._id.toString()}_${data.situation}`) || [];
 
       for (const indicatorValue of matchingValues) {
-        if (indicatorValue.indicator_type === "number") data.value = isNaN(parseFloat(data.value)) ? null : parseFloat(data.value);
-        if (indicatorValue.indicator_type === "checkbox") {
-          const strValue = data.value != null ? String(data.value) : "";
+        if (indicatorValue.indicator_type === 'number') data.value = isNaN(parseFloat(data.value)) ? null : parseFloat(data.value);
+        if (indicatorValue.indicator_type === 'checkbox') {
+          const strValue = data.value != null ? String(data.value) : '';
           data.value = strValue
             .split(/[,;.]/)
             .map((v) => v.trim())
             .filter((v) => v);
         }
-        if (indicatorValue.indicator_type === "radio" || indicatorValue.indicator_type === "text") data.value = data.value != null ? String(data.value).trim() : "";
+        if (indicatorValue.indicator_type === 'radio' || indicatorValue.indicator_type === 'text') data.value = data.value != null ? String(data.value).trim() : '';
 
         const oldValue = indicatorValue.value?.[indicatorValue.indicator_type];
-        const isOldEmpty = oldValue == null || oldValue === "" || (Array.isArray(oldValue) && oldValue.length === 0);
-        const isNewEmpty = data.value == null || data.value === "" || (Array.isArray(data.value) && data.value.length === 0);
+        const isOldEmpty = oldValue == null || oldValue === '' || (Array.isArray(oldValue) && oldValue.length === 0);
+        const isNewEmpty = data.value == null || data.value === '' || (Array.isArray(data.value) && data.value.length === 0);
         if (isOldEmpty && isNewEmpty) continue;
         if (JSON.stringify(oldValue) === JSON.stringify(data.value)) continue;
         logs.push(
           new Log({
-            model_name: "indicator_value",
+            model_name: 'indicator_value',
             name: indicator.name,
-            field: "value",
-            operation: "update",
-            new_value: { [Array.isArray(data.value) ? "array" : typeof data.value]: data.value },
-            previous_value: { [Array.isArray(oldValue) ? "array" : typeof oldValue]: oldValue },
-            type_value: Array.isArray(data.value) ? "array" : typeof data.value,
+            field: 'value',
+            operation: 'update',
+            new_value: { [Array.isArray(data.value) ? 'array' : typeof data.value]: data.value },
+            previous_value: { [Array.isArray(oldValue) ? 'array' : typeof oldValue]: oldValue },
+            type_value: Array.isArray(data.value) ? 'array' : typeof data.value,
             date: new Date(),
             user_id: req.user.id,
             user_name: req.user.name,
