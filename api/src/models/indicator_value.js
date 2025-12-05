@@ -30,7 +30,7 @@ const Schema = new mongoose.Schema(
     indicator_value_unit: { type: String, trim: true },
     situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'], trim: true },
     year: { type: Number, trim: true },
-    source: { type: String, trim: true },
+    value_source: { type: String, trim: true },
     comment: { type: String, trim: true },
 
     value: {

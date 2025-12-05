@@ -44,7 +44,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const logs = [];
 
     for (const field of Object.keys(req.body)) {
-      if (['updatedAt', '__v', 'createdAt', '_id', 'owner_type', 'source'].includes(field)) continue;
+      if (['updatedAt', '__v', 'createdAt', '_id', 'owner', 'value_source'].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = indicatorValue[field];
 
@@ -88,6 +88,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     }
 
     const { source, ...updateData } = req.body;
+    if (source) updateData.value_source = source;
     indicatorValue.set(updateData);
     await indicatorValue.save();
 
