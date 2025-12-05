@@ -6,7 +6,7 @@ import { SITUATION_TYPES } from "@/utils/constants";
 import ProgressCircle from "@/components/ProgressCircle";
 import IndicatorsList from "./IndicatorsList";
 import SituationTab from "./SituationTab";
-import { FiArrowLeft, FiDownload, FiUpload, FiLoader } from "react-icons/fi";
+import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo } from "react-icons/fi";
 import useStore from "@/services/store";
 
 export const SITUATION_TABS = [
@@ -147,34 +147,6 @@ export default function Completion({ action }) {
               </h1>
             </div>
             
-            <div className="flex items-center gap-2  p-2 ">
-              
-              <button
-                onClick={exportIndicatorTemplate}
-                disabled={isExporting}
-                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Téléchargez le fichier Excel pour le remplir hors ligne"
-              >
-                {isExporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
-                <span className="hidden sm:inline">Exporter les indicateurs</span>
-                <span className="sm:hidden">Exporter</span>
-              </button>
-
-              <label className={`inline-flex items-center gap-2 px-3 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 transition-all cursor-pointer ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title="Importez le fichier Excel rempli pour mettre à jour les valeurs"
-              >
-                {isImporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiUpload className="w-4 h-4" />}
-                <span className="hidden sm:inline">Importer les valeurs</span>
-                <span className="sm:hidden">Importer</span>
-                <input 
-                  type="file" 
-                  accept=".xlsx" 
-                  className="hidden" 
-                  disabled={isImporting}
-                  onChange={(e) => e.target.files[0] && importIndicatorValues(e.target.files[0])}
-                />
-              </label>
-            </div>
           </div>
           
           <div className="flex gap-2 items-center ml-14">
@@ -192,18 +164,63 @@ export default function Completion({ action }) {
           </div>
         </div>
 
-        <div className="flex border-b border-gray-200 mb-8">
-          {SITUATION_TABS.map(tab => (
-            <button 
-              key={tab.key} 
-              className={`px-6 py-3 text-sm font-semibold transition-all ${
-                activeTab === tab.key  ? "text-primary-green border-b-2 border-primary-green"  : "text-gray-500 hover:text-primary-green"
-              }`} 
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex items-center justify-between border-b border-gray-200 mb-8">
+          <div className="flex">
+            {SITUATION_TABS.map(tab => (
+              <button 
+                key={tab.key} 
+                className={`px-6 py-3 text-sm font-semibold transition-all ${
+                  activeTab === tab.key  ? "text-primary-green border-b-2 border-primary-green"  : "text-gray-500 hover:text-primary-green"
+                }`} 
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="relative group">
+              <button
+                onClick={exportIndicatorTemplate}
+                disabled={isExporting}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300"
+                title="Téléchargez le fichier Excel des indicateurs de cette actions"
+              >
+                {isExporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
+                <span>Telecharger le template</span>
+              </button>
+            </div>
+
+            <div className="relative group">
+              <label className={`inline-flex items-center gap-2 px-3 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 cursor-pointer ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Importez le fichier Excel rempli pour mettre à jour les indicateurs de cette actions"
+              >
+                {isImporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiUpload className="w-4 h-4" />}
+                <span>Importer les Valeurs</span>
+                <input 
+                  type="file" 
+                  accept=".xlsx" 
+                  className="hidden" 
+                  disabled={isImporting}
+                  onChange={(e) => e.target.files[0] && importIndicatorValues(e.target.files[0])}
+                />
+              </label>
+            </div>
+
+            <div className="relative group">
+              <button
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Information"
+              >
+                <FiInfo className="w-4 h-4" />
+              </button>
+              <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 pointer-events-none">
+                Téléchargez le template des indicateurs de cette actions et ensuite importez le pour mettre à jour les indicateurs de cette actions
+                <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">

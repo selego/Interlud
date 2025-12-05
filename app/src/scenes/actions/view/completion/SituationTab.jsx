@@ -85,7 +85,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                 </div>
               </div>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div className="grid grid-cols-[1fr_2fr] gap-x-6 gap-y-4">
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">
                   Valeur{indicatorValue.indicator_value_unit ? ` (${indicatorValue.indicator_value_unit})` : ''}
@@ -106,14 +106,14 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                   {!indicatorValue.value_default?.[indicatorValue.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
                 {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
                   <div className="flex justify-between items-center gap-2">
-                    <p className="text-gray-600">
+                    <p className="text-gray-600 text-sm max-w-[20em]">
                       {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
                     </p>
                     <button
                       onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] } })}
-                      className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit whitespace-nowrap"
                     >
-                      Utiliser la valeur par défaut
+                      Appliquer la valeur par défaut
                     </button>
                   </div>
                 )}
