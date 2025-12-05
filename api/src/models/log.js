@@ -27,7 +27,9 @@ const Schema = new mongoose.Schema(
 
     type_value: { type: String },
     date: { type: Date, default: Date.now },
+    source: { type: String, enum: ['manual', 'import_excel', 'default_value', 'synchronization'] },
 
+    // References
     user_id: { type: String },
     user_name: { type: String },
     user_email: { type: String },
