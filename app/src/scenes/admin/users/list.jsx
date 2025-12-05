@@ -39,6 +39,7 @@ export default function List() {
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Rôle</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Collectivités</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Dernière connexion</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
@@ -52,6 +53,7 @@ export default function List() {
                 </span>
               </td>
               <td className="px-6 py-4 text-sm text-gray-600">{user.collectivities?.length || 0}</td>
+              <td className="px-6 py-4 text-sm text-gray-600"> {user.last_login_at && !isNaN(new Date(user.last_login_at).getTime()) ? new Date(user.last_login_at).toLocaleDateString("fr-FR")  : "Jamais"}</td>
             </tr>
           ))}
         </tbody>
