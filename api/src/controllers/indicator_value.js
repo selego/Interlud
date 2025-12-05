@@ -8,9 +8,15 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Action = require('../models/action');
 const Indicator = require('../models/indicator');
-const { updateExcelCellByIndicatorId } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
+const SITUATION_SHEETS = [
+  { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
+  { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
+  { sheetName: 'Remplissage - Sit. Prev.', situation: 'prev' },
+  { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
+];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {

@@ -6,6 +6,7 @@ import Modal from "@/components/modal";
 import { FiList, FiSettings, FiClock, FiArrowLeft } from "react-icons/fi";
 import Select from "@/components/Select";
 import History from "./history";
+import Pagination from "@/components/pagination";
 
 export default function Settings({ action }) {
   const navigate = useNavigate();
@@ -88,12 +89,15 @@ function IndicatorsTab({ action }) {
   const [indicatorValues, setIndicatorValues] = useState([]);
   const [indicators, setIndicators] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [filters, setFilters] = useState({ page: 0, limit: 10 });
+  const [total, setTotal] = useState(0);
 
   const fetchIndicatorValues = async () => {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setIndicatorValues(data);
+      console.log(data);
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
@@ -102,9 +106,10 @@ function IndicatorsTab({ action }) {
   const fetchIndicators = async () => {
     try {
       const ids = [...new Set(indicatorValues.map((v) => v.indicator_id))];
-      const { ok, data, code } = await api.post(`/indicator/search`, { _id: { $in: ids } });
+      const { ok, data, code, total } = await api.post(`/indicator/search`, { _id: { $in: ids }, page: filters.page, limit: filters.limit });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setIndicators(data);
+      setTotal(total !== undefined ? total : ids.length);
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
@@ -116,7 +121,7 @@ function IndicatorsTab({ action }) {
 
   useEffect(() => {
     if (indicatorValues.length > 0) fetchIndicators();
-  }, [indicatorValues]);
+  }, [indicatorValues, filters]);
 
   return (
     <div className="p-8 card-shadow">
@@ -135,7 +140,6 @@ function IndicatorsTab({ action }) {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Nom</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Description</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Unité</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Catégorie</th>
@@ -144,8 +148,7 @@ function IndicatorsTab({ action }) {
           <tbody className="bg-white divide-y divide-gray-200">
             {indicators.map((indicator) => (
               <tr key={indicator._id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{indicator.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{indicator.description || "-"}</td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900 truncate max-w-[500px]">{indicator.name}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{indicator.value_unit || "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{indicator.value_type || "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{indicator.indicator_category_name || "-"}</td>
@@ -154,6 +157,14 @@ function IndicatorsTab({ action }) {
           </tbody>
         </table>
       </div>
+
+      <Pagination 
+        total={total} 
+        per_page={filters.limit} 
+        currentPage={filters.page + 1} 
+        onNext={() => setFilters({ ...filters, page: filters.page + 1 })} 
+        onPrevious={() => setFilters({ ...filters, page: filters.page - 1 })}
+      />
 
       <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} action={action} onAdd={fetchIndicatorValues} />
     </div>
