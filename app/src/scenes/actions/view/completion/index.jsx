@@ -209,7 +209,18 @@ export default function Completion({ action }) {
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="w-full lg:w-72 shrink-0">
             <div className="card-shadow p-4 sticky top-8 self-start">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Indicateurs</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">{SITUATION_TABS.find((tab) => tab.key === activeTab)?.label}</h3>
+                <div className="flex items-center gap-2">
+                  <ProgressCircle 
+                    percentage={indicatorValues.length > 0 ? Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100) : 0} 
+                    size={16} 
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    {indicatorValues.length > 0 ? Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
                 <IndicatorsList indicatorValues={indicatorValues} onSelectIndicatorValue={setSelectedIndicatorValue} />
               </div>
