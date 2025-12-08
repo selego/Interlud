@@ -140,7 +140,14 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const action = await Action.create({ ...req.body, excel_worksheetname: parentAction.excel_worksheetname });
+    const action = await Action.create({
+      ...req.body,
+      excel_worksheetname: parentAction.excel_worksheetname,
+      last_modif_by_id: req.user._id,
+      last_modif_by_name: req.user.name,
+      last_modif_by_email: req.user.email,
+      last_modif_date: new Date(),
+    });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const indicators = await Indicator.find({ linked_action_id: parentAction._id });
