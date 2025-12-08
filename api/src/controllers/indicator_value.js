@@ -43,6 +43,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
     action.last_modif_date = new Date();
     await action.save();
     const indicator = await Indicator.findById(indicatorValue.indicator_id);
