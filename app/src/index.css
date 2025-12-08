@@ -54,7 +54,7 @@
   }
 
   .button-primary {
-    @apply px-4 py-2 rounded-full bg-primary-green text-white text-base;
+    @apply px-4 py-2 rounded-lg bg-primary-green text-white text-sm;
   }
 
   .input-primary {
