@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import DebounceInput from "@/components/debounceInput";
 import Select from "@/components/Select";
 
-export default function IndicatorValueInput({ value, indicatorType, options, onChange }) {
+export default function IndicatorValueInput({ value, indicatorType, options, onChange, className = "" }) {
   if (indicatorType === "text" || indicatorType === undefined) {
     return (
       <DebounceInput
@@ -11,7 +11,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
         debounce={800}
-        className="text-gray-900 font-bold"
+        className={`text-gray-900 font-bold ${className}`}
       />
     );
   }
@@ -24,56 +24,27 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
         onChange={(e) => onChange(Number(e.target.value))}
         placeholder="Valeur numérique"
         debounce={800}
-        className="text-gray-900 font-bold"
+        className={`text-gray-900 font-bold ${className}`}
       />
     );
   }
 
   if (indicatorType === "radio") {
-    if (options?.some(opt => opt.length > 30) || options?.length > 3) {
       return (
         <Select
           value={value || ""}
           onChange={onChange}
           options={options?.map(opt => ({ value: opt, label: opt })) || []}
           placeholder="Sélectionner une option"
-          className="text-gray-900 truncate max-w-[20em]"
+          className={`text-gray-900 truncate max-w-[20em] ${className}`}
         />
       );
-    }
-
-    return (
-      <div className="inline-flex rounded-full border border-secondary-green bg-secondary-green/30 w-fit">
-        {options?.map((option, index) => {          
-          return (
-            <label
-              key={index}
-              className={`
-                relative flex items-center justify-center px-4 py-2 cursor-pointer transition-all
-                ${value === option ? "bg-primary-green text-white font-medium"  : "bg-transparent text-gray-400"}
-                ${index === 0 ? "rounded-l-full" : ""}
-                ${index === options.length - 1 ? "rounded-r-full" : ""}
-              `}
-            >
-              <input
-                type="radio"
-                value={option}
-                checked={value === option}
-                onChange={(e) => onChange(e.target.value)}
-                className="sr-only"
-              />
-              <span className="text-sm whitespace-nowrap">{option}</span>
-            </label>
-          );
-        })}
-      </div>
-    );
   }
 
   if (indicatorType === "checkbox") {
     const selectedValues = Array.isArray(value) ? value : [];
     const [showAll, setShowAll] = useState(false);
-    const visibleOptions = options && options.length > 5 && !showAll ? options.slice(0, 5) : options;
+    const visibleOptions = options && options.length > 3 && !showAll ? options.slice(0, 3) : options;
 
     const handleCheckboxChange = (option, isChecked) => {
       const newValues = isChecked ? [...selectedValues, option] : selectedValues.filter(v => v !== option);
@@ -95,13 +66,13 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
             <span className="text-sm text-gray-700">{option}</span>
           </label>
         ))}
-        {options && options.length > 5 && (
+        {options && options.length > 3 && (
           <button
             type="button"
             onClick={() => setShowAll(!showAll)}
             className="text-sm text-primary-green hover:text-primary-green/80 font-medium mt-2"
           >
-            {showAll ? "Voir moins" : `Voir plus (${options.length - 5} autres)`}
+            {showAll ? "Voir moins" : `Voir plus (${options.length - 3} autres)`}
           </button>
         )}
       </div>

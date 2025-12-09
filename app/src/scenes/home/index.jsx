@@ -415,9 +415,27 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {actions.map((action) => (
-              <CardAction key={action._id} action={action} />
-            ))}
+            {actions.length === 0 ? (
+              <div className="col-span-full">
+                <div className="flex flex-col items-center justify-center gap-4 text-center">
+                  <div className="text-lg font-semibold text-gray-700">Aucune action dans cette collectivité</div>
+                  <p className="text-sm text-gray-500">Créez votre première action pour démarrer.</p>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="button-primary px-5 py-3 flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Créer votre première action</span>
+                  </button>              
+                </div>
+              </div>
+            ) : (
+              <>
+                {actions.map((action) => (
+                <CardAction key={action._id} action={action} />
+                ))}
 
             <div
               className="h-full card-shadow rounded-2xl border-2 border-dashed border-primary-green/60 hover:border-primary-green bg-white p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center"
@@ -429,6 +447,10 @@ export default function Home() {
                   <div className="w-7 h-7 rounded-md bg-primary-green"></div>
                   <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
                   <div className="w-7 h-7 rounded-md bg-primary-green"></div>
+                </div>
+                <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
+              </div>
+              <p className="text-base font-semibold text-primary-green">Voir toutes les actions</p>
                 </div>
                 <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
               </div>

@@ -85,38 +85,69 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                 </div>
               </div>
 
-            <div className="grid grid-cols-[1fr_2fr] gap-x-6 gap-y-4">
+            <div className="grid grid-cols-[2fr_2fr_2fr] gap-x-6 gap-y-4">
               <div className="flex flex-col">
                 <label className="block text-xs font-medium text-gray-600 mb-2">
-                  Valeur{indicatorValue.indicator_value_unit ? ` (${indicatorValue.indicator_value_unit})` : ''}
+                  Valeur
                 </label>
-                <IndicatorValueInput
-                  key={`${indicatorValue._id}-${indicatorValue.value?.[indicatorValue.indicator_type] || 'empty'}`}
-                  value={indicatorValue.value?.[indicatorValue.indicator_type]}
-                  indicatorType={indicatorValue.indicator_type}
-                  options={indicatorValue.indicator_value_possibilities}
-                  onChange={newValue => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: newValue } })}
-                />
+                <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <IndicatorValueInput
+                    key={`${indicatorValue._id}-${indicatorValue.value?.[indicatorValue.indicator_type] || 'empty'}`}
+                    value={indicatorValue.value?.[indicatorValue.indicator_type]}
+                    indicatorType={indicatorValue.indicator_type}
+                    options={indicatorValue.indicator_value_possibilities}
+                    onChange={newValue => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: newValue } })}
+                    className="w-full"
+                  />
+                </div>
+                {indicatorValue.indicator_value_unit && <span className="text-xs text-gray-500 whitespace-nowrap">{indicatorValue.indicator_value_unit}</span>}
+                </div>
               </div>
 
               <div className="flex flex-col">
-                <label className="block text-xs font-medium text-gray-600 mb-2">
-                  Valeur par défaut{indicatorValue.indicator_value_unit ? ` (${indicatorValue.indicator_value_unit})` : ''}
-                </label>
-                  {!indicatorValue.value_default?.[indicatorValue.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
-                {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
-                  <div className="flex justify-between items-center gap-2">
-                    <p className="text-gray-600 text-sm max-w-[20em]">
-                      {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
-                    </p>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-xs font-medium text-gray-600">
+                    Valeur par défaut
+                  </label>
+                  {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
+                    <Tooltip content="Appliquer cette valeur">
+                      <button
+                        onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] } })}
+                        className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                      </button>
+                    </Tooltip>
+                  )}
+                </div>
+                 {!indicatorValue.value_default?.[indicatorValue.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
+                 {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
+                   <p className="text-gray-600 text-sm truncate max-w-[20em]" title={Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}>
+                     {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
+                   </p>
+                 )}
+              </div>
+
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-xs font-medium text-gray-600">
+                    Valeurs Acteurs économiques
+                  </label>
+                  <Tooltip content="Appliquer cette valeur">
                     <button
-                      onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] } })}
-                      className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit whitespace-nowrap"
+                      onClick={() => console.log('Apply economic actor value')}
+                      className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
                     >
-                      Appliquer la valeur par défaut
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
                     </button>
-                  </div>
-                )}
+                  </Tooltip>
+                </div>
+                <p className="text-gray-600 text-sm">3</p>
               </div>
             </div>
           </div>
@@ -128,23 +159,27 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 }
 
 
-function Tooltip({ content }) {
+function Tooltip({ content, children }) {
   const [isVisible, setIsVisible] = useState(false);
+
+  const trigger = children || (
+    <svg className="w-4 h-4 text-gray-400 hover:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+      <path 
+        fillRule="evenodd" 
+        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" 
+        clipRule="evenodd" 
+      />
+    </svg>
+  );
 
   return (
     <div className="relative inline-flex items-center">
       <div
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
-        className="cursor-help"
+        className={children ? "" : "cursor-help"}
       >
-        <svg  className="w-4 h-4 text-gray-400 hover:text-gray-600"  fill="currentColor" viewBox="0 0 20 20">
-            <path 
-              fillRule="evenodd" 
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" 
-              clipRule="evenodd" 
-            />
-          </svg>
+        {trigger}
       </div>
       {isVisible && (
         <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg whitespace-nowrap">
