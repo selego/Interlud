@@ -4,6 +4,14 @@ import Modal from "@/components/modal"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 
+const getStatusLabel = (status) => {
+  if (status === "completed") return "Terminée"
+  if (status === "upcoming") return "À venir"
+  if (status === "in_progress") return "En cours"
+  if (status === "blocked") return "Bloquée"
+  return "Nouvelle"
+}
+
 export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
@@ -11,7 +19,7 @@ export default function List() {
 
   const fetchActions = async () => {
     try {
-      const { ok, data } = await api.post("/action/search")
+      const { ok, data } = await api.post("/action/search", { limit: 10000 })
       if (!ok) return toast.error(data.code || "Une erreur est survenue")
       setActions(data)
     } catch (error) {
@@ -49,7 +57,7 @@ export default function List() {
             <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/action/${action._id}`)}>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
               <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-xs">{action.description}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.status}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.type}</td>
             </tr>
           ))}
