@@ -29,6 +29,19 @@ export default function List() {
     fetchUsers()
   }, [])
 
+  if ( users.length === 0 ) return (
+    <div className="p-8"> 
+          <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Membres de {collectivity?.name}</h1>
+      </div>
+
+      <div className="flex items-center justify-center">
+        <div className="text-lg text-gray-600">Aucun membre dans cette collectivité</div>
+      </div>
+    </div>
+  )
+
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
