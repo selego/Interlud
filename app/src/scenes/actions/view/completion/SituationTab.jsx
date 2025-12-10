@@ -105,7 +105,6 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
-                  <Tooltip content="Saisissez la valeur de l'indicateur pour cette situation"/>
                 </div>
               </div>
 
@@ -160,17 +159,22 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                   <label className="block text-xs font-medium text-gray-600">
                     Valeurs Acteurs économiques
                   </label>
-                  {economicActorData?.aggregated_value !== null && economicActorData?.aggregated_value !== undefined && (
-                    <Tooltip content="Appliquer cette valeur">
-                      <button
-                        onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: economicActorData.aggregated_value } })}
-                        className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                      </button>
-                    </Tooltip>
+                  {economicActorData?.aggregated_value !== null && economicActorData?.aggregated_value !== undefined ? (
+                    <>
+                      <Tooltip content={`Valeur agrégée de ${economicActorData.nb_actors_responded} acteur${economicActorData.nb_actors_responded > 1 ? 's' : ''} économique${economicActorData.nb_actors_responded > 1 ? 's' : ''}`} />
+                      <Tooltip content="Appliquer cette valeur">
+                        <button
+                          onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: economicActorData.aggregated_value } })}
+                          className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                          </svg>
+                        </button>
+                      </Tooltip>
+                    </>
+                  ) : (
+                    <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli" />
                   )}
                 </div>
                 {economicActorData && (
@@ -180,9 +184,6 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                         {economicActorData.aggregated_value || 'Pas de valeur'}
                       </p>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      {economicActorData.nb_actors_responded} acteur{economicActorData.nb_actors_responded > 1 ? 's' : ''} économique{economicActorData.nb_actors_responded > 1 ? 's' : ''}
-                    </p>
                   </div>
                 )}
               </div>
@@ -219,9 +220,9 @@ function Tooltip({ content, children }) {
         {trigger}
       </div>
       {isVisible && (
-        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg whitespace-nowrap">
+        <div className="absolute z-50 bottom-full right-0 mb-2 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg w-80">
           {content}
-          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+          <div className="absolute top-full right-2 -mt-1">
             <div className="border-4 border-transparent border-t-gray-900"></div>
           </div>
         </div>
