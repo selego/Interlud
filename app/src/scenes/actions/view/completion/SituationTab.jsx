@@ -174,7 +174,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                       </Tooltip>
                     </>
                   ) : (
-                    <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli" />
+                    <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli l'indicateur" />
                   )}
                 </div>
                 {economicActorData && (
