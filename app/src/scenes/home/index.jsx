@@ -229,7 +229,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  <span>Sans statut</span>
+                  <span>Nouvelles actions</span>
                 </div>
               </div>
             </div>

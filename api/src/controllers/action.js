@@ -27,6 +27,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
     action.last_modif_date = new Date();
     await action.save();
 
@@ -113,7 +114,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     await Log.create({
       model_name: 'action',
       name: action.name,
-      operation: "add",
+      operation: 'add',
       date: new Date(),
       user_id: req.user._id,
       user_name: req.user.name,
@@ -139,7 +140,14 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const action = await Action.create({ ...req.body, excel_worksheetname: parentAction.excel_worksheetname });
+    const action = await Action.create({
+      ...req.body,
+      excel_worksheetname: parentAction.excel_worksheetname,
+      last_modif_by_id: req.user._id,
+      last_modif_by_name: req.user.name,
+      last_modif_by_email: req.user.email,
+      last_modif_date: new Date(),
+    });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const indicators = await Indicator.find({ linked_action_id: parentAction._id });
@@ -176,7 +184,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     await Log.create({
       model_name: 'action',
       name: action.name,
-      operation: "add",
+      operation: 'add',
       date: new Date(),
       user_id: req.user._id,
       user_name: req.user.name,
@@ -260,7 +268,7 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
     await Log.create({
       model_name: 'action',
       name: action.name,
-      operation: "delete",
+      operation: 'delete',
       date: new Date(),
       user_id: req.user._id,
       user_name: req.user.name,

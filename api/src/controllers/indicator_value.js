@@ -1,15 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
+const ExcelJS = require('exceljs');
 const IndicatorValue = require('../models/indicator_value');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Action = require('../models/action');
 const Indicator = require('../models/indicator');
-const { updateExcelCellByIndicatorId } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
+const SITUATION_SHEETS = [
+  { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
+  { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
+  { sheetName: 'Remplissage - Sit. Prev.', situation: 'prev' },
+  { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
+];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -36,6 +43,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
     action.last_modif_date = new Date();
     await action.save();
     const indicator = await Indicator.findById(indicatorValue.indicator_id);

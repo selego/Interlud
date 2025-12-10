@@ -30,6 +30,18 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
   }
 
   if (indicatorType === "radio") {
+    if (options?.some(opt => opt.length > 30) || options?.length > 3) {
+      return (
+        <Select
+          value={value || ""}
+          onChange={onChange}
+          options={options?.map(opt => ({ value: opt, label: opt })) || []}
+          placeholder="Sélectionner une option"
+          className="text-gray-900 truncate max-w-[20em]"
+        />
+      );
+    }
+
     return (
       <div className="inline-flex rounded-full border border-secondary-green bg-secondary-green/30 w-fit">
         {options?.map((option, index) => {          

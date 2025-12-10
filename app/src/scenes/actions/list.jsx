@@ -6,6 +6,14 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 
+const getStatusLabel = (status) => {
+  if (status === "completed") return "Terminée"
+  if (status === "upcoming") return "À venir"
+  if (status === "in_progress") return "En cours"
+  if (status === "blocked") return "Bloquée"
+  return "Nouvelle"
+}
+
 export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
@@ -53,7 +61,7 @@ export default function List() {
             <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.status}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.date_start}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.date_end}</td>
             </tr>
@@ -111,7 +119,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg min-h-[45vh]">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
