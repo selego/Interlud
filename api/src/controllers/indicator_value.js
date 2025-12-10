@@ -184,9 +184,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = {
-      owner: 'collectivity',
-    };
+    let query = { owner: 'collectivity' };
 
     if (req.body.indicator_id) query.indicator_id = req.body.indicator_id;
     if (req.body.action_id) query.action_id = req.body.action_id;
@@ -449,6 +447,43 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
   } catch (error) {
     capture(error);
     res.status(500).json({ ok: false, data: { error: error.message } });
+  }
+});
+
+router.post('/economic_actor_indicator_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { action, situation } = req.body;
+
+    const collectivityIndicatorValues = await IndicatorValue.find({ action_id: action._id, situation, owner: 'collectivity' });
+    const collectivityIds = collectivityIndicatorValues.map((iv) => iv._id.toString());
+    const economicActorIndicatorValues = await IndicatorValue.find({ indicator_value_collectivity_id: { $in: collectivityIds }, owner: 'economic_actor' });
+
+    const result = collectivityIndicatorValues.map((iv) => {
+      const economicActorValues = economicActorIndicatorValues.filter((eaiv) => eaiv.indicator_value_collectivity_id === iv._id.toString());
+
+      const filledValues = economicActorValues.filter((eaiv) => {
+        if (eaiv.indicator_type === 'number') return eaiv.value?.number !== null && eaiv.value?.number !== undefined;
+        if (eaiv.indicator_type === 'text') return eaiv.value?.text && eaiv.value.text.trim() !== '';
+        if (eaiv.indicator_type === 'radio') return eaiv.value?.radio && eaiv.value.radio.trim() !== '';
+        if (eaiv.indicator_type === 'checkbox') return eaiv.value?.checkbox && eaiv.value.checkbox.length > 0;
+        return false;
+      });
+
+      let aggregatedValue = null;
+
+      if (filledValues.length >= 3 && iv.indicator_type === 'number') {
+        const numbers = filledValues.map((eaiv) => eaiv.value.number).filter((n) => n !== null && n !== undefined);
+        if (iv.indicator_value_unit === '%') aggregatedValue = numbers.length > 0 ? numbers.reduce((acc, val) => acc + val, 0) / numbers.length : null;
+        if (iv.indicator_value_unit !== '%') aggregatedValue = numbers.reduce((acc, val) => acc + val, 0);
+      }
+
+      return { ...iv.toObject(), nb_actors_responded: filledValues.length, aggregated_value: aggregatedValue };
+    });
+
+    return res.status(200).send({ ok: true, data: result });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, data: { error: error.message } });
   }
 });
 

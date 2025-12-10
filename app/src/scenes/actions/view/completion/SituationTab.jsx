@@ -3,6 +3,7 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
 import IndicatorValueInput from "./IndicatorValueInput";
+import useStore from "@/services/store";
 
 export const SITUATION_LABELS = {
   [SITUATION_TYPES.INIT]: "Initial",
@@ -10,6 +11,7 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.PREV]: "Prévisionnel",
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
+
 
 const sortIndicatorValues = (a, b) => {
   if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
@@ -19,16 +21,28 @@ const sortIndicatorValues = (a, b) => {
   return (a.indicator_name || "").toLowerCase().localeCompare((b.indicator_name || "").toLowerCase());
 };
 
-export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
+export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue, action }) {
+  const [economicActorValues, setEconomicActorValues] = useState([]);
 
   useEffect(() => {
     if (selectedIndicatorValue) {
       const element = document.getElementById(`indicator-${selectedIndicatorValue._id}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [selectedIndicatorValue]);
+
+
+  const fetchEconomicActorIndicatorValues = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/economic_actor_indicator_values`, { action, situation });
+      if (!ok) return toast.error(code || "Erreur lors du chargement")
+      setEconomicActorValues(data)
+      console.log(data)
+    } catch (error) {
+      toast.error("Une erreur est survenue")
+    }
+  }
+
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
@@ -61,6 +75,10 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
     await onUpdate();
   };
 
+  useEffect(() => {
+    fetchEconomicActorIndicatorValues()
+  }, [situation])
+
   return (
     <div className="card-shadow p-6">
       <div className="flex justify-between items-center mb-6">
@@ -76,6 +94,8 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       <div className="space-y-4">
         {[...indicatorValues].sort(sortIndicatorValues).map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
+          const economicActorData = economicActorValues.find(ea => ea._id === indicatorValue._id);
+          
           return (
             <div 
               key={indicatorValue._id} 
@@ -140,18 +160,31 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                   <label className="block text-xs font-medium text-gray-600">
                     Valeurs Acteurs économiques
                   </label>
-                  <Tooltip content="Appliquer cette valeur">
-                    <button
-                      onClick={() => console.log('Apply economic actor value')}
-                      className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                      </svg>
-                    </button>
-                  </Tooltip>
+                  {economicActorData?.aggregated_value !== null && economicActorData?.aggregated_value !== undefined && (
+                    <Tooltip content="Appliquer cette valeur">
+                      <button
+                        onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: economicActorData.aggregated_value } })}
+                        className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                      </button>
+                    </Tooltip>
+                  )}
                 </div>
-                <p className="text-gray-600 text-sm">3</p>
+                {economicActorData && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-gray-900 font-medium text-sm">
+                        {economicActorData.aggregated_value || 'Pas de valeur'}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {economicActorData.nb_actors_responded} acteur{economicActorData.nb_actors_responded > 1 ? 's' : ''} économique{economicActorData.nb_actors_responded > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
