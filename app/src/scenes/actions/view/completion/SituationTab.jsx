@@ -32,7 +32,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
-      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, indicatorValue);
+      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: 'manual', ...indicatorValue });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Valeur enregistrée avec succès");
       await onUpdate();
@@ -47,7 +47,11 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       if (indicatorsWithDefaults.length === 0) return toast.error("Aucune valeur par défaut disponible");
 
       await Promise.all(indicatorsWithDefaults.map(async indicatorValue => {
-        await api.put(`/indicator_value/${indicatorValue._id}`, { ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] }})
+        await api.put(`/indicator_value/${indicatorValue._id}`, { 
+          ...indicatorValue, 
+          value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] },
+          source: 'default_value'
+        })
       }));
       toast.success("Valeurs par défaut appliquées avec succès");
 
@@ -110,8 +114,8 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                       {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
                     </p>
                     <button
-                      onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] } })}
-                      className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit whitespace-nowrap"
+                      onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] }, source: 'default_value' })}
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium bg-primary-green text-white w-fit"
                     >
                       Appliquer la valeur par défaut
                     </button>

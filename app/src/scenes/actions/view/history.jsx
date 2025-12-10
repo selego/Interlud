@@ -20,6 +20,13 @@ const formatValue = value => {
   return String(value)
 }
 
+const formatSource = source => ({
+  'manual': 'Manuel',
+  'import_excel': 'Import Excel',
+  'default_value': 'Valeur par défaut',
+  'synchronization': 'Synchronisation'
+}[source] || source || '-')
+
 export default function History({ action }) {
   const [logs, setLogs] = useState([])
   const fetchLogs = async () => {
@@ -36,24 +43,12 @@ export default function History({ action }) {
     fetchLogs()
   }, [action._id])
 
+  if (logs.length === 0) return null;
+
   return (
-    <div className="p-8 card-shadow">
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Historique des modifications</h2>
-            <p className="text-sm text-gray-600 mt-1">Historique de toutes les modifications liées à cette action</p>
-          </div>
-        </div>
-      </div>
-
-
-      {logs.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">Aucune modification enregistrée pour le moment</div>
-      ) : (
-        <div className="space-y-4">
+    <div className="space-y-4">
           {logs.map((log, index) => (
-            <div key={log._id || index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+            <div key={log._id || index} className="border rounded-lg p-4 bg-gray-50">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -84,6 +79,11 @@ export default function History({ action }) {
                         Collectivité : <span className="font-medium text-gray-700">{log.collectivity_name}</span>
                       </div>
                     )}
+                    {log.source && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Source : <span className="font-medium text-gray-700">{formatSource(log.source)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right ml-4">
@@ -93,10 +93,8 @@ export default function History({ action }) {
                   )}
                 </div>
               </div>
-            </div>
-          ))}
         </div>
-      )}
+      ))}
     </div>
   )
 }
