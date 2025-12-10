@@ -100,6 +100,22 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     indicatorValue.set(updateData);
     await indicatorValue.save();
 
+    const isValueFilled = (iv) => {
+      const val = iv.value?.[iv.indicator_type];
+      if (iv.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
+      return val !== null && val !== undefined && val !== '';
+    };
+
+    const actionIndicatorValues = await IndicatorValue.find({ action_id: indicatorValue.action_id, collectivity_id: indicatorValue.collectivity_id });
+    if (actionIndicatorValues.length > 0 && actionIndicatorValues.every(isValueFilled)) {
+      action.status = 'completed';
+      await action.save();
+    }
+    if (action.status === 'no_status') {
+      action.status = 'in_progress';
+      await action.save();
+    }
+
     res.status(200).send({ ok: true, data: indicatorValue });
     await updateExcelCellByIndicatorId(collectivity.excelFileId, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation);
 
