@@ -52,7 +52,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const logs = [];
 
     for (const field of Object.keys(req.body)) {
-      if (['updatedAt', '__v', 'createdAt', '_id'].includes(field)) continue;
+      if (['updatedAt', '__v', 'createdAt', '_id', 'owner', 'value_source'].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = indicatorValue[field];
 
@@ -79,6 +79,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         previous_value: { [logType]: actualOldValue },
         type_value: logType,
         date: new Date(),
+        source: req.body.source || 'manual',
         user_id: req.user._id,
         user_name: req.user.name,
         user_email: req.user.email,
@@ -94,8 +95,26 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       logs.push(log);
     }
 
-    indicatorValue.set(req.body);
+    const { source, ...updateData } = req.body;
+    if (source) updateData.value_source = source;
+    indicatorValue.set(updateData);
     await indicatorValue.save();
+
+    const isValueFilled = (iv) => {
+      const val = iv.value?.[iv.indicator_type];
+      if (iv.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
+      return val !== null && val !== undefined && val !== '';
+    };
+
+    const actionIndicatorValues = await IndicatorValue.find({ action_id: indicatorValue.action_id, collectivity_id: indicatorValue.collectivity_id });
+    if (actionIndicatorValues.length > 0 && actionIndicatorValues.every(isValueFilled)) {
+      action.status = 'completed';
+      await action.save();
+    }
+    if (action.status === 'no_status') {
+      action.status = 'in_progress';
+      await action.save();
+    }
 
     res.status(200).send({ ok: true, data: indicatorValue });
     await updateExcelCellByIndicatorId(collectivity.excelFileId, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation);
@@ -134,6 +153,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           previous_value: { [logType]: actualOldValue },
           type_value: logType,
           date: new Date(),
+          source: 'synchronization',
           user_id: req.user._id,
           user_name: req.user.name,
           user_email: req.user.email,
@@ -404,6 +424,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             previous_value: { [Array.isArray(oldValue) ? 'array' : typeof oldValue]: oldValue },
             type_value: Array.isArray(data.value) ? 'array' : typeof data.value,
             date: new Date(),
+            source: 'import_excel',
             user_id: req.user.id,
             user_name: req.user.name,
             user_email: req.user.email,

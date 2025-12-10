@@ -101,6 +101,13 @@ export default function Completion({ action }) {
     return val !== null && val !== undefined && val !== ""
   }
 
+  const getSituationProgress = (situationKey) => {
+    const values = allIndicatorValues.filter((iv) => iv.situation === situationKey)
+    if (values.length === 0) return 0
+    const filled = values.filter(isIndicatorValueFilled).length
+    return Math.round((filled / values.length) * 100)
+  }
+
   useEffect(() => {
     fetchIndicatorsValues()
   }, [action._id, activeTab])
@@ -163,7 +170,13 @@ export default function Completion({ action }) {
                 }`}
                 onClick={() => setActiveTab(tab.key)}
               >
-                {tab.label}
+                <div className="flex items-center gap-2">
+                  {tab.label}
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <ProgressCircle percentage={getSituationProgress(tab.key)} size={16} />
+                    <span>{getSituationProgress(tab.key)}%</span>
+                  </div>
+                </div>
               </button>
             ))}
           </div>
@@ -211,15 +224,6 @@ export default function Completion({ action }) {
             <div className="card-shadow p-4 sticky top-8 self-start">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">{SITUATION_TABS.find((tab) => tab.key === activeTab)?.label}</h3>
-                <div className="flex items-center gap-2">
-                  <ProgressCircle 
-                    percentage={indicatorValues.length > 0 ? Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100) : 0} 
-                    size={16} 
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    {indicatorValues.length > 0 ? Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100) : 0}%
-                  </span>
-                </div>
               </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
                 <IndicatorsList indicatorValues={indicatorValues} onSelectIndicatorValue={setSelectedIndicatorValue} />

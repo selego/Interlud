@@ -32,7 +32,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
-      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, indicatorValue);
+      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: 'manual', ...indicatorValue });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Valeur enregistrée avec succès");
       await onUpdate();
@@ -47,7 +47,11 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       if (indicatorsWithDefaults.length === 0) return toast.error("Aucune valeur par défaut disponible");
 
       await Promise.all(indicatorsWithDefaults.map(async indicatorValue => {
-        await api.put(`/indicator_value/${indicatorValue._id}`, { ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] }})
+        await api.put(`/indicator_value/${indicatorValue._id}`, { 
+          ...indicatorValue, 
+          value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] },
+          source: 'default_value'
+        })
       }));
       toast.success("Valeurs par défaut appliquées avec succès");
 

@@ -8,6 +8,7 @@ import Select from "@/components/Select"
 import ProgressCircle from "@/components/ProgressCircle"
 import DebouncedInput from "@/components/debounceInput"
 import Loader from "@/components/loader"
+import Modal from "@/components/modal"
 
 const getStatutBadgeClass = (statut) => {
   if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
@@ -26,7 +27,8 @@ export default function Home() {
   const [evolutionStatuts, setEvolutionStatuts] = useState([])
   const [period, setPeriod] = useState("month")
   const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true })
-
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  
   const fetchEvolutionStatuts = async () => {
     try {
       const { ok, data, code } = await api.post("/dashboard/evolution-statuts", { collectivity_id: collectivity._id, period: period })
@@ -428,37 +430,36 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     <span>Créer votre première action</span>
-                  </button>              
+                  </button>
                 </div>
               </div>
             ) : (
               <>
                 {actions.map((action) => (
-                <CardAction key={action._id} action={action} />
+                  <CardAction key={action._id} action={action} />
                 ))}
 
-            <div
-              className="h-full card-shadow rounded-2xl border-2 border-dashed border-primary-green/60 hover:border-primary-green bg-white p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center"
-              onClick={() => navigate(`/actions`)}
-            >
-              <div className="flex flex-col items-center gap-3 mb-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
-                  <div className="w-7 h-7 rounded-md bg-primary-green"></div>
-                  <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
-                  <div className="w-7 h-7 rounded-md bg-primary-green"></div>
+                <div
+                  className="h-full card-shadow rounded-2xl border-2 border-dashed border-primary-green/60 hover:border-primary-green bg-white p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center"
+                  onClick={() => navigate(`/actions`)}
+                >
+                  <div className="flex flex-col items-center gap-3 mb-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
+                      <div className="w-7 h-7 rounded-md bg-primary-green"></div>
+                      <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
+                      <div className="w-7 h-7 rounded-md bg-primary-green"></div>
+                    </div>
+                    <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
+                  </div>
+                  <p className="text-base font-semibold text-primary-green">Voir toutes les actions</p>
                 </div>
-                <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
-              </div>
-              <p className="text-base font-semibold text-primary-green">Voir toutes les actions</p>
-                </div>
-                <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
-              </div>
-              <p className="text-base font-semibold text-primary-green">Voir toutes les actions</p>
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>
+      <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
     </div>
   )
 }
@@ -504,5 +505,127 @@ function CardAction({ action }) {
         </div>
       </div>
     </div>
+  )
+}
+
+
+
+const AddActionModal = ({ isOpen, onClose, collectivity }) => {
+    const navigate = useNavigate()
+    const [selectedActionId, setSelectedActionId] = useState("")
+    const [isCustomVersion, setIsCustomVersion] = useState(false)
+    const [customName, setCustomName] = useState("")
+    const [actions, setActions] = useState([])
+
+    const fetchActions = async () => {
+      try {
+        const { ok, data } = await api.post("/action/search", { type: "global" })
+        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        setActions(data)
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    }
+
+    useEffect(() => {
+        fetchActions()
+    }, [isOpen])
+
+    const createAction = async () => {
+      try {
+        if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
+        if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
+
+        const selectedAction = actions.find(a => a._id === selectedActionId)
+        const payload = {
+          action_parent_id: selectedActionId,
+          action_parent_name: selectedAction.name,
+          name: isCustomVersion ? customName : selectedAction.name,
+          type: isCustomVersion ? "custom" : "reference",
+          collectivity_id: collectivity._id,
+          collectivity_name: collectivity.name
+        }
+
+        const { ok, data } = await api.post("/action/create_action_with_default_indicators", payload)
+        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        navigate(`/actions/${data._id}/settings`)
+      } catch (error) {
+        toast.error(error || "Une erreur est survenue")
+      }
+    }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
+        </div>
+
+        {/* Action Selection */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Choisissez parmi les actions disponibles <span className="text-red-500">*</span>
+          </label>
+          <Select
+            options={actions.map(action => ({ value: action._id, label: action.name}))}
+            value={selectedActionId}
+            onChange={(value) => setSelectedActionId(value)}
+            placeholder="Sélectionner une action"
+            constrained={true}
+          />
+        </div>
+
+        {selectedActionId && (
+          <div className="mb-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  checked={isCustomVersion}
+                  onChange={(e) => setIsCustomVersion(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-4 h-4 border-2 border-gray-300 peer-checked:bg-[#2DAC6A] peer-checked:border-[#2DAC6A] flex items-center justify-center transition-all">
+                  {isCustomVersion && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <span className="text-sm text-gray-700">
+                Créer une version personnalisée de cette action
+              </span>
+            </label>
+          </div>
+        )}
+
+        {/* Custom Name Input */}
+        {isCustomVersion && (
+          <div className="mb-6 animate-fadeIn">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Nom de votre action personnalisée <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Entrez un nom personnalisé"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+              autoFocus
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              Cette action sera basée sur "{actions.find(a => a._id === selectedActionId)?.name}" avec les mêmes indicateurs
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button onClick={createAction} className="button-primary">
+            Créer
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
