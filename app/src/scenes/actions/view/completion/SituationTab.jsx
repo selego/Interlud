@@ -11,6 +11,14 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
 
+const isIndicatorValueFilled = (indicatorValue) => {
+  if (indicatorValue.indicator_type === 'number') return indicatorValue.value?.number !== null && indicatorValue.value?.number !== undefined;
+  if (indicatorValue.indicator_type === 'text') return indicatorValue.value?.text && indicatorValue.value.text.trim() !== '';
+  if (indicatorValue.indicator_type === 'radio') return indicatorValue.value?.radio && indicatorValue.value.radio.trim() !== '';
+  if (indicatorValue.indicator_type === 'checkbox') return indicatorValue.value?.checkbox && indicatorValue.value.checkbox.length > 0;
+  return false;
+};
+
 const sortIndicatorValues = (a, b) => {
   if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
   const subCatA = a.indicator_sub_category_name || '';
@@ -19,16 +27,14 @@ const sortIndicatorValues = (a, b) => {
   return (a.indicator_name || "").toLowerCase().localeCompare((b.indicator_name || "").toLowerCase());
 };
 
-export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
-
+export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue, action }) {
   useEffect(() => {
     if (selectedIndicatorValue) {
       const element = document.getElementById(`indicator-${selectedIndicatorValue._id}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [selectedIndicatorValue]);
+
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
@@ -76,6 +82,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       <div className="space-y-4">
         {[...indicatorValues].sort(sortIndicatorValues).map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
+          
           return (
             <div 
               key={indicatorValue._id} 
@@ -85,7 +92,6 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
-                  <Tooltip content="Saisissez la valeur de l'indicateur pour cette situation"/>
                 </div>
               </div>
 
@@ -135,24 +141,10 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                  )}
               </div>
 
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="block text-xs font-medium text-gray-600">
-                    Valeurs Acteurs économiques
-                  </label>
-                  <Tooltip content="Appliquer cette valeur">
-                    <button
-                      onClick={() => console.log('Apply economic actor value')}
-                      className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                      </svg>
-                    </button>
-                  </Tooltip>
-                </div>
-                <p className="text-gray-600 text-sm">3</p>
-              </div>
+              <EconomicActorValues 
+                indicatorValue={indicatorValue} 
+                onApplyValue={(value) => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: value } })}
+              />
             </div>
           </div>
         );
@@ -162,6 +154,67 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
   )
 }
 
+function EconomicActorValues({ indicatorValue, onApplyValue }) {
+  const [numberValues, setNumberValues] = useState(0);
+  const [aggregatedValue, setAggregatedValue] = useState(null);
+
+  const fetchEconomicActorValues = async () => {
+      try {
+        const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_id: indicatorValue._id, owner: 'economic_actor', limit: 10000 });
+        if (!ok) return toast.error(code || "Une erreur est survenue");
+        const filledValues = data.filter(isIndicatorValueFilled);
+
+        let aggregated = null;
+        if (filledValues.length >= 3 && indicatorValue.indicator_type === 'number') {
+          const numbers = filledValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined);
+          if (numbers.length > 0) aggregated = indicatorValue.indicator_value_unit === '%'? numbers.reduce((acc, val) => acc + val, 0) / numbers.length: numbers.reduce((acc, val) => acc + val, 0);
+        }
+
+        setNumberValues(filledValues.length);
+        setAggregatedValue(aggregated);
+      } catch (error) {
+        toast.error("Une erreur est survenue");
+      }
+  };
+
+  useEffect(() => {
+    fetchEconomicActorValues();
+  }, [indicatorValue._id]);
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center gap-2 mb-2">
+        <label className="block text-xs font-medium text-gray-600">
+          Valeurs Acteurs économiques
+        </label>
+        {numberValues >= 3 ? (
+          <>
+            <Tooltip content={`Valeur agrégée de ${numberValues} acteur${numberValues > 1 ? 's' : ''} économique${numberValues > 1 ? 's' : ''}`} />
+            <Tooltip content="Appliquer cette valeur">
+              <button
+                onClick={() => onApplyValue(aggregatedValue)}
+                className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
+            </Tooltip>
+          </>
+        ) : (
+          <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli l'indicateur" />
+        )}
+      </div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <p className="text-gray-900 font-medium text-sm">
+              {aggregatedValue || 'Pas de valeur'}
+            </p>
+          </div>
+        </div>
+    </div>
+  );
+}
 
 function Tooltip({ content, children }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -186,9 +239,9 @@ function Tooltip({ content, children }) {
         {trigger}
       </div>
       {isVisible && (
-        <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg whitespace-nowrap">
+        <div className="absolute z-50 bottom-full right-0 mb-2 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg w-80">
           {content}
-          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+          <div className="absolute top-full right-2 -mt-1">
             <div className="border-4 border-transparent border-t-gray-900"></div>
           </div>
         </div>

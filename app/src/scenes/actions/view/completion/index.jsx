@@ -240,6 +240,7 @@ export default function Completion({ action }) {
                 fetchAllIndicatorsValues()
               }}
               selectedIndicatorValue={selectedIndicatorValue}
+              action={action}
             />
           </div>
         </div>
