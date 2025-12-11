@@ -21,18 +21,19 @@ export default function List() {
   const { collectivity } = useStore()
 
   const fetchActions = async () => {
+    if (!collectivity?._id) return;
     try {
-      const { ok, data } = await api.post("/action/search ", { collectivity_id: collectivity._id })
-      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      const { ok, data, code} = await api.post("/action/search", { collectivity_id: collectivity._id })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
       setActions(data)
     } catch (error) {
-      toast.error(error || "Une erreur est survenue")
+      toast.error(error.message || "Une erreur est survenue")
     }
   };
 
   useEffect(() => {
     fetchActions()
-  }, [])
+  }, [collectivity])
 
   if ( actions.length === 0 ) return (
     <div className="p-8"> 
@@ -95,11 +96,11 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
     const fetchActions = async () => {
       try {
-        const { ok, data } = await api.post("/action/search", { type: "global" })
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        const { ok, data , code} = await api.post("/action/search", { type: "global" })
+        if (!ok) return toast.error(code || "Une erreur est survenue")
         setActions(data)
       } catch (error) {
-        toast.error(error || "Une erreur est survenue")
+        toast.error(error.message || "Une erreur est survenue")
       }
     }
 
@@ -109,6 +110,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
     const createAction = async () => {
       try {
+        if (!collectivity?._id) return toast.error("Collectivité non trouvée")
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
 
@@ -122,11 +124,11 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           collectivity_name: collectivity.name
         }
 
-        const { ok, data } = await api.post("/action/create_action_with_default_indicators", payload)
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        const { ok, data , code} = await api.post("/action/create_action_with_default_indicators", payload)
+        if (!ok) return toast.error(code || "Une erreur est survenue")
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {
-        toast.error(error || "Une erreur est survenue")
+        toast.error(error.message || "Une erreur est survenue")
       }
     }
 
