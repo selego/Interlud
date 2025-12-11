@@ -19,17 +19,6 @@ const isIndicatorValueFilled = (indicatorValue) => {
   return false;
 };
 
-const computeAggregatedValue = (filledValues, indicatorValue) => {
-  if (filledValues.length < 3 || indicatorValue.indicator_type !== 'number') return null;
-  const numbers = filledValues.map(indicatorValue => indicatorValue.value?.number).filter(n => n !== null && n !== undefined);
-  if (numbers.length === 0) return null;
-  
-  // Pour les %, on fait une moyenne. Sinon, on fait une somme.
-  if (indicatorValue.indicator_value_unit === '%')  return numbers.reduce((acc, val) => acc + val, 0) / numbers.length;
-  return numbers.reduce((acc, val) => acc + val, 0);
-};
-
-
 const sortIndicatorValues = (a, b) => {
   if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
   const subCatA = a.indicator_sub_category_name || '';
@@ -171,13 +160,18 @@ function EconomicActorValues({ indicatorValue, onApplyValue }) {
 
   const fetchEconomicActorValues = async () => {
       try {
-        const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_id: indicatorValue._id, owner: 'economic_actor',limit: 10000 });
+        const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_id: indicatorValue._id, owner: 'economic_actor', limit: 10000 });
         if (!ok) return toast.error(code || "Une erreur est survenue");
         const filledValues = data.filter(isIndicatorValueFilled);
-        const aggregatedValue = computeAggregatedValue(filledValues, indicatorValue);
+
+        let aggregated = null;
+        if (filledValues.length >= 3 && indicatorValue.indicator_type === 'number') {
+          const numbers = filledValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined);
+          if (numbers.length > 0) aggregated = indicatorValue.indicator_value_unit === '%'? numbers.reduce((acc, val) => acc + val, 0) / numbers.length: numbers.reduce((acc, val) => acc + val, 0);
+        }
 
         setNumberValues(filledValues.length);
-        setAggregatedValue(aggregatedValue);
+        setAggregatedValue(aggregated);
       } catch (error) {
         toast.error("Une erreur est survenue");
       }
