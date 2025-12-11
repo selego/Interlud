@@ -368,7 +368,7 @@ function ValueIndicator({ indicator }) {
 
 
   const situations = ['init', 'ref', 'prev', 'expost'];
-  const situationLabels = { init: 'Initial', ref: 'Référence', prev: 'Prévisionnel', expost: 'Ex-post' };
+  const situationLabels = { init: 'Initiale', ref: 'Référence', prev: 'Prévisionnel', expost: 'Ex-post' };
 
   return (
     <div className="space-y-4 card-shadow">

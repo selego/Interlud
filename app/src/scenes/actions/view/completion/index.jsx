@@ -10,7 +10,7 @@ import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo } from "react-icons
 import useStore from "@/services/store"
 
 export const SITUATION_TABS = [
-  { key: SITUATION_TYPES.INIT, label: "Initial" },
+  { key: SITUATION_TYPES.INIT, label: "Initiale" },
   { key: SITUATION_TYPES.REF, label: "Référence" },
   { key: SITUATION_TYPES.PREV, label: "Prévisionnel" },
   { key: SITUATION_TYPES.EXPOST, label: "Ex-post" }

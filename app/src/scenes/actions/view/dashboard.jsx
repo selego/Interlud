@@ -147,7 +147,7 @@ export default function Dashboard({ action }) {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Complétion par situation</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="p-4">
-              <p className="text-sm text-gray-600 mb-2">Initial</p>
+              <p className="text-sm text-gray-600 mb-2">Initiale</p>
               <p className="text-2xl font-bold text-blue-600">{stats.bySituation.init}</p>
               <p className="text-xs text-gray-500">/ {indicatorValues.filter((v) => v.situation === "init").length}</p>
             </div>

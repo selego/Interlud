@@ -5,7 +5,7 @@ import { SITUATION_TYPES } from "@/utils/constants";
 import IndicatorValueInput from "./IndicatorValueInput";
 
 export const SITUATION_LABELS = {
-  [SITUATION_TYPES.INIT]: "Initial",
+  [SITUATION_TYPES.INIT]: "Initiale",
   [SITUATION_TYPES.REF]: "Référence",
   [SITUATION_TYPES.PREV]: "Prévisionnel",
   [SITUATION_TYPES.EXPOST]: "Ex-post"
