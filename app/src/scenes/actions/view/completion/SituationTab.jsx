@@ -3,7 +3,6 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
 import IndicatorValueInput from "./IndicatorValueInput";
-import useStore from "@/services/store";
 
 export const SITUATION_LABELS = {
   [SITUATION_TYPES.INIT]: "Initial",
@@ -11,6 +10,24 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.PREV]: "Prévisionnel",
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
+
+const isIndicatorValueFilled = (indicatorValue) => {
+  if (indicatorValue.indicator_type === 'number') return indicatorValue.value?.number !== null && indicatorValue.value?.number !== undefined;
+  if (indicatorValue.indicator_type === 'text') return indicatorValue.value?.text && indicatorValue.value.text.trim() !== '';
+  if (indicatorValue.indicator_type === 'radio') return indicatorValue.value?.radio && indicatorValue.value.radio.trim() !== '';
+  if (indicatorValue.indicator_type === 'checkbox') return indicatorValue.value?.checkbox && indicatorValue.value.checkbox.length > 0;
+  return false;
+};
+
+const computeAggregatedValue = (filledValues, indicatorValue) => {
+  if (filledValues.length < 3 || indicatorValue.indicator_type !== 'number') return null;
+  const numbers = filledValues.map(indicatorValue => indicatorValue.value?.number).filter(n => n !== null && n !== undefined);
+  if (numbers.length === 0) return null;
+  
+  // Pour les %, on fait une moyenne. Sinon, on fait une somme.
+  if (indicatorValue.indicator_value_unit === '%')  return numbers.reduce((acc, val) => acc + val, 0) / numbers.length;
+  return numbers.reduce((acc, val) => acc + val, 0);
+};
 
 
 const sortIndicatorValues = (a, b) => {
@@ -22,26 +39,12 @@ const sortIndicatorValues = (a, b) => {
 };
 
 export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue, action }) {
-  const [economicActorValues, setEconomicActorValues] = useState([]);
-
   useEffect(() => {
     if (selectedIndicatorValue) {
       const element = document.getElementById(`indicator-${selectedIndicatorValue._id}`);
       if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [selectedIndicatorValue]);
-
-
-  const fetchEconomicActorIndicatorValues = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/indicator_value/economic_actor_indicator_values`, { action, situation });
-      if (!ok) return toast.error(code || "Erreur lors du chargement")
-      setEconomicActorValues(data)
-      console.log(data)
-    } catch (error) {
-      toast.error("Une erreur est survenue")
-    }
-  }
 
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
@@ -75,10 +78,6 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
     await onUpdate();
   };
 
-  useEffect(() => {
-    fetchEconomicActorIndicatorValues()
-  }, [situation])
-
   return (
     <div className="card-shadow p-6">
       <div className="flex justify-between items-center mb-6">
@@ -94,7 +93,6 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       <div className="space-y-4">
         {[...indicatorValues].sort(sortIndicatorValues).map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
-          const economicActorData = economicActorValues.find(ea => ea._id === indicatorValue._id);
           
           return (
             <div 
@@ -154,39 +152,10 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                  )}
               </div>
 
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="block text-xs font-medium text-gray-600">
-                    Valeurs Acteurs économiques
-                  </label>
-                  {economicActorData?.aggregated_value !== null && economicActorData?.aggregated_value !== undefined ? (
-                    <>
-                      <Tooltip content={`Valeur agrégée de ${economicActorData.nb_actors_responded} acteur${economicActorData.nb_actors_responded > 1 ? 's' : ''} économique${economicActorData.nb_actors_responded > 1 ? 's' : ''}`} />
-                      <Tooltip content="Appliquer cette valeur">
-                        <button
-                          onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: economicActorData.aggregated_value } })}
-                          className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
-                        </button>
-                      </Tooltip>
-                    </>
-                  ) : (
-                    <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli l'indicateur" />
-                  )}
-                </div>
-                {economicActorData && (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-gray-900 font-medium text-sm">
-                        {economicActorData.aggregated_value || 'Pas de valeur'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <EconomicActorValues 
+                indicatorValue={indicatorValue} 
+                onApplyValue={(value) => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: value } })}
+              />
             </div>
           </div>
         );
@@ -196,6 +165,62 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
   )
 }
 
+function EconomicActorValues({ indicatorValue, onApplyValue }) {
+  const [numberValues, setNumberValues] = useState(0);
+  const [aggregatedValue, setAggregatedValue] = useState(null);
+
+  const fetchEconomicActorValues = async () => {
+      try {
+        const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_id: indicatorValue._id, owner: 'economic_actor',limit: 10000 });
+        if (!ok) return toast.error(code || "Une erreur est survenue");
+        const filledValues = data.filter(isIndicatorValueFilled);
+        const aggregatedValue = computeAggregatedValue(filledValues, indicatorValue);
+
+        setNumberValues(filledValues.length);
+        setAggregatedValue(aggregatedValue);
+      } catch (error) {
+        toast.error("Une erreur est survenue");
+      }
+  };
+
+  useEffect(() => {
+    fetchEconomicActorValues();
+  }, [indicatorValue._id]);
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center gap-2 mb-2">
+        <label className="block text-xs font-medium text-gray-600">
+          Valeurs Acteurs économiques
+        </label>
+        {numberValues >= 3 ? (
+          <>
+            <Tooltip content={`Valeur agrégée de ${numberValues} acteur${numberValues > 1 ? 's' : ''} économique${numberValues > 1 ? 's' : ''}`} />
+            <Tooltip content="Appliquer cette valeur">
+              <button
+                onClick={() => onApplyValue(aggregatedValue)}
+                className="p-1 rounded-lg hover:bg-primary-green/10 text-primary-green transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
+            </Tooltip>
+          </>
+        ) : (
+          <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli l'indicateur" />
+        )}
+      </div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <p className="text-gray-900 font-medium text-sm">
+              {aggregatedValue || 'Pas de valeur'}
+            </p>
+          </div>
+        </div>
+    </div>
+  );
+}
 
 function Tooltip({ content, children }) {
   const [isVisible, setIsVisible] = useState(false);

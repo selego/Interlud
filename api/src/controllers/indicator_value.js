@@ -184,12 +184,17 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = { owner: 'collectivity' };
+    let query = {};
+
+    query.owner = 'collectivity';
+    if (req.body.owner) query.owner = req.body.owner;
 
     if (req.body.indicator_id) query.indicator_id = req.body.indicator_id;
     if (req.body.action_id) query.action_id = req.body.action_id;
     if (req.body.situation) query.situation = req.body.situation;
     if (req.body.indicator_category_name) query.indicator_category_name = req.body.indicator_category_name;
+    if (req.body.indicator_value_collectivity_id) query.indicator_value_collectivity_id = req.body.indicator_value_collectivity_id;
+    if (req.body.indicator_value_collectivity_ids) query.indicator_value_collectivity_id = { $in: req.body.indicator_value_collectivity_ids };
     if (req.body.indicator_sub_category_name !== undefined) {
       if (req.body.indicator_sub_category_name === null) {
         query.$and = [{ $or: [{ indicator_sub_category_name: null }, { indicator_sub_category_name: '' }, { indicator_sub_category_name: { $exists: false } }] }];
