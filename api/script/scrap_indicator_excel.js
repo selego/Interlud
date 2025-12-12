@@ -1,39 +1,39 @@
-const { getAccessToken } = require('../src/services/microsoftGraph');
-const Indicator = require('../src/models/indicator');
-const IndicatorCategory = require('../src/models/indicator_category');
-const Action = require('../src/models/action');
-const Log = require('../src/models/log');
-const mongoose = require('mongoose');
-const config = require('../src/config');
+const { getAccessToken } = require("../src/services/microsoftGraph");
+const Indicator = require("../src/models/indicator");
+const IndicatorCategory = require("../src/models/indicator_category");
+const Action = require("../src/models/action");
+const Log = require("../src/models/log");
+const mongoose = require("mongoose");
+const config = require("../src/config");
 
-const sharePointSiteName = 'selegobv';
-const fileId = '01IBL4ADI6GFGNFTVX7JEKTEEVD4COHF77';
+const sharePointSiteName = "selegobv";
+const fileId = "01IBL4ADM2GGWQITUEAZDYF3Y4Q66XTJB7";
 
 // Fonction helper pour formater les valeurs de log selon leur type
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
 
   if (Array.isArray(value)) return { array: value };
-  if (typeof value === 'number') return { number: value };
-  if (typeof value === 'boolean') return { boolean: value };
+  if (typeof value === "number") return { number: value };
+  if (typeof value === "boolean") return { boolean: value };
   if (value instanceof Date) return { date: value };
-  if (typeof value === 'object') return { string: JSON.stringify(value) };
+  if (typeof value === "object") return { string: JSON.stringify(value) };
   return { string: String(value) };
 }
 
 // Fonction pour déterminer le type de valeur
 function getValueType(value) {
-  if (value === null || value === undefined) return 'undefined';
-  if (Array.isArray(value)) return 'array';
-  if (typeof value === 'number') return 'number';
-  if (typeof value === 'boolean') return 'boolean';
-  if (value instanceof Date) return 'date';
-  if (typeof value === 'object') return 'object';
-  return 'string';
+  if (value === null || value === undefined) return "undefined";
+  if (Array.isArray(value)) return "array";
+  if (typeof value === "number") return "number";
+  if (typeof value === "boolean") return "boolean";
+  if (value instanceof Date) return "date";
+  if (typeof value === "object") return "object";
+  return "string";
 }
 
 function normalizeEmptyValue(value) {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || value === "") return null;
   if (Array.isArray(value) && value.length === 0) return null;
   return value;
 }
@@ -53,13 +53,13 @@ async function getWorksheetUsedRange(fileId, worksheetName) {
     const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
     if (!siteResponse.ok) {
       const error = await siteResponse.json();
-      throw new Error(error.error?.message || 'Site SharePoint not found');
+      throw new Error(error.error?.message || "Site SharePoint not found");
     }
 
     const site = await siteResponse.json();
@@ -68,19 +68,19 @@ async function getWorksheetUsedRange(fileId, worksheetName) {
     const usedRangeResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
     if (!usedRangeResponse.ok) {
       const error = await usedRangeResponse.json();
-      throw new Error(error.error?.message || 'Cannot read worksheet used range');
+      throw new Error(error.error?.message || "Cannot read worksheet used range");
     }
 
     const usedRangeData = await usedRangeResponse.json();
     return usedRangeData;
   } catch (error) {
-    console.error('Erreur lors de la récupération des données:', error);
+    console.error("Erreur lors de la récupération des données:", error);
     throw error;
   }
 }
@@ -95,25 +95,23 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
 
     // Charger toutes les catégories principales
     const allPrincipalCategories = await IndicatorCategory.find({
-      type: 'principal',
+      type: "principal",
     });
     const principalCategoriesMap = new Map(allPrincipalCategories.map((cat) => [cat.name, cat]));
 
     // Charger toutes les sous-catégories
-    const allSubCategories = await IndicatorCategory.find({ type: 'sub' });
+    const allSubCategories = await IndicatorCategory.find({ type: "sub" });
     const subCategoriesMap = new Map(allSubCategories.map((cat) => [`${cat.name}|${cat.principal_category_id}`, cat]));
 
     // Charger toutes les actions
-    const allActions = await Action.find({ type: 'global' });
+    const allActions = await Action.find({ type: "global" });
     const actionsMap = new Map(allActions.map((action) => [action.excel_worksheetname, action]));
 
     // Charger tous les indicateurs existants
     const allExistingIndicators = await Indicator.find({});
     const indicatorsMap = new Map(allExistingIndicators.map((ind) => [ind.excel_indicator_id, ind]));
 
-    console.log(
-      `✅ Données chargées : ${principalCategoriesMap.size} catégories principales, ${subCategoriesMap.size} sous-catégories, ${actionsMap.size} actions, ${indicatorsMap.size} indicateurs`
-    );
+    console.log(`✅ Données chargées : ${principalCategoriesMap.size} catégories principales, ${subCategoriesMap.size} sous-catégories, ${actionsMap.size} actions, ${indicatorsMap.size} indicateurs`);
 
     // Maps pour stocker les nouvelles catégories à créer
     const newPrincipalCategories = new Map();
@@ -136,22 +134,18 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
       let subCategory = null;
       let action = null;
 
-      if (row[0] !== '') {
+      if (row[0] !== "") {
         category = principalCategoriesMap.get(row[0]);
         if (!category) {
           category = newPrincipalCategories.get(row[0]);
           if (!category) {
-            category = {
-              _id: new mongoose.Types.ObjectId(),
-              name: row[0],
-              type: 'principal',
-            };
+            category = { _id: new mongoose.Types.ObjectId(), name: row[0], type: "principal" };
             newPrincipalCategories.set(row[0], category);
           }
         }
       }
 
-      if (row[1] !== '' && category) {
+      if (row[1] !== "" && category) {
         const subCatKey = `${row[1]}|${category._id}`;
         subCategory = subCategoriesMap.get(subCatKey);
         if (!subCategory) {
@@ -160,7 +154,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             subCategory = {
               _id: new mongoose.Types.ObjectId(),
               name: row[1],
-              type: 'sub',
+              type: "sub",
               principal_category_id: category._id,
               principal_category_name: category.name,
             };
@@ -169,7 +163,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
         }
       }
 
-      if (row[12] !== '') {
+      if (row[12] !== "") {
         action = actionsMap.get(row[12]);
         if (!action) continue;
       }
@@ -179,17 +173,17 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
         const defaultValueRaw = row[7] || undefined;
 
         let valueDefaultForSituation = undefined;
-        if (defaultValueRaw !== undefined && defaultValueRaw !== '' && valueType) {
-          if (valueType === 'number') valueDefaultForSituation = { [valueType]: parseFloat(defaultValueRaw) || undefined };
-          if (valueType === 'text') valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
-          if (valueType === 'radio') valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
-          if (valueType === 'checkbox')
+        if (defaultValueRaw !== undefined && defaultValueRaw !== "" && valueType) {
+          if (valueType === "number") valueDefaultForSituation = { [valueType]: parseFloat(defaultValueRaw) || undefined };
+          if (valueType === "text") valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
+          if (valueType === "radio") valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
+          if (valueType === "checkbox")
             valueDefaultForSituation = {
               [valueType]:
                 String(defaultValueRaw)
-                  .split(',')
+                  .split(",")
                   .map((v) => v.trim())
-                  .filter((v) => v !== '') || undefined,
+                  .filter((v) => v !== "") || undefined,
             };
         }
 
@@ -198,8 +192,8 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
         let display_indicator_excel_id = undefined;
         let display_condition_indicator_value = undefined;
         const displayConditionRaw = row[15];
-        if (displayConditionRaw && displayConditionRaw !== '') {
-          const equalIndex = String(displayConditionRaw).indexOf('=');
+        if (displayConditionRaw && displayConditionRaw !== "") {
+          const equalIndex = String(displayConditionRaw).indexOf("=");
           if (equalIndex !== -1) {
             display_indicator_excel_id = String(displayConditionRaw).substring(0, equalIndex).trim() || undefined;
             display_condition_indicator_value =
@@ -215,9 +209,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
           if (situation && valueDefaultForSituation) updatedValueDefault[situation] = valueDefaultForSituation;
 
           // Mettre à jour la présence pour cette situation
-          const updatedPresenceInExcel = {
-            ...existingIndicator.presence_in_excel,
-          };
+          const updatedPresenceInExcel = { ...existingIndicator.presence_in_excel };
           if (situation) updatedPresenceInExcel[situation] = true;
 
           // Préparer les nouvelles valeurs
@@ -229,11 +221,11 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             name: row[2] || undefined,
             description: row[3] || undefined,
             value_possibilities:
-              row[6] !== undefined && row[6] !== ''
+              row[6] !== undefined && row[6] !== ""
                 ? String(row[6])
-                    .split(',')
+                    .split(",")
                     .map((v) => v.trim())
-                    .filter((v) => v !== '')
+                    .filter((v) => v !== "")
                 : undefined,
             value_default: updatedValueDefault,
             value_unit: row[8] || undefined,
@@ -246,29 +238,29 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
           };
 
           const fieldsToLog = [
-            'indicator_category_id',
-            'indicator_category_name',
-            'indicator_sub_category_id',
-            'indicator_sub_category_name',
-            'name',
-            'description',
-            'value_possibilities',
-            'value_unit',
-            'value_type',
-            'linked_action_id',
-            'linked_action_name',
-            'presence_in_excel',
-            'display_indicator_excel_id',
-            'display_condition_indicator_value',
+            "indicator_category_id",
+            "indicator_category_name",
+            "indicator_sub_category_id",
+            "indicator_sub_category_name",
+            "name",
+            "description",
+            "value_possibilities",
+            "value_unit",
+            "value_type",
+            "linked_action_id",
+            "linked_action_name",
+            "presence_in_excel",
+            "display_indicator_excel_id",
+            "display_condition_indicator_value",
           ];
 
           fieldsToLog.forEach((field) => {
             if (!areValuesEqual(existingIndicator[field], newData[field])) {
               logsToCreate.push({
-                model_name: 'indicator',
-                name: 'Excel',
+                model_name: "indicator",
+                name: "Excel",
                 field: field,
-                operation: 'update',
+                operation: "update",
                 previous_value: formatLogValue(existingIndicator[field]),
                 new_value: formatLogValue(newData[field]),
                 type_value: getValueType(newData[field]),
@@ -286,10 +278,10 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
           if (valueType) {
             if (!areValuesEqual(existingIndicator.value_default?.[situation]?.[valueType], newData.value_default?.[situation]?.[valueType])) {
               logsToCreate.push({
-                model_name: 'indicator',
-                name: 'Excel',
+                model_name: "indicator",
+                name: "Excel",
                 field: `value_default_${situation}`,
-                operation: 'update',
+                operation: "update",
                 previous_value: formatLogValue(existingIndicator.value_default?.[situation]?.[valueType]),
                 new_value: formatLogValue(newData.value_default?.[situation]?.[valueType]),
                 type_value: getValueType(newData.value_default?.[situation]?.[valueType]),
@@ -304,12 +296,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             }
           }
 
-          bulkUpdateOps.push({
-            updateOne: {
-              filter: { _id: existingIndicator._id },
-              update: { $set: newData },
-            },
-          });
+          bulkUpdateOps.push({ updateOne: { filter: { _id: existingIndicator._id }, update: { $set: newData } } });
         } else {
           const valueDefault = situation && valueDefaultForSituation ? { [situation]: valueDefaultForSituation } : undefined;
 
@@ -322,11 +309,11 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             description: row[3] || undefined,
             excel_indicator_id: row[4] || undefined,
             value_possibilities:
-              row[6] !== undefined && row[6] !== ''
+              row[6] !== undefined && row[6] !== ""
                 ? String(row[6])
-                    .split(',')
+                    .split(",")
                     .map((v) => v.trim())
-                    .filter((v) => v !== '')
+                    .filter((v) => v !== "")
                 : undefined,
             value_default: valueDefault,
             value_unit: row[8] || undefined,
@@ -342,13 +329,13 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
 
           // Créer un log pour la création de l'indicateur
           logsToCreate.push({
-            model_name: 'indicator',
-            name: 'Excel',
-            field: 'creation',
-            operation: 'add',
+            model_name: "indicator",
+            name: "Excel",
+            field: "creation",
+            operation: "add",
             new_value: formatLogValue(`Indicateur créé: ${row[2] || row[4]}`),
             previous_value: null,
-            type_value: 'string',
+            type_value: "string",
             date: new Date(),
             indicator_category_id: category?._id?.toString(),
             indicator_category_name: category?.name,
@@ -381,22 +368,22 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
       console.log(`✅ ${bulkUpdateOps.length} indicateurs mis à jour`);
     }
 
-    // if (logsToCreate.length > 0) {
-    //   await Log.insertMany(logsToCreate);
-    //   console.log(`📝 ${logsToCreate.length} logs créés`);
-    // }
+    if (logsToCreate.length > 0) {
+      await Log.insertMany(logsToCreate);
+      console.log(`📝 ${logsToCreate.length} logs créés`);
+    }
   } catch (error) {
-    console.error('❌ Erreur:', error.message);
+    console.error("❌ Erreur:", error.message);
     throw error;
   }
 }
 
 if (require.main === module) {
   const worksheetsToProcess = [
-    { worksheetName: 'Remplissage - Sit. Init.', situation: 'init' },
-    { worksheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
-    { worksheetName: 'Remplissage - Sit. Prev.', situation: 'prev' },
-    { worksheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
+    { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
+    { worksheetName: "Remplissage - Sit. Ref.", situation: "ref" },
+    { worksheetName: "Remplissage - Sit. Prev.", situation: "prev" },
+    { worksheetName: "Remplissage - Sit. Expost", situation: "expost" },
   ];
 
   (async () => {
@@ -406,10 +393,10 @@ if (require.main === module) {
         await createIndicatorsFromExcel(situation, worksheetName);
         console.log(`✅ Feuille "${worksheetName}" traitée avec succès!`);
       }
-      console.log('\n🎉 Toutes les feuilles ont été traitées avec succès!');
+      console.log("\n🎉 Toutes les feuilles ont été traitées avec succès!");
       process.exit(0);
     } catch (error) {
-      console.error('\n❌ Échec du script:', error.message);
+      console.error("\n❌ Échec du script:", error.message);
       process.exit(1);
     }
   })();
