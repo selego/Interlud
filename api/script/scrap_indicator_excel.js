@@ -164,18 +164,20 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
         }
 
         // Parse colonne P (index 15) - "Affichage conditionnel"
-        // Format: "LogChantChoix = Proposer un ordre de grandeur commun..."
-        let display_indicator_excel_id = undefined;
-        let display_condition_indicator_value = undefined;
+        // Format: "LogChantChoix = Valeur1, LogChantAccDirTC16 = Valeur2"
+        let display_conditions = [];
         const displayConditionRaw = row[15];
         if (displayConditionRaw && displayConditionRaw !== "") {
-          const equalIndex = String(displayConditionRaw).indexOf("=");
-          if (equalIndex !== -1) {
-            display_indicator_excel_id = String(displayConditionRaw).substring(0, equalIndex).trim() || undefined;
-            display_condition_indicator_value =
-              String(displayConditionRaw)
-                .substring(equalIndex + 1)
-                .trim() || undefined;
+          const conditions = String(displayConditionRaw).split(",");
+          for (const condition of conditions) {
+            const equalIndex = condition.indexOf("=");
+            if (equalIndex !== -1) {
+              const indicator_excel_id = condition.substring(0, equalIndex).trim();
+              const value = condition.substring(equalIndex + 1).trim();
+              if (indicator_excel_id && value) {
+                display_conditions.push({ indicator_excel_id, value });
+              }
+            }
           }
         }
 
@@ -209,8 +211,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             linked_action_id: action?._id,
             linked_action_name: action?.name,
             presence_in_excel: updatedPresenceInExcel,
-            display_indicator_excel_id,
-            display_condition_indicator_value,
+            display_conditions,
           };
 
           const fieldsToLog = [
@@ -226,8 +227,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             "linked_action_id",
             "linked_action_name",
             "presence_in_excel",
-            "display_indicator_excel_id",
-            "display_condition_indicator_value",
+            "display_conditions",
           ];
 
           fieldsToLog.forEach((field) => {
@@ -284,8 +284,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             indicator_sub_category_id: newData.indicator_sub_category_id?.toString(),
             indicator_sub_category_name: newData.indicator_sub_category_name,
             indicator_value_unit: newData.value_unit,
-            // display_indicator_excel_id: newData.display_indicator_excel_id,
-            // display_condition_indicator_value: newData.display_condition_indicator_value,
+            display_conditions: newData.display_conditions || [],
           });
         } else {
           const valueDefault = situation && valueDefaultForSituation ? { [situation]: valueDefaultForSituation } : undefined;
@@ -311,8 +310,7 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             linked_action_id: action?._id,
             linked_action_name: action?.name,
             presence_in_excel: situation ? { [situation]: true } : undefined,
-            display_indicator_excel_id,
-            display_condition_indicator_value,
+            display_conditions,
           };
 
           indicators.push(indicatorData);
