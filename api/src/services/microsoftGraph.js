@@ -102,10 +102,11 @@ async function duplicateExcelFile(newFileName) {
 
   await new Promise((r) => setTimeout(r, 2000));
 
+  const parentFolderId = sourceFile.parentReference.id;
   for (let attempts = 0; attempts < 20; attempts++) {
     await new Promise((r) => setTimeout(r, 1000));
 
-    const searchResult = await graphFetch(`/sites/${siteId}/drive/root/children?$filter=name eq '${newFileName}'`);
+    const searchResult = await graphFetch(`/sites/${siteId}/drive/items/${parentFolderId}/children?$filter=name eq '${newFileName}'`);
     if (searchResult.value?.length > 0) return searchResult.value[0].id;
   }
 
