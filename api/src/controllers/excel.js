@@ -14,33 +14,41 @@ const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
 ];
 
-const FIXED_RANGES = [
-  { name: 'gains_environnementaux', range: 'C13:H18' },
-  { name: 'emissions_GES', range: 'E26:H29' },
-  { name: 'emissions_PM', range: 'J26:M29' },
-  { name: 'emissions_NOx', range: 'O26:R29' },
-  { name: 'emissions_HC', range: 'T26:W29' },
-  { name: 'emissions_CO', range: 'Y26:AB29' },
-  { name: 'emissions_Energie', range: 'AD26:AG29' },
-  { name: 'calculs_Surface_de_la_ZFE', range: 'E39:H41' },
-  { name: 'calculs_Seuil_de_la_ZFE', range: 'K39:N41' },
-  { name: 'calculs_Part_des_distance_effectuée_dans_la_ZFE', range: 'P39:S41' },
+// Ranges for "Agrégation des gains" sheet - gains per action
+// Each action block has 2 header rows + 6 data rows (GES, PM, NOx, HC, CO, Énergie)
+// Blocks are 11 rows apart
+const AGGREGATION_WORKSHEET = 'Agrégation';
+const AGGREGATION_RANGES = [
+  { name: 'B2', range: 'B46:H53' },
+  { name: 'B3', range: 'B57:H64' },
+  { name: 'B4', range: 'B68:H75' },
+  { name: 'C1', range: 'B79:H86' },
+  { name: 'C2', range: 'B90:H97' },
+  { name: 'C3', range: 'B101:H108' },
+  { name: 'C4', range: 'B112:H119' },
+  { name: 'C5', range: 'B123:H130' },
+  { name: 'C6', range: 'B134:H141' },
+  { name: 'C7', range: 'B145:H152' },
+  { name: 'C8', range: 'B156:H163' },
+  { name: 'C9', range: 'B167:H174' },
 ];
 
-router.post('/values', async (req, res) => {
+// Fetch aggregated gains for a specific action from "Agrégation" sheet
+router.post('/aggregation', async (req, res) => {
   try {
-    const { worksheetName, excelFileId } = req.body;
-    if (!worksheetName) return res.json({ ok: false, data: { error: 'worksheetName is required' } });
+    const { excelFileId, action } = req.body;
     if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
+    if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
+
+    // Find the range for this action
+    const actionConfig = AGGREGATION_RANGES.find((r) => r.name === action);
+    if (!actionConfig) return res.json({ ok: false, data: { error: `Action '${action}' not found` } });
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-    const ranges = await Promise.all(
-      FIXED_RANGES.map(async (descriptor) => {
-        const result = await graphFetch(`/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${worksheetName}/range(address='${descriptor.range}')`);
-        return { name: descriptor.name, values: result.values || [] };
-      })
+    const result = await graphFetch(
+      `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='${actionConfig.range}')`
     );
-    res.json({ ok: true, data: ranges });
+    res.json({ ok: true, data: result.values || [] });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });
