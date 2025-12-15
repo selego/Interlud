@@ -74,17 +74,8 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       </div>
 
       <div className="space-y-4">
-        {[...indicatorValues]
-          .filter(iv => {
-            if (!iv.display_conditions || iv.display_conditions.length === 0) return true;
-            return iv.display_conditions.every(condition => {
-              const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === condition.indicator_excel_id);
-              if (!conditionIndicator) return true;
-              return conditionIndicator.value?.[conditionIndicator.indicator_type] === condition.value;
-            });
-          })
-          .sort(sortIndicatorValues)
-          .map(indicatorValue => {
+        <IndicatorValuesList indicatorValues={indicatorValues}>
+          {(filteredIndicatorValues) => filteredIndicatorValues.map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           return (
             <div 
@@ -165,13 +156,29 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
               </div>
             </div>
           </div>
-        );
-        })}
+          );
+          })}
+        </IndicatorValuesList>
       </div>
     </div>
   )
 }
 
+
+function IndicatorValuesList({ indicatorValues, children }) {
+  const filtered = [...indicatorValues]
+    .filter(iv => {
+      if (!iv.display_conditions || iv.display_conditions.length === 0) return true;
+      return iv.display_conditions.every(condition => {
+        const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === condition.indicator_excel_id);
+        if (!conditionIndicator) return true;
+        return conditionIndicator.value?.[conditionIndicator.indicator_type] === condition.value;
+      });
+    })
+    .sort(sortIndicatorValues);
+
+  return children(filtered);
+}
 
 function Tooltip({ content, children }) {
   const [isVisible, setIsVisible] = useState(false);
