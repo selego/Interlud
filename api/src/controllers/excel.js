@@ -27,6 +27,8 @@ const FIXED_RANGES = [
   { name: 'calculs_Part_des_distance_effectuée_dans_la_ZFE', range: 'P39:S41' },
 ];
 
+const AGGREGATION_WORKSHEET = 'Agrégation';
+
 const GLOBAL_GAINS_RANGES = [
   { name: 'years', range: 'B7:C9' },
   { name: 'gains_previsionnels', range: 'B13:J19' },
