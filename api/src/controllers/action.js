@@ -150,7 +150,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const indicators = await Indicator.find({ linked_action_id: parentAction._id });
+    const indicators = await Indicator.find({ $or: [{ linked_action_id: parentAction._id }, { linked_action_id: { $in: [null, undefined, ''] } }] });
 
     const allSituations = ['init', 'ref', 'prev', 'expost'];
     const createdIndicatorValues = [];
