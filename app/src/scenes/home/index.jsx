@@ -726,14 +726,12 @@ function GlobalGainsSection({ collectivity }) {
       </div>
 
       {ecart.length > 1 && (
-        <div className="border-t">
-          <div className="px-6 py-3 bg-gray-100">
-            <h4 className="font-semibold text-gray-700 text-sm">Écart entre gains réels et prévisionnels</h4>
-          </div>
-          <div className="overflow-x-auto">
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50">
+          <h4 className="font-semibold text-gray-700 text-sm mb-3">Écart entre gains réels et prévisionnels</h4>
+          <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 border-b">
+                <tr className="bg-gray-50">
                   <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Indicateur</th>
                   <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">Écart absolu</th>
                   <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">Écart relatif</th>
@@ -750,7 +748,8 @@ function GlobalGainsSection({ collectivity }) {
                     </td>
                     <td className="px-4 py-2 text-center text-sm">
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                        typeof row[2] === 'number' && row[2] < 0   ? 'bg-red-100 text-red-800'  : 'bg-green-100 text-green-800'  }`}>
+                        typeof row[2] === 'number' && row[2] < 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                      }`}>
                         {`${(row[2] * 100).toFixed(1)}%`}
                       </span>
                     </td>
