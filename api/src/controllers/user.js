@@ -218,6 +218,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     let query = {};
 
     if (req.body.collectivity_id) query = { ...query, collectivities: { $elemMatch: { id: req.body.collectivity_id } } };
+    if (req.body.economic_actor_id) query = { ...query, economic_actor_id: req.body.economic_actor_id };
+    if (req.body.role) query = { ...query, role: req.body.role };
 
     const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, '\\$&');
     if (search) {
@@ -246,11 +248,20 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin'], { session: false }), async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, role, economic_actor_name } = req.body;
 
     if (!validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
 
-    const user = await UserObject.create(req.body);
+    let payload = { ...req.body };
+
+    // Si c'est un acteur économique, créer l'entité EconomicActor
+    if (role === 'economic_actor' && economic_actor_name) {
+      const economic_actor = await EconomicActor.create({ name: economic_actor_name });
+      payload.economic_actor_id = economic_actor._id;
+      payload.economic_actor_name = economic_actor.name;
+    }
+
+    const user = await UserObject.create(payload);
 
     return res.status(200).send({ data: user, ok: true });
   } catch (error) {

@@ -10,6 +10,12 @@ const ROLE_LABELS = {
   economic_actor: "Acteur économique"
 }
 
+const ROLE_COLORS = {
+  user: "bg-gray-100 text-gray-800",
+  admin: "bg-blue-100 text-blue-800",
+  economic_actor: "bg-green-100 text-green-800"
+}
+
 export default function List() {
   const navigate = useNavigate()
   const [users, setUsers] = useState([])
@@ -29,18 +35,18 @@ export default function List() {
     fetchUsers()
   }, [])
 
-  if ( users.length === 0 ) return (
-    <div className="p-8"> 
-          <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Membres de {collectivity?.name}</h1>
-      </div>
+  if (users.length === 0)
+    return (
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Membres de {collectivity?.name}</h1>
+        </div>
 
-      <div className="flex items-center justify-center">
-        <div className="text-lg text-gray-600">Aucun membre dans cette collectivité</div>
+        <div className="flex items-center justify-center">
+          <div className="text-lg text-gray-600">Aucun membre dans cette collectivité</div>
+        </div>
       </div>
-    </div>
-  )
-
+    )
 
   return (
     <div className="p-8">
@@ -65,7 +71,9 @@ export default function List() {
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.name || "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">
-                  <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">{ROLE_LABELS[collectivityData?.role || "user"]}</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${ROLE_COLORS[collectivityData?.role || "user"]}`}>
+                    {ROLE_LABELS[collectivityData?.role || "user"]}
+                  </span>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-600">
                   <span

@@ -101,7 +101,7 @@ export default function Header() {
     ? [
         user.role === "admin" && {
           iconId: "fr-icon-settings-5-line",
-          text: "Admin",
+          text: "Gestion Administrateur",
           menuItems: [
             {
               linkProps: { to: "/admin/collectivity" },
@@ -118,12 +118,16 @@ export default function Header() {
             {
               linkProps: { to: "/admin/users" },
               text: "Utilisateurs"
+            },
+            {
+              linkProps: { to: "/admin/economic-actors" },
+              text: "Acteurs économiques"
             }
           ]
         },
         {
           iconId: "fr-icon-account-circle-line",
-          text: user?.name || "Mon compte",
+          text: "Mon compte",
           menuItems: [
             {
               iconId: "fr-icon-settings-5-line",
@@ -186,7 +190,7 @@ export default function Header() {
                             <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? "rotate-180" : ""}`} />
                           </button>
                           {openQuickAccessDropdown === index && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+                            <div className="absolute top-9 right-0 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
                               <ul className="py-1">
                                 {item.menuItems.map((subItem, subIndex) => (
                                   <li key={subIndex}>

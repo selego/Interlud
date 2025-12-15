@@ -15,6 +15,7 @@ import Collectivity from "@/scenes/collectivity"
 import Settings from "@/scenes/settings"
 
 import AdminUsers from "@/scenes/admin/users"
+import AdminEconomicActors from "@/scenes/admin/economic-actors"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/admin/action/*" element={<AdminAction />} />
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
+          <Route path="/admin/economic-actors/*" element={<AdminEconomicActors />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
