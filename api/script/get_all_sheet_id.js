@@ -1,68 +1,171 @@
 const { getAccessToken } = require("../src/services/microsoftGraph");
+const fs = require("fs");
 
 const sharePointSiteName = "selegobv";
-const fileId = "01IBL4ADO73TUHKGZ4EJCJATFUR357PVU4";
 
-async function getAllWorksheets(fileId) {
+async function getSiteId() {
+  const token = await getAccessToken();
+  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+
+  if (!siteResponse.ok) {
+    const error = await siteResponse.json();
+    throw new Error(error.error?.message || "Site SharePoint not found");
+  }
+
+  const site = await siteResponse.json();
+  return site.id;
+}
+
+async function getAllExcelFiles(folderId = "root", path = "") {
   try {
     const token = await getAccessToken();
-    
-    // Récupérer les informations du site SharePoint
-    const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
+    const siteId = await getSiteId();
+
+    const endpoint = folderId === "root" ? `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root/children` : `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${folderId}/children`;
+
+    const response = await fetch(endpoint, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
 
-    if (!siteResponse.ok) {
-      const error = await siteResponse.json();
-      throw new Error(error.error?.message || "Site SharePoint not found");
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || "Cannot list files");
     }
 
-    const site = await siteResponse.json();
+    const data = await response.json();
+    let excelFiles = [];
 
-    // Récupérer la liste de toutes les feuilles de calcul
-    const worksheetsResponse = await fetch(
-      `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets`,
-      {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    for (const item of data.value) {
+      const itemPath = path ? `${path}/${item.name}` : item.name;
+
+      if (item.folder) {
+        console.log(`📁 Parcours du dossier: ${itemPath}`);
+        const subFiles = await getAllExcelFiles(item.id, itemPath);
+        excelFiles = excelFiles.concat(subFiles);
+      } else if (item.name.endsWith(".xlsx") || item.name.endsWith(".xls") || item.name.endsWith(".xlsm")) {
+        excelFiles.push({
+          id: item.id,
+          name: item.name,
+          path: itemPath,
+          size: item.size,
+          lastModified: item.lastModifiedDateTime,
+          webUrl: item.webUrl,
+        });
+        console.log(`📊 Fichier Excel trouvé: ${itemPath}`);
       }
-    );
-
-    if (!worksheetsResponse.ok) {
-      const error = await worksheetsResponse.json();
-      throw new Error(error.error?.message || "Cannot read worksheets");
     }
 
-    const worksheetsData = await worksheetsResponse.json();
-    return worksheetsData.value;
+    return excelFiles;
   } catch (error) {
-    console.error("Erreur lors de la récupération des feuilles:", error);
+    console.error("Erreur lors de la récupération des fichiers:", error);
     throw error;
   }
 }
 
-async function getFileInfo(fileId) {
+async function getWorksheets(siteId, fileId) {
   try {
     const token = await getAccessToken();
-    
-    // Récupérer les informations du site SharePoint
-    const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
+
+    const worksheetsResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileId}/workbook/worksheets`, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
 
-    if (!siteResponse.ok) {
-      const error = await siteResponse.json();
-      throw new Error(error.error?.message || "Site SharePoint not found");
+    if (!worksheetsResponse.ok) {
+      const error = await worksheetsResponse.json();
+      console.log(`  ⚠️ Impossible de lire les feuilles: ${error.error?.message || "Erreur inconnue"}`);
+      return [];
     }
 
-    const site = await siteResponse.json();
+    const worksheetsData = await worksheetsResponse.json();
+    return worksheetsData.value.map((ws) => ({
+      id: ws.id,
+      name: ws.name,
+      position: ws.position,
+      visibility: ws.visibility,
+    }));
+  } catch (error) {
+    console.log(`  ⚠️ Erreur: ${error.message}`);
+    return [];
+  }
+}
 
-    // Récupérer les informations du fichier
-    const fileResponse = await fetch(
-      `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}`,
-      {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+async function getAllSheetsFromAllFiles() {
+  try {
+    console.log("🔍 Recherche de tous les fichiers Excel sur SharePoint...\n");
+
+    const siteId = await getSiteId();
+    const excelFiles = await getAllExcelFiles();
+
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`📊 ${excelFiles.length} FICHIERS EXCEL TROUVÉS`);
+    console.log(`${"=".repeat(80)}\n`);
+
+    const results = [];
+
+    for (const file of excelFiles) {
+      console.log(`\n📄 ${file.name}`);
+      console.log(`   ID: ${file.id}`);
+      console.log(`   Chemin: ${file.path}`);
+
+      const worksheets = await getWorksheets(siteId, file.id);
+
+      if (worksheets.length > 0) {
+        console.log(`   📋 ${worksheets.length} feuille(s):`);
+        worksheets.forEach((ws, i) => {
+          console.log(`      ${i + 1}. ${ws.name} (${ws.id})`);
+        });
       }
-    );
+
+      results.push({
+        file: {
+          id: file.id,
+          name: file.name,
+          path: file.path,
+          size: file.size,
+          lastModified: file.lastModified,
+          webUrl: file.webUrl,
+        },
+        worksheets: worksheets,
+        sheetsCount: worksheets.length,
+      });
+    }
+
+    // Sauvegarder les résultats
+    const outputData = {
+      totalFiles: excelFiles.length,
+      totalSheets: results.reduce((acc, r) => acc + r.sheetsCount, 0),
+      extractedAt: new Date().toISOString(),
+      files: results,
+    };
+
+    fs.writeFileSync("./all_excel_sheets.json", JSON.stringify(outputData, null, 2));
+
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`✅ TERMINÉ`);
+    console.log(`   📄 ${outputData.totalFiles} fichiers Excel`);
+    console.log(`   📋 ${outputData.totalSheets} feuilles au total`);
+    console.log(`   💾 Sauvegardé dans 'all_excel_sheets.json'`);
+    console.log(`${"=".repeat(80)}`);
+
+    return results;
+  } catch (error) {
+    console.error("❌ Erreur:", error.message);
+    throw error;
+  }
+}
+
+// Fonction pour récupérer les feuilles d'un seul fichier par son ID
+async function getSheetsByFileId(fileId) {
+  try {
+    const siteId = await getSiteId();
+    const token = await getAccessToken();
+
+    // Récupérer les infos du fichier
+    const fileResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileId}`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
 
     if (!fileResponse.ok) {
       const error = await fileResponse.json();
@@ -70,83 +173,16 @@ async function getFileInfo(fileId) {
     }
 
     const fileData = await fileResponse.json();
-    return fileData;
-  } catch (error) {
-    console.error("Erreur lors de la récupération des infos du fichier:", error);
-    throw error;
-  }
-}
+    const worksheets = await getWorksheets(siteId, fileId);
 
-async function getAllSheetsInfo() {
-  try {
-    console.log("🔍 Récupération des informations du fichier et des feuilles...");
-    
-    // Récupérer les infos du fichier
-    const fileInfo = await getFileInfo(fileId);
-    console.log("📄 Informations du fichier:");
-    console.log(`  - Nom: ${fileInfo.name}`);
-    console.log(`  - ID: ${fileInfo.id}`);
-    console.log(`  - Taille: ${(fileInfo.size / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`  - Dernière modification: ${new Date(fileInfo.lastModifiedDateTime).toLocaleString()}`);
-    console.log(`  - URL: ${fileInfo.webUrl}`);
-    
-    // Récupérer toutes les feuilles
-    const worksheets = await getAllWorksheets(fileId);
-    
-    console.log(`\n📊 Feuilles de calcul trouvées (${worksheets.length}):`);
-    
-    worksheets.forEach((worksheet, index) => {
-      console.log(`\n${index + 1}. 📋 ${worksheet.name}`);
-      console.log(`   - ID: ${worksheet.id}`);
-      console.log(`   - Position: ${worksheet.position}`);
-      console.log(`   - Visibilité: ${worksheet.visibility}`);
+    console.log(`📄 ${fileData.name}`);
+    console.log(`   ID: ${fileId}`);
+    console.log(`   📋 ${worksheets.length} feuille(s):`);
+    worksheets.forEach((ws, i) => {
+      console.log(`      ${i + 1}. ${ws.name} (${ws.id})`);
     });
 
-    // Sauvegarder les informations dans un fichier JSON
-    const fs = require('fs');
-    const outputData = {
-      file: {
-        id: fileInfo.id,
-        name: fileInfo.name,
-        size: fileInfo.size,
-        lastModified: fileInfo.lastModifiedDateTime,
-        webUrl: fileInfo.webUrl
-      },
-      worksheets: worksheets.map(ws => ({
-        id: ws.id,
-        name: ws.name,
-        position: ws.position,
-        visibility: ws.visibility
-      })),
-      totalSheets: worksheets.length,
-      extractedAt: new Date().toISOString()
-    };
-    
-    fs.writeFileSync('./file_sheets_info.json', JSON.stringify(outputData, null, 2));
-    console.log("\n💾 Informations sauvegardées dans 'file_sheets_info.json'");
-
-    return { fileInfo, worksheets };
-  } catch (error) {
-    console.error("❌ Erreur:", error.message);
-    throw error;
-  }
-}
-
-// Fonction utilitaire pour obtenir une feuille spécifique par nom
-async function getWorksheetByName(worksheetName) {
-  try {
-    const { worksheets } = await getAllSheetsInfo();
-    const worksheet = worksheets.find(ws => ws.name === worksheetName);
-    
-    if (!worksheet) {
-      console.log(`❌ Feuille "${worksheetName}" non trouvée`);
-      console.log("📋 Feuilles disponibles:");
-      worksheets.forEach(ws => console.log(`  - ${ws.name}`));
-      return null;
-    }
-    
-    console.log(`✅ Feuille trouvée: ${worksheet.name} (ID: ${worksheet.id})`);
-    return worksheet;
+    return { file: fileData, worksheets };
   } catch (error) {
     console.error("❌ Erreur:", error.message);
     throw error;
@@ -155,27 +191,15 @@ async function getWorksheetByName(worksheetName) {
 
 // Exécuter le script
 if (require.main === module) {
-  getAllSheetsInfo()
-    .then(({ fileInfo, worksheets }) => {
-      console.log("\n✅ Script terminé avec succès!");
-      console.log(`📄 Fichier: ${fileInfo.name}`);
-      console.log(`📊 ${worksheets.length} feuilles trouvées`);
-      
-      // Afficher un résumé rapide
-      console.log("\n📋 Résumé des feuilles:");
-      worksheets.forEach((ws, i) => {
-        console.log(`  ${i + 1}. ${ws.name} (${ws.id})`);
-      });
-    })
-    .catch((error) => {
-      console.error("\n❌ Échec du script:", error.message);
-      process.exit(1);
-    });
+  getAllSheetsFromAllFiles()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
 }
 
-module.exports = { 
-  getAllSheetsInfo, 
-  getAllWorksheets, 
-  getFileInfo, 
-  getWorksheetByName 
+module.exports = {
+  getAllSheetsFromAllFiles,
+  getSheetsByFileId,
+  getWorksheets,
+  getAllExcelFiles,
+  getSiteId,
 };
