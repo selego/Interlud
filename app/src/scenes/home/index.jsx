@@ -384,6 +384,8 @@ export default function Home() {
           </div>
         </div>
 
+        <GlobalGainsSection collectivity={collectivity} />
+
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
@@ -628,4 +630,137 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
       </div>
     </Modal>
   )
+}
+
+const INDICATORS_LABELS = ['GES', 'PM', 'HC', 'NOx', 'CO', 'Énergie'];
+
+function GlobalGainsSection({ collectivity }) {
+  const [data, setData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('previsionnels');
+
+  const fetchGlobalGains = async () => {
+    if (!collectivity?.excelFileId) return;
+    try {
+      setIsLoading(true);
+      const { ok, data } = await api.post('/excel/global-gains', { excelFileId: collectivity.excelFileId });
+      if (!ok) return toast.error(data.error || "Une erreur est survenue");
+      setData(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGlobalGains();
+  }, [collectivity?.excelFileId]);
+
+  if (isLoading) return <div className="card-shadow p-6 mb-12"><Loader /></div>;
+  if (!data) return null;
+
+  const gainsPrevisionnels = data.find(d => d.name === 'gains_previsionnels')?.values || [];
+  const gainsReels = data.find(d => d.name === 'gains_reels')?.values || [];
+  const ecart = data.find(d => d.name === 'ecart')?.values || [];
+
+  const currentGains = activeTab === 'previsionnels' ? gainsPrevisionnels : gainsReels;
+  return (
+    <div className="card-shadow overflow-hidden mb-12">
+      <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+        <div>
+          <h3 className="font-bold text-font-primary text-2xl">Gains environnementaux globaux</h3>
+          <p className="text-sm text-gray-500 mt-1">Impact de la charte sur la collectivité</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('previsionnels')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'previsionnels' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Prévisionnels
+          </button>
+          <button
+            onClick={() => setActiveTab('reels')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'reels' ? 'bg-primary-green text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Réels
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Indicateur</th>
+              {currentGains[0].slice(1).map((header, idx) => (
+                <th key={idx} className="px-4 py-3 text-center text-sm font-semibold text-gray-700">
+                  {header || '-'}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {currentGains.slice(1).map((row, rowIndex) => (
+              <tr key={rowIndex} className="hover:bg-gray-50 transition-colors">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                  {row[0] || INDICATORS_LABELS[rowIndex] || '-'}
+                </td>
+                {row.slice(1).map((cell, cellIndex) => (
+                  <td key={cellIndex} className={`px-4 py-3 text-center text-sm ${
+                    cellIndex === 0 ? 'font-semibold text-gray-900' : 
+                    cellIndex === 1 ? 'font-semibold text-gray-900' : 
+                    'text-gray-700'
+                  } ${activeTab === 'previsionnels' ? 'bg-yellow-50/30' : 'bg-green-50/30'}`}>
+                    {cell.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {ecart.length > 1 && (
+        <div className="border-t">
+          <div className="px-6 py-3 bg-gray-100">
+            <h4 className="font-semibold text-gray-700 text-sm">Écart entre gains réels et prévisionnels</h4>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Indicateur</th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">Écart absolu</th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">Écart relatif</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {ecart.slice(1).map((row, rowIndex) => (
+                  <tr key={rowIndex} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                      {row[0] || INDICATORS_LABELS[rowIndex] || '-'}
+                    </td>
+                    <td className="px-4 py-2 text-center text-sm text-gray-700">
+                      {row[1].toLocaleString('fr-FR', { maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-2 text-center text-sm">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                        typeof row[2] === 'number' && row[2] < 0   ? 'bg-red-100 text-red-800'  : 'bg-green-100 text-green-800'  }`}>
+                        {`${(row[2] * 100).toFixed(1)}%`}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
