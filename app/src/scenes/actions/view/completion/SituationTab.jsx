@@ -76,10 +76,12 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       <div className="space-y-4">
         {[...indicatorValues]
           .filter(iv => {
-            if (!iv.display_indicator_excel_id) return true;
-            const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
-            if (!conditionIndicator) return true;
-            return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
+            if (!iv.display_conditions || iv.display_conditions.length === 0) return true;
+            return iv.display_conditions.every(condition => {
+              const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === condition.indicator_excel_id);
+              if (!conditionIndicator) return true;
+              return conditionIndicator.value?.[conditionIndicator.indicator_type] === condition.value;
+            });
           })
           .sort(sortIndicatorValues)
           .map(indicatorValue => {

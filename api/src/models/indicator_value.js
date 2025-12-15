@@ -30,8 +30,12 @@ const Schema = new mongoose.Schema(
     indicator_sub_category_name: { type: String, trim: true },
     indicator_value_unit: { type: String, trim: true },
     indicator_excel_id: { type: String, trim: true },
-    display_indicator_excel_id: { type: String, trim: true },
-    display_condition_indicator_value: { type: String, trim: true },
+    display_conditions: [
+      {
+        indicator_excel_id: { type: String, trim: true },
+        value: { type: String, trim: true },
+      },
+    ],
     situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'], trim: true },
     year: { type: Number, trim: true },
     value_source: { type: String, trim: true },

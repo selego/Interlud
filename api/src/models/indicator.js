@@ -35,8 +35,12 @@ const Schema = new mongoose.Schema(
       prev: { type: Boolean, default: false },
       expost: { type: Boolean, default: false },
     },
-    display_indicator_excel_id: { type: String, trim: true },
-    display_condition_indicator_value: { type: String, trim: true },
+    display_conditions: [
+      {
+        indicator_excel_id: { type: String, trim: true },
+        value: { type: String, trim: true },
+      },
+    ],
   },
   { timestamps: true }
 );
