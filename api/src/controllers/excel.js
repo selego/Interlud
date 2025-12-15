@@ -27,6 +27,35 @@ const FIXED_RANGES = [
   { name: 'calculs_Part_des_distance_effectuée_dans_la_ZFE', range: 'P39:S41' },
 ];
 
+const GLOBAL_GAINS_RANGES = [
+  { name: 'years', range: 'B7:C9' },
+  { name: 'gains_previsionnels', range: 'B13:J19' },
+  { name: 'gains_reels', range: 'B23:K29' },
+  { name: 'ecart', range: 'C33:E39' },
+];
+
+router.post('/global-gains', async (req, res) => {
+  try {
+    const { excelFileId } = req.body;
+    if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
+    const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+    const results = await Promise.all(
+      GLOBAL_GAINS_RANGES.map(async (descriptor) => {
+        const result = await graphFetch(
+          `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='${descriptor.range}')`
+        );
+        return { name: descriptor.name, values: result.values || [] };
+      })
+    );
+
+    res.json({ ok: true, data: results });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
 router.post('/values', async (req, res) => {
   try {
     const { worksheetName, excelFileId } = req.body;
