@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADM2GGWQITUEAZDYF3Y4Q66XTJB7"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADIVUZIGVTMVLVCZE36NH3QQKG6T"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -81,7 +81,6 @@ async function getWorksheetUsedRange(fileId, worksheetName) {
 
 async function createIndicatorsFromExcel(situation, worksheetName) {
   try {
-    await mongoose.connect(config.MONGODB_ENDPOINT);
     const data = await getWorksheetUsedRange(masterFileId, worksheetName);
 
     // La première ligne contient les en-têtes, on la skip
@@ -128,17 +127,35 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
       let action = null;
 
       if (row[0] !== "") {
-        category = await IndicatorCategory.findOne({ name: row[0], type: "principal" });
-        if (!category) category = await IndicatorCategory.create({ name: row[0], type: "principal" });
+        const categoryName = row[0];
+        category = principalCategoriesMap.get(categoryName);
+        if (!category) {
+          // Créer seulement si pas dans le cache (1 seule création par catégorie)
+          category = await IndicatorCategory.create({ name: categoryName, type: "principal" });
+          principalCategoriesMap.set(categoryName, category); // Mettre en cache
+          newPrincipalCategories.set(categoryName, category);
+        }
       }
 
-      if (row[1] !== "") {
-        subCategory = await IndicatorCategory.findOne({ name: row[1], type: "sub", principal_category_id: category._id });
-        if (!subCategory) subCategory = await IndicatorCategory.create({ name: row[1], type: "sub", principal_category_id: category._id, principal_category_name: category.name });
+      // Utiliser le cache pour les sous-catégories
+      if (row[1] !== "" && category) {
+        const subCategoryKey = `${row[1]}|${category._id}`;
+        subCategory = subCategoriesMap.get(subCategoryKey);
+        if (!subCategory) {
+          // Créer seulement si pas dans le cache (1 seule création par sous-catégorie)
+          subCategory = await IndicatorCategory.create({
+            name: row[1],
+            type: "sub",
+            principal_category_id: category._id,
+            principal_category_name: category.name,
+          });
+          subCategoriesMap.set(subCategoryKey, subCategory); // Mettre en cache
+          newSubCategories.set(subCategoryKey, subCategory);
+        }
       }
 
       if (row[12] !== "") {
-        action = await Action.findOne({ excel_sheet_name: row[12] });
+        action = actionsMap.get(row[12]);
         if (!action) continue;
       }
 
@@ -286,7 +303,8 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
             indicator_value_unit: newData.value_unit,
             display_conditions: newData.display_conditions || [],
           });
-        } else {
+        }
+        if (!existingIndicator) {
           const valueDefault = situation && valueDefaultForSituation ? { [situation]: valueDefaultForSituation } : undefined;
 
           const indicatorData = {
@@ -335,16 +353,12 @@ async function createIndicatorsFromExcel(situation, worksheetName) {
         console.error(`❌ Erreur ligne ${i + 2}:`, error.message);
       }
     }
-    await Indicator.insertMany(indicators);
-
+    // Log des nouvelles catégories créées
     if (newPrincipalCategories.size > 0) {
-      console.log(`🔄 Création de ${newPrincipalCategories.size} nouvelles catégories principales...`);
-      await IndicatorCategory.insertMany(Array.from(newPrincipalCategories.values()));
+      console.log(`✅ ${newPrincipalCategories.size} nouvelles catégories principales créées`);
     }
-
     if (newSubCategories.size > 0) {
-      console.log(`🔄 Création de ${newSubCategories.size} nouvelles sous-catégories...`);
-      await IndicatorCategory.insertMany(Array.from(newSubCategories.values()));
+      console.log(`✅ ${newSubCategories.size} nouvelles sous-catégories créées`);
     }
 
     if (indicators.length > 0) {
@@ -388,8 +402,7 @@ const WORKSHEETS = [
 // Retourne null si pas de valeur définie (pour ne pas écraser la valeur par défaut)
 function formatIndicatorValue(indicatorValue) {
   if (!indicatorValue.value) return null;
-  const type = indicatorValue.indicator_type;
-  const val = indicatorValue.value[type];
+  const val = indicatorValue.value[indicatorValue.indicator_type];
   if (val === undefined || val === null) return null;
   if (Array.isArray(val) && val.length === 0) return null;
   if (Array.isArray(val)) return val.join(", ");
@@ -399,7 +412,6 @@ function formatIndicatorValue(indicatorValue) {
 async function syncIndicatorValuesToExcel(excelFileId, collectivityId) {
   console.log(`\n🔄 Synchronisation des valeurs pour la collectivité ${collectivityId}...`);
 
-  await mongoose.connect(config.MONGODB_ENDPOINT);
   const token = await getAccessToken();
 
   // Récupérer le site SharePoint
@@ -412,10 +424,7 @@ async function syncIndicatorValuesToExcel(excelFileId, collectivityId) {
   const indicatorValues = await IndicatorValue.find({ collectivity_id: collectivityId });
   console.log(`📋 ${indicatorValues.length} indicator_values trouvés`);
 
-  if (indicatorValues.length === 0) {
-    console.log("⏭️ Aucune valeur à synchroniser");
-    return;
-  }
+  if (indicatorValues.length === 0) return console.log("⏭️ Aucune valeur à synchroniser");
 
   // Créer une map par situation et indicator_excel_id pour accès rapide
   const valuesMap = new Map();
@@ -433,10 +442,7 @@ async function syncIndicatorValuesToExcel(excelFileId, collectivityId) {
     // Lire la plage utilisée de la feuille
     const usedRangeResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
 
-    if (!usedRangeResponse.ok) {
-      console.log(`   ⚠️ Feuille non accessible`);
-      continue;
-    }
+    if (!usedRangeResponse.ok) continue;
 
     const usedRange = await usedRangeResponse.json();
     const rows = usedRange.values || [];
