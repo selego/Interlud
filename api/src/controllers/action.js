@@ -175,6 +175,8 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
           indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+          display_conditions: indicator.display_conditions || [],
         };
         createdIndicatorValues.push(indicatorValue);
       }
@@ -314,6 +316,8 @@ router.post('/initialize_indicator_values', passport.authenticate(['admin', 'use
         indicator_sub_category_id: indicator.indicator_sub_category_id,
         indicator_sub_category_name: indicator.indicator_sub_category_name,
         indicator_value_unit: indicator.value_unit,
+        indicator_excel_id: indicator.excel_indicator_id,
+        display_conditions: indicator.display_conditions || [],
       };
       createdIndicatorValues.push(indicatorValue);
     }

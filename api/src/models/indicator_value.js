@@ -9,16 +9,17 @@ const Schema = new mongoose.Schema(
     action_name: { type: String, trim: true },
     collectivity_id: { type: String, trim: true },
     collectivity_name: { type: String, trim: true },
+
     owner: {
       type: String,
       enum: ['collectivity', 'economic_actor'],
       default: 'collectivity',
       trim: true,
     },
+
     indicator_value_collectivity_id: { type: String, trim: true },
     economic_actor_id: { type: String, trim: true },
     economic_actor_name: { type: String, trim: true },
-
     indicator_id: { type: String, trim: true },
     indicator_name: { type: String, trim: true },
     indicator_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
@@ -28,18 +29,23 @@ const Schema = new mongoose.Schema(
     indicator_sub_category_id: { type: String, trim: true },
     indicator_sub_category_name: { type: String, trim: true },
     indicator_value_unit: { type: String, trim: true },
+    indicator_excel_id: { type: String, trim: true },
+    display_conditions: [
+      {
+        indicator_excel_id: { type: String, trim: true },
+        value: { type: String, trim: true },
+      },
+    ],
     situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'], trim: true },
     year: { type: Number, trim: true },
     value_source: { type: String, trim: true },
     comment: { type: String, trim: true },
-
     value: {
       text: { type: String, trim: true },
       number: { type: Number, trim: true },
       radio: { type: String, trim: true },
       checkbox: { type: Array, default: [] },
     },
-
     value_default: {
       text: { type: String, trim: true },
       number: { type: Number, trim: true },

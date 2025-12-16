@@ -241,6 +241,8 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
           action_id: economicActorAction._id,
           action_name: economicActorAction.name,
           indicator_value_collectivity_id: sourceIndicatorValue._id,
+          indicator_excel_id: sourceIndicatorValue.indicator_excel_id,
+          display_conditions: sourceIndicatorValue.display_conditions || [],
           value: { text: null, number: null, radio: null, checkbox: [] },
           _id: undefined,
           __v: undefined,
