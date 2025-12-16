@@ -15,6 +15,7 @@ const Schema = new mongoose.Schema(
     description: { type: String, trim: true },
     value_unit: { type: String, trim: true },
     value_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
+    //Nom de la variable dans l'excel
     excel_indicator_id: { type: String, trim: true },
     value_possibilities: { type: Array, default: [] },
     value_default: {
