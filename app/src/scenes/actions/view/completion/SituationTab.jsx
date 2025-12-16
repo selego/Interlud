@@ -11,13 +11,6 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
 
-export const filterIndicatorsByDisplayCondition = (indicatorValues) => (iv) => {
-  if (!iv.display_indicator_excel_id) return true;
-  const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
-  if (!conditionIndicator) return true;
-  return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
-};
-
 const sortIndicatorValues = (a, b) => {
   if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
   const subCatA = a.indicator_sub_category_name || '';
@@ -82,7 +75,12 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 
       <div className="space-y-4">
         {[...indicatorValues]
-          .filter(filterIndicatorsByDisplayCondition(indicatorValues))
+          .filter(iv => {
+            if (!iv.display_indicator_excel_id) return true;
+            const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
+            if (!conditionIndicator) return true;
+            return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
+          })
           .sort(sortIndicatorValues)
           .map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
