@@ -11,6 +11,13 @@ export const SITUATION_LABELS = {
   [SITUATION_TYPES.EXPOST]: "Ex-post"
 }
 
+export const filterIndicatorsByDisplayCondition = (indicatorValues) => (iv) => {
+  if (!iv.display_indicator_excel_id) return true;
+  const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
+  if (!conditionIndicator) return true;
+  return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
+};
+
 const sortIndicatorValues = (a, b) => {
   if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
   const subCatA = a.indicator_sub_category_name || '';
@@ -74,8 +81,10 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       </div>
 
       <div className="space-y-4">
-        <IndicatorValuesList indicatorValues={indicatorValues}>
-          {(filteredIndicatorValues) => filteredIndicatorValues.map(indicatorValue => {
+        {[...indicatorValues]
+          .filter(filterIndicatorsByDisplayCondition(indicatorValues))
+          .sort(sortIndicatorValues)
+          .map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           return (
             <div 
@@ -156,29 +165,13 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
               </div>
             </div>
           </div>
-          );
-          })}
-        </IndicatorValuesList>
+        );
+        })}
       </div>
     </div>
   )
 }
 
-
-function IndicatorValuesList({ indicatorValues, children }) {
-  const filtered = [...indicatorValues]
-    .filter(iv => {
-      if (!iv.display_conditions || iv.display_conditions.length === 0) return true;
-      return iv.display_conditions.every(condition => {
-        const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === condition.indicator_excel_id);
-        if (!conditionIndicator) return true;
-        return conditionIndicator.value?.[conditionIndicator.indicator_type] === condition.value;
-      });
-    })
-    .sort(sortIndicatorValues);
-
-  return children(filtered);
-}
 
 function Tooltip({ content, children }) {
   const [isVisible, setIsVisible] = useState(false);
