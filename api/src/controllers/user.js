@@ -307,12 +307,16 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
   }
 });
 
-router.post('/reset_password/:id', passport.authenticate(['admin'], { session: false }), async (req, res) => {
+router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
-    if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
+    if (req.user.role === 'user' && req.user._id.toString() !== req.params.id)
+      return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN, message: 'Vous ne pouvez pas réinitialiser le mot de passe de cet utilisateur' });
+    if (req.body.newPassword !== req.body.verifyPassword)
+      return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH, message: 'Les mots de passe ne correspondent pas' });
+    if (!validatePassword(req.body.newPassword))
+      return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED, message: 'Le mot de passe doit contenir au moins 6 caractères' });
     const obj = await UserObject.findById(req.params.id);
-    if (!obj) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    if (!obj) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS, message: 'Utilisateur non trouvé' });
     obj.set({ password: req.body.newPassword });
     await obj.save();
     return res.status(200).send({ ok: true, user: obj });

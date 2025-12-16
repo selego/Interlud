@@ -72,7 +72,7 @@ function ProfileTab({ user }) {
       </div>
 
       <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        <ResetPassword />
+        <ResetPassword user={user} />
         <button className="button-primary" onClick={updateUser}>
           Enregistrer
         </button>
@@ -222,7 +222,7 @@ function RightsTab({ user }) {
   )
 }
 
-function ResetPassword() {
+function ResetPassword({ user }) {
   const [open, setOpen] = useState(false)
   const [values, setValues] = useState({ newPassword: "", verifyPassword: "" })
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -232,17 +232,13 @@ function ResetPassword() {
     if (values.newPassword !== values.verifyPassword) return toast.error("Les mots de passe ne correspondent pas")
     if (values.newPassword.length < 6) return toast.error("Le mot de passe doit contenir au moins 6 caractères")
     try {
-      const { ok, data, code } = await api.post(`/user/reset_password`, {
-        password: values.currentPassword,
-        newPassword: values.newPassword,
-        verifyPassword: values.verifyPassword
-      })
-      if (!ok) return toast.error(code || "Erreur lors de la mise à jour du mot de passe")
+      const { ok, message } = await api.post(`/user/reset_password/${user._id}`, values)
+      if (!ok) return toast.error(message || "Erreur lors de la mise à jour du mot de passe")
       setOpen(false)
       toast.success("Mot de passe mis à jour avec succès !")
       setValues({ newPassword: "", verifyPassword: "" })
     } catch (error) {
-      toast.error("Une erreur est survenue")
+      toast.error(error.message || "Une erreur est survenue")
     }
   }
 
@@ -277,7 +273,7 @@ function ResetPassword() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Confirmer le mot de passe</label>
               <div className="relative">
                 <input
-                  className="w-full input-primary pr-10"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all pr-10"
                   type={showVerifyPassword ? "text" : "password"}
                   placeholder="Confirmer le nouveau mot de passe"
                   value={values.verifyPassword}
@@ -294,7 +290,7 @@ function ResetPassword() {
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-2">
             <button className="button-primary" disabled={!values.newPassword || !values.verifyPassword} onClick={resetPasswordHandle}>
               Réinitialiser
             </button>

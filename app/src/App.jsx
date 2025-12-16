@@ -109,7 +109,6 @@ const UserLayout = () => {
     try {
       const { ok, data, code } = await api.get(`/economic_actor/${user.economic_actor_id}`)
       if (!ok) return toast.error(code || "Erreur lors de la récupération de l'acteur économique")
-      console.log(data)
       setEconomicActor(data)
     } catch (error) {
       toast.error(error || "Erreur lors de la récupération de l'acteur économique")
