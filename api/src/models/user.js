@@ -23,6 +23,10 @@ const Schema = new mongoose.Schema(
     economic_actor_id: { type: String, default: '', trim: true },
     economic_actor_name: { type: String, trim: true },
 
+    invitation_token: { type: String, default: '' },
+    invitation_token_expires: { type: Date },
+    invitation_sent_at: { type: Date },
+    invitation_accepted_at: { type: Date },
     last_login_at: { type: Date },
   },
   { timestamps: true }

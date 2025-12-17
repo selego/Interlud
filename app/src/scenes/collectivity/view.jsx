@@ -117,7 +117,7 @@ function UserInfoTab({ user, setUser }) {
       const { ok, data, code } = await api.delete(`/user/${user._id}`)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       toast.success("Utilisateur supprimé")
-      navigate("/collectivity/users")
+      navigate("/collectivity")
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")

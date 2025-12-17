@@ -50,16 +50,11 @@ export default function View() {
     <div className="w-full max-w-7xl mx-auto px-4 py-8">
       <div className="mb-6">
         <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-          <button
-            onClick={() => navigate("/admin/collectivity")}
-            className="hover:text-primary-green transition-colors"
-          >
+          <button onClick={() => navigate("/admin/collectivity")} className="hover:text-primary-green transition-colors">
             Collectivités
           </button>
           <span>/</span>
-          <span className="text-gray-900 font-medium truncate max-w-[150px]">
-            {collectivity.name}
-          </span>
+          <span className="text-gray-900 font-medium truncate max-w-[150px]">{collectivity.name}</span>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -69,14 +64,11 @@ export default function View() {
           >
             <FiArrowLeft size={18} />
           </button>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            {collectivity.name || "Détails de la collectivité"}
-          </h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{collectivity.name || "Détails de la collectivité"}</h1>
         </div>
       </div>
-      
-      <div className="card-shadow">
 
+      <div className="card-shadow">
         {/* Informations générales */}
         <div className="pt-6 mt-6 border-t border-light-border">
           <h2 className="text-lg font-semibold mb-4">Informations générales</h2>
@@ -87,18 +79,18 @@ export default function View() {
                 type="text"
                 placeholder="Nom de la collectivité"
                 value={collectivity.name || ""}
-                onChange={(e) => setCollectivity({...collectivity, name: e.target.value})}
+                onChange={(e) => setCollectivity({ ...collectivity, name: e.target.value })}
                 className="w-full input-primary"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-semibold mb-2">Population</label>
               <input
                 type="number"
                 value={collectivity.population || ""}
-                onChange={(e) => setCollectivity({...collectivity, population: e.target.value})}
-                className="w-full input-primary"  
+                onChange={(e) => setCollectivity({ ...collectivity, population: e.target.value })}
+                className="w-full input-primary"
               />
             </div>
 
@@ -107,7 +99,7 @@ export default function View() {
               <input
                 type="number"
                 value={collectivity.department || ""}
-                onChange={(e) => setCollectivity({...collectivity, department: e.target.value})}
+                onChange={(e) => setCollectivity({ ...collectivity, department: e.target.value })}
                 className="w-full input-primary"
               />
             </div>
@@ -116,7 +108,7 @@ export default function View() {
               <label className="block text-sm font-semibold mb-2">Description</label>
               <textarea
                 value={collectivity.description || ""}
-                onChange={(e) => setCollectivity({...collectivity, description: e.target.value})}
+                onChange={(e) => setCollectivity({ ...collectivity, description: e.target.value })}
                 rows="4"
                 className="w-full input-primary rounded-lg"
               />
@@ -125,22 +117,16 @@ export default function View() {
         </div>
 
         <div className="pt-6 mt-6 border-t border-light-border">
-        <div className="flex justify-end gap-3">
-        <button
-          onClick={handleDelete}
-          className="button-primary bg-red-600"
-        >
-          Supprimer
-        </button>
-        <button
-          onClick={handleSave}
-          className="button-primary"
-        >
-          Enregistrer
-        </button>
-      </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={handleDelete} className="button-primary bg-red-600">
+              Supprimer
+            </button>
+            <button onClick={handleSave} className="button-primary">
+              Enregistrer
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
