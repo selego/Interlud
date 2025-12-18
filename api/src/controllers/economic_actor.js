@@ -10,10 +10,10 @@ const { duplicateExcelFile } = require('../services/microsoftGraph');
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const { name, collectivity } = req.body;
-    if (!name || !collectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const { name } = req.body;
+    if (!name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const actor = await EconomicActor.create({ name, collectivity_id: collectivity.id, collectivity_name: collectivity.name });
+    const actor = await EconomicActor.create({ name });
     return res.status(200).send({ ok: true, data: actor });
   } catch (error) {
     capture(error);
