@@ -38,7 +38,13 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const action = await Action.findById(indicatorValue.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const collectivity = await Collectivity.findById(action.collectivity_id);
+    let collectivity = null;
+    if (action.owner === 'economic_actor') {
+      const economicActor = await EconomicActor.findById(action.economic_actor_id);
+      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      collectivity = economicActor.collectivities.find((c) => c.id === action.collectivity_id);
+    }
+    if (action.owner === 'collectivity') collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     action.last_modif_by_id = req.user._id;

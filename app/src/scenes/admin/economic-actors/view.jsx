@@ -209,13 +209,10 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
     const exists = (economicActor?.collectivities || []).some((x) => x.id === collectivity._id)
     if (exists) return toast.error("Cette collectivité est déjà associée")
 
-    const updatedCollectivities = [...(economicActor?.collectivities || []), { id: collectivity._id, name: collectivity.name, joined_at: new Date() }]
-
     try {
-      const { ok, data, code } = await api.put(`/economic_actor/${economicActor._id}`, { collectivities: updatedCollectivities })
+      const { ok, data, code } = await api.put(`/economic_actor/${economicActor._id}/add_collectivity`, { collectivity_id: collectivity._id, collectivity_name: collectivity.name })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setEconomicActor(data)
-
       await addUserCollectivities(collectivity)
 
       setAddOpen(false)
