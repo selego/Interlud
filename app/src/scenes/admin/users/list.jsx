@@ -85,25 +85,17 @@ const AddUserModal = ({ isOpen, onClose }) => {
     try {
       if (!values.name.trim()) return toast.error("Veuillez entrer un nom pour l'utilisateur")
       if (!values.email.trim()) return toast.error("Veuillez entrer un email pour l'utilisateur")
-      if (accountType === "economic_actor" && !values.entityName.trim()) {
-        return toast.error("Veuillez entrer le nom de la société")
-      }
+      if (accountType === "economic_actor" && !values.entityName.trim())  return toast.error("Veuillez entrer le nom de la société")
 
-      const payload = {
-        ...values,
-        password: "Password123!",
-        role: accountType
-      }
+      const payload = { ...values, password: "Password123!",role: accountType }
 
-      if (accountType === "economic_actor") {
-        payload.economic_actor_name = values.entityName
-      }
+      if (accountType === "economic_actor") payload.economic_actor_name = values.entityName
 
       const { ok, data, code } = await api.post("/user/", payload)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       navigate(`/admin/users/${data._id}`)
     } catch (error) {
-      toast.error(error || "Une erreur est survenue")
+       return toast.error(error.code || "Une erreur est survenue")
     }
   }
 
