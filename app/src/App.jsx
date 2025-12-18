@@ -16,6 +16,7 @@ import Settings from "@/scenes/settings"
 
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
+import NotFound from "@/scenes/not-found"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
@@ -54,7 +55,7 @@ export default function App() {
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
           <Route path="/admin/economic-actors/*" element={<AdminEconomicActors />} />
         </Route>
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster position="top-center" />
     </BrowserRouter>
