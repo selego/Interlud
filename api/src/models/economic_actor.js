@@ -11,6 +11,7 @@ const Schema = new mongoose.Schema(
         id: String,
         name: String,
         joined_at: { type: Date, default: Date.now },
+        excelFileId: { type: String, trim: true },
       },
     ],
   },
