@@ -172,7 +172,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 
               <EconomicActorValues 
                 indicatorValue={indicatorValue} 
-                data={economicActorData[indicatorValue._id] || []}
+                economicActorData={economicActorData[indicatorValue._id] || []}
                 onApplyValue={(value) => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: value } })}
               />
             </div>
@@ -184,18 +184,13 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
   )
 }
 
-function EconomicActorValues({ indicatorValue, data, onApplyValue }) {
-  const filledValues = data.filter(isIndicatorValueFilled);
-  const numberValues = filledValues.length;
+function EconomicActorValues({ indicatorValue, economicActorData, onApplyValue }) {
+  const filledValues = economicActorData.filter(isIndicatorValueFilled);
 
   let aggregatedValue = null;
-  if (numberValues >= 3 && indicatorValue.indicator_type === 'number') {
+  if (filledValues.length >= 3 && indicatorValue.indicator_type === 'number') {
     const numbers = filledValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined);
-    if (numbers.length > 0) {
-      aggregatedValue = indicatorValue.indicator_value_unit === '%' 
-        ? numbers.reduce((acc, val) => acc + val, 0) / numbers.length 
-        : numbers.reduce((acc, val) => acc + val, 0);
-    }
+    if (numbers.length > 0)  aggregatedValue = indicatorValue.indicator_value_unit === '%' ? numbers.reduce((acc, val) => acc + val, 0) / numbers.length : numbers.reduce((acc, val) => acc + val, 0);
   }
 
   return (
@@ -204,9 +199,9 @@ function EconomicActorValues({ indicatorValue, data, onApplyValue }) {
         <label className="block text-xs font-medium text-gray-600">
           Valeurs Acteurs économiques
         </label>
-        {numberValues >= 3 ? (
+        {filledValues.length >= 3 ? (
           <>
-            <Tooltip content={`Valeur agrégée de ${numberValues} acteur${numberValues > 1 ? 's' : ''} économique${numberValues > 1 ? 's' : ''}`} />
+            <Tooltip content={`Valeur agrégée de ${filledValues.length} acteur${filledValues.length > 1 ? 's' : ''} économique${filledValues.length > 1 ? 's' : ''}`} />
             <Tooltip content="Appliquer cette valeur">
               <button
                 onClick={() => onApplyValue(aggregatedValue)}
