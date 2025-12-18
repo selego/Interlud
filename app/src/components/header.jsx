@@ -137,6 +137,13 @@ export default function Header() {
               text: "Paramètres"
             },
             {
+              iconId: "fr-icon-message-2-line",
+              linkProps: {
+                to: "/notifications"
+              },
+              text: "Notifications"
+            },
+            {
               iconId: "fr-icon-logout-box-r-line",
               text: "Se déconnecter",
               buttonProps: {

@@ -13,6 +13,7 @@ import AdminCollectivity from "@/scenes/admin/collectivity"
 import AdminIndicator from "@/scenes/admin/indicator"
 import Collectivity from "@/scenes/collectivity"
 import Settings from "@/scenes/settings"
+import Notification from "@/scenes/notification"
 
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
@@ -39,6 +40,7 @@ export default function App() {
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/actions/*" element={<Actions />} />
+          <Route path="/notifications" element={<Notification />} />
           <Route path="/admin/users/*" element={<AdminUsers />} />
           <Route path="/recherche" element={<div>Page de recherche</div>} />
           <Route path="/settings" element={<Settings />} />
