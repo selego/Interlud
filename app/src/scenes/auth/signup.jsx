@@ -19,7 +19,6 @@ export default () => {
     if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
     if (!values.last_name) return setErrors({ ...errors, last_name: "Ce champ est requis" })
     if (!values.entityName && accountType === "economic_actor") return setErrors({ ...errors, entityName: "Ce champ est requis" })
-    if (!validator.isEmail(values?.email)) return setErrors({ ...errors, email: "Adresse e-mail invalide" })
 
     const payload = {
       email: values.email,
