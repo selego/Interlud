@@ -79,11 +79,6 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
   try {
     let query = { owner: 'collectivity' };
 
-    if (req.body.type) {
-      query.type = req.body.type;
-      if (req.body.type === 'global') delete query.owner;
-    }
-
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
@@ -92,6 +87,14 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
       query.owner = 'economic_actor';
+    }
+
+    if (req.body.type) {
+      query.type = req.body.type;
+      if (req.body.type === 'global') {
+        delete query.owner;
+        delete query.economic_actor_id;
+      }
     }
 
     const limit = req.body.limit || 50;
