@@ -29,7 +29,7 @@ export default function Notification() {
     try {
       const { ok, code } = await api.put(`/notification/${notificationId}`, { read_at: new Date()  });
       if (!ok) return toast.error(code || "Une erreur est survenue");
-      fetchNotifications();
+      fetchNotifications(); 
     } catch (error) {
       toast.error(error.message || "Une erreur est survenue");
     }
@@ -82,9 +82,9 @@ export default function Notification() {
                 )}
                 
                 <div className="flex justify-between items-center">
-                  {notification.link && (
+                  {notification.redirect && (
                     <a
-                      href={notification.link}
+                      href={notification.redirect}
                       className="text-xs text-blue-600 hover:text-blue-800 underline"
                     >
                       Voir plus

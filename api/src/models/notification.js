@@ -8,7 +8,7 @@ const Schema = new mongoose.Schema(
     user_id: { type: String, trim: true },
     user_name: { type: String, trim: true },
     user_email: { type: String, trim: true },
-    link: { type: String, trim: true },
+    redirect: { type: String, trim: true },
     read_at: { type: Date },
   },
   { timestamps: true }

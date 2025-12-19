@@ -465,7 +465,7 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
         user_id: admin._id,
         user_name: admin.name,
         user_email: admin.email,
-        link: `${config.APP_URL}/collectivity`,
+        redirect: `${config.APP_URL}/collectivity`,
       });
     }
 
