@@ -12,6 +12,7 @@ const config = require('../config');
 const { validatePassword } = require('../utils');
 const { BREVO_TEMPLATES } = require('../utils/constants');
 const ERROR_CODES = require('../utils/errorCodes');
+const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
 const { capture } = require('../services/sentry');
@@ -457,6 +458,17 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: 'ALREADY_REQUESTED' });
+
+    const adminCollectivity = await UserObject.find({ collectivities: { $elemMatch: { id: collectivityId, role: 'admin' } } });
+    for (const admin of adminCollectivity) {
+      await Notification.create({
+        message: `${user.name} a demandé à rejoindre la collectivité ${collectivity.name}`,
+        user_id: admin._id,
+        user_name: admin.name,
+        user_email: admin.email,
+        redirect: `${config.APP_URL}/collectivity`,
+      });
+    }
 
     user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: user.role || 'user', status: 'pending' }];
     await user.save();
