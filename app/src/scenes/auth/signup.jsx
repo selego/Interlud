@@ -7,8 +7,9 @@ import api from "@/services/api"
 
 export default () => {
   const [values, setValues] = useState({ name: "", email: "", password: "", entityName: "", last_name: "", first_name: "" })
-  const [errors, setErrors] = useState({ email: "", password: "", entityName: "", first_name: "", last_name: "" })
+  const [errors, setErrors] = useState({ email: "", password: "", entityName: "", first_name: "", last_name: "", acceptedTerms: "" })
   const [accountType, setAccountType] = useState("user")
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const { user, setUser, setActionRights, setCollectivity, setEconomicActor } = store()
   const navigate = useNavigate()
@@ -19,6 +20,7 @@ export default () => {
     if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
     if (!values.last_name) return setErrors({ ...errors, last_name: "Ce champ est requis" })
     if (!values.entityName && accountType === "economic_actor") return setErrors({ ...errors, entityName: "Ce champ est requis" })
+    if (!acceptedTerms) return setErrors({ ...errors, acceptedTerms: "Vous devez accepter les conditions d'utilisation" })
 
     const payload = {
       email: values.email,
@@ -170,6 +172,33 @@ export default () => {
                 required
               />
               {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
+            </div>
+
+            <div className="mb-6">
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 mr-3 h-4 w-4 border-gray-300 rounded focus:ring-primary-green"
+                  style={{ accentColor: "#2DAC6A" }}
+                  checked={acceptedTerms}
+                  onChange={(e) => {
+                    setAcceptedTerms(e.target.checked)
+                    if (errors.acceptedTerms) setErrors({ ...errors, acceptedTerms: "" })
+                  }}
+                />
+                <span className="text-sm text-gray-700">
+                  J'accepte les{" "}
+                  <Link to="/conditions" className="text-primary-green hover:underline" target="_blank">
+                    conditions d'utilisation
+                  </Link>
+                  {" "}et la{" "}
+                  <Link to="/politique" className="text-primary-green hover:underline" target="_blank">
+                    politique de confidentialité
+                  </Link>
+                  {" "}<span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.acceptedTerms && <p className="text-sm text-red-500 mt-1 ml-7">{errors.acceptedTerms}</p>}
             </div>
 
             <button type="submit" className="button-primary w-full">

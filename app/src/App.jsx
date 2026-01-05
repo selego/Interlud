@@ -17,6 +17,8 @@ import Notification from "@/scenes/notification"
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
 import NotFound from "@/scenes/not-found"
+import Conditions from "@/scenes/confidentiality/conditions"
+import Politique from "@/scenes/confidentiality/politique"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
@@ -36,6 +38,12 @@ export default function App() {
         <Route element={<AuthLayout />}>
           <Route path="/auth/*" element={<Auth />} />
         </Route>
+        <Route element={<PublicLayout />}>
+          <Route path="/conditions" element={<Conditions />} />
+          <Route path="/politique" element={<Politique />} />
+          <Route path="/cgu" element={<Conditions />} />
+          <Route path="/politique-de-confidentialite" element={<Politique />} />
+        </Route>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/actions/*" element={<Actions />} />
@@ -46,10 +54,6 @@ export default function App() {
           <Route path="/collectivity/*" element={<Collectivity />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/contact" element={<div>Contact</div>} />
-          <Route path="/cgu" element={<div>CGU</div>} />
-          <Route path="/politique-de-confidentialite" element={<div>Politique de confidentialité</div>} />
-          <Route path="/politique-des-cookies" element={<div>Politique des cookies</div>} />
-          <Route path="/mentions-legales" element={<div>Mentions légales</div>} />
           <Route path="/admin/action/*" element={<AdminAction />} />
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
@@ -65,6 +69,14 @@ export default function App() {
 const AuthLayout = () => {
   const { user } = useStore()
   if (user) return <Navigate to="/" replace={true} />
+  return (
+    <Layout>
+      <Outlet />
+    </Layout>
+  )
+}
+
+const PublicLayout = () => {
   return (
     <Layout>
       <Outlet />
