@@ -950,11 +950,7 @@ function GlobalGainsSection({ collectivity }) {
               <button
                 key={config.key}
                 onClick={() => setSelectedIndicator(config.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  selectedIndicator === config.key
-                    ? 'text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedIndicator === config.key ? 'text-white': 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                 style={selectedIndicator === config.key ? { backgroundColor: config.color } : {}}
               >
                 {config.label}
@@ -1017,29 +1013,6 @@ function GlobalGainsSection({ collectivity }) {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-              <p className="text-xs text-yellow-700 font-medium">Évolution prévue</p>
-              <p className="text-2xl font-bold text-yellow-600">{formatNumber(selectedData.evolutionRelativePrev)}</p>
-              <p className="text-xs text-yellow-600">{selectedData.unit}</p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-              <p className="text-xs text-green-700 font-medium">Évolution réelle</p>
-              <p className="text-2xl font-bold text-green-600">{formatNumber(selectedData.evolutionRelativeReel)}</p>
-              <p className="text-xs text-green-600">{selectedData.unit}</p>
-            </div>
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <p className="text-xs text-blue-700 font-medium">Cumul prévu</p>
-              <p className="text-2xl font-bold text-blue-600">{formatNumber(selectedData.evolutionCumuleePrev)}</p>
-              <p className="text-xs text-blue-600">{selectedData.unit}</p>
-            </div>
-            <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-              <p className="text-xs text-purple-700 font-medium">Écart relatif</p>
-              <p className="text-2xl font-bold text-purple-600">{(selectedData.ecartRelatif * 100).toFixed(1)}%</p>
-              <p className="text-xs text-purple-600">vs prévisionnel</p>
             </div>
           </div>
         </div>
