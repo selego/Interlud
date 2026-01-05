@@ -107,24 +107,22 @@ export default function Dashboard({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="p-6 card-shadow">
             <p className="text-gray-600 text-sm mb-2">Indicateurs</p>
-            <p className="text-4xl font-bold text-blue-600">
-              {new Set(indicatorValues.map((v) => v.indicator_id)).size}
-            </p>
+            <p className="text-4xl font-bold text-blue-600">{new Set(indicatorValues.map((v) => v.indicator_id)).size}</p>
             <p className="text-xs text-gray-500 mt-1">Nombre d'indicateurs</p>
           </div>
 
           <div className="p-6 card-shadow">
-            <p className="text-gray-600 text-sm mb-2">Complétion</p>
+            <p className="text-gray-600 text-sm mb-2">Taux de complétion</p>
             <p className="text-4xl font-bold text-green-600">{stats.completeness}%</p>
             <p className="text-xs text-gray-500 mt-1">
-              {stats.filled} / {stats.total} valeurs
+              {stats.filled} / {stats.total} indicateurs
             </p>
           </div>
 
           <div className="p-6 card-shadow">
-            <p className="text-gray-600 text-sm mb-2">Remplis</p>
+            <p className="text-gray-600 text-sm mb-2">Nombre d'indicateurs complétés</p>
             <p className="text-4xl font-bold text-green-600">{stats.filled}</p>
-            <p className="text-xs text-gray-500 mt-1">Valeurs complètes</p>
+            <p className="text-xs text-gray-500 mt-1">Indicateurs complétés</p>
           </div>
 
           <div className="p-6 card-shadow">
