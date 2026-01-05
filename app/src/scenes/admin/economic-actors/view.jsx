@@ -185,6 +185,7 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
   const [collectivities, setCollectivities] = useState([])
   const [addOpen, setAddOpen] = useState(false)
   const [addValues, setAddValues] = useState({ collectivity_id: "" })
+  const [loading, setLoading] = useState(false)
 
   const fetchCollectivities = async () => {
     try {
@@ -210,6 +211,7 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
     if (exists) return toast.error("Cette collectivité est déjà associée")
 
     try {
+      setLoading(true)
       const { ok, data, code } = await api.put(`/economic_actor/${economicActor._id}/add_collectivity`, { collectivity_id: collectivity._id, collectivity_name: collectivity.name })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setEconomicActor(data)
@@ -221,6 +223,8 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -319,7 +323,16 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
         <div className="p-6">
           <h3 className="text-xl font-semibold text-gray-900 mb-6">Ajouter une collectivité</h3>
 
-          <div className="space-y-5">
+      
+          {loading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+            </div>
+          )}
+
+          {!loading && (
+            <>
+            <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Collectivité</label>
               <Select
@@ -329,10 +342,7 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
                   { value: "", label: "Sélectionner une collectivité" },
                   ...collectivities
                     .filter((c) => !economicActor?.collectivities?.some((ec) => ec.id === c._id))
-                    .map((c) => ({
-                      value: c._id,
-                      label: c.name
-                    }))
+                    .map((c) => ({value: c._id, label: c.name }))
                 ]}
               />
             </div>
@@ -341,8 +351,10 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
           <div className="flex justify-end mt-6">
             <button className="button-primary" onClick={addCollectivity}>
               Ajouter
-            </button>
-          </div>
+              </button>
+            </div>
+          </>
+        )}
         </div>
       </Modal>
     </div>

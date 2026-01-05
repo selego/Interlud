@@ -112,9 +112,7 @@ function UserInfoTab({ user, setUser }) {
 
   const onUpdate = async () => {
     try {
-      if (user.role === "economic_actor" && !user.economic_actor_id) {
-        return toast.error("Veuillez sélectionner un acteur économique")
-      }
+      if (user.role === "economic_actor" && !user.economic_actor_id) return toast.error("Veuillez sélectionner un acteur économique")
 
       const payload = {
         ...user,
