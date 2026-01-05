@@ -683,19 +683,19 @@ function GlobalGainsSection({ collectivity }) {
     return 0;
   };
 
-  const yearStartIndex = gainsPrevisionnels[0].findIndex(h => /^\d{4}$/.test(String(h)));
-  const years = yearStartIndex >= 0 ? gainsPrevisionnels[0].slice(yearStartIndex) : [];
+  const yearStartIndex = gainsPrevisionnels[0]?.findIndex(h => /^\d{4}$/.test(String(h)));
+  const years = yearStartIndex >= 0 && gainsPrevisionnels[0] ? gainsPrevisionnels[0].slice(yearStartIndex) : [];
 
   const getIndicatorData = (indicatorIndex) => {
     const prevRow = gainsPrevisionnels[indicatorIndex + 1] || [];
     const reelRow = gainsReels[indicatorIndex + 1] || [];
     const ecartRow = ecart[indicatorIndex + 1] || [];
 
-    const evolRelIndex = gainsPrevisionnels[0].findIndex(h => 
+    const evolRelIndex = gainsPrevisionnels[0]?.findIndex(h => 
       String(h).toLowerCase().includes('evolution relative') || 
       String(h).toLowerCase().includes('évolution relative')
     );
-    const evolCumIndex = gainsPrevisionnels[0].findIndex(h => 
+    const evolCumIndex = gainsPrevisionnels[0]?.findIndex(h => 
       String(h).toLowerCase().includes('evolution cumulée') || 
       String(h).toLowerCase().includes('évolution cumulée') ||
       String(h).toLowerCase().includes('evolution cumul')
@@ -712,14 +712,8 @@ function GlobalGainsSection({ collectivity }) {
       evolutionRelativeReel: Math.abs(parseNumber(reelRow[relIdx])),
       evolutionCumuleePrev: Math.abs(parseNumber(prevRow[cumIdx])),
       evolutionCumuleeReel: Math.abs(parseNumber(reelRow[cumIdx])),
-      yearlyPrev: years.map((year, i) => ({ 
-        year: String(year), 
-        value: Math.abs(parseNumber(prevRow[yearIdx + i])) 
-      })),
-      yearlyReel: years.map((year, i) => ({ 
-        year: String(year), 
-        value: Math.abs(parseNumber(reelRow[yearIdx + i])) 
-      })),
+      yearlyPrev: years.map((year, i) => ({year: String(year), value: Math.abs(parseNumber(prevRow[yearIdx + i]))})),
+      yearlyReel: years.map((year, i) => ({year: String(year), value: Math.abs(parseNumber(reelRow[yearIdx + i]))})),
       ecartAbsolu: parseNumber(ecartRow[1]),
       ecartRelatif: parseNumber(ecartRow[2]),
     };
@@ -727,12 +721,7 @@ function GlobalGainsSection({ collectivity }) {
 
   const comparisonData = INDICATORS_CONFIG.map((config, index) => {
     const indicatorData = getIndicatorData(index);
-    return {
-      name: config.label,
-      previsionnel: indicatorData.evolutionRelativePrev,
-      reel: indicatorData.evolutionRelativeReel,
-      ecartPct: indicatorData.ecartRelatif * 100,
-    };
+    return {name: config.label, previsionnel: indicatorData.evolutionRelativePrev, reel: indicatorData.evolutionRelativeReel, ecartPct: indicatorData.ecartRelatif * 100};
   });
 
   const selectedIndex = INDICATORS_CONFIG.findIndex(c => c.key === selectedIndicator);
@@ -740,11 +729,25 @@ function GlobalGainsSection({ collectivity }) {
   const evolutionData = selectedData.yearlyPrev.map((item, i) => ({ year: item.year, previsionnel: item.value, reel: selectedData.yearlyReel[i]?.value || 0 }));
 
   const gesData = getIndicatorData(0);
+  const energieData = getIndicatorData(5);
   const tauxRealisation = gesData.evolutionRelativePrev > 0  ? (gesData.evolutionRelativeReel / gesData.evolutionRelativePrev) * 100 : 0;
 
+  const avancementTrajectoire = gesData.evolutionCumuleePrev > 0 ? (gesData.evolutionCumuleeReel / gesData.evolutionCumuleePrev) * 100 : 0;
   const formatNumber = (num) => {
     if (num === 0 || isNaN(num)) return '0';
     return num.toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+  };
+
+  const formatGES = (value) => {
+    if (value === 0 || isNaN(value)) return '0 tCO₂e';
+    if (Math.abs(value) >= 1000000) return `${(value / 1000000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} MtCO₂e`;
+    if (Math.abs(value) >= 1000) return `${(value / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} ktCO₂e`;
+    return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} tCO₂e`;
+  };
+
+  const formatEnergie = (value) => {
+    if (value === 0 || isNaN(value)) return '0 GWh';
+    return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} GWh`;
   };
 
   return (
@@ -788,6 +791,36 @@ function GlobalGainsSection({ collectivity }) {
             </svg>
             Tableau
           </button>
+        </div>
+      </div>
+
+      <div className="px-6 py-6 bg-white border-b border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <p className="text-sm text-gray-600 mb-2">GES évités (mesuré)</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{formatGES(gesData.evolutionCumuleeReel)}</p>
+            <p className="text-xs text-gray-500">Évolution cumulée</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <p className="text-sm text-gray-600 mb-2">Énergie économisée</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{formatEnergie(energieData.evolutionCumuleeReel)}</p>
+            <p className="text-xs text-gray-500">Évolution cumulée</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <p className="text-sm text-gray-600 mb-2">Avancement trajectoire 2030</p>
+            <p className="text-3xl font-bold text-gray-900 mb-1">{avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %</p>
+            <p className="text-xs text-gray-500">Réel cumulé / Prévisionnel cumulé</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <p className="text-sm text-gray-600 mb-2">Écart à la trajectoire (GES)</p>
+            <p className={`text-3xl font-bold mb-1 ${gesData.ecartAbsolu < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {formatGES(gesData.ecartAbsolu)}
+            </p>
+            <p className="text-xs text-gray-500">Écart absolu réel vs prévisionnel</p>
+          </div>
         </div>
       </div>
 
