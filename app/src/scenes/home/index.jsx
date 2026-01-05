@@ -996,19 +996,20 @@ function GlobalGainsSection({ collectivity }) {
                   <Line
                     type="monotone"
                     dataKey="previsionnel"
-                    name="Prévisionnel"
-                    stroke="#F59600"
+                    name="Trajectoire attendue (prévisionnel cumulée)"
+                    stroke="#9CA3AF"
                     strokeWidth={3}
-                    dot={{ fill: '#F59600', r: 5 }}
+                    strokeDasharray="5 5"
+                    dot={{ fill: '#9CA3AF', r: 5 }}
                     activeDot={{ r: 7 }}
                   />
                   <Line
                     type="monotone"
                     dataKey="reel"
-                    name="Réel"
-                    stroke="#2DAC6A"
+                    name="Mesurés (réel cumulé)"
+                    stroke="#1E40AF"
                     strokeWidth={3}
-                    dot={{ fill: '#2DAC6A', r: 5 }}
+                    dot={{ fill: '#1E40AF', r: 5 }}
                     activeDot={{ r: 7 }}
                   />
                 </LineChart>
