@@ -668,9 +668,9 @@ function GlobalGainsSection({ collectivity }) {
 
   if (isLoading) return <div className="card-shadow p-6 mb-12"><Loader /></div>;
 
-  const gainsPrevisionnels = data.find(d => d.name === 'gains_previsionnels')?.values || [];
-  const gainsReels = data.find(d => d.name === 'gains_reels')?.values || [];
-  const ecart = data.find(d => d.name === 'ecart')?.values || [];
+  const gainsPrevisionnels = data?.find(d => d.name === 'gains_previsionnels')?.values || [];
+  const gainsReels = data?.find(d => d.name === 'gains_reels')?.values || [];
+  const ecart = data?.find(d => d.name === 'ecart')?.values || [];
 
   const parseNumber = (val) => {
     if (val === null || val === undefined || val === '') return 0;
