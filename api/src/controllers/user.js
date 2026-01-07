@@ -397,7 +397,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 
     await brevo.sendEmail(bodyHTML, {
       subject: `Invitation à rejoindre ${obj.collectivity.name} sur InTerLUD+`,
-      sender: { name: 'InTerLUD+', email: 'leopold@selego.co' },
+      sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
       to: [{ email: obj.email }],
     });
 
@@ -406,6 +406,79 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
   } catch (error) {
     console.log('ERROR', error);
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+router.post('/send-invite/:id', passport.authenticate(['admin'], { session: false }), async (req, res) => {
+  try {
+    const user = await UserObject.findById(req.params.id);
+    if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365); // 1 an
+
+    user.invitation_token = token;
+    user.invitation_token_expires = expires;
+    user.invitation_sent_at = new Date();
+    await user.save();
+
+    const collectivityName = user.collectivities?.[0]?.name || 'InTerLUD+';
+    let cta = `${config.APP_URL}/auth/invite?token=${token}`;
+
+    const bodyHTML = `
+        <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+          <!-- En-tête avec dégradé vert Interlud -->
+          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre InTerLUD+</h1>
+          </div>
+          
+          <!-- Corps du message -->
+          <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Bonjour${user.name ? ` ${user.name}` : ''},</p>
+            
+            <p style="font-size: 16px; margin-bottom: 20px;">
+              Vous avez été invité à rejoindre <strong>${collectivityName}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+            </p>
+            
+            <p style="font-size: 16px; margin-bottom: 30px;">
+              InTerLUD+ est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
+            </p>
+
+            <!-- Bouton CTA -->
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${cta}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
+                Accepter l'invitation
+              </a>
+            </div>
+
+            <p style="font-size: 16px; margin-bottom: 10px;">Une question ? Notre équipe est à votre disposition pour vous accompagner.</p>
+            
+            <p style="font-size: 16px; margin-bottom: 0;">
+              Cordialement,<br>
+              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+            </p>
+          </div>
+          
+          <!-- Pied de page -->
+          <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 12px; color: #768776; margin: 0;">
+              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+            </p>
+          </div>
+      </div>
+      `;
+
+    await brevo.sendEmail(bodyHTML, {
+      subject: `Invitation à rejoindre ${collectivityName} sur InTerLUD+`,
+      sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+      to: [{ email: user.email }],
+    });
+
+    return res.status(200).send({ ok: true, data: user });
+  } catch (error) {
+    console.log('ERROR', error);
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
@@ -437,9 +510,18 @@ router.post('/invite-accepted', async (req, res) => {
     user.set(updateData);
     await user.save();
 
+    const userActionRights = await UserActionRightObject.find({ user_id: user._id });
+
+    const approvedCollectivities = user.collectivities?.filter((c) => c.status === 'approved') || [];
+    let collectivity = await Collectivity.findById(approvedCollectivities[0]?.id);
+    if (user.role === 'admin') collectivity = await Collectivity.findOne();
+
+    let economicActor = null;
+    if (user.role === 'economic_actor') economicActor = await EconomicActor.findById(user.economic_actor_id);
+
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie('jwt', token, cookieOptions());
-    return res.status(200).send({ data: user, token, ok: true });
+    return res.status(200).send({ ok: true, token, user, userActionRights, collectivity, economicActor });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

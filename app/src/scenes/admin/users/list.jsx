@@ -80,22 +80,36 @@ const AddUserModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
   const [values, setValues] = useState({ name: "", email: "", entityName: "" })
   const [accountType, setAccountType] = useState("user")
+  const [sendInvite, setSendInvite] = useState(true)
 
   const createUser = async () => {
     try {
       if (!values.name.trim()) return toast.error("Veuillez entrer un nom pour l'utilisateur")
       if (!values.email.trim()) return toast.error("Veuillez entrer un email pour l'utilisateur")
-      if (accountType === "economic_actor" && !values.entityName.trim())  return toast.error("Veuillez entrer le nom de la société")
+      if (accountType === "economic_actor" && !values.entityName.trim()) return toast.error("Veuillez entrer le nom de la société")
 
-      const payload = { ...values, password: "Password123!",role: accountType }
+      const payload = { ...values, password: "Password123!", role: accountType }
 
       if (accountType === "economic_actor") payload.economic_actor_name = values.entityName
 
       const { ok, data, code } = await api.post("/user/", payload)
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      navigate(`/admin/users/${data._id}`)
+
+      if (!sendInvite) return navigate(`/admin/users/${data._id}`)
+      await sendInvitationEmail(data)
     } catch (error) {
-       return toast.error(error.code || "Une erreur est survenue")
+      return toast.error(error.code || "Une erreur est survenue")
+    }
+  }
+
+  const sendInvitationEmail = async (user) => {
+    try {
+      const { ok, code } = await api.post(`/user/send-invite/${user._id}`)
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      navigate(`/admin/users/${user._id}`)
+      toast.success("Invitation envoyée avec succès")
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue")
     }
   }
 
@@ -172,6 +186,19 @@ const AddUserModal = ({ isOpen, onClose }) => {
             onChange={(e) => setValues({ ...values, email: e.target.value })}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
           />
+        </div>
+
+        <div className="mb-6">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendInvite}
+              onChange={(e) => setSendInvite(e.target.checked)}
+              className="w-5 h-5 text-primary-green border-gray-300 rounded focus:ring-primary-green"
+            />
+            <span className="text-sm font-medium text-gray-700">Envoyer une invitation par email</span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1 ml-8">L'utilisateur recevra un email pour créer son mot de passe et se connecter</p>
         </div>
 
         <div className="flex justify-end gap-3">

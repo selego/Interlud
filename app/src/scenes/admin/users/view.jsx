@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
-import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft } from "react-icons/fi"
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft, FiSend } from "react-icons/fi"
 
 import Modal from "@/components/modal"
 import api from "@/services/api"
@@ -227,7 +227,10 @@ function UserInfoTab({ user, setUser }) {
       </div>
 
       <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        {user.role === "admin" && <ResetPassword user={user} />}
+        <div className="flex items-center gap-3">
+          {user.role === "admin" && <ResetPassword user={user} />}
+          <InviteButton user={user} />
+        </div>
         <div className="flex items-center gap-3">
           <button
             className="button-primary"
@@ -438,6 +441,35 @@ function ResetPassword({ user }) {
         </div>
       </Modal>
     </>
+  )
+}
+
+function InviteButton({ user }) {
+  const [loading, setLoading] = useState(false)
+
+  const handleInvite = async () => {
+    try {
+      setLoading(true)
+      const { ok, code } = await api.post(`/user/send-invite/${user._id}`)
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      toast.success("Invitation envoyée avec succès !")
+    } catch (error) {
+      console.log(error)
+      toast.error("Une erreur est survenue")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      className="px-6 py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium rounded-lg transition-colors flex items-center gap-2"
+      onClick={handleInvite}
+      disabled={loading}
+    >
+      <FiSend size={16} />
+      {loading ? "Envoi en cours..." : "Envoyer une invitation"}
+    </button>
   )
 }
 

@@ -8,12 +8,12 @@ import api from "@/services/api"
 import Loader from "@/components/loader"
 
 const Invite = () => {
-  const [values, setValues] = useState({ email: "", password: "", first_name: "", last_name: "" })
-  const [errors, setErrors] = useState({ email: "", password: "", first_name: "", last_name: "" })
+  const [values, setValues] = useState({ email: "", password: "", name: "" })
+  const [errors, setErrors] = useState({ email: "", password: "", name: "" })
   const [invalidToken, setInvalidToken] = useState(false)
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
-  const { user, setUser } = store()
+  const { user, setUser, setActionRights, setCollectivity, setEconomicActor } = store()
   const navigate = useNavigate()
   const redirect = searchParams.get("redirect")
   const inviteToken = searchParams.get("token")
@@ -22,7 +22,7 @@ const Invite = () => {
     try {
       const { ok, user, code } = await api.post("/user/check-invitation-token", { invitation_token: inviteToken })
       if (!ok) throw new Error(code)
-      setValues({ ...values, email: user.email })
+      setValues({ ...values, email: user.email, name: user.name })
     } catch (error) {
       console.error(error)
       toast.error("Invalid or expired invitation token")
@@ -39,25 +39,24 @@ const Invite = () => {
 
     if (!values.email) return setErrors({ ...errors, email: "Ce champ est requis" })
     if (!values.password) return setErrors({ ...errors, password: "Ce champ est requis" })
-    if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
-    if (!values.last_name) return setErrors({ ...errors, last_name: "Ce champ est requis" })
+    if (!values.name) return setErrors({ ...errors, name: "Ce champ est requis" })
     if (!validator.isEmail(values?.email)) return toast.error("Adresse e-mail invalide")
 
     setLoading(true)
     try {
-      const data = { ...values, name: `${values.first_name} ${values.last_name}`, invitation_token: inviteToken }
-      delete data.first_name
-      delete data.last_name
+      const data = { ...values, invitation_token: inviteToken }
 
-      const { ok, data: user, token, code } = await api.post("/user/invite-accepted", data)
+      const { ok, data: user, token, code, userActionRights, collectivity, economicActor } = await api.post("/user/invite-accepted", data)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       if (token) api.setToken(token)
-      if (user) {
-        setUser(user)
-        toast.success("Votre compte a été créé avec succès !")
-        if (redirect) navigate(redirect)
-        else navigate("/")
-      }
+      if (user) setUser(user)
+      if (userActionRights) setActionRights(userActionRights)
+      if (collectivity) setCollectivity(collectivity)
+      if (economicActor) setEconomicActor(economicActor)
+      localStorage.setItem("selectedCollectivityId", collectivity._id)
+      toast.success("Votre compte a été créé avec succès !")
+      if (redirect) return navigate(redirect)
+      navigate("/")
     } catch (error) {
       console.log("✌️  error", error)
       if (error.code === "USER_ALREADY_REGISTERED") return toast.error("Cette adresse e-mail est déjà enregistrée.\nEssayez de vous connecter.")
@@ -111,39 +110,22 @@ const Invite = () => {
 
         <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
           <form onSubmit={handleSubmit}>
-            <div className="flex gap-4">
-              <div className="mb-6">
-                <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom <span className="text-red-500">*</span>
-                </label>
-                <input
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-                  name="last_name"
-                  type="text"
-                  id="last_name"
-                  value={values.last_name}
-                  onChange={(e) => setValues({ ...values, last_name: e.target.value })}
-                  placeholder="Votre nom"
-                  required
-                />
-                {errors.last_name && <p className="text-sm text-red-500 mt-1">{errors.last_name}</p>}
-              </div>
-              <div className="mb-6">
-                <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-2">
-                  Prénom <span className="text-red-500">*</span>
-                </label>
-                <input
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-                  name="first_name"
-                  type="text"
-                  id="first_name"
-                  value={values.first_name}
-                  onChange={(e) => setValues({ ...values, first_name: e.target.value })}
-                  placeholder="Votre prénom"
-                  required
-                />
-                {errors.first_name && <p className="text-sm text-red-500 mt-1">{errors.first_name}</p>}
-              </div>
+            <div className="mb-6">
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                Nom <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                name="name"
+                type="text"
+                id="name"
+                value={values.name}
+                onChange={(e) => setValues({ ...values, name: e.target.value })}
+                placeholder="Votre nom"
+                required
+                disabled
+              />
+              {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name}</p>}
             </div>
 
             <div className="mb-6">
