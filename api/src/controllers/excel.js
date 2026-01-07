@@ -1,18 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const passport = require('passport');
 const { capture } = require('../services/sentry');
 const { graphFetch, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
-const Indicator = require('../models/indicator');
-const IndicatorValue = require('../models/indicator_value');
-const Log = require('../models/log');
-
-const SITUATION_SHEETS = [
-  { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
-  { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
-  { sheetName: 'Remplissage - Sit. Prev.', situation: 'prev' },
-  { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
-];
 
 const FIXED_RANGES = [
   { name: 'gains_environnementaux', range: 'C13:H18' },
@@ -29,15 +18,25 @@ const FIXED_RANGES = [
 
 const AGGREGATION_WORKSHEET = 'Agrégation';
 
-const GLOBAL_GAINS_RANGES = [
-  { name: 'years', range: 'B7:C9' },
-  { name: 'gains_previsionnels', range: 'B13:J19' },
-  { name: 'gains_reels', range: 'B23:K29' },
-  { name: 'ecart', range: 'C33:E39' },
+const INDICATORS_CONFIG = [
+  { key: 'GES', label: 'GES', unit: 'tCO2e' },
+  { key: 'PM', label: 'PM', unit: 'tPart' },
+  { key: 'HC', label: 'HC', unit: 'tHC' },
+  { key: 'NOx', label: 'NOx', unit: 'tNOx' },
+  { key: 'CO', label: 'CO', unit: 'tCO' },
+  { key: 'Énergie', label: 'Énergie', unit: 'GWh' },
 ];
 
-const ACTION_GAINS_WORKSHEET = 'Agrégation';
-const ACTION_GAINS_RANGE = 'C40:H300';
+const parseNumber = (val) => {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const cleaned = val.replace(/\s/g, '').replace(',', '.');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  }
+  return 0;
+};
 
 router.post('/global-gains', async (req, res) => {
   try {
@@ -45,16 +44,58 @@ router.post('/global-gains', async (req, res) => {
     if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
-    const results = await Promise.all(
-      GLOBAL_GAINS_RANGES.map(async (descriptor) => {
-        const result = await graphFetch(
-          `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='${descriptor.range}')`
-        );
-        return { name: descriptor.name, values: result.values || [] };
-      })
+    const result = await graphFetch(
+      `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`
     );
+    const allValues = result.values || [];
 
-    res.json({ ok: true, data: results });
+    const yearsData = allValues.slice(0, 3).map(row => row.slice(0, 2));
+    const gainsPrevisionnels = allValues.slice(6, 13).map(row => row.slice(0, 9));
+    const gainsReels = allValues.slice(16, 23).map(row => row.slice(0, 10));
+    const ecart = allValues.slice(26, 33).map(row => row.slice(1, 4));
+
+    const yearStartIndex = gainsPrevisionnels[0]?.findIndex(h => /^\d{4}$/.test(String(h)));
+    const years = yearStartIndex >= 0 && gainsPrevisionnels[0] ? gainsPrevisionnels[0].slice(yearStartIndex) : [];
+
+    const getIndicatorData = (indicatorIndex) => {
+      const prevRow = gainsPrevisionnels[indicatorIndex + 1] || [];
+      const reelRow = gainsReels[indicatorIndex + 1] || [];
+      const ecartRow = ecart[indicatorIndex + 1] || [];
+
+      const evolRelIndex = gainsPrevisionnels[0]?.findIndex(h =>
+        String(h).toLowerCase().includes('evolution relative') ||
+        String(h).toLowerCase().includes('évolution relative')
+      );
+      const evolCumIndex = gainsPrevisionnels[0]?.findIndex(h =>
+        String(h).toLowerCase().includes('evolution cumulée') ||
+        String(h).toLowerCase().includes('évolution cumulée') ||
+        String(h).toLowerCase().includes('evolution cumul')
+      );
+
+      const relIdx = evolRelIndex >= 0 ? evolRelIndex : 2;
+      const cumIdx = evolCumIndex >= 0 ? evolCumIndex : 3;
+      const yearIdx = yearStartIndex >= 0 ? yearStartIndex : 4;
+
+      return {
+        label: INDICATORS_CONFIG[indicatorIndex]?.label || prevRow[0],
+        unit: INDICATORS_CONFIG[indicatorIndex]?.unit,
+        evolutionRelativePrev: Math.abs(parseNumber(prevRow[relIdx])),
+        evolutionRelativeReel: Math.abs(parseNumber(reelRow[relIdx])),
+        evolutionCumuleePrev: Math.abs(parseNumber(prevRow[cumIdx])),
+        evolutionCumuleeReel: Math.abs(parseNumber(reelRow[cumIdx])),
+        yearlyPrev: years.map((year, i) => ({ year: String(year), value: Math.abs(parseNumber(prevRow[yearIdx + i])) })),
+        yearlyReel: years.map((year, i) => ({ year: String(year), value: Math.abs(parseNumber(reelRow[yearIdx + i])) })),
+        ecartAbsolu: parseNumber(ecartRow[1]),
+        ecartRelatif: parseNumber(ecartRow[2]),
+      };
+    };
+
+    const indicators = [0, 1, 2, 3, 4, 5].map(index => getIndicatorData(index));
+    const gesData = indicators[0];
+    const energieData = indicators[5];
+    const avancementTrajectoire = gesData.evolutionCumuleePrev > 0 ? (gesData.evolutionCumuleeReel / gesData.evolutionCumuleePrev) * 100 : 0;
+
+    res.json({ ok: true, data: { gesData, energieData, avancementTrajectoire, indicators } });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });
@@ -67,10 +108,7 @@ router.post('/action-gains', async (req, res) => {
     if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
     
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-    
-    const result = await graphFetch(
-      `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(ACTION_GAINS_WORKSHEET)}/range(address='${ACTION_GAINS_RANGE}')`
-    );
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`);
     
     const values = result.values || [];
     const actionGains = [];
@@ -84,25 +122,18 @@ router.post('/action-gains', async (req, res) => {
       const potentialActionName = String(row[0]).trim();
       
       if (targetActions.includes(potentialActionName)) {
-        
         if (i + 4 < values.length) {
             const gesRow = values[i + 4];
             if (String(gesRow[0]).trim() !== 'GES') continue;
-            const rawValue = gesRow[3]; // Colonne F (Situation ex-post - Évolution absolue)
-            let cleanedValue = String(rawValue || 0).replace(/tCO2e/gi, '').replace(/\s/g, '').replace(',', '.');
-            const gesValue = parseFloat(cleanedValue) || 0;
+            const gesValue =parseFloat(String(gesRow[3] || 0).replace(/tCO2e/gi, '').replace(/\s/g, '').replace(',', '.')) || 0;
 
-            const rawValuePrev = gesRow[1]; // Colonne D (Situation prévisionnelle - Évolution absolue)
-            let cleanedValuePrev = String(rawValuePrev || 0).replace(/tCO2e/gi, '').replace(/\s/g, '').replace(',', '.');
-            const gesPrev = parseFloat(cleanedValuePrev) || 0;
-            
+            const gesPrev =parseFloat(String(gesRow[1] || 0).replace(/tCO2e/gi, '').replace(/\s/g, '').replace(',', '.')) || 0;
             actionGains.push({action: potentialActionName,ges: gesValue,ges_prev: gesPrev,type: gesValue <= 0 ? 'gain' : 'degradation'});
         }
       }
     }
     
     actionGains.sort((a, b) => Math.abs(b.ges) - Math.abs(a.ges));
-    
     res.json({ ok: true, data: actionGains });
   } catch (error) {
     capture(error);
