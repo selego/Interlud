@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import { FiList, FiCheckCircle, FiTrendingUp, FiAlertTriangle, FiPlusCircle } from "react-icons/fi"
 import { Navigate, useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import api from "@/services/api"
@@ -24,22 +25,9 @@ export default function Home() {
   const { collectivity, user } = useStore()
   const [filters, setFilters] = useState({ search: "", status: "" })
   const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
-  const [evolutionStatuts, setEvolutionStatuts] = useState([])
   const [period, setPeriod] = useState("month")
-  const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true })
   const [isModalOpen, setIsModalOpen] = useState(false)
   
-  const fetchEvolutionStatuts = async () => {
-    try {
-      const { ok, data, code } = await api.post("/dashboard/evolution-statuts", { collectivity_id: collectivity._id, period: period })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setEvolutionStatuts(data)
-      console.log("evolutionStatuts", data)
-    } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
-    }
-  }
-
   const fetchSynthese = async () => {
     try {
       const { ok, data, code } = await api.post("/dashboard/synthese", { collectivity_id: collectivity._id, period: period })
@@ -82,7 +70,6 @@ export default function Home() {
     if (!collectivity) return
     fetchActions()
     fetchSynthese()
-    fetchEvolutionStatuts()
   }, [collectivity, filters, period])
 
   if (!collectivity) return <Loader />
@@ -128,40 +115,50 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-15 gap-6 mb-12">
-          <div className="xl:col-span-3 p-6 h-[430px] card-shadow">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
-            </div>
-
-            <div className="space-y-4">
-              <div className=" gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreated}</span>
+          <div className="xl:col-span-3 p-6 h-full card-shadow flex flex-col">
+            <h3 className="font-bold text-font-primary text-2xl mb-4">Synthèse</h3>
+            
+            <div className="border border-gray-200 rounded-xl overflow-hidden h-full flex flex-col">
+              {/* Total actions */}
+              <div className="flex items-center justify-between p-5 bg-gray-50 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-gray-900 text-lg">Total actions</span>
                 </div>
-                <span className="text-lg text-font-secondary">Total actions</span>
+                <span className="text-2xl font-bold text-gray-900">{synthese.actionsCreated}</span>
               </div>
 
-              <div className="gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsInProgress}</span>
+              <div className="bg-white divide-y divide-gray-100 flex-1 flex flex-col justify-between">
+                {/* Actions en progression */}
+                <div className="flex items-center justify-between px-5 py-4 flex-1">
+                  <div className="flex items-center gap-3 pl-4">
+                    <span className="text-gray-600 text-base">En progression</span>
+                  </div>
+                  <span className="font-semibold text-gray-900 text-base">{synthese.actionsInProgress}</span>
                 </div>
 
-                <span className="text-lg text-font-secondary">Actions en progression</span>
-              </div>
-
-              <div className="gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCompleted}</span>
+                {/* Actions complétées */}
+                <div className="flex items-center justify-between px-5 py-4 flex-1">
+                    <div className="flex items-center gap-3 pl-4">
+                    <span className="text-gray-600 text-base">Complétées</span>
+                  </div>
+                  <span className="font-semibold text-gray-900 text-base">{synthese.actionsCompleted}</span>
                 </div>
 
-                <span className="text-lg text-font-secondary">Actions complétées</span>
-              </div>
-              <div className="gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsBlocked}</span>
+                {/* Actions bloquées */}
+                <div className="flex items-center justify-between px-5 py-4 flex-1">
+                  <div className="flex items-center gap-3 pl-4">
+                    <span className="text-gray-600 text-base">Bloquées</span>
+                  </div>
+                  <span className="font-semibold text-gray-900 text-base">{synthese.actionsBlocked}</span>
                 </div>
 
-                <span className="text-lg text-font-secondary">Actions bloquées</span>
+                {/* Nouvelles actions (Sans statut) */}
+                <div className="flex items-center justify-between px-5 py-4 flex-1">
+                  <div className="flex items-center gap-3 pl-4">
+                    <span className="text-gray-600 text-base">Nouvelles actions</span>
+                  </div>
+                  <span className="font-semibold text-gray-900 text-base">{synthese.actionsWithoutStatus}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -237,151 +234,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="xl:col-span-8 p-6 h-full card-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
-            </div>
-
-            <div className="flex gap-2 mb-6 flex-wrap">
-              <button
-                onClick={() => setVisibleLines({ ...visibleLines, actionsCompleted: !visibleLines.actionsCompleted })}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsCompleted ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
-                }`}
-              >
-                Complétées
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.actionsCompleted ? (
-                    <>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </>
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  )}
-                </svg>
-              </button>
-              <button
-                onClick={() => setVisibleLines({ ...visibleLines, actionsInProgress: !visibleLines.actionsInProgress })}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsInProgress ? "bg-primary-orange text-white" : "border border-gray-300 text-gray-700 bg-white"
-                }`}
-              >
-                En progression
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.actionsInProgress ? (
-                    <>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </>
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  )}
-                </svg>
-              </button>
-              <button
-                onClick={() => setVisibleLines({ ...visibleLines, actionsUpcoming: !visibleLines.actionsUpcoming })}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsUpcoming ? "bg-primary-teal text-white" : "border border-gray-300 text-gray-700 bg-white"
-                }`}
-              >
-                À venir
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.actionsUpcoming ? (
-                    <>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </>
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  )}
-                </svg>
-              </button>
-            </div>
-
-            <div className="h-[260px] rounded-lg overflow-hidden mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={evolutionStatuts} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="mois" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={{ stroke: "#e5e7eb" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={{ stroke: "#e5e7eb" }} />
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white border-2 border-primary-orange rounded-lg p-3 shadow-lg">
-                            <p className="font-bold text-sm mb-1">{label}</p>
-                            {payload.map((entry, index) => (
-                              <p key={index} className="text-sm text-gray-600">
-                                Nombre d'actions {entry.name?.toLowerCase()}
-                                <span className="text-primary-orange font-bold text-lg ml-1">{entry.value}</span>
-                              </p>
-                            ))}
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                  {visibleLines.actionsCompleted && (
-                    <Line type="monotone" dataKey="actionsCompleted" stroke="#2DAC6A" strokeWidth={3} name="Complétées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                  {visibleLines.actionsUpcoming && (
-                    <Line type="monotone" dataKey="actionsUpcoming" stroke="#56BDB8" strokeWidth={3} name="À venir" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                  {visibleLines.actionsInProgress && (
-                    <Line type="monotone" dataKey="actionsInProgress" stroke="#F59600" strokeWidth={3} name="En progression" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Légende */}
-            <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-start text-xs text-gray-600">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                <span>Actions complétées</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
-                <span>Actions à venir</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
-                <span>Actions en progression</span>
-              </div>
-            </div>
-          </div>
+          {/* Contribution des actions */}
+          <ActionContributionSection collectivity={collectivity} />
         </div>
 
         <GlobalGainsSection collectivity={collectivity} />
@@ -412,7 +266,9 @@ export default function Home() {
                   { value: "", label: "Tous" },
                   { value: "completed", label: "Terminée" },
                   { value: "in_progress", label: "À compléter" },
-                  { value: "upcoming", label: "En attente" }
+                  { value: "upcoming", label: "En attente" },
+                  { value: "blocked", label: "Bloquée" },
+                  { value: "no_status", label: "Sans statut" }
                 ]}
               />
             </div>
@@ -754,7 +610,7 @@ function GlobalGainsSection({ collectivity }) {
     <div className="card-shadow overflow-hidden mb-12">
       <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h3 className="font-bold text-font-primary text-2xl">Gains environnementaux globaux</h3>
+          <h3 className="font-bold text-font-primary text-2xl">Gains environnementaux de la collectivité</h3>
           <p className="text-sm text-gray-500 mt-1">Impact de la charte sur la collectivité</p>
         </div>
         <div className="flex gap-2">
@@ -1128,6 +984,162 @@ function TableView({ gainsPrevisionnels, gainsReels, ecart }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ActionContributionSection({ collectivity }) {
+  const [actionGains, setActionGains] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const fetchActionGains = async () => {
+    if (!collectivity?.excelFileId) return;
+    try {
+      setIsLoading(true);
+      const { ok, data, code } = await api.post('/excel/action-gains', { excelFileId: collectivity.excelFileId });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setActionGains(data);
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchActionGains();
+  }, [collectivity?.excelFileId]);
+
+  if (isLoading) {
+    return (
+      <div className="xl:col-span-8 p-6 h-full card-shadow flex items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
+
+  const formatGES = (value) => {
+    if (value === 0 || isNaN(value)) return '0';
+    const absValue = Math.abs(value);
+    if (absValue >= 1000) return `${(value / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ktCO₂e`;
+    return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} tCO₂e`;
+  };
+
+  const displayedActions = showAll ? actionGains : actionGains.slice(0, 5);
+  const maxAbsValue = Math.max(...actionGains.map(a => Math.abs(a.ges)), 1);
+
+  const getActionStatus = (action) => {
+    if (action.ges > 0) return { icon: '✖', label: 'Impact négatif', color: 'text-red-600', bgColor: 'bg-red-100' };
+    if (action.ges <= action.ges_prev) return { icon: '✔', label: 'En avance', color: 'text-green-600', bgColor: 'bg-green-100' };
+    return { icon: '⚠', label: 'En retard', color: 'text-amber-600', bgColor: 'bg-amber-100' };
+  };
+
+  return (
+    <div className="xl:col-span-8 p-6 h-full card-shadow">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="font-bold text-font-primary text-2xl">Contribution des actions</h3>
+          <p className="text-sm text-gray-500 mt-1">GES évités par action (tCO₂e/an)</p>
+        </div>
+      </div>
+          <div className="space-y-3">
+            {displayedActions.map((action, index) => {
+
+              return (
+                <div key={index} className="group">
+                  <div className="flex items-center gap-4">
+                    {/* Action name */}
+                    <div className="w-16 flex-shrink-0">
+                      <span className="font-bold text-sm text-gray-900">{action.action}</span>
+                    </div>
+
+                    {/* Bar container */}
+                    <div className="flex-1 relative">
+                      <div className="h-8 bg-gray-100 rounded-lg overflow-hidden relative">
+                        {/* Bar */}
+                        <div
+                          className={`h-full rounded-lg transition-all duration-500 ${
+                            action.ges > 0 ? 'bg-red-500' : 'bg-primary-green'
+                          }`}
+                          style={{ width: `${Math.min((Math.abs(action.ges) / maxAbsValue) * 100, 100)}%` }}
+                        />
+                        {/* Value inside bar */}
+                        <div className="absolute inset-0 flex items-center px-3">
+                          <span className={`text-sm font-semibold ${(Math.abs(action.ges) / maxAbsValue) * 100 > 30 ? 'text-white' : 'text-gray-700'}`}>
+                            {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status icon */}
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full ${getActionStatus(action).bgColor} flex items-center justify-center`}>
+                      <span className={`text-sm ${getActionStatus(action).color}`}>{getActionStatus(action).icon}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Légende */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-600">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center">
+                  <span className="text-green-600 text-[10px]">✔</span>
+                </div>
+                <span>En avance</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-amber-100 flex items-center justify-center">
+                  <span className="text-amber-600 text-[10px]">⚠</span>
+                </div>
+                <span>En retard</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-red-100 flex items-center justify-center">
+                  <span className="text-red-600 text-[10px]">✖</span>
+                </div>
+                <span>Impact négatif</span>
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <div className="w-3 h-3 rounded bg-primary-green"></div>
+                <span>Gain réel</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-red-500"></div>
+                <span>Dégradation</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Button to see all */}
+          {actionGains.length > 5 && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setShowAll(!showAll)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-green hover:text-primary-green/80 transition-colors"
+              >
+                {showAll ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                    Réduire
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    Voir toutes les actions ({actionGains.length})
+                  </>
+                )}
+              </button>
+            </div>
+          )}
     </div>
   );
 }
