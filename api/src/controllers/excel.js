@@ -36,6 +36,9 @@ const GLOBAL_GAINS_RANGES = [
   { name: 'ecart', range: 'C33:E39' },
 ];
 
+const ACTION_GAINS_WORKSHEET = 'Agrégation';
+const ACTION_GAINS_RANGE = 'C40:H300';
+
 router.post('/global-gains', async (req, res) => {
   try {
     const { excelFileId } = req.body;
@@ -55,6 +58,55 @@ router.post('/global-gains', async (req, res) => {
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
+router.post('/action-gains', async (req, res) => {
+  try {
+    const { excelFileId } = req.body;
+    if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
+    
+    const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+    
+    const result = await graphFetch(
+      `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(ACTION_GAINS_WORKSHEET)}/range(address='${ACTION_GAINS_RANGE}')`
+    );
+    
+    const values = result.values || [];
+    const actionGains = [];
+    
+    const targetActions = ['B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C9'];
+    
+    for (let i = 0; i < values.length; i++) {
+      const row = values[i];
+      if (!row || !row[0]) continue;
+      
+      const potentialActionName = String(row[0]).trim();
+      
+      if (targetActions.includes(potentialActionName)) {
+        
+        if (i + 4 < values.length) {
+            const gesRow = values[i + 4];
+            if (String(gesRow[0]).trim() !== 'GES') continue;
+            const rawValue = gesRow[3]; // Colonne F (Situation ex-post - Évolution absolue)
+            let cleanedValue = String(rawValue || 0).replace(/tCO2e/gi, '').replace(/\s/g, '').replace(',', '.');
+            const gesValue = parseFloat(cleanedValue) || 0;
+
+            const rawValuePrev = gesRow[1]; // Colonne D (Situation prévisionnelle - Évolution absolue)
+            let cleanedValuePrev = String(rawValuePrev || 0).replace(/tCO2e/gi, '').replace(/\s/g, '').replace(',', '.');
+            const gesPrev = parseFloat(cleanedValuePrev) || 0;
+            
+            actionGains.push({action: potentialActionName,ges: gesValue,ges_prev: gesPrev,type: gesValue <= 0 ? 'gain' : 'degradation'});
+        }
+      }
+    }
+    
+    actionGains.sort((a, b) => Math.abs(b.ges) - Math.abs(a.ges));
+    
+    res.json({ ok: true, data: actionGains });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
