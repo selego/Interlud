@@ -229,7 +229,6 @@ export default function Home() {
 
 function KeyIndicatorsCard({ globalGains }) {
   if (!globalGains) return <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[300px]"><Loader /></div>;
-  const { gesData, energieData, avancementTrajectoire } = globalGains;
 
   return (
     <div className="h-full rounded-2xl p-8 text-white relative overflow-hidden flex flex-col justify-between shadow-lg" style={{ background: 'linear-gradient(135deg, #2DAC6A 0%, #1D7E4F 100%)' }}>
@@ -241,16 +240,16 @@ function KeyIndicatorsCard({ globalGains }) {
         
         <div className="mt-4 mb-6">
           <div className="text-6xl font-bold tracking-tight mb-4">
-            {formatGES(gesData.evolutionCumuleeReel).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
+            {formatGES(globalGains.gesData.evolutionCumuleeReel).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
             <span className="text-3xl font-medium ml-2 opacity-80">
-               {gesData.evolutionCumuleeReel >= 1000000 ? 'MtCO₂e' : gesData.evolutionCumuleeReel >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
+               {globalGains.gesData.evolutionCumuleeReel >= 1000000 ? 'MtCO₂e' : globalGains.gesData.evolutionCumuleeReel >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
             </span>
           </div>
           
           <div className="inline-flex items-center bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/10">
             <span className="text-2xl mr-2">🌳</span>
             <span className="text-sm font-medium">
-              Équivalent à <strong className="text-white">{Math.round(gesData.evolutionCumuleeReel * 40)} d'arbres</strong> plantés pendant 10 ans
+              Équivalent à <strong className="text-white">{Math.round(globalGains.gesData.evolutionCumuleeReel * 40)} d'arbres</strong> plantés pendant 10 ans
             </span>
           </div>
         </div>
@@ -259,18 +258,18 @@ function KeyIndicatorsCard({ globalGains }) {
       <div className="relative z-10 grid grid-cols-3 gap-8 border-t border-white/20 pt-6">
         <div>
           <p className="text-green-100 text-sm mb-1 opacity-80">Énergie économisée</p>
-          <p className="text-2xl font-bold">{formatEnergie(energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
+          <p className="text-2xl font-bold">{formatEnergie(globalGains.energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
         </div>
         <div>
           <p className="text-green-100 text-sm mb-1 opacity-80">Avancement trajectoire 2030</p>
-          <p className="text-2xl font-bold">{avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} <span className="text-base font-medium opacity-80">%</span></p>
+          <p className="text-2xl font-bold">{globalGains.avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} <span className="text-base font-medium opacity-80">%</span></p>
         </div>
         <div>
           <p className="text-green-100 text-sm mb-1 opacity-80">Écart vs prévisionnel</p>
-          <p className={`text-2xl font-bold ${gesData.ecartAbsolu < 0 ? 'text-red-300' : 'text-green-300'}`}>
-            {gesData.ecartAbsolu > 0 ? '+' : ''}{formatGES(gesData.ecartAbsolu).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
+          <p className={`text-2xl font-bold ${globalGains.gesData.ecartAbsolu < 0 ? 'text-red-300' : 'text-green-300'}`}>
+            {globalGains.gesData.ecartAbsolu > 0 ? '+' : ''}{formatGES(globalGains.gesData.ecartAbsolu).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
              <span className="text-base font-medium opacity-80 ml-1">
-               {Math.abs(gesData.ecartAbsolu) >= 1000000 ? 'MtCO₂e' : Math.abs(gesData.ecartAbsolu) >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
+               {Math.abs(globalGains.gesData.ecartAbsolu) >= 1000000 ? 'MtCO₂e' : Math.abs(globalGains.gesData.ecartAbsolu) >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
             </span>
           </p>
         </div>
@@ -332,7 +331,7 @@ function ActionsDistribution({ synthese }) {
         </ResponsiveContainer>
 
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-4xl font-bold text-gray-900">{total}</span>
+          <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreated}</span>
           <span className="text-sm text-gray-500 font-medium">Total</span>
         </div>
       </div>
@@ -345,21 +344,15 @@ function EvolutionChart({ globalGains }) {
   
   if (!globalGains) return <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]"><Loader /></div>;
   
-  const { indicators } = globalGains;
   const selectedIndex = INDICATORS_CONFIG.findIndex(c => c.key === selectedIndicator);
-  const selectedData = indicators[selectedIndex];
   
-  const evolutionData = selectedData.yearlyPrev.map((item, i) => ({ 
-    year: item.year, 
-    previsionnel: item.value, 
-    reel: selectedData.yearlyReel[i]?.value || 0 
-  }));
+  const evolutionData =  globalGains.indicators[selectedIndex].yearlyPrev.map((item, i) => ({year: item.year, previsionnel: item.value, reel:  globalGains.indicators[selectedIndex].yearlyReel[i]?.value || 0 }));
 
   return (
     <div className="h-full card-shadow p-6 flex flex-col">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h3 className="font-bold text-font-primary text-xl">Évolution {selectedIndicator} ({selectedData.unit})</h3>
+          <h3 className="font-bold text-font-primary text-xl">Évolution {selectedIndicator} ({ globalGains.indicators[selectedIndex].unit})</h3>
           <p className="text-sm text-gray-500 mt-1">Impact de la charte sur la collectivité</p>
         </div>
         
@@ -409,7 +402,7 @@ function EvolutionChart({ globalGains }) {
                         <div key={index} className="flex items-center gap-2 text-sm mb-1">
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
                           <span className="text-gray-600">{entry.name}:</span>
-                          <span className="font-semibold">{entry.value.toLocaleString('fr-FR')} {selectedData.unit}</span>
+                          <span className="font-semibold">{entry.value.toLocaleString('fr-FR')} { globalGains.indicators[selectedIndex].unit}</span>
                         </div>
                       ))}
                     </div>
