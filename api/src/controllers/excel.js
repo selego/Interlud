@@ -34,7 +34,7 @@ const AGGREGATION_RANGES = [
 ];
 
 // Fetch aggregated gains for a specific action from "Agrégation" sheet
-router.post('/aggregation', async (req, res) => {
+router.post('/action_aggregation', async (req, res) => {
   try {
     const { excelFileId, action } = req.body;
     if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
@@ -48,7 +48,70 @@ router.post('/aggregation', async (req, res) => {
     const result = await graphFetch(
       `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='${actionConfig.range}')`
     );
-    res.json({ ok: true, data: result.values || [] });
+
+    const INDICATORS = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Énergie'];
+    const UNITS = ['tCO2e/an', 't/an', 't/an', 't/an', 't/an', 'GWh/an'];
+
+    const aggregationData = result.values || [];
+    let processedData = {
+      ges: { value: 0, trend: 0 },
+      energy: { value: 0, trend: 0 },
+      pollutants: { value: 0, count: 0 },
+      score: 0,
+      bestIndicator: { label: "-", val: -1 },
+      worstIndicator: { label: "-", val: 9999 },
+      indicators: [],
+    };
+
+    if (aggregationData && aggregationData.length > 2) {
+      const rows = aggregationData.slice(2);
+      if (rows[0]) {
+        processedData.ges.value = Math.abs(rows[0][4] || 0);
+        processedData.ges.trend = rows[0][5];
+      }
+
+      if (rows[5]) {
+        processedData.energy.value = Math.abs(rows[5][4] || 0);
+        processedData.energy.trend = rows[5][5];
+      }
+
+      [1, 2, 3, 4].forEach(idx => {
+        if (rows[idx] && typeof rows[idx][4] === 'number') {
+          processedData.pollutants.value += Math.abs(rows[idx][4]);
+          processedData.pollutants.count++;
+        }
+      });
+
+      let totalAchievement = 0;
+      let achievementCount = 0;
+
+      rows.forEach((row, index) => {
+        if (index > 5 || !row) return;
+        const label = row[0] || INDICATORS[index];
+
+        let achievement = 0;
+        let hasData = false;
+
+        if (typeof row[3] === 'number' && typeof row[5] === 'number' && row[3] !== 0) {
+          achievement = Math.min((row[5] / row[3]) * 100, 100);
+          achievement = (row[5] / row[3]) * 100;
+          hasData = true;
+        }
+
+        if (hasData) {
+          totalAchievement += Math.min(achievement, 100);
+          achievementCount++;
+          if (achievement > processedData.bestIndicator.val) processedData.bestIndicator = { label, val: achievement };
+          if (achievement < processedData.worstIndicator.val) processedData.worstIndicator = { label, val: achievement };
+        }
+
+        processedData.indicators.push({ label, unit: row[6] || UNITS[index], objective: row[3], real: row[5], objectiveVal: row[2], realVal: row[4], achievement: hasData ? achievement : null });
+      });
+
+      processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
+    }
+
+    res.json({ ok: true, data: processedData });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });
