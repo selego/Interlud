@@ -3,6 +3,8 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import validator from "validator"
+import Modal from "@/components/modal"
 
 const ROLE_LABELS = {
   user: "Utilisateur",
@@ -10,9 +12,16 @@ const ROLE_LABELS = {
   economic_actor: "Acteur économique"
 }
 
+const ROLE_COLORS = {
+  user: "bg-gray-100 text-gray-800",
+  admin: "bg-blue-100 text-blue-800",
+  economic_actor: "bg-green-100 text-green-800"
+}
+
 export default function List() {
   const navigate = useNavigate()
   const [users, setUsers] = useState([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const { collectivity } = useStore()
 
   const fetchUsers = async () => {
@@ -29,23 +38,30 @@ export default function List() {
     fetchUsers()
   }, [])
 
-  if ( users.length === 0 ) return (
-    <div className="p-8"> 
-          <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Membres de {collectivity?.name}</h1>
-      </div>
+  if (users.length === 0)
+    return (
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Membres de {collectivity?.name}</h1>
+          <button onClick={() => setIsModalOpen(true)} className="button-primary">
+            Inviter un membre
+          </button>
+        </div>
 
-      <div className="flex items-center justify-center">
-        <div className="text-lg text-gray-600">Aucun membre dans cette collectivité</div>
+        <div className="flex items-center justify-center">
+          <div className="text-lg text-gray-600">Aucun membre dans cette collectivité</div>
+        </div>
+        <InviteMemberModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} onSuccess={fetchUsers} />
       </div>
-    </div>
-  )
-
+    )
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Membres de {collectivity?.name}</h1>
+        <button onClick={() => setIsModalOpen(true)} className="button-primary">
+          Inviter un membre
+        </button>
       </div>
 
       <table className="w-full overflow-hidden card-shadow">
@@ -65,7 +81,9 @@ export default function List() {
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.name || "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">
-                  <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">{ROLE_LABELS[collectivityData?.role || "user"]}</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${ROLE_COLORS[collectivityData?.role || "user"]}`}>
+                    {ROLE_LABELS[collectivityData?.role || "user"]}
+                  </span>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-600">
                   <span
@@ -80,12 +98,97 @@ export default function List() {
                     {collectivityData?.status === "approved" ? "Approuvé" : collectivityData?.status === "pending" ? "En attente" : "Rejeté"}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm"></td>
               </tr>
             )
           })}
         </tbody>
       </table>
+      <InviteMemberModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} onSuccess={fetchUsers} />
     </div>
+  )
+}
+
+const InviteMemberModal = ({ isOpen, onClose, collectivity, onSuccess }) => {
+  const [email, setEmail] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleInvite = async () => {
+    try {
+      if (!validator.isEmail(email)) return toast.error("Veuillez entrer un email valide")
+
+      setLoading(true)
+
+      const { ok, code } = await api.post("/user/invite", {
+        email: email,
+        collectivity
+      })
+      if (!ok) {
+        return toast.error(code || "Une erreur est survenue")
+      }
+
+      toast.success("Invitation envoyée avec succès !")
+      setEmail("")
+      onClose()
+      if (onSuccess) onSuccess()
+    } catch (error) {
+      if (error.code === "EMAIL_ALREADY_EXIST") return toast.error("Cette adresse e-mail existe déjà.")
+      toast.error("Une erreur est survenue")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={() => {
+        setEmail("")
+        onClose()
+      }}
+      className="max-w-xl"
+    >
+      <div className="p-8 gap-2">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Inviter un membre</h2>
+        </div>
+
+        <div className="mb-2">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+          <input
+            type="email"
+            placeholder="Entrez l'email de la personne à inviter"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                handleInvite()
+              }
+            }}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+          />
+        </div>
+
+        <div className="text-xs text-gray-600 mb-6">
+          La personne recevra un email d'invitation pour rejoindre la collectivité <strong>{collectivity?.name}</strong>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => {
+              setEmail("")
+              onClose()
+            }}
+            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            disabled={loading}
+          >
+            Annuler
+          </button>
+          <button onClick={handleInvite} className="button-primary" disabled={!email.trim() || loading}>
+            {loading ? "Envoi en cours..." : "Envoyer l'invitation"}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

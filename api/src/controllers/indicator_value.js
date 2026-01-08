@@ -38,7 +38,13 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const action = await Action.findById(indicatorValue.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const collectivity = await Collectivity.findById(action.collectivity_id);
+    let collectivity = null;
+    if (action.owner === 'economic_actor') {
+      const economicActor = await EconomicActor.findById(action.economic_actor_id);
+      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      collectivity = economicActor.collectivities.find((c) => c.id === action.collectivity_id);
+    }
+    if (action.owner === 'collectivity') collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     action.last_modif_by_id = req.user._id;
@@ -241,6 +247,8 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
           action_id: economicActorAction._id,
           action_name: economicActorAction.name,
           indicator_value_collectivity_id: sourceIndicatorValue._id,
+          indicator_excel_id: sourceIndicatorValue.indicator_excel_id,
+          display_conditions: sourceIndicatorValue.display_conditions || [],
           value: { text: null, number: null, radio: null, checkbox: [] },
           _id: undefined,
           __v: undefined,

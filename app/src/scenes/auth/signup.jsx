@@ -6,17 +6,27 @@ import store from "@/services/store"
 import api from "@/services/api"
 
 export default () => {
-  const [values, setValues] = useState({ name: "", email: "", password: "", entityName: "" })
+  const [values, setValues] = useState({ name: "", email: "", password: "", entityName: "", last_name: "", first_name: "" })
+  const [errors, setErrors] = useState({ email: "", password: "", entityName: "", first_name: "", last_name: "", acceptedTerms: "" })
   const [accountType, setAccountType] = useState("user")
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const { user, setUser, setActionRights, setCollectivity, setEconomicActor } = store()
   const navigate = useNavigate()
 
   const send = async () => {
+    if (!values.email) return setErrors({ ...errors, email: "Ce champ est requis" })
+    if (!values.password) return setErrors({ ...errors, password: "Ce champ est requis" })
+    if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
+    if (!values.last_name) return setErrors({ ...errors, last_name: "Ce champ est requis" })
+    if (!values.entityName && accountType === "economic_actor") return setErrors({ ...errors, entityName: "Ce champ est requis" })
+    if (!acceptedTerms) return setErrors({ ...errors, acceptedTerms: "Vous devez accepter les conditions d'utilisation" })
+
     const payload = {
       email: values.email,
       password: values.password,
-      role: accountType
+      role: accountType,
+      name: `${values.first_name} ${values.last_name}`
     }
 
     if (accountType === "economic_actor") {
@@ -80,7 +90,7 @@ export default () => {
             {accountType === "economic_actor" && (
               <div className="mb-6">
                 <label htmlFor="entityName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom de l'entité
+                  Nom de l'entité <span className="text-red-500">*</span>
                 </label>
                 <input
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
@@ -91,12 +101,48 @@ export default () => {
                   placeholder="Nom de votre structure"
                   required={accountType === "economic_actor"}
                 />
+                {errors.entityName && <p className="text-sm text-red-500 mt-1">{errors.entityName}</p>}
               </div>
             )}
 
+            <div className="flex gap-4">
+              <div className="mb-6">
+                <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-2">
+                  Nom <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+                  name="last_name"
+                  type="text"
+                  id="last_name"
+                  value={values.last_name}
+                  onChange={(e) => setValues({ ...values, last_name: e.target.value })}
+                  placeholder="Votre nom"
+                  required
+                />
+                {errors.last_name && <p className="text-sm text-red-500 mt-1">{errors.last_name}</p>}
+              </div>
+              <div className="mb-6">
+                <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-2">
+                  Prénom <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+                  name="first_name"
+                  type="text"
+                  id="first_name"
+                  value={values.first_name}
+                  onChange={(e) => setValues({ ...values, first_name: e.target.value })}
+                  placeholder="Votre prénom"
+                  required
+                />
+                {errors.first_name && <p className="text-sm text-red-500 mt-1">{errors.first_name}</p>}
+              </div>
+            </div>
+
             <div className="mb-6">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Adresse e-mail
+                Adresse e-mail <span className="text-red-500">*</span>
               </label>
               <input
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
@@ -108,11 +154,12 @@ export default () => {
                 placeholder="votre@email.fr"
                 required
               />
+              {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
             </div>
 
             <div className="mb-6">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Mot de passe
+                Mot de passe <span className="text-red-500">*</span>
               </label>
               <input
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
@@ -124,6 +171,34 @@ export default () => {
                 placeholder="••••••••"
                 required
               />
+              {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
+            </div>
+
+            <div className="mb-6">
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 mr-3 h-4 w-4 border-gray-300 rounded focus:ring-primary-green"
+                  style={{ accentColor: "#2DAC6A" }}
+                  checked={acceptedTerms}
+                  onChange={(e) => {
+                    setAcceptedTerms(e.target.checked)
+                    if (errors.acceptedTerms) setErrors({ ...errors, acceptedTerms: "" })
+                  }}
+                />
+                <span className="text-sm text-gray-700">
+                  J'accepte les{" "}
+                  <Link to="/conditions" className="text-primary-green hover:underline" target="_blank">
+                    conditions d'utilisation
+                  </Link>
+                  {" "}et la{" "}
+                  <Link to="/politique" className="text-primary-green hover:underline" target="_blank">
+                    politique de confidentialité
+                  </Link>
+                  {" "}<span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.acceptedTerms && <p className="text-sm text-red-500 mt-1 ml-7">{errors.acceptedTerms}</p>}
             </div>
 
             <button type="submit" className="button-primary w-full">

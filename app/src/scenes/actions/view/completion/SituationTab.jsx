@@ -27,7 +27,28 @@ const sortIndicatorValues = (a, b) => {
   return (a.indicator_name || "").toLowerCase().localeCompare((b.indicator_name || "").toLowerCase());
 };
 
-export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue, action }) {
+export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
+  const [economicActorData, setEconomicActorData] = useState({});
+
+  const fetchEconomicActorData = async () => {
+    try {
+    const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_ids: indicatorValues.map(iv => iv._id), owner: 'economic_actor', limit: 10000 });
+    if (!ok) return toast.error(code || "Une erreur est survenue");
+    const grouped = {};
+    data.forEach(iv => {
+      if (!grouped[iv.indicator_value_collectivity_id]) grouped[iv.indicator_value_collectivity_id] = [];
+      grouped[iv.indicator_value_collectivity_id].push(iv);
+    });
+    setEconomicActorData(grouped);
+  } catch (error) {
+    toast.error("Une erreur est survenue");
+  }
+  };
+
+  useEffect(() => {
+    fetchEconomicActorData();
+  }, [indicatorValues]);
+
   useEffect(() => {
     if (selectedIndicatorValue) {
       const element = document.getElementById(`indicator-${selectedIndicatorValue._id}`);
@@ -80,7 +101,15 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
       </div>
 
       <div className="space-y-4">
-        {[...indicatorValues].sort(sortIndicatorValues).map(indicatorValue => {
+        {[...indicatorValues]
+          .filter(iv => {
+            if (!iv.display_indicator_excel_id) return true;
+            const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
+            if (!conditionIndicator) return true;
+            return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
+          })
+          .sort(sortIndicatorValues)
+          .map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           
           return (
@@ -143,6 +172,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
 
               <EconomicActorValues 
                 indicatorValue={indicatorValue} 
+                economicActorData={economicActorData[indicatorValue._id] || []}
                 onApplyValue={(value) => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: value } })}
               />
             </div>
@@ -154,32 +184,14 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
   )
 }
 
-function EconomicActorValues({ indicatorValue, onApplyValue }) {
-  const [numberValues, setNumberValues] = useState(0);
-  const [aggregatedValue, setAggregatedValue] = useState(null);
+function EconomicActorValues({ indicatorValue, economicActorData, onApplyValue }) {
+  const filledValues = economicActorData.filter(isIndicatorValueFilled);
 
-  const fetchEconomicActorValues = async () => {
-      try {
-        const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_id: indicatorValue._id, owner: 'economic_actor', limit: 10000 });
-        if (!ok) return toast.error(code || "Une erreur est survenue");
-        const filledValues = data.filter(isIndicatorValueFilled);
-
-        let aggregated = null;
-        if (filledValues.length >= 3 && indicatorValue.indicator_type === 'number') {
-          const numbers = filledValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined);
-          if (numbers.length > 0) aggregated = indicatorValue.indicator_value_unit === '%'? numbers.reduce((acc, val) => acc + val, 0) / numbers.length: numbers.reduce((acc, val) => acc + val, 0);
-        }
-
-        setNumberValues(filledValues.length);
-        setAggregatedValue(aggregated);
-      } catch (error) {
-        toast.error("Une erreur est survenue");
-      }
-  };
-
-  useEffect(() => {
-    fetchEconomicActorValues();
-  }, [indicatorValue._id]);
+  let aggregatedValue = null;
+  if (filledValues.length >= 3 && indicatorValue.indicator_type === 'number') {
+    const numbers = filledValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined);
+    if (numbers.length > 0)  aggregatedValue = indicatorValue.indicator_value_unit === '%' ? numbers.reduce((acc, val) => acc + val, 0) / numbers.length : numbers.reduce((acc, val) => acc + val, 0);
+  }
 
   return (
     <div className="flex flex-col">
@@ -187,9 +199,9 @@ function EconomicActorValues({ indicatorValue, onApplyValue }) {
         <label className="block text-xs font-medium text-gray-600">
           Valeurs Acteurs économiques
         </label>
-        {numberValues >= 3 ? (
+        {filledValues.length >= 3 ? (
           <>
-            <Tooltip content={`Valeur agrégée de ${numberValues} acteur${numberValues > 1 ? 's' : ''} économique${numberValues > 1 ? 's' : ''}`} />
+            <Tooltip content={`Valeur agrégée de ${filledValues.length} acteur${filledValues.length > 1 ? 's' : ''} économique${filledValues.length > 1 ? 's' : ''}`} />
             <Tooltip content="Appliquer cette valeur">
               <button
                 onClick={() => onApplyValue(aggregatedValue)}
