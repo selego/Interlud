@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
-import { FiArrowLeft, FiDownload, FiPlus, FiLayers, FiZap, FiShield, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiTrendingDown, FiTarget } from "react-icons/fi"
+import { FiArrowLeft, FiDownload, FiPlus, FiLayers, FiZap, FiShield, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiTrendingDown, FiTarget, FiEdit } from "react-icons/fi"
 import { HiCheckCircle } from "react-icons/hi2"
 import Loader from "@/components/loader"
 
@@ -121,6 +121,13 @@ export default function Dashboard({ action }) {
                 <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                     <FiDownload size={16} />
                     Exporter
+                </button>
+                <button 
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    onClick={() => navigate(`/actions/${action._id}/completion`)}
+                >
+                    <FiEdit size={16} />
+                    Compléter
                 </button>
                 {(isAdmin || right?.can_write || isEconomicActorAsRight) && (
                     <button 
