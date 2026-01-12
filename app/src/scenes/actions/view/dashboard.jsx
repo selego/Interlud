@@ -34,6 +34,40 @@ export default function Dashboard({ action }) {
     return val !== null && val !== undefined && val !== ""
   }
 
+  const shouldDisplayIndicator = (indicatorValue, allIndicatorValues) => {
+    if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
+
+    const results = indicatorValue.display_condition.conditions.map((cond) => {
+      const sourceValueObj = allIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
+
+      if (!sourceValueObj) return false
+
+      const val = sourceValueObj.value?.[sourceValueObj.indicator_type]
+
+      let isMatch = false
+        if (cond.type === "equals") {
+          isMatch = val == cond.value
+          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify(val.sort()) === JSON.stringify(cond.value.sort())
+        }
+        if (cond.type === "contains") {
+          if (Array.isArray(val)) isMatch = val.includes(cond.value)
+          if (typeof val === "string") isMatch = val.includes(cond.value)
+        }
+        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
+        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
+        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
+        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
+        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
+        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
+
+      if (cond.negate) isMatch = !isMatch
+      return isMatch
+    })
+
+    if (indicatorValue.display_condition.operator === "OR") return results.some((r) => r)
+    return results.every((r) => r)
+  }
+
   const calculateStats = (data) => {
     const bySituation = {
       init: { filled: data.filter((v) => v.situation === "init" && isIndicatorValueFilled(v)).length, total: data.filter((v) => v.situation === "init").length },
@@ -48,7 +82,8 @@ export default function Dashboard({ action }) {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setStats(calculateStats(data))
+      const filteredData = data.filter((iv) => shouldDisplayIndicator(iv, data))
+      setStats(calculateStats(filteredData))
     } catch (error) {
       console.error(error)
       toast.error("Une erreur est survenue lors du chargement des indicateurs")
@@ -227,39 +262,6 @@ export default function Dashboard({ action }) {
                         })}
                     </div>
                 </div>
-
-                    <div className="bg-gray-900 rounded-2xl p-8 text-white card-shadow">
-                        <div className="mb-6">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Résumé</h3>
-                            
-                            <div className="space-y-4">
-                                <div>
-                                    <div className="flex items-center gap-2 text-primary-green mb-1">
-                                        <FiTarget size={14} />
-                                        <span className="text-xs font-medium">Meilleur résultat</span>
-                                    </div>
-                                    <div className="text-lg font-bold">
-                                        {processedData.bestIndicator.label} <span className="text-primary-green">— {Math.round(processedData.bestIndicator.val)}% atteint</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center gap-2 text-primary-green/70 mb-1">
-                                        <FiAlertCircle size={14} />
-                                        <span className="text-xs font-medium">À améliorer</span>
-                                    </div>
-                                    <div className="text-lg font-bold">
-                                        {processedData.worstIndicator.label} <span className="text-primary-green/60">— {Math.round(processedData.worstIndicator.val)}% atteint</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div className="pt-4 border-t border-gray-800 flex justify-between items-center text-xs text-gray-400">
-                            <span>Indicateurs</span>
-                            <span className="text-white font-bold">{processedData.indicators.length} suivis</span>
-                    </div>
-                </div>
             </div>
         </div>
       </div>
@@ -267,10 +269,7 @@ export default function Dashboard({ action }) {
   )
 }
 
-const COLORS = {
-  primary: { base: "text-primary-green",bg: "bg-primary-green",light: "bg-[#D9EFE3]",border: "border-primary-green"},
-  gradient: {start: "#2DAC6A",end: "#D9EFE3"}
-}
+const COLORS = { primary: { base: "text-primary-green",bg: "bg-primary-green",light: "bg-[#D9EFE3]",border: "border-primary-green"},gradient: {start: "#2DAC6A",end: "#D9EFE3"}}
 
 function TopCard({ label, value, unit, trend, subLabel }) {
     const trendIsPositive = trend > 0;
@@ -332,7 +331,6 @@ function ProgressBar({ indicator }) {
     const config = { icon: label.substring(0, 2), bg: "bg-[#D9EFE3]", color: "bg-primary-green" };
 
     const icons = { GES: "GES", PM: "PM", NOx: "NOx", HC: "HC", CO: "CO", Énergie: "Énergie" };
-    const iconText = icons[label] || label.substring(0, 2);
 
     let status = "En retard";
     let statusClass = "text-primary-green/60"
@@ -344,10 +342,7 @@ function ProgressBar({ indicator }) {
     if (!objective && objective !== 0) return null
 
     return (
-        <div className="flex items-center gap-6 group">
-            <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center text-xs font-bold ${config.bg} text-primary-green transition-colors group-hover:bg-primary-green group-hover:text-white`}>
-                {iconText}
-            </div>
+        <div className="flex items-center gap-6">
             
             <div className="flex-1 space-y-2">
                 <div className="flex justify-between items-center mb-1">
@@ -362,7 +357,7 @@ function ProgressBar({ indicator }) {
                 </div>
 
                 <div className="flex justify-between text-xs font-medium mt-1">
-                    <span className="text-primary-green">Réel: {formatBigNumber(realVal)} {indicator.unit}</span>
+                    <span className="text-gray-400">Réel: {formatBigNumber(realVal)} {indicator.unit}</span>
                     <div className="text-right">
                         <span className="text-gray-400 mr-4">Objectif: {formatBigNumber(objectiveVal)} {indicator.unit}</span>
                     </div>
@@ -373,7 +368,6 @@ function ProgressBar({ indicator }) {
                  <div className={`text-xl font-bold ${statusClass}`}>
                      {Math.round(achievement)}%
                  </div>
-                 <div className="text-xs text-gray-400">{status}</div>
             </div>
         </div>
     )

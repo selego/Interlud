@@ -102,11 +102,47 @@ export default function Completion({ action }) {
   }
 
   const getSituationProgress = (situationKey) => {
-    const values = allIndicatorValues.filter((iv) => iv.situation === situationKey)
+    const values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv))
     if (values.length === 0) return 0
     const filled = values.filter(isIndicatorValueFilled).length
     return Math.round((filled / values.length) * 100)
   }
+
+  const shouldDisplayIndicator = (indicatorValue) => {
+    if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
+
+    const results = indicatorValue.display_condition.conditions.map((cond) => {
+      const sourceValueObj = allIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
+
+      if (!sourceValueObj) return false
+
+      const val = sourceValueObj.value?.[sourceValueObj.indicator_type]
+
+      let isMatch = false
+        if (cond.type === "equals") {
+          isMatch = val == cond.value
+          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify(val.sort()) === JSON.stringify(cond.value.sort())
+        }
+        if (cond.type === "contains") {
+          if (Array.isArray(val)) isMatch = val.includes(cond.value)
+          if (typeof val === "string") isMatch = val.includes(cond.value)
+        }
+        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
+        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
+        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
+        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
+        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
+        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
+
+      if (cond.negate) isMatch = !isMatch
+      return isMatch
+    })
+
+    if (indicatorValue.display_condition.operator === "OR") return results.some((r) => r)
+    return results.every((r) => r)
+  }
+
+  const allDisplayedIndicatorValues = allIndicatorValues.filter(shouldDisplayIndicator)
 
   useEffect(() => {
     fetchIndicatorsValues()
@@ -146,9 +182,17 @@ export default function Completion({ action }) {
           </div>
 
           <div className="flex gap-2 items-center ml-14">
-            <ProgressCircle percentage={Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)} size={20} />
+            <ProgressCircle
+              percentage={
+                allDisplayedIndicatorValues.length > 0 ? Math.round((allDisplayedIndicatorValues.filter(isIndicatorValueFilled).length / allDisplayedIndicatorValues.length) * 100) : 0
+              }
+              size={20}
+            />
             <p className="text-sm text-gray-900">
-              Complété à <strong>{Math.round((allIndicatorValues.filter(isIndicatorValueFilled).length / allIndicatorValues.length) * 100)}%</strong>
+              Complété à{" "}
+              <strong>
+                {allDisplayedIndicatorValues.length > 0 ? Math.round((allDisplayedIndicatorValues.filter(isIndicatorValueFilled).length / allDisplayedIndicatorValues.length) * 100): 0}%
+              </strong>
             </p>
             <p className="text-sm text-gray-600">
               - Dernière mise à jour le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong>
@@ -226,7 +270,7 @@ export default function Completion({ action }) {
                 <h3 className="text-lg font-semibold text-gray-900">{SITUATION_TABS.find((tab) => tab.key === activeTab)?.label}</h3>
               </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
-                <IndicatorsList indicatorValues={indicatorValues} onSelectIndicatorValue={setSelectedIndicatorValue} />
+                <IndicatorsList indicatorValues={indicatorValues.filter(shouldDisplayIndicator)} onSelectIndicatorValue={setSelectedIndicatorValue} />
               </div>
             </div>
           </div>
@@ -234,7 +278,7 @@ export default function Completion({ action }) {
           <div className="flex-1">
             <SituationTab
               situation={activeTab}
-              indicatorValues={indicatorValues}
+              indicatorValues={indicatorValues.filter(shouldDisplayIndicator)}
               onUpdate={() => {
                 fetchIndicatorsValues()
                 fetchAllIndicatorsValues()
