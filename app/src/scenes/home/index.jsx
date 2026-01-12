@@ -247,9 +247,9 @@ function KeyIndicatorsCard({ globalGains }) {
           </div>
           
           <div className="inline-flex items-center bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/10">
-            <span className="text-2xl mr-2">🌳</span>
+            <span className="text-2xl mr-2">✈️</span>
             <span className="text-sm font-medium">
-              Équivalent à <strong className="text-white">{Math.round(globalGains.gesData.evolutionCumuleeReel * 40)} d'arbres</strong> plantés pendant 10 ans
+              Équivalent à <strong className="text-white">{Math.round((globalGains.gesData.evolutionCumuleeReel / 250)*2).toLocaleString('fr-FR')} vols transatlantiques évités</strong>
             </span>
           </div>
         </div>
