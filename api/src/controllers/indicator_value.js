@@ -240,7 +240,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
         if (sourceIndicatorValue.action_id !== economicActorAction.action_collectivity_id) continue;
 
         payloads.push({
-          ...sourceIndicatorValue.toObject(),
+          ...sourceIndicatorValue,
           owner: 'economic_actor',
           economic_actor_id: economic_actor._id,
           economic_actor_name: economic_actor.name,
@@ -248,7 +248,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
           action_name: economicActorAction.name,
           indicator_value_collectivity_id: sourceIndicatorValue._id,
           indicator_excel_id: sourceIndicatorValue.indicator_excel_id,
-          display_conditions: sourceIndicatorValue.display_conditions || [],
+          display_condition: sourceIndicatorValue.display_condition || undefined,
           value: { text: null, number: null, radio: null, checkbox: [] },
           _id: undefined,
           __v: undefined,
