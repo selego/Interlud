@@ -617,7 +617,7 @@ function ActionContributionSection({ collectivity }) {
     if (!collectivity?.excelFileId) return;
     try {
       setIsLoading(true);
-      const { ok, data, code } = await api.post('/excel/action-gains', { excelFileId: collectivity.excelFileId });
+      const { ok, data, code } = await api.post('/excel/action-contribution', { excelFileId: collectivity.excelFileId });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setActionGains(data);
     } catch (error) {
