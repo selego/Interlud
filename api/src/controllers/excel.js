@@ -3,17 +3,23 @@ const router = express.Router();
 const { capture } = require('../services/sentry');
 const { graphFetch, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
 
-const FIXED_RANGES = [
-  { name: 'gains_environnementaux', range: 'C13:H18' },
-  { name: 'emissions_GES', range: 'E26:H29' },
-  { name: 'emissions_PM', range: 'J26:M29' },
-  { name: 'emissions_NOx', range: 'O26:R29' },
-  { name: 'emissions_HC', range: 'T26:W29' },
-  { name: 'emissions_CO', range: 'Y26:AB29' },
-  { name: 'emissions_Energie', range: 'AD26:AG29' },
-  { name: 'calculs_Surface_de_la_ZFE', range: 'E39:H41' },
-  { name: 'calculs_Seuil_de_la_ZFE', range: 'K39:N41' },
-  { name: 'calculs_Part_des_distance_effectuée_dans_la_ZFE', range: 'P39:S41' },
+// Ranges for "Agrégation des gains" sheet - gains per action
+// Each action block has 2 header rows + 6 data rows (GES, PM, NOx, HC, CO, Énergie)
+// Blocks are 11 rows apart
+const AGGREGATION_WORKSHEET = 'Agrégation';
+const AGGREGATION_RANGES = [
+  { name: 'B2', range: 'B46:H53' },
+  { name: 'B3', range: 'B57:H64' },
+  { name: 'B4', range: 'B68:H75' },
+  { name: 'C1', range: 'B79:H86' },
+  { name: 'C2', range: 'B90:H97' },
+  { name: 'C3', range: 'B101:H108' },
+  { name: 'C4', range: 'B112:H119' },
+  { name: 'C5', range: 'B123:H130' },
+  { name: 'C6', range: 'B134:H141' },
+  { name: 'C7', range: 'B145:H152' },
+  { name: 'C8', range: 'B156:H163' },
+  { name: 'C9', range: 'B167:H174' },
 ];
 
 const AGGREGATION_WORKSHEET = 'Agrégation';
@@ -142,19 +148,85 @@ router.post('/action-gains', async (req, res) => {
 });
 
 router.post('/values', async (req, res) => {
+// Fetch aggregated gains for a specific action from "Agrégation" sheet
+router.post('/action_aggregation', async (req, res) => {
   try {
-    const { worksheetName, excelFileId } = req.body;
-    if (!worksheetName) return res.json({ ok: false, data: { error: 'worksheetName is required' } });
+    const { excelFileId, action } = req.body;
     if (!excelFileId) return res.json({ ok: false, data: { error: 'excelFileId is required' } });
+    if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
+
+    // Find the range for this action
+    const actionConfig = AGGREGATION_RANGES.find((r) => r.name === action);
+    if (!actionConfig) return res.json({ ok: false, data: { error: `Action '${action}' not found` } });
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-    const ranges = await Promise.all(
-      FIXED_RANGES.map(async (descriptor) => {
-        const result = await graphFetch(`/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${worksheetName}/range(address='${descriptor.range}')`);
-        return { name: descriptor.name, values: result.values || [] };
-      })
+    const result = await graphFetch(
+      `/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='${actionConfig.range}')`
     );
-    res.json({ ok: true, data: ranges });
+
+    const INDICATORS = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Énergie'];
+    const UNITS = ['tCO2e/an', 't/an', 't/an', 't/an', 't/an', 'GWh/an'];
+
+    const aggregationData = result.values || [];
+    let processedData = {
+      ges: { value: 0, trend: 0 },
+      energy: { value: 0, trend: 0 },
+      pollutants: { value: 0, count: 0 },
+      score: 0,
+      bestIndicator: { label: "-", val: -1 },
+      worstIndicator: { label: "-", val: 9999 },
+      indicators: [],
+    };
+
+    if (aggregationData && aggregationData.length > 2) {
+      const rows = aggregationData.slice(2);
+      if (rows[0]) {
+        processedData.ges.value = Math.abs(rows[0][4] || 0);
+        processedData.ges.trend = rows[0][5];
+      }
+
+      if (rows[5]) {
+        processedData.energy.value = Math.abs(rows[5][4] || 0);
+        processedData.energy.trend = rows[5][5];
+      }
+
+      [1, 2, 3, 4].forEach(idx => {
+        if (rows[idx] && typeof rows[idx][4] === 'number') {
+          processedData.pollutants.value += Math.abs(rows[idx][4]);
+          processedData.pollutants.count++;
+        }
+      });
+
+      let totalAchievement = 0;
+      let achievementCount = 0;
+
+      rows.forEach((row, index) => {
+        if (index > 5 || !row) return;
+        const label = row[0] || INDICATORS[index];
+
+        let achievement = 0;
+        let hasData = false;
+
+        if (typeof row[3] === 'number' && typeof row[5] === 'number' && row[3] !== 0) {
+          achievement = Math.min((row[5] / row[3]) * 100, 100);
+          achievement = (row[5] / row[3]) * 100;
+          hasData = true;
+        }
+
+        if (hasData) {
+          totalAchievement += Math.min(achievement, 100);
+          achievementCount++;
+          if (achievement > processedData.bestIndicator.val) processedData.bestIndicator = { label, val: achievement };
+          if (achievement < processedData.worstIndicator.val) processedData.worstIndicator = { label, val: achievement };
+        }
+
+        processedData.indicators.push({ label, unit: row[6] || UNITS[index], objective: row[3], real: row[5], objectiveVal: row[2], realVal: row[4], achievement: hasData ? achievement : null });
+      });
+
+      processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
+    }
+
+    res.json({ ok: true, data: processedData });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });

@@ -18,7 +18,11 @@ export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const { collectivity } = useStore()
+  const { collectivity, user } = useStore()
+
+
+    const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === collectivity._id && c.role === "admin")
+
 
   const fetchActions = async () => {
     if (!collectivity?._id) return;
@@ -51,12 +55,14 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
-        <button
+        { isAdmin && (
+          <button
           onClick={() => setIsModalOpen(true)}
           className="button-primary"
         >
-          Ajouter
-        </button>
+            Ajouter
+          </button>
+        )}
       </div>
       
       <table className="w-full overflow-hidden card-shadow">

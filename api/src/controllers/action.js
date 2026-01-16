@@ -79,11 +79,6 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
   try {
     let query = { owner: 'collectivity' };
 
-    if (req.body.type) {
-      query.type = req.body.type;
-      if (req.body.type === 'global') delete query.owner;
-    }
-
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
@@ -94,10 +89,18 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       query.owner = 'economic_actor';
     }
 
+    if (req.body.type) {
+      query.type = req.body.type;
+      if (req.body.type === 'global') {
+        delete query.owner;
+        delete query.economic_actor_id;
+      }
+    }
+
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Action.countDocuments(query);
-    const data = await Action.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
+    const data = await Action.find(query).sort({ name: 1 }).skip(skip).limit(limit);
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
     capture(error);
@@ -175,7 +178,10 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
           indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
         };
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
         createdIndicatorValues.push(indicatorValue);
       }
     }
@@ -314,7 +320,10 @@ router.post('/initialize_indicator_values', passport.authenticate(['admin', 'use
         indicator_sub_category_id: indicator.indicator_sub_category_id,
         indicator_sub_category_name: indicator.indicator_sub_category_name,
         indicator_value_unit: indicator.value_unit,
+        indicator_excel_id: indicator.excel_indicator_id,
       };
+      const displayCondition = indicator.display_condition?.[situation];
+      if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
       createdIndicatorValues.push(indicatorValue);
     }
     await IndicatorValue.insertMany(createdIndicatorValues);

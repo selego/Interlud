@@ -11,7 +11,7 @@ const S3_ENDPOINT = process.env.S3_ENDPOINT || "";
 const S3_ACCESSKEYID = process.env.S3_ACCESSKEYID || "";
 const S3_SECRETACCESSKEY = process.env.S3_SECRETACCESSKEY || "";
 
-const BREVO_KEY = process.env.BREVO_KEY || "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";
+const BREVO_KEY = process.env.BREVO_KEY || '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';
 
 const CONFIG = {
   ENVIRONMENT,

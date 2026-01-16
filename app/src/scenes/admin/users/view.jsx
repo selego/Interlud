@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
-import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft } from "react-icons/fi"
+import { FiUser, FiShield, FiClock, FiEye, FiEyeOff, FiHome, FiX, FiArrowLeft, FiSend } from "react-icons/fi"
 
 import Modal from "@/components/modal"
 import api from "@/services/api"
@@ -108,10 +108,25 @@ export default function View() {
 
 function UserInfoTab({ user, setUser }) {
   const navigate = useNavigate()
-  const [values, setValues] = useState({ name: user?.name || "", email: user?.email || "", role: user.role || "", status: user.status || "" })
+  const [modalOpen, setModalOpen] = useState(false)
+
   const onUpdate = async () => {
     try {
-      const { ok, data, code } = await api.put(`/user/${user._id}`, values)
+      if (user.role === "economic_actor" && !user.economic_actor_id) return toast.error("Veuillez sélectionner un acteur économique")
+
+      const payload = {
+        ...user,
+        economic_actor_id: user.economic_actor_id,
+        economic_actor_name: user.economic_actor_name,
+        collectivities: user.collectivities
+      }
+
+      if (user.role !== "economic_actor") {
+        payload.economic_actor_id = null
+        payload.economic_actor_name = null
+      }
+
+      const { ok, data, code } = await api.put(`/user/${user._id}`, payload)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setUser(data)
       toast.success("Utilisateur mis à jour")
@@ -140,19 +155,19 @@ function UserInfoTab({ user, setUser }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="w-full">
           <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-          <input className="w-full input-primary" value={values.name} onChange={(e) => setValues({ ...values, name: e.target.value })} placeholder="Nom de l'utilisateur" />
+          <input className="w-full input-primary" value={user.name} onChange={(e) => setUser({ ...user, name: e.target.value })} placeholder="Nom de l'utilisateur" />
         </div>
 
         <div className="w-full">
           <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
-          <input className="w-full input-primary" value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} placeholder="email@exemple.fr" />
+          <input className="w-full input-primary" value={user.email} onChange={(e) => setUser({ ...user, email: e.target.value })} placeholder="email@exemple.fr" />
         </div>
 
         <div className="w-full">
           <label className="block text-sm font-medium text-gray-700 mb-2">Rôle</label>
           <Select
-            value={values.role}
-            onChange={(value) => setValues({ ...values, role: value })}
+            value={user.role}
+            onChange={(value) => setUser({ ...user, role: value })}
             options={[
               { value: "admin", label: "Admin" },
               { value: "user", label: "User" },
@@ -164,20 +179,65 @@ function UserInfoTab({ user, setUser }) {
         <div className="w-full">
           <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
           <Select
-            value={values.status || "active"}
-            onChange={(value) => setValues({ ...values, status: value })}
+            value={user.status || "active"}
+            onChange={(value) => setUser({ ...user, status: value })}
             options={[
               { value: "active", label: "Actif" },
               { value: "inactive", label: "Inactif" }
             ]}
           />
         </div>
+
+        {user.role === "economic_actor" && (
+          <div className="w-full md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Acteur économique</label>
+            {user.economic_actor_id ? (
+              <div className="flex items-center justify-between p-4 bg-deco-background-green border border-secondary-green rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary-green rounded-full flex items-center justify-center">
+                    <FiUser className="text-white" size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">{user.economic_actor_name}</h3>
+                    <p className="text-xs text-gray-600">Acteur économique associé</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setModalOpen(true)}
+                    className="px-3 py-1.5 text-sm text-primary-green hover:bg-primary-green hover:text-white rounded-lg transition-colors"
+                  >
+                    Changer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-amber-50 border-2 border-amber-200 border-dashed rounded-lg">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <FiUser className="text-amber-600" size={24} />
+                </div>
+                <p className="text-sm text-gray-600 mb-3">Aucun acteur économique associé</p>
+                <button onClick={() => setModalOpen(true)} className="button-primary">
+                  Ajouter un acteur économique
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        <ResetPassword userId={user._id} />
         <div className="flex items-center gap-3">
-          <button className="button-primary" onClick={onUpdate}>
+          {user.role === "admin" && <ResetPassword user={user} />}
+          <InviteButton user={user} />
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            className="button-primary"
+            onClick={onUpdate}
+            disabled={user.role === "economic_actor" && !user.economic_actor_id}
+            title={user.role === "economic_actor" && !user.economic_actor_id ? "Veuillez sélectionner un acteur économique" : ""}
+          >
             Enregistrer
           </button>
           <button className="button-primary bg-red-600" onClick={onDelete}>
@@ -185,11 +245,127 @@ function UserInfoTab({ user, setUser }) {
           </button>
         </div>
       </div>
+
+      <SelectEconomicActorModal isOpen={modalOpen} onClose={() => setModalOpen(false)} user={user} setUser={setUser} />
     </div>
   )
 }
 
-function ResetPassword({ userId }) {
+function SelectEconomicActorModal({ isOpen, onClose, user, setUser }) {
+  const [searchValue, setSearchValue] = useState("")
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
+
+  const searchEconomicActors = async (search) => {
+    if (!search || search.trim().length < 2) return setSearchResults([])
+
+    try {
+      setSearching(true)
+      const { ok, data, code } = await api.post("/economic_actor/search", { search })
+      if (!ok) {
+        toast.error(code || "Une erreur est survenue")
+        return
+      }
+      setSearchResults(data)
+    } catch (e) {
+      console.log(e)
+      toast.error("Une erreur est survenue")
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleClose = () => {
+    setSearchValue("")
+    setSearchResults([])
+    onClose()
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchEconomicActors(searchValue)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchValue])
+
+  return (
+    <Modal isOpen={isOpen} className="max-w-2xl" onClose={handleClose}>
+      <div className="p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-6">Sélectionner un acteur économique</h3>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher un acteur économique</label>
+          <input type="text" className="w-full input-primary" placeholder="Entrez un nom..." value={searchValue} onChange={(e) => setSearchValue(e.target.value)} />
+        </div>
+
+        {searching && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+          </div>
+        )}
+
+        {!searching && searchResults.length > 0 && (
+          <div className="border border-gray-200 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Nom</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Collectivités</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {searchResults.map((actor) => (
+                  <tr key={actor._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{actor.name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{actor.collectivities?.length || 0} collectivités</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        className="px-3 py-1 bg-primary-green text-white text-sm rounded-lg hover:bg-primary-green/90 transition-colors"
+                        onClick={() => {
+                          setUser({
+                            ...user,
+                            economic_actor_id: actor._id,
+                            economic_actor_name: actor.name,
+                            collectivities: (actor.collectivities || []).map((col) => ({
+                              id: col.id,
+                              name: col.name,
+                              role: "economic_actor",
+                              status: "approved"
+                            }))
+                          })
+                          toast.success("Acteur économique sélectionné. N'oubliez pas d'enregistrer.")
+                          handleClose()
+                        }}
+                      >
+                        Sélectionner
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!searching && searchValue.length >= 2 && searchResults.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-sm">Aucun acteur économique trouvé</p>
+          </div>
+        )}
+
+        {!searching && searchValue.length < 2 && searchValue.length > 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-sm">Entrez au moins 2 caractères pour rechercher</p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function ResetPassword({ user }) {
   const [open, setOpen] = useState(false)
   const [values, setValues] = useState({ newPassword: "", verifyPassword: "" })
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -199,13 +375,13 @@ function ResetPassword({ userId }) {
     if (values.newPassword !== values.verifyPassword) return toast.error("Les mots de passe ne correspondent pas")
     if (values.newPassword.length < 6) return toast.error("Le mot de passe doit contenir au moins 6 caractères")
     try {
-      const { ok, data, code } = await api.post(`/user/reset_password/${userId}`, values)
-      if (!ok) return toast.error(code || "Erreur lors de la mise à jour du mot de passe")
+      const { ok, message } = await api.post(`/user/reset_password/${user._id}`, values)
+      if (!ok) return toast.error(message || "Erreur lors de la mise à jour du mot de passe")
       setOpen(false)
       toast.success("Mot de passe mis à jour avec succès !")
       setValues({ newPassword: "", verifyPassword: "" })
     } catch (error) {
-      toast.error("Une erreur est survenue")
+      toast.error(error.message || "Une erreur est survenue")
     }
   }
 
@@ -257,7 +433,7 @@ function ResetPassword({ userId }) {
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-2">
             <button className="button-primary" disabled={!values.newPassword || !values.verifyPassword} onClick={resetPasswordHandle}>
               Réinitialiser
             </button>
@@ -265,6 +441,35 @@ function ResetPassword({ userId }) {
         </div>
       </Modal>
     </>
+  )
+}
+
+function InviteButton({ user }) {
+  const [loading, setLoading] = useState(false)
+
+  const handleInvite = async () => {
+    try {
+      setLoading(true)
+      const { ok, code } = await api.post(`/user/send-invite/${user._id}`)
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      toast.success("Invitation envoyée avec succès !")
+    } catch (error) {
+      console.log(error)
+      toast.error("Une erreur est survenue")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      className="px-6 py-2.5 bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium rounded-lg transition-colors flex items-center gap-2"
+      onClick={handleInvite}
+      disabled={loading}
+    >
+      <FiSend size={16} />
+      {loading ? "Envoi en cours..." : "Envoyer une invitation"}
+    </button>
   )
 }
 

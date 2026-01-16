@@ -117,7 +117,7 @@ function UserInfoTab({ user, setUser }) {
       const { ok, data, code } = await api.delete(`/user/${user._id}`)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       toast.success("Utilisateur supprimé")
-      navigate("/collectivity/users")
+      navigate("/collectivity")
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")
@@ -258,9 +258,11 @@ function UserInfoTab({ user, setUser }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <ResetPassword userId={user._id} />
-        </div>
+        {user.role === "admin" && (
+          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+            <ResetPassword user={user} />
+          </div>
+        )}
       </div>
 
       {/* Boutons bas (identiques) */}
@@ -278,7 +280,7 @@ function UserInfoTab({ user, setUser }) {
   )
 }
 
-function ResetPassword({ userId }) {
+function ResetPassword({ user }) {
   const [open, setOpen] = useState(false)
   const [values, setValues] = useState({ newPassword: "", verifyPassword: "" })
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -288,13 +290,13 @@ function ResetPassword({ userId }) {
     if (values.newPassword !== values.verifyPassword) return toast.error("Les mots de passe ne correspondent pas")
     if (values.newPassword.length < 6) return toast.error("Le mot de passe doit contenir au moins 6 caractères")
     try {
-      const { ok, data, code } = await api.post(`/user/reset_password/${userId}`, values)
-      if (!ok) return toast.error(code || "Erreur lors de la mise à jour du mot de passe")
+      const { ok, message } = await api.post(`/user/reset_password/${user._id}`, values)
+      if (!ok) return toast.error(message || "Erreur lors de la mise à jour du mot de passe")
       setOpen(false)
       toast.success("Mot de passe mis à jour avec succès !")
       setValues({ newPassword: "", verifyPassword: "" })
     } catch (error) {
-      toast.error("Une erreur est survenue")
+      toast.error(error.message || "Une erreur est survenue")
     }
   }
 
@@ -346,7 +348,7 @@ function ResetPassword({ userId }) {
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-2">
             <button className="button-primary" disabled={!values.newPassword || !values.verifyPassword} onClick={resetPasswordHandle}>
               Réinitialiser
             </button>

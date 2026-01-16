@@ -14,7 +14,6 @@ const FileInput = ({ value, onChange, name, folder }) => {
   if (!value) {
     preview = null
   } else if (value.indexOf(".pdf") !== -1) {
-    console.log("pdf")
     preview = (
       <div className="absolute top-0 left-0 w-20 h-20 bg-gray-300 opacity-80 hover:opacity-90 flex items-center justify-center cursor-pointer text-[12px] text-black font-normal">
         <AiFillFilePdf size={48} />
@@ -28,7 +27,7 @@ const FileInput = ({ value, onChange, name, folder }) => {
     onChange({ target: { value: "", name } })
   }
 
-  const handleFileChange = async e => {
+  const handleFileChange = async (e) => {
     setLoading(true)
 
     const files = []
