@@ -153,10 +153,6 @@ export default function Dashboard({ action }) {
             </div>
             
             <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                    <FiDownload size={16} />
-                    Exporter
-                </button>
                 <button 
                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     onClick={() => navigate(`/actions/${action._id}/completion`)}
