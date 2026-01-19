@@ -132,7 +132,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                 <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <IndicatorValueInput
-                    key={`${indicatorValue._id}-${indicatorValue.value?.[indicatorValue.indicator_type] || 'empty'}`}
+                    key={indicatorValue._id}
                     value={indicatorValue.value?.[indicatorValue.indicator_type]}
                     indicatorType={indicatorValue.indicator_type}
                     options={indicatorValue.indicator_value_possibilities}
