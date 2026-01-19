@@ -91,11 +91,11 @@ export default function Dashboard({ action }) {
   }
 
   const loadAggregation = async () => {
-    if (!collectivity?.excelFileId || !action?.excel_worksheetname) return
+    if (!collectivity || !action?.excel_worksheetname) return
 
     try {
       setIsAggregationLoading(true)
-      const { ok, data } = await api.post(`/excel/action_aggregation`, { excelFileId: collectivity.excelFileId, action: action.excel_worksheetname })
+      const { ok, data } = await api.post(`/excel/action_aggregation`, { collectivity: collectivity, action: action.excel_worksheetname })
       if (!ok) return toast.error(data.error)
       setProcessedData(data)
     } catch (error) {
@@ -112,7 +112,7 @@ export default function Dashboard({ action }) {
 
   useEffect(() => {
     loadAggregation()
-  }, [collectivity?.excelFileId, action])
+  }, [collectivity, action])
 
   if (!isAdmin && !isEconomicActorAsRight && !right?.can_read) {
     return (

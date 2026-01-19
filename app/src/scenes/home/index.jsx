@@ -70,9 +70,9 @@ export default function Home() {
   }
 
   const fetchGlobalGains = async () => {
-    if (!collectivity?.excelFileId) return;
+    if (!collectivity) return;
     try {
-      const { ok, data } = await api.post('/excel/global-gains', { excelFileId: collectivity.excelFileId });
+      const { ok, data } = await api.post('/excel/global-gains', { collectivity: collectivity });
       if (!ok) return console.error(data.error || "Une erreur est survenue");
       setGlobalGains(data);
     } catch (error) {
@@ -614,10 +614,10 @@ function ActionContributionSection({ collectivity }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchActionGains = async () => {
-    if (!collectivity?.excelFileId) return;
+    if (!collectivity) return;
     try {
       setIsLoading(true);
-      const { ok, data, code } = await api.post('/excel/action-contribution', { excelFileId: collectivity.excelFileId });
+      const { ok, data, code } = await api.post('/excel/action-contribution', { collectivity: collectivity });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setActionGains(data);
     } catch (error) {
@@ -629,7 +629,7 @@ function ActionContributionSection({ collectivity }) {
 
   useEffect(() => {
     fetchActionGains();
-  }, [collectivity?.excelFileId]);
+  }, [collectivity]);
 
   if (isLoading) {
     return (
