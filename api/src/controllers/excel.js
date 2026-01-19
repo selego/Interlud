@@ -59,8 +59,6 @@ router.post('/global-gains', passport.authenticate(['admin', 'user'], { session:
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
-    console.log('collectivity.excelFileId', collectivity.excelFileId);
-
     const result = await graphFetch(
       `/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`
     );
