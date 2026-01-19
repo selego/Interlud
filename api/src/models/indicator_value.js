@@ -62,5 +62,8 @@ const Schema = new mongoose.Schema(
   { timestamps: true }
 );
 
+Schema.index({ indicator_id: 1, situation: 1 });
+Schema.index({ collectivity_id: 1, situation: 1 });
+
 const OBJ = mongoose.model(MODELNAME, Schema);
 module.exports = OBJ;
