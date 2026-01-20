@@ -54,10 +54,10 @@ function extractRowNumber(cellRef) {
 function extractSituationFromSheetName(sheetName) {
   if (!sheetName) return null;
   const lower = sheetName.toLowerCase();
-  if (lower.includes('init')) return 'init';
-  if (lower.includes('ref')) return 'ref';
-  if (lower.includes('prev')) return 'prev';
-  if (lower.includes('expost')) return 'expost';
+  if (lower.includes("init")) return "init";
+  if (lower.includes("ref")) return "ref";
+  if (lower.includes("prev")) return "prev";
+  if (lower.includes("expost")) return "expost";
   return null;
 }
 
@@ -111,7 +111,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
   // CAS 3: K477 * IF(...) - AND avec référence cellule (SEARCH ou égalité)
   if (/^\$?[A-Z]+\$?\d+\s*\*\s*IF\s*\(/i.test(formulaContent)) {
     const refMatch = formulaContent.match(/^(\$?[A-Z]+\$?\d+)\s*\*/i);
-    
+
     // Essayer d'abord avec SEARCH (contains)
     const searchMatch = formulaContent.match(/SEARCH\s*\(\s*"([^"]+)"\s*,\s*\$?([A-Z]+)\$?(\d+)/i);
     if (searchMatch) {
@@ -147,8 +147,10 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
 
   // CAS 4: IF(...) * IF(...) ou (IF(...))*(IF(...)) - AND entre plusieurs conditions
   // Ex: =IF($F$16="Oui",1,0)*IF(ISNUMBER(SEARCH("Diesel",$F$1089)),1,0)
+  // Ex: =(IF(ISNUMBER(SEARCH("C4",$F$18)),1,0))*(IF($F$1838="...",1,0))
   // Accepte aussi les parenthèses supplémentaires et ignore les #REF!
-  if (/\(?IF\s*\([^)]+\)\)?\s*\*\s*\(?IF\s*\(/i.test(formulaContent)) {
+  // Détection améliorée : présence de * entre des blocs IF (gère les parenthèses imbriquées)
+  if (/\)\s*\*\s*\(?IF\s*\(/i.test(formulaContent) || /IF\s*\(.*\)\s*\*\s*\(?IF\s*\(/i.test(formulaContent)) {
     const conditions = [];
 
     // Chercher toutes les conditions "equals": IF($F$16="Oui",1,0)
@@ -171,7 +173,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
       const valueColumn = containsMatch[1];
       const sourceRow = parseInt(containsMatch[4], 10);
       const sourceIndicatorId = rowToIndicatorMap.get(sourceRow);
-      
+
       if (sourceIndicatorId && getCellValue) {
         const searchValue = getCellValue(valueRow, valueColumn);
         if (searchValue) {
@@ -213,7 +215,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
         return { conditions: [condition] };
       }
     }
-    
+
     // Sinon essayer avec une référence de cellule: SEARCH($B123, $F$456) ou SEARCH(B123, $F$456)
     // Ou avec référence inter-feuilles: SEARCH('Feuille'!$F$127, $F$456) ou SEARCH('Feuille'!$F$127, 'Feuille'!$F$456)
     const cellRefMatch = formulaContent.match(/SEARCH\s*\(\s*(?:['']([^'']+)['']!)?\$?([A-Z]+)\$?(\d+)\s*,\s*(?:['']([^'']+)['']!)?\$?([A-Z]+)\$?(\d+)/i);
@@ -223,15 +225,15 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
       const targetSheetName = cellRefMatch[4];
       const sourceSituation = extractSituationFromSheetName(targetSheetName);
       const sourceIndicatorId = rowToIndicatorMap.get(parseInt(cellRefMatch[6], 10));
-      
+
       if (sourceIndicatorId) {
         // Lire la valeur directement depuis la cellule
         const searchValue = getCellValue(valueRow, valueColumn);
-        if (searchValue !== null && searchValue !== undefined && searchValue !== '') {
-          const condition = { 
-            type: "contains", 
+        if (searchValue !== null && searchValue !== undefined && searchValue !== "") {
+          const condition = {
+            type: "contains",
             excel_indicator_id: sourceIndicatorId,
-            value: String(searchValue).trim()
+            value: String(searchValue).trim(),
           };
           if (sourceSituation) condition.excel_indicator_situation = sourceSituation;
           return { conditions: [condition] };
@@ -317,7 +319,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
     const equalsValue = andEqualsRefMatch[3];
     const refRow = parseInt(andEqualsRefMatch[5], 10);
     const sourceIndicatorId = rowToIndicatorMap.get(equalsRow);
-    
+
     if (sourceIndicatorId) {
       return {
         _andEqualsRef: {
@@ -335,7 +337,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
     const equalsRow = parseInt(andRefEqualsMatch[4], 10);
     const equalsValue = andRefEqualsMatch[5];
     const sourceIndicatorId = rowToIndicatorMap.get(equalsRow);
-    
+
     if (sourceIndicatorId) {
       return {
         _andEqualsRef: {
@@ -356,7 +358,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
     const suffix = vlookupNotMatch[4];
     const sheetName = vlookupNotMatch[5]; // Nom de la feuille référencée (optionnel)
     const sourceSituation = extractSituationFromSheetName(sheetName);
-    
+
     // Lire la valeur de la cellule (ex: Q1599)
     const cellValue = getCellValue(cellRow, cellColumn);
     if (cellValue !== null && cellValue !== undefined) {
@@ -379,7 +381,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
     const sheetName = vlookupMatch[5]; // Nom de la feuille référencée (optionnel)
     const sourceSituation = extractSituationFromSheetName(sheetName);
     const compareValue = parseFloat(vlookupMatch[6]);
-    
+
     const cellValue = getCellValue(cellRow, cellColumn);
     if (cellValue !== null && cellValue !== undefined) {
       const indicatorId = `${prefix}${cellValue}${suffix}`;
@@ -395,7 +397,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
 function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null, allSheetsData = null, allRowToIndicatorMaps = null, allFormulasMapsBySituation = null) {
   const resolvedConditions = new Map();
   const parseCache = new Map();
-  
+
   // Cache des conditions résolues par situation (pour les références inter-feuilles)
   const resolvedBySituation = new Map();
 
@@ -495,9 +497,9 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
         const refCondition = resolveConditionInSheet(refRowNum, sourceSituation, new Set());
         if (refCondition?.conditions) {
           // Ajouter sourceSituation à chaque condition
-          const conditionsWithSource = refCondition.conditions.map(cond => ({
+          const conditionsWithSource = refCondition.conditions.map((cond) => ({
             ...cond,
-            excel_indicator_situation: sourceSituation
+            excel_indicator_situation: sourceSituation,
           }));
           const result = { ...refCondition, conditions: conditionsWithSource };
           resolvedConditions.set(rowNum, result);
@@ -550,11 +552,11 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       const { equalsCondition, refRowNum } = parsed._andEqualsRef;
       const refCondition = resolveCondition(refRowNum, new Set(visited));
       const allConditions = [equalsCondition];
-      
+
       if (refCondition?.conditions) {
         allConditions.push(...refCondition.conditions);
       }
-      
+
       const result = { operator: allConditions.length > 1 ? "AND" : undefined, conditions: allConditions };
       resolvedConditions.set(rowNum, result);
       return result;
@@ -589,10 +591,7 @@ async function getWorksheetUsedRange(fileId, worksheetName) {
     const site = await siteResponse.json();
 
     // Récupérer la plage utilisée (inclut values, formulas, address par défaut)
-    const usedRangeResponse = await fetch(
-      `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`,
-      { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
-    );
+    const usedRangeResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
 
     if (!usedRangeResponse.ok) {
       const error = await usedRangeResponse.json();
@@ -611,7 +610,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
   try {
     // Utiliser les données pré-chargées si disponibles, sinon charger
     let dataRows, formulaRows, startRow;
-    
+
     if (allSheetsData && allSheetsData.has(situation)) {
       const sheetData = allSheetsData.get(situation);
       dataRows = sheetData.dataRows;
@@ -659,7 +658,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     // Construire les maps pour toutes les feuilles (pour résoudre les références inter-feuilles)
     const allRowToIndicatorMaps = new Map();
     const allFormulasMapsBySituation = new Map();
-    
+
     if (allSheetsData) {
       for (const [sit, sheetData] of allSheetsData) {
         // Construire rowToIndicatorMap pour cette feuille
@@ -671,7 +670,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           }
         }
         allRowToIndicatorMaps.set(sit, sitRowToIndicatorMap);
-        
+
         // Construire formulasMap pour cette feuille
         const sitFormulasMap = new Map();
         if (sheetData.formulaRows) {
@@ -707,7 +706,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       console.log(`   ⚠️ ${unparsedFormulas.length} formule(s) non prise(s) en compte`);
     } else {
       const parsedCount = formulasMap.size - ignoredCount;
-      console.log(`   ✅ ${parsedCount} formules parsées avec succès${ignoredCount > 0 ? `, ${ignoredCount} références inter-feuilles ignorées` : ''}`);
+      console.log(`   ✅ ${parsedCount} formules parsées avec succès${ignoredCount > 0 ? `, ${ignoredCount} références inter-feuilles ignorées` : ""}`);
     }
 
     // Charger toutes les catégories principales
@@ -993,8 +992,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     if (indicatorValueUpdates.size > 0) {
       const indicatorValueBulkOps = [];
       for (const [, { indicator_id, situation: sit, updateData }] of indicatorValueUpdates) {
-        indicatorValueBulkOps.push({updateMany: { filter: { indicator_id: indicator_id, situation: sit },update: { $set: updateData }},
-        });
+        indicatorValueBulkOps.push({ updateMany: { filter: { indicator_id: indicator_id, situation: sit }, update: { $set: updateData } } });
       }
       const result = await IndicatorValue.bulkWrite(indicatorValueBulkOps);
       console.log(`✅ ${result.modifiedCount} indicator_values mis à jour (${indicatorValueUpdates.size} indicateurs/situations concernés)`);
@@ -1219,7 +1217,7 @@ if (require.main === module) {
       // Étape 1: Charger toutes les feuilles d'abord (pour les références inter-feuilles)
       console.log("📥 Chargement de toutes les feuilles Excel...");
       const allSheetsData = new Map();
-      
+
       for (const { worksheetName, situation } of worksheetsToProcess) {
         console.log(`   📄 Chargement de "${worksheetName}"...`);
         const data = await getWorksheetUsedRange(masterFileId, worksheetName);
