@@ -64,46 +64,19 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const collectivity = await Collectivity.create(req.body);
+    collectivity.excelFileId = await duplicateExcelFile(`${collectivity.name}.xlsx`);
+    await collectivity.save();
 
-    try {
-      collectivity.excelFileId = await duplicateExcelFile(`${collectivity.name}.xlsx`);
-      await collectivity.save();
-    } catch (excelError) {
-      capture(excelError);
-    }
+    const actionParcTypes = await Action.create({name: 'Parc types',type: 'reference',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status'});
+    const actionBasicData = await Action.create({name: 'Données de base',type: 'reference',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status'});
 
-    // Créer l'action "Parc types"
-    const actionParcTypes = await Action.create({
-      name: 'Parc types',
-      type: 'reference',
-      collectivity_id: collectivity._id,
-      collectivity_name: collectivity.name,
-      owner: 'collectivity',
-      status: 'no_status',
-    });
-
-    // Créer l'action "Données de base"
-    const actionBasicData = await Action.create({
-      name: 'Données de base',
-      type: 'reference',
-      collectivity_id: collectivity._id,
-      collectivity_name: collectivity.name,
-      owner: 'collectivity',
-      status: 'no_status',
-    });
-
-    // Récupérer tous les indicateurs des catégories globales
     const indicators = await Indicator.find({ indicator_category_name: { $in: GLOBAL_INDICATOR_CATEGORIES } });
-
-    // Créer les indicator_values pour chaque indicateur et chaque situation
     const allSituations = ['init', 'ref', 'prev', 'expost'];
     const createdIndicatorValues = [];
 
     for (const indicator of indicators) {
       const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
-
       const action = indicator.indicator_category_name === 'Données de base' ? actionBasicData : actionParcTypes;
-
       for (const situation of situationsForIndicator) {
         const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
         const indicatorValue = {
@@ -124,7 +97,10 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           indicator_sub_category_id: indicator.indicator_sub_category_id,
           indicator_sub_category_name: indicator.indicator_sub_category_name,
           indicator_excel_id: indicator.excel_indicator_id,
+          excel_line_number: indicator.excel_line_number?.[situation],
         };
+
+        if (action.name === 'Parc types') indicatorValue.value = { [indicator.value_type]: defaultValue };
 
         const displayCondition = indicator.display_condition?.[situation];
         if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
