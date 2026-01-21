@@ -36,6 +36,12 @@ const Schema = new mongoose.Schema(
       prev: { type: Boolean, default: false },
       expost: { type: Boolean, default: false },
     },
+    excel_line_number: {
+      init: { type: Number},
+      ref: { type: Number},
+      prev: { type: Number},
+      expost: { type: Number},
+    },
     display_condition: {
       init: {
         operator: { type: String, enum: ['AND', 'OR'] },

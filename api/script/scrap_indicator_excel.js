@@ -61,13 +61,21 @@ function extractSituationFromSheetName(sheetName) {
   return null;
 }
 
-function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
+function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allRowToIndicatorMaps = null) {
   if (!formula || typeof formula !== "string") return null;
 
   const f = formula.trim();
   if (!f.startsWith("=")) return null;
 
   const formulaContent = f.substring(1).trim();
+
+  // Helper pour récupérer le bon rowToIndicatorMap selon la situation
+  const getRowToIndicatorMapForSituation = (sheetName) => {
+    if (!sheetName || !allRowToIndicatorMaps) return rowToIndicatorMap;
+    const situation = extractSituationFromSheetName(sheetName);
+    if (situation && allRowToIndicatorMaps.has(situation)) return allRowToIndicatorMaps.get(situation);
+    return rowToIndicatorMap;
+  };
 
   // CAS 1: Référence simple (=K478)
   if (/^\$?[A-Z]+\$?\d+$/i.test(formulaContent)) {
@@ -94,7 +102,9 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
     while ((match = regex.exec(formulaContent)) !== null) {
       const sheetName = match[2];
       const sourceSituation = extractSituationFromSheetName(sheetName);
-      const sourceIndicatorId = rowToIndicatorMap.get(parseInt(match[4], 10));
+      // Utiliser le rowToIndicatorMap de la feuille référencée si inter-feuille
+      const targetMap = getRowToIndicatorMapForSituation(sheetName);
+      const sourceIndicatorId = targetMap.get(parseInt(match[4], 10));
       if (sourceIndicatorId) {
         const condition = { type: "contains", excel_indicator_id: sourceIndicatorId, value: match[1] };
         if (sourceSituation) condition.excel_indicator_situation = sourceSituation;
@@ -208,7 +218,9 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
     if (literalMatch) {
       const sheetName = literalMatch[2];
       const sourceSituation = extractSituationFromSheetName(sheetName);
-      const sourceIndicatorId = rowToIndicatorMap.get(parseInt(literalMatch[4], 10));
+      // Utiliser le rowToIndicatorMap de la feuille référencée si inter-feuille
+      const targetMap = getRowToIndicatorMapForSituation(sheetName);
+      const sourceIndicatorId = targetMap.get(parseInt(literalMatch[4], 10));
       if (sourceIndicatorId) {
         const condition = { type: "contains", excel_indicator_id: sourceIndicatorId, value: literalMatch[1] };
         if (sourceSituation) condition.excel_indicator_situation = sourceSituation;
@@ -224,7 +236,9 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null) {
       const valueRow = parseInt(cellRefMatch[3], 10);
       const targetSheetName = cellRefMatch[4];
       const sourceSituation = extractSituationFromSheetName(targetSheetName);
-      const sourceIndicatorId = rowToIndicatorMap.get(parseInt(cellRefMatch[6], 10));
+      // Utiliser le rowToIndicatorMap de la feuille référencée si inter-feuille
+      const targetMap = getRowToIndicatorMapForSituation(targetSheetName);
+      const sourceIndicatorId = targetMap.get(parseInt(cellRefMatch[6], 10));
 
       if (sourceIndicatorId) {
         // Lire la valeur directement depuis la cellule
@@ -402,7 +416,7 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
   const resolvedBySituation = new Map();
 
   for (const [rowNum, formula] of formulasMap) {
-    parseCache.set(rowNum, parseExcelFormula(formula, rowToIndicatorMap, getCellValue));
+    parseCache.set(rowNum, parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps));
   }
 
   // Fonction pour résoudre une condition dans une feuille spécifique
@@ -445,7 +459,7 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       return targetSheetData.dataRows[rowIndex][colIndex];
     };
 
-    const parsed = parseExcelFormula(formula, targetRowToIndicatorMap, targetGetCellValue);
+    const parsed = parseExcelFormula(formula, targetRowToIndicatorMap, targetGetCellValue, allRowToIndicatorMaps);
     if (!parsed) {
       situationCache.set(rowNum, null);
       return null;
@@ -818,6 +832,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const updatedPresenceInExcel = { ...existingIndicator.presence_in_excel };
           if (situation) updatedPresenceInExcel[situation] = true;
 
+          const updatedExcelLineNumber = { ...existingIndicator.excel_line_number };
+          if (situation) updatedExcelLineNumber[situation] = excelRowNumber;
+
           const updatedDisplayCondition = { ...existingIndicator.display_condition };
           if (situation && display_condition_for_situation) updatedDisplayCondition[situation] = display_condition_for_situation;
 
@@ -841,6 +858,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             linked_action_id: action?._id,
             linked_action_name: action?.name,
             presence_in_excel: updatedPresenceInExcel,
+            excel_line_number: updatedExcelLineNumber,
             display_condition: updatedDisplayCondition,
           };
 
@@ -917,6 +935,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               indicator_sub_category_id: newData.indicator_sub_category_id?.toString(),
               indicator_sub_category_name: newData.indicator_sub_category_name,
               indicator_value_unit: newData.value_unit,
+              excel_line_number: excelRowNumber,
               display_condition: display_condition_for_situation,
             },
           });
@@ -925,6 +944,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
         if (!existingIndicator) {
           const valueDefault = situation && valueDefaultForSituation ? { [situation]: valueDefaultForSituation } : undefined;
           const displayCondition = situation && display_condition_for_situation ? { [situation]: display_condition_for_situation } : undefined;
+          const excelLineNumber = situation ? { [situation]: excelRowNumber } : undefined;
 
           const indicatorData = {
             indicator_category_id: category?._id,
@@ -947,6 +967,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             linked_action_id: action?._id,
             linked_action_name: action?.name,
             presence_in_excel: situation ? { [situation]: true } : undefined,
+            excel_line_number: excelLineNumber,
             display_condition: displayCondition,
           };
 

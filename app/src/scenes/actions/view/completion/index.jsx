@@ -23,6 +23,7 @@ export default function Completion({ action }) {
   const [selectedIndicatorValue, setSelectedIndicatorValue] = useState(null)
   const [indicatorValues, setIndicatorValues] = useState([])
   const [allIndicatorValues, setAllIndicatorValues] = useState([])
+  const [allCollectivityIndicatorValues, setAllCollectivityIndicatorValues] = useState([])
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
@@ -41,6 +42,16 @@ export default function Completion({ action }) {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 })
       if (!ok) return toast.error(code || "Erreur lors du chargement")
       setAllIndicatorValues(data)
+    } catch (error) {
+      toast.error("Une erreur est survenue")
+    }
+  }
+
+  const fetchAllCollectivityIndicatorValues = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { collectivity_id: action.collectivity_id, limit: 10000 })
+      if (!ok) return toast.error(code || "Erreur lors du chargement")
+      setAllCollectivityIndicatorValues(data)
     } catch (error) {
       toast.error("Une erreur est survenue")
     }
@@ -83,6 +94,7 @@ export default function Completion({ action }) {
           toast.success("Valeurs importées avec succès")
           fetchIndicatorsValues()
           fetchAllIndicatorsValues()
+          fetchAllCollectivityIndicatorValues()
         } catch (error) {
           toast.error("Erreur lors de l'import")
         } finally {
@@ -111,8 +123,9 @@ export default function Completion({ action }) {
   const shouldDisplayIndicator = (indicatorValue) => {
     if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
 
+    // Utiliser tous les indicator values de la collectivité pour évaluer les conditions d'affichage
     const results = indicatorValue.display_condition.conditions.map((cond) => {
-      const sourceValueObj = allIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
+      const sourceValueObj = allCollectivityIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
 
       if (!sourceValueObj) return false
 
@@ -150,7 +163,8 @@ export default function Completion({ action }) {
 
   useEffect(() => {
     fetchAllIndicatorsValues()
-  }, [action._id])
+    fetchAllCollectivityIndicatorValues()
+  }, [action._id, action.collectivity_id])
 
   return (
     <div className="min-h-screen p-8">
@@ -282,6 +296,7 @@ export default function Completion({ action }) {
               onUpdate={() => {
                 fetchIndicatorsValues()
                 fetchAllIndicatorsValues()
+                fetchAllCollectivityIndicatorValues()
               }}
               selectedIndicatorValue={selectedIndicatorValue}
             />

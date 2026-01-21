@@ -7,6 +7,8 @@ const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
+const Collectivity = require('../models/collectivity');
+const { updateExcelCellByIndicatorId } = require('../services/microsoftGraph');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -171,6 +173,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           indicator_name: indicator.name,
           indicator_type: indicator.value_type,
           situation,
+          excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
@@ -186,6 +189,20 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
       }
     }
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
+
+    const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
+    const collectivity = await Collectivity.findById(action.collectivity_id);
+
+    for (const situation of ['init', 'expost']) {
+      const iv = await IndicatorValue.findOneAndUpdate(
+        { collectivity_id: action.collectivity_id, indicator_excel_id: targetExcelId, situation },
+        { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } },
+        { new: true }
+      );
+      if (iv && collectivity?.excelFileId) {
+        await updateExcelCellByIndicatorId(collectivity.excelFileId, targetExcelId, iv.value?.checkbox, situation);
+      }
+    }
 
     await Log.create({
       model_name: 'action',
@@ -321,6 +338,7 @@ router.post('/initialize_indicator_values', passport.authenticate(['admin', 'use
         indicator_sub_category_name: indicator.indicator_sub_category_name,
         indicator_value_unit: indicator.value_unit,
         indicator_excel_id: indicator.excel_indicator_id,
+        excel_line_number: indicator.excel_line_number?.[situation],
       };
       const displayCondition = indicator.display_condition?.[situation];
       if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;

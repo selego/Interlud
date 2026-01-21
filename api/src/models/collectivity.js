@@ -9,6 +9,7 @@ const Schema = new mongoose.Schema(
     department: { type: Number, trim: true },
     population: { type: Number, trim: true },
     excelFileId: { type: String, trim: true },
+    is_onboarded: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

@@ -20,6 +20,8 @@ export default function Dashboard({ action }) {
   const navigate = useNavigate()
   
   const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, completeness: 0, bySituation: { init: { filled: 0, total: 0 }, ref: { filled: 0, total: 0 }, prev: { filled: 0, total: 0 }, expost: { filled: 0, total: 0 } } })
+  const [allIndicatorValues, setAllIndicatorValues] = useState([])
+  const [allCollectivityIndicatorValues, setAllCollectivityIndicatorValues] = useState([])
 
   const [processedData, setProcessedData] = useState({ges: { value: 0, trend: 0 }, energy: { value: 0, trend: 0 }, pollutants: { value: 0, count: 0 }, score: 0, bestIndicator: { label: "-", val: -1 }, worstIndicator: { label: "-", val: 9999 }, indicators: [] })
   const [isAggregationLoading, setIsAggregationLoading] = useState(false)
@@ -34,11 +36,11 @@ export default function Dashboard({ action }) {
     return val !== null && val !== undefined && val !== ""
   }
 
-  const shouldDisplayIndicator = (indicatorValue, allIndicatorValues) => {
+  const shouldDisplayIndicator = (indicatorValue) => {
     if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
 
     const results = indicatorValue.display_condition.conditions.map((cond) => {
-      const sourceValueObj = allIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
+      const sourceValueObj = allCollectivityIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
 
       if (!sourceValueObj) return false
 
@@ -78,12 +80,22 @@ export default function Dashboard({ action }) {
     return { total: data.length, filled: data.filter(isIndicatorValueFilled).length, empty: data.length - data.filter(isIndicatorValueFilled).length, completeness: Math.round((data.filter(isIndicatorValueFilled).length / data.length) * 100) || 0, bySituation }
   }
 
-  const fetchIndicatorValues = async () => {
+  const fetchAllIndicatorValues = async () => {
     try {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      const filteredData = data.filter((iv) => shouldDisplayIndicator(iv, data))
-      setStats(calculateStats(filteredData))
+      setAllIndicatorValues(data)
+    } catch (error) {
+      console.error(error)
+      toast.error("Une erreur est survenue lors du chargement des indicateurs")
+    }
+  }
+
+  const fetchAllCollectivityIndicatorValues = async () => {
+    try {
+      const { ok, data, code } = await api.post(`/indicator_value/search`, { collectivity_id: action.collectivity_id, limit: 10000 })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      setAllCollectivityIndicatorValues(data)
     } catch (error) {
       console.error(error)
       toast.error("Une erreur est survenue lors du chargement des indicateurs")
@@ -107,12 +119,19 @@ export default function Dashboard({ action }) {
   }
 
   useEffect(() => {
-    fetchIndicatorValues()
-  }, [action])
+    fetchAllIndicatorValues()
+    fetchAllCollectivityIndicatorValues()
+  }, [action._id, action.collectivity_id])
 
   useEffect(() => {
     loadAggregation()
   }, [collectivity, action])
+
+  useEffect(() => {
+    if (allCollectivityIndicatorValues.length === 0) return
+    const filteredData = allIndicatorValues.filter(shouldDisplayIndicator)
+    setStats(calculateStats(filteredData))
+  }, [allIndicatorValues, allCollectivityIndicatorValues])
 
   if (!isAdmin && !isEconomicActorAsRight && !right?.can_read) {
     return (

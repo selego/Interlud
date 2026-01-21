@@ -72,9 +72,19 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       capture(excelError);
     }
 
-    // Créer l'action globale pour la collectivité
-    const action = await Action.create({
+    // Créer l'action "Parc types"
+    const actionParcTypes = await Action.create({
       name: 'Parc types',
+      type: 'reference',
+      collectivity_id: collectivity._id,
+      collectivity_name: collectivity.name,
+      owner: 'collectivity',
+      status: 'no_status',
+    });
+
+    // Créer l'action "Données de base"
+    const actionBasicData = await Action.create({
+      name: 'Données de base',
       type: 'reference',
       collectivity_id: collectivity._id,
       collectivity_name: collectivity.name,
@@ -91,6 +101,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     for (const indicator of indicators) {
       const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
+
+      const action = indicator.indicator_category_name === 'Données de base' ? actionBasicData : actionParcTypes;
 
       for (const situation of situationsForIndicator) {
         const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;

@@ -197,6 +197,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
     if (req.body.indicator_id) query.indicator_id = req.body.indicator_id;
     if (req.body.action_id) query.action_id = req.body.action_id;
+    if (req.body.action_name) query.action_name = req.body.action_name;
+    if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.situation) query.situation = req.body.situation;
     if (req.body.indicator_category_name) query.indicator_category_name = req.body.indicator_category_name;
     if (req.body.indicator_value_collectivity_id) query.indicator_value_collectivity_id = req.body.indicator_value_collectivity_id;
@@ -217,7 +219,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await IndicatorValue.countDocuments(query);
-    const data = await IndicatorValue.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
+    const data = await IndicatorValue.find(query).sort({ excel_line_number: 1 }).skip(skip).limit(limit).allowDiskUse(true);
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
     capture(error);

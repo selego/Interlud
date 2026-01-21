@@ -6,7 +6,7 @@ const Schema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
-    collectivities: [
+    economic_actor: [
       {
         id: String,
         name: String,

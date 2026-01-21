@@ -314,31 +314,15 @@ function ActionSettingsTab({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Type</label>
-            <Select
-              value={actionData.type}
-              onChange={(value) => setActionData({...actionData, type: value})}
-              options={[
-                { value: "custom", label: "Custom" },
-                { value: "reference", label: "Reference" }
-              ]}
-            />
+            <div className="w-full input-primary bg-gray-50">
+              {actionData.type || "Aucun type"}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Parent Action liée</label>
-            <Select
-              value={actionData.action_parent_id || ""}
-              onChange={(value) => {
-                const selectedAction = parentActions.find(action => action._id === value);
-                setActionData({ ...actionData, action_parent_id: value, action_parent_name: selectedAction?.name || "" });
-              }}
-              options={[
-                { value: "", label: "Sélectionner" },
-                ...parentActions.map((parentAction) => ({
-                  value: parentAction._id,
-                  label: parentAction.name
-                }))
-              ]}
-            />
+            <div className="w-full input-primary bg-gray-50">
+              {actionData.action_parent_name || "Aucune action"}
+            </div>
           </div>
         </div>
 
@@ -360,21 +344,9 @@ function ActionSettingsTab({ action }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Collectivité</label>
-            <Select
-              value={actionData.collectivity_id || ""}
-              onChange={(value) => setActionData({
-                ...actionData,
-                collectivity_id: value,
-                collectivity_name: collectivities.find(c => c._id === value)?.name
-              })}
-              options={[
-                { value: "", label: "Sélectionner" },
-                ...collectivities.map((collectivity) => ({
-                  value: collectivity._id,
-                  label: collectivity.name
-                }))
-              ]}
-            />
+            <div className="w-full input-primary bg-gray-50">
+              {actionData.collectivity_name || "Aucune collectivité"}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Date de début</label>

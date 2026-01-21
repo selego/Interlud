@@ -10,6 +10,7 @@ import ProgressCircle from "@/components/ProgressCircle"
 import DebouncedInput from "@/components/debounceInput"
 import Loader from "@/components/loader"
 import Modal from "@/components/modal"
+import Onboarding from "./Onboarding"
 
 const getStatutBadgeClass = (statut) => {
   if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
@@ -99,12 +100,21 @@ export default function Home() {
     if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin")
       return navigate("/collectivity/join", { replace: true })
     if (!collectivity) return
+
     fetchActions()
     fetchSynthese()
     fetchGlobalGains()
   }, [collectivity, filters])
 
   if (!collectivity) return <Loader />
+
+  if (!collectivity.is_onboarded) {
+    return (
+      <div className="min-h-screen bg-gray-50/50 p-8">
+         <Onboarding collectivity={collectivity} />
+      </div>
+    )
+  }
 
   return (
     <div className="">

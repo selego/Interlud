@@ -30,6 +30,7 @@ const Schema = new mongoose.Schema(
     indicator_sub_category_name: { type: String, trim: true },
     indicator_value_unit: { type: String, trim: true },
     indicator_excel_id: { type: String, trim: true },
+    excel_line_number: { type: Number, trim: true },
     display_condition: {
       operator: { type: String, enum: ['AND', 'OR'] },
       conditions: [
