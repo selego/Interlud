@@ -271,11 +271,11 @@ function KeyIndicatorsCard({ globalGains }) {
           <p className="text-2xl font-bold">{formatEnergie(globalGains.energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
         </div>
         <div>
-          <p className="text-green-100 text-sm mb-1 opacity-80">Avancement trajectoire 2030</p>
+          <p className="text-green-100 text-sm mb-1 opacity-80">Taux d'avancement de la trajectoire GES</p>
           <p className="text-2xl font-bold">{globalGains.avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} <span className="text-base font-medium opacity-80">%</span></p>
         </div>
         <div>
-          <p className="text-green-100 text-sm mb-1 opacity-80">Écart vs prévisionnel</p>
+          <p className="text-green-100 text-sm mb-1 opacity-80">Écart entre gains prévisionnels et réels</p>
           <p className={`text-2xl font-bold ${globalGains.gesData.ecartAbsolu < 0 ? 'text-red-300' : 'text-green-300'}`}>
             {globalGains.gesData.ecartAbsolu > 0 ? '+' : ''}{formatGES(globalGains.gesData.ecartAbsolu).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
              <span className="text-base font-medium opacity-80 ml-1">
