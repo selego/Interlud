@@ -302,6 +302,7 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       collectivity_name: action.collectivity_name,
     });
 
+    await IndicatorValue.deleteMany({ action_id: req.params.id });
     await Action.deleteOne({ _id: req.params.id });
 
     return res.status(200).send({ ok: true });

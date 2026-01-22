@@ -35,6 +35,17 @@ export default function Settings({ action: initialAction, onSave }) {
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      const { ok, code } = await api.delete(`/action/${action._id}`);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Action supprimée");
+      navigate('/actions');
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue");
+    }
+  };
+
   return (
     <div className="min-h-screen p-8">
     <div className="max-w-7xl mx-auto">
@@ -107,7 +118,7 @@ export default function Settings({ action: initialAction, onSave }) {
       </div>
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
-      {activeTab === "settings" && ( <ActionSettingsTab  action={action} onUpdate={handleUpdate}  />)}
+      {activeTab === "settings" && ( <ActionSettingsTab  action={action} onUpdate={handleUpdate} onDelete={handleDelete} />)}
       {activeTab === "history" && <History action={action} />}
     </div>
     </div>
@@ -197,7 +208,7 @@ function IndicatorsTab({ action }) {
   );
 }
 
-function ActionSettingsTab({ action, onUpdate }) {
+function ActionSettingsTab({ action, onUpdate, onDelete }) {
 
   return (
     <div className="card-shadow">
@@ -454,6 +465,26 @@ function ActionSettingsTab({ action, onUpdate }) {
             rows="4"
             className="w-full input-primary rounded-lg"
           />
+        </div>
+      </div>
+
+      <div className="pt-6 mt-6 border-t border-light-border px-6 pb-6">
+        <h2 className="text-lg font-semibold mb-4 text-red-600">Zone de danger</h2>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-red-800">Supprimer l'action</h3>
+            <p className="text-sm text-red-600 mt-1">Cette action est irréversible. Toutes les données associées seront perdues.</p>
+          </div>
+          <button
+            onClick={() => {
+              if (window.confirm("Êtes-vous sûr de vouloir supprimer cette action ? Cette opération est irréversible.")) {
+                onDelete();
+              }
+            }}
+            className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm font-medium"
+          >
+            Supprimer
+          </button>
         </div>
       </div>
     </div>
