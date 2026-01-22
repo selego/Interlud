@@ -11,7 +11,7 @@ import DebounceInput from "@/components/debounceInput";
 
 export default function Settings({ action: initialAction, onSave }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("indicators");
+  const [activeTab, setActiveTab] = useState("settings");
   const [action, setAction] = useState(initialAction);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -76,7 +76,7 @@ export default function Settings({ action: initialAction, onSave }) {
       </div>
 
       <div className="flex mb-6">
-        <button
+        {/* <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
             activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
           }`}
@@ -84,7 +84,7 @@ export default function Settings({ action: initialAction, onSave }) {
         >
           <FiList size={16} />
           Liste des Indicateurs
-        </button>
+        </button> */}
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
