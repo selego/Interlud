@@ -7,10 +7,33 @@ import { FiList, FiSettings, FiClock, FiArrowLeft } from "react-icons/fi";
 import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
+import DebounceInput from "@/components/debounceInput";
 
-export default function Settings({ action, onSave }) {
+export default function Settings({ action: initialAction, onSave }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("indicators");
+  const [action, setAction] = useState(initialAction);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setAction(initialAction);
+  }, [initialAction]);
+
+  const handleUpdate = async (key, value) => {
+    const updatedAction = { ...action, [key]: value };
+    setAction(updatedAction);
+    
+    try {
+      setIsSaving(true);
+      const { ok, code } = await api.put(`/action/${action._id}`, updatedAction);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Sauvegardé");
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen p-8">
@@ -43,6 +66,12 @@ export default function Settings({ action, onSave }) {
             <FiArrowLeft size={18} />
           </button>
           <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
+          {isSaving && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 ml-4">
+              <div className="w-4 h-4 border-2 border-gray-300 border-t-primary-green rounded-full animate-spin"></div>
+              <span>Sauvegarde...</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -78,7 +107,7 @@ export default function Settings({ action, onSave }) {
       </div>
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
-      {activeTab === "settings" && <ActionSettingsTab action={action}  onSave={onSave}/>}
+      {activeTab === "settings" && ( <ActionSettingsTab  action={action} onUpdate={handleUpdate}  />)}
       {activeTab === "history" && <History action={action} />}
     </div>
     </div>
@@ -168,54 +197,7 @@ function IndicatorsTab({ action }) {
   );
 }
 
-function ActionSettingsTab({ action, onSave }) {
-  const [actionData, setActionData] = useState({
-    type: "custom",
-    action_reference_id: "",
-    action_reference_name: "",
-    name: "",
-    description: "",
-    status: "no_status",
-    blocked_reason: "",
-    step_description: "",
-    date_start: "",
-    date_end: "",
-    budget_costs: "",
-    budget_description: "",
-    financial_aid: "",
-    financial_aid_description: "",
-    pilote: "",
-    pilote_description: "",
-    partners: "",
-    partners_description: "",
-    priority: "",
-    is_subsidized_by_program: false,
-    related_initiatives: "",
-    comment: ""
-  });
-
-  useEffect(() => {
-    setActionData(action);
-  }, [action]);
-
-  const handleSave = async () => {
-    try {
-      const { ok, data, code } = await api.put(`/action/${action._id}`, actionData);
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      toast.success("Action sauvegardée !");
-      onSave();
-    } catch (error) {
-      toast.error(error || "Une erreur est survenue");
-    }
-  };
-
-  const ActionButtons = () => (
-    <div className="flex justify-end gap-3">
-      <button onClick={handleSave} className= "button-primary">
-        Enregistrer
-      </button>
-    </div>
-  );
+function ActionSettingsTab({ action, onUpdate }) {
 
   return (
     <div className="card-shadow">
@@ -224,7 +206,6 @@ function ActionSettingsTab({ action, onSave }) {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Détails de l'action</h1>
           <p className="text-gray-500 mt-1">Gère les informations, l'avancement et le contexte de l'action.</p>
         </div>
-        <ActionButtons />
       </div>
 
       <div className="pt-6 mt-6 border-t border-light-border px-6">
@@ -232,18 +213,18 @@ function ActionSettingsTab({ action, onSave }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <label className="block text-sm font-semibold mb-2">Nom de l'action</label>
-            <input
+            <DebounceInput
               type="text"
-              value={actionData.name || ""}
-              onChange={(e) => setActionData({...actionData, name: e.target.value})}
+              value={action.name || ""}
+              onChange={(e) => onUpdate("name", e.target.value)}
               className="w-full input-primary"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Priorité</label>
             <Select
-              value={actionData.priority || ""}
-              onChange={(value) => setActionData({...actionData, priority: value})}
+              value={action.priority || ""}
+              onChange={(value) => onUpdate("priority", value)}
               options={[
                 { value: "", label: "Sélectionner" },
                 { value: "high", label: "Haute" },
@@ -255,8 +236,8 @@ function ActionSettingsTab({ action, onSave }) {
           <div>
             <label className="block text-sm font-semibold mb-2">Statut</label>
             <Select
-              value={actionData.status}
-              onChange={(value) => setActionData({...actionData, status: value})}
+              value={action.status}
+              onChange={(value) => onUpdate("status", value)}
               options={[
                 { value: "no_status", label: "Pas de statut" },
                 { value: "upcoming", label: "À venir" },
@@ -266,13 +247,13 @@ function ActionSettingsTab({ action, onSave }) {
               ]}
             />
           </div>
-          {actionData.status === "blocked" ? (
+          {action.status === "blocked" ? (
             <div className="md:col-span-2">
               <label className="block text-sm font-semibold mb-2">Raison de blocage</label>
-              <input
+              <DebounceInput
                 type="text"
-                value={actionData.blocked_reason || ""}
-                onChange={(e) => setActionData({...actionData, blocked_reason: e.target.value})}
+                value={action.blocked_reason || ""}
+                onChange={(e) => onUpdate("blocked_reason", e.target.value)}
                 className="w-full input-primary"
               />
             </div>
@@ -286,13 +267,13 @@ function ActionSettingsTab({ action, onSave }) {
           <div>
             <label className="block text-sm font-semibold mb-2">Type</label>
             <div className="w-full input-primary bg-gray-50">
-              {actionData.type || "Aucun type"}
+              {action.type || "Aucun type"}
             </div>
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Parent Action liée</label>
             <div className="w-full input-primary bg-gray-50">
-              {actionData.action_parent_name || "Aucune action"}
+              {action.action_parent_name || "Aucune action"}
             </div>
           </div>
         </div>
@@ -301,8 +282,8 @@ function ActionSettingsTab({ action, onSave }) {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={actionData.is_subsidized_by_program || false}
-              onChange={(e) => setActionData({...actionData, is_subsidized_by_program: e.target.checked})}
+              checked={action.is_subsidized_by_program || false}
+              onChange={(e) => onUpdate("is_subsidized_by_program", e.target.checked)}
               className="w-4 h-4"
             />
             <span className="text-sm font-medium text-gray-800">Subventionné par le programme</span>
@@ -316,24 +297,24 @@ function ActionSettingsTab({ action, onSave }) {
           <div>
             <label className="block text-sm font-semibold mb-2">Collectivité</label>
             <div className="w-full input-primary bg-gray-50">
-              {actionData.collectivity_name || "Aucune collectivité"}
+              {action.collectivity_name || "Aucune collectivité"}
             </div>
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Date de début</label>
-            <input
+            <DebounceInput
               type="date"
-              value={actionData.date_start ? new Date(actionData.date_start).toISOString().split('T')[0] : ""}
-              onChange={(e) => setActionData({...actionData, date_start: e.target.value})}
+              value={action.date_start ? new Date(action.date_start).toISOString().split('T')[0] : ""}
+              onChange={(e) => onUpdate("date_start", e.target.value)}
               className="w-full input-primary"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Date de fin</label>
-            <input
+            <DebounceInput
               type="date"
-              value={actionData.date_end ? new Date(actionData.date_end).toISOString().split('T')[0] : ""}
-              onChange={(e) => setActionData({...actionData, date_end: e.target.value})}
+              value={action.date_end ? new Date(action.date_end).toISOString().split('T')[0] : ""}
+              onChange={(e) => onUpdate("date_end", e.target.value)}
               className="w-full input-primary"
             />
           </div>
@@ -346,8 +327,8 @@ function ActionSettingsTab({ action, onSave }) {
           <div>
             <label className="block text-sm font-semibold mb-2">Pilote</label>
             <Select
-              value={actionData.pilote || ""}
-              onChange={(value) => setActionData({...actionData, pilote: value})}
+              value={action.pilote || ""}
+              onChange={(value) => onUpdate("pilote", value)}
               options={[
                 { value: "", label: "Sélectionner" },
                 { value: "epci", label: "EPCI" },
@@ -357,18 +338,18 @@ function ActionSettingsTab({ action, onSave }) {
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description du pilote</label>
-            <input
+            <DebounceInput
               type="text"
-              value={actionData.pilote_description || ""}
-              onChange={(e) => setActionData({...actionData, pilote_description: e.target.value})}
+              value={action.pilote_description || ""}
+              onChange={(e) => onUpdate("pilote_description", e.target.value)}
               className="w-full input-primary"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Partenaires</label>
             <Select
-              value={actionData.partners || ""}
-              onChange={(value) => setActionData({...actionData, partners: value})}
+              value={action.partners || ""}
+              onChange={(value) => onUpdate("partners", value)}
               options={[
                 { value: "", label: "Sélectionner" },
                 { value: "epci", label: "EPCI" },
@@ -378,10 +359,10 @@ function ActionSettingsTab({ action, onSave }) {
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
-            <input
+            <DebounceInput
               type="text"
-              value={actionData.partners_description || ""}
-              onChange={(e) => setActionData({...actionData, partners_description: e.target.value})}
+              value={action.partners_description || ""}
+              onChange={(e) => onUpdate("partners_description", e.target.value)}
               className="w-full input-primary"
             />
           </div>
@@ -393,37 +374,37 @@ function ActionSettingsTab({ action, onSave }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Coûts budget</label>
-            <input
+            <DebounceInput
               type="number"
-              value={actionData.budget_costs || ""}
-              onChange={(e) => setActionData({...actionData, budget_costs: e.target.value})}
+              value={action.budget_costs || ""}
+              onChange={(e) => onUpdate("budget_costs", e.target.value)}
               className="w-full input-primary"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description du budget</label>
-            <input
+            <DebounceInput
               type="text"
-              value={actionData.budget_description || ""}
-              onChange={(e) => setActionData({...actionData, budget_description: e.target.value})}
+              value={action.budget_description || ""}
+              onChange={(e) => onUpdate("budget_description", e.target.value)}
               className="w-full input-primary"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Aide financière</label>
-            <input
+            <DebounceInput
               type="number"
-              value={actionData.financial_aid || ""}
-              onChange={(e) => setActionData({...actionData, financial_aid: e.target.value})}
+              value={action.financial_aid || ""}
+              onChange={(e) => onUpdate("financial_aid", e.target.value)}
               className="w-full input-primary"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description aide financière</label>
-            <input
+            <DebounceInput
               type="text"
-              value={actionData.financial_aid_description || ""}
-              onChange={(e) => setActionData({...actionData, financial_aid_description: e.target.value})}
+              value={action.financial_aid_description || ""}
+              onChange={(e) => onUpdate("financial_aid_description", e.target.value)}
               className="w-full input-primary"
             />
           </div>
@@ -435,45 +416,45 @@ function ActionSettingsTab({ action, onSave }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold mb-2">Initiatives liées</label>
-            <textarea
+            <DebounceInput
+              type="textarea"
               rows="4"
-              value={actionData.related_initiatives || ""}
-              onChange={(e) => setActionData({...actionData, related_initiatives: e.target.value})}
+              value={action.related_initiatives || ""}
+              onChange={(e) => onUpdate("related_initiatives", e.target.value)}
               className="w-full input-primary rounded-lg"
             />
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Description des étapes</label>
-            <textarea
+            <DebounceInput
+              type="textarea"
               rows="4"
-              value={actionData.step_description || ""}
-              onChange={(e) => setActionData({...actionData, step_description: e.target.value})}
+              value={action.step_description || ""}
+              onChange={(e) => onUpdate("step_description", e.target.value)}
               className="w-full input-primary rounded-lg"
             />
           </div>
         </div>
         <div className="mt-4">
           <label className="block text-sm font-semibold mb-2">Description</label>
-          <textarea
-            value={actionData.description || ""}
-            onChange={(e) => setActionData({...actionData, description: e.target.value})}
+          <DebounceInput
+            type="textarea"
+            value={action.description || ""}
+            onChange={(e) => onUpdate("description", e.target.value)}
             rows="4"
             className="w-full input-primary rounded-lg"
           />
         </div>
-        <div className="mt-4">
+        <div className="mt-4 pb-6">
           <label className="block text-sm font-semibold mb-2">Commentaire</label>
-          <textarea
-            value={actionData.comment || ""}
-            onChange={(e) => setActionData({...actionData, comment: e.target.value})}
+          <DebounceInput
+            type="textarea"
+            value={action.comment || ""}
+            onChange={(e) => onUpdate("comment", e.target.value)}
             rows="4"
             className="w-full input-primary rounded-lg"
           />
         </div>
-      </div>
-
-      <div className="pt-6 mt-6 border-t border-light-border px-6 pb-6">
-        <ActionButtons />
       </div>
     </div>
   );
