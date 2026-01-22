@@ -305,44 +305,60 @@ function ActionsDistribution({ synthese }) {
     <div className="h-full card-shadow p-6 flex flex-col">
       <h3 className="font-bold text-font-primary text-xl mb-4 text-center">Répartition des actions</h3>
       
-      <div className="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie 
-              data={displayData} 
-              cx="50%" 
-              cy="50%" 
-              innerRadius={70} 
-              outerRadius={90} 
-              paddingAngle={4} 
-              dataKey="value"
-            >
-              {displayData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-              ))}
-            </Pie>
-            <Tooltip
-              wrapperStyle={{ zIndex: 1000 }}
-              content={({ active, payload }) => {
-                if (active && payload && payload.length && pieData.length > 0) {
-                  return (
-                    <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-xl">
-                      <p className="font-bold text-sm mb-1">{payload[0].name}</p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-bold text-lg ml-1" style={{color: payload[0].payload.color}}>{payload[0].value}</span> actions
-                      </p>
-                    </div>
-                  )
-                }
-                return null
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+      <div className="flex-1 flex flex-col min-h-[250px]">
+        <div className="flex-1 relative min-h-[180px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie 
+                data={displayData} 
+                cx="50%" 
+                cy="50%" 
+                innerRadius={60} 
+                outerRadius={80} 
+                paddingAngle={4} 
+                dataKey="value"
+              >
+                {displayData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                ))}
+              </Pie>
+              <Tooltip
+                wrapperStyle={{ zIndex: 1000 }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length && pieData.length > 0) {
+                    return (
+                      <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-xl">
+                        <p className="font-bold text-sm mb-1">{payload[0].name}</p>
+                        <p className="text-sm text-gray-600">
+                          <span className="font-bold text-lg ml-1" style={{color: payload[0].payload.color}}>{payload[0].value}</span> actions
+                        </p>
+                      </div>
+                    )
+                  }
+                  return null
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
 
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreated}</span>
-          <span className="text-sm text-gray-500 font-medium">Total</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-3xl font-bold text-gray-900">{synthese.actionsCreated}</span>
+            <span className="text-sm text-gray-500 font-medium">Total</span>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
+          {pieData.map((item, index) => (
+            <div key={index} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 truncate">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="text-gray-600 truncate" title={item.name}>{item.name}</span>
+              </div>
+              <span className="font-semibold text-gray-900 ml-2">
+                {total > 0 ? Math.round((item.value / total) * 100) : 0}%
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
