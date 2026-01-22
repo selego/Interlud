@@ -33,7 +33,7 @@ export default function Index() {
     <Routes>
       <Route path="/dashboard" element={<Dashboard action={action} />} />
       <Route path="/completion" element={<Completion action={action} />} />
-      <Route path="/settings" element={<Settings action={action} />} />
+      <Route path="/settings" element={<Settings action={action}  onSave={fetchAction}/>} />
     </Routes>
   );
 }

@@ -8,7 +8,7 @@ import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
 
-export default function Settings({ action }) {
+export default function Settings({ action, onSave }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("indicators");
 
@@ -78,7 +78,7 @@ export default function Settings({ action }) {
       </div>
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
-      {activeTab === "settings" && <ActionSettingsTab action={action} />}
+      {activeTab === "settings" && <ActionSettingsTab action={action}  onSave={onSave}/>}
       {activeTab === "history" && <History action={action} />}
     </div>
     </div>
@@ -130,9 +130,6 @@ function IndicatorsTab({ action }) {
           <h2 className="text-xl font-semibold text-gray-900">Indicateurs</h2>
           <p className="text-sm text-gray-600 mt-1">Liste des indicateurs associés à cette action</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="button-primary">
-          Ajouter
-        </button>
       </div>
 
       <div className="overflow-x-auto">
@@ -171,7 +168,7 @@ function IndicatorsTab({ action }) {
   );
 }
 
-function ActionSettingsTab({ action }) {
+function ActionSettingsTab({ action, onSave }) {
   const [actionData, setActionData] = useState({
     type: "custom",
     action_reference_id: "",
@@ -196,33 +193,6 @@ function ActionSettingsTab({ action }) {
     related_initiatives: "",
     comment: ""
   });
-  const [parentActions, setParentActions] = useState([]);
-  const [collectivities, setCollectivities] = useState([]);
-
-  const fetchParentActions = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/action/search`, { type: "global" });
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setParentActions(data);
-    } catch (error) {
-      toast.error(error || "Une erreur est survenue");
-    }
-  };
-
-  const fetchCollectivities = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/collectivity/search`, {});
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setCollectivities(data);
-    } catch (error) {
-      toast.error(error || "Une erreur est survenue");
-    }
-  };
-
-  useEffect(() => {
-    fetchParentActions();
-    fetchCollectivities();
-  }, []);
 
   useEffect(() => {
     setActionData(action);
@@ -233,6 +203,7 @@ function ActionSettingsTab({ action }) {
       const { ok, data, code } = await api.put(`/action/${action._id}`, actionData);
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Action sauvegardée !");
+      onSave();
     } catch (error) {
       toast.error(error || "Une erreur est survenue");
     }
