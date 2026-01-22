@@ -382,7 +382,7 @@ function ActionSettingsTab({ action, onUpdate }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Description du budget</label>
+            <label className="block text-sm font-semibold mb-2">Commentaire du budget</label>
             <DebounceInput
               type="text"
               value={action.budget_description || ""}
@@ -400,7 +400,7 @@ function ActionSettingsTab({ action, onUpdate }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Description aide financière</label>
+            <label className="block text-sm font-semibold mb-2">Commentaire aide financière</label>
             <DebounceInput
               type="text"
               value={action.financial_aid_description || ""}
