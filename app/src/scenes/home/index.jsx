@@ -637,6 +637,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
 function ActionContributionSection({ collectivity }) {
   const [actionGains, setActionGains] = useState([]);
+  const [collectivityActions, setCollectivityActions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchActionGains = async () => {
@@ -653,8 +654,20 @@ function ActionContributionSection({ collectivity }) {
     }
   };
 
+  const fetchCollectivityActions = async () => {
+    if (!collectivity) return;
+    try {
+      const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id });
+      if (!ok) return toast.error(data.code || "Une erreur est survenue");
+      setCollectivityActions(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     fetchActionGains();
+    fetchCollectivityActions();
   }, [collectivity]);
 
   if (isLoading) {
@@ -665,6 +678,14 @@ function ActionContributionSection({ collectivity }) {
     );
   }
 
+  const filteredGains = actionGains.filter(gain => {
+    return collectivityActions.some(action => action.excel_worksheetname === gain.action);
+  }).map(gain => {
+    const action = collectivityActions.find(a => a.excel_worksheetname === gain.action);
+    return {...gain, displayName: action ? action.name : gain.action
+    };
+  });
+
 
   return (
     <div className="h-full card-shadow p-6 flex flex-col">
@@ -674,27 +695,28 @@ function ActionContributionSection({ collectivity }) {
       </div>
 
       <div className="flex-1 space-y-4">
-        {actionGains.slice(0, 5).map((action, index) => {
-          const codeMatch = action.action.match(/^([A-Z][0-9]+)\s*-\s*(.*)/);
-          const code = codeMatch ? codeMatch[1] : null;
-
-          const totalReduction = actionGains.reduce((acc, curr) => acc + Math.abs(curr.ges), 0);
+        {filteredGains.slice(0, 4).map((action, index) => {
+          const totalReduction = filteredGains.reduce((acc, curr) => acc + Math.abs(curr.ges), 0);
           return (
-            <div key={index} className={`flex items-center gap-4 p-2 rounded-lg hover:bg-gray-50 transition-colors`}>
-              <div className="w-8 font-bold text-gray-900 text-sm">{code || (index + 1)}</div>
-
-              <div className="flex-1 h-8 bg-gray-100 rounded flex overflow-hidden relative">
-                 <div 
-                   className={`h-full ${action.ges < 0 ? 'bg-[#2DAC6A]' : 'bg-[#EF4444]'}`} 
-                   style={{ width: `${Math.min((Math.abs(action.ges) /  Math.max(...actionGains.map(a => Math.abs(a.ges)), 1)) * 100, 100)}%` }}
-                 />
-                 <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-gray-700 drop-shadow-sm">
-                   {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
-                 </span>
+            <div key={index} className={`flex flex-col gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors`}>
+              <div className="font-bold text-gray-900 text-sm truncate" title={action.displayName}>
+                {action.displayName}
               </div>
-              
-              <div className={`w-16 text-right text-sm font-bold ${action.ges < 0 ? 'text-[#2DAC6A]' : 'text-[#EF4444]'}`}>
-                {action.ges > 0 ? '+' : ''}{(totalReduction > 0 ? (Math.abs(action.ges) / totalReduction) * 100 : 0).toFixed(1)}%
+
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-6 bg-gray-100 rounded flex overflow-hidden relative">
+                   <div 
+                     className={`h-full ${action.ges < 0 ? 'bg-[#2DAC6A]' : 'bg-[#EF4444]'}`} 
+                     style={{ width: `${Math.min((Math.abs(action.ges) /  Math.max(...filteredGains.map(a => Math.abs(a.ges)), 1)) * 100, 100)}%` }}
+                   />
+                   <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-gray-700 drop-shadow-sm">
+                     {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
+                   </span>
+                </div>
+                
+                <div className={`w-14 text-right text-sm font-bold ${action.ges < 0 ? 'text-[#2DAC6A]' : 'text-[#EF4444]'}`}>
+                  {(totalReduction > 0 ? (Math.abs(action.ges) / totalReduction) * 100 : 0).toFixed(1)}%
+                </div>
               </div>
             </div>
           );
