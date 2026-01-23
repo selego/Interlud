@@ -32,7 +32,7 @@ const INDICATORS_CONFIG = [
 const formatGES = (value) => {
   if (value === 0 || isNaN(value)) return '0 tCO₂e';
   const absVal = Math.abs(value);
-  if (absVal >= 1000000) return `${(value / 1000000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} MtCO₂e`;
+  if (absVal >= 1000) return `${(value / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ktCO₂e`;
   return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} tCO₂e`;
 };
 
@@ -252,7 +252,7 @@ function KeyIndicatorsCard({ globalGains }) {
           <div className="text-6xl font-bold tracking-tight mb-4">
             {formatGES(globalGains.gesData.evolutionCumuleeReel).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
             <span className="text-3xl font-medium ml-2 opacity-80">
-               {globalGains.gesData.evolutionCumuleeReel >= 1000000 ? 'MtCO₂e' : globalGains.gesData.evolutionCumuleeReel >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
+               {globalGains.gesData.evolutionCumuleeReel >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
             </span>
           </div>
           
@@ -267,10 +267,6 @@ function KeyIndicatorsCard({ globalGains }) {
 
       <div className="relative z-10 grid grid-cols-3 gap-8 border-t border-white/20 pt-6">
         <div>
-          <p className="text-green-100 text-sm mb-1 opacity-80">Énergie économisée</p>
-          <p className="text-2xl font-bold">{formatEnergie(globalGains.energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
-        </div>
-        <div>
           <p className="text-green-100 text-sm mb-1 opacity-80">Taux d'avancement de la trajectoire GES</p>
           <p className="text-2xl font-bold">{globalGains.avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} <span className="text-base font-medium opacity-80">%</span></p>
         </div>
@@ -279,9 +275,13 @@ function KeyIndicatorsCard({ globalGains }) {
           <p className={`text-2xl font-bold ${globalGains.gesData.ecartAbsolu < 0 ? 'text-red-300' : 'text-green-300'}`}>
             {globalGains.gesData.ecartAbsolu > 0 ? '+' : ''}{formatGES(globalGains.gesData.ecartAbsolu).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
              <span className="text-base font-medium opacity-80 ml-1">
-               {Math.abs(globalGains.gesData.ecartAbsolu) >= 1000000 ? 'MtCO₂e' : Math.abs(globalGains.gesData.ecartAbsolu) >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
+               {Math.abs(globalGains.gesData.ecartAbsolu) >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
             </span>
           </p>
+        </div>
+        <div>
+          <p className="text-green-100 text-sm mb-1 opacity-80">Énergie économisée</p>
+          <p className="text-2xl font-bold">{formatEnergie(globalGains.energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
         </div>
       </div>
     </div>
@@ -413,7 +413,6 @@ function EvolutionChart({ globalGains }) {
               tickLine={false} 
               tick={{ fontSize: 12, fill: '#6B7280' }} 
               tickFormatter={(v) => {
-                if (v >= 1000000) return `${(v/1000000).toFixed(1)}M`;
                 if (v >= 1000) return `${(v/1000).toFixed(0)}k`;
                 return v;
               }}
