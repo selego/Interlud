@@ -694,7 +694,7 @@ function ActionContributionSection({ collectivity }) {
       <div className="flex-1 space-y-4">
         {filteredGains.length < 2 ? (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-            Il faut au moins 2 actions créées
+            Il faut au moins 2 actions liées à la charte InTerLUD+ pour afficher les contributions
           </div>
         ) : (
           filteredGains.slice(0, 4).map((action, index) => {
