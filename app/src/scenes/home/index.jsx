@@ -694,32 +694,38 @@ function ActionContributionSection({ collectivity }) {
       </div>
 
       <div className="flex-1 space-y-4">
-        {filteredGains.slice(0, 4).map((action, index) => {
-          const totalReduction = filteredGains.reduce((acc, curr) => acc + Math.abs(curr.ges), 0);
-          return (
-            <div key={index} className={`flex flex-col gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors`}>
-              <div className="font-bold text-gray-900 text-sm truncate" title={action.displayName}>
-                {action.displayName}
-              </div>
+        {filteredGains.length < 2 ? (
+          <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+            Il faut au moins 2 actions créées
+          </div>
+        ) : (
+          filteredGains.slice(0, 4).map((action, index) => {
+            const totalReduction = filteredGains.reduce((acc, curr) => acc + Math.abs(curr.ges), 0);
+            return (
+              <div key={index} className={`flex flex-col gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors`}>
+                <div className="font-bold text-gray-900 text-sm truncate" title={action.displayName}>
+                  {action.displayName}
+                </div>
 
-              <div className="flex items-center gap-4">
-                <div className="flex-1 h-6 bg-gray-100 rounded flex overflow-hidden relative">
-                   <div 
-                     className={`h-full ${action.ges < 0 ? 'bg-[#2DAC6A]' : 'bg-[#EF4444]'}`} 
-                     style={{ width: `${Math.min((Math.abs(action.ges) /  Math.max(...filteredGains.map(a => Math.abs(a.ges)), 1)) * 100, 100)}%` }}
-                   />
-                   <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-gray-700 drop-shadow-sm">
-                     {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
-                   </span>
-                </div>
-                
-                <div className={`w-14 text-right text-sm font-bold ${action.ges < 0 ? 'text-[#2DAC6A]' : 'text-[#EF4444]'}`}>
-                  {(totalReduction > 0 ? (Math.abs(action.ges) / totalReduction) * 100 : 0).toFixed(1)}%
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 h-6 bg-gray-100 rounded flex overflow-hidden relative">
+                     <div
+                       className={`h-full ${action.ges < 0 ? 'bg-[#2DAC6A]' : 'bg-[#EF4444]'}`}
+                       style={{ width: `${Math.min((Math.abs(action.ges) /  Math.max(...filteredGains.map(a => Math.abs(a.ges)), 1)) * 100, 100)}%` }}
+                     />
+                     <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-gray-700 drop-shadow-sm">
+                       {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
+                     </span>
+                  </div>
+
+                  <div className={`w-14 text-right text-sm font-bold ${action.ges < 0 ? 'text-[#2DAC6A]' : 'text-[#EF4444]'}`}>
+                    {(totalReduction > 0 ? (Math.abs(action.ges) / totalReduction) * 100 : 0).toFixed(1)}%
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );
