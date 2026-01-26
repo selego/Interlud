@@ -25,6 +25,7 @@ export default function List() {
   const { collectivity } = useStore()
 
   const fetchUsers = async () => {
+    if (!collectivity?._id) return
     try {
       const { data, ok, code } = await api.post("/user/search", { collectivity_id: collectivity._id })
       if (!ok) return toast.error(code || "Une erreur est survenue")
@@ -36,7 +37,22 @@ export default function List() {
 
   useEffect(() => {
     fetchUsers()
-  }, [])
+  }, [collectivity])
+
+  if (!collectivity) {
+    return (
+      <div className="p-8">
+        <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+          <div className="text-6xl mb-4">🏛️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Aucune collectivité sélectionnée</h2>
+          <p className="text-gray-600 mb-6">Veuillez sélectionner une collectivité pour accéder à la gestion des membres.</p>
+          <button onClick={() => navigate("/")} className="button-primary">
+            Retour à l'accueil
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (users.length === 0)
     return (

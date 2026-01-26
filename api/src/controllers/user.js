@@ -542,24 +542,59 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: 'ALREADY_REQUESTED' });
 
     const adminCollectivity = await UserObject.find({ collectivities: { $elemMatch: { id: collectivityId, role: 'admin' } } });
+    const redirectUrl = `${config.APP_URL}/collectivity?collectivityId=${collectivityId}`;
+    
     for (const admin of adminCollectivity) {
       await Notification.create({
         message: `${user.name} a demandé à rejoindre la collectivité ${collectivity.name}`,
         user_id: admin._id,
         user_name: admin.name,
         user_email: admin.email,
-        redirect: `${config.APP_URL}/collectivity`,
+        redirect: redirectUrl,
+      });
+
+      const bodyHTML = `
+        <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Demande d'accès</h1>
+          </div>
+          
+          <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Bonjour ${admin.name},</p>
+            
+            <p style="font-size: 16px; margin-bottom: 20px;">
+              <strong>${user.name}</strong> a demandé à rejoindre la collectivité <strong>${collectivity.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+            </p>
+            
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${redirectUrl}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
+                Gérer les accès
+              </a>
+            </div>
+
+            <p style="font-size: 16px; margin-bottom: 0;">
+              Cordialement,<br>
+              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+            </p>
+          </div>
+          
+          <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 12px; color: #768776; margin: 0;">
+              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+            </p>
+          </div>
+        </div>
+      `;
+
+      await brevo.sendEmail(bodyHTML, {
+        subject: 'Nouvelle demande d\'accès à votre collectivité',
+        sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+        to: [{ email: admin.email }],
       });
     }
 
     user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: user.role || 'user', status: 'pending' }];
     await user.save();
-
-    await brevo.sendEmail(`<p>uwu</p>`, {
-      subject: 'Demande de collectivité',
-      sender: { name: 'InTerLUD+', email: 'leopold@selego.co' },
-      to: [{ email: 'leopold@selego.co' }],
-    });
 
     res.status(200).send({ ok: true, data: user });
   } catch (error) {

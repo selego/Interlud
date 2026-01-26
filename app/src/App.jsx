@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom"
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate, useSearchParams } from "react-router-dom"
 import { Toaster } from "react-hot-toast"
 import * as Sentry from "@sentry/browser"
 import toast from "react-hot-toast"
@@ -86,7 +86,9 @@ const PublicLayout = () => {
 
 const UserLayout = () => {
   const [loading, setLoading] = useState(true)
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user, setUser, setCollectivity, setEconomicActor } = useStore()
+  
   async function fetchUser() {
     try {
       const { ok, token, user } = await api.get("/user/signin_token")
@@ -106,11 +108,36 @@ const UserLayout = () => {
 
   const loadCollectivity = async () => {
     if (!user) return
+    const collectivityIdFromUrl = searchParams.get("collectivityId")
     const savedCollectivityId = localStorage.getItem("selectedCollectivityId")
-    if (!savedCollectivityId) return
+    const collectivityId = collectivityIdFromUrl || savedCollectivityId
+    
+    if (!collectivityId) {
+      const approvedCollectivities = user.collectivities?.filter((c) => c.status === "approved") || []
+      if (approvedCollectivities.length > 0) {
+        const firstCollectivityId = approvedCollectivities[0].id
+        try {
+          const { ok, data } = await api.get(`/collectivity/${firstCollectivityId}`)
+          if (ok) {
+            localStorage.setItem("selectedCollectivityId", firstCollectivityId)
+            setCollectivity(data)
+          }
+        } catch (error) {
+          console.error("Erreur lors de l'auto-sélection de la collectivité", error)
+        }
+      }
+      return
+    }
+    
     try {
-      const { ok, data, code } = await api.get(`/collectivity/${savedCollectivityId}`)
+      const { ok, data, code } = await api.get(`/collectivity/${collectivityId}`)
       if (!ok) return toast.error(code || "Erreur lors de la récupération de la collectivité")
+      
+      if (collectivityIdFromUrl) {
+        localStorage.setItem("selectedCollectivityId", collectivityIdFromUrl)
+        setSearchParams({})
+      }
+      
       setCollectivity(data)
     } catch (error) {
       toast.error(error || "Erreur lors de la récupération de la collectivité")
@@ -135,7 +162,7 @@ const UserLayout = () => {
   useEffect(() => {
     loadCollectivity()
     if (user && user?.role === "economic_actor") loadEconomicActor()
-  }, [user])
+  }, [user, searchParams])
 
   if (loading) return <Loader />
 
