@@ -18,6 +18,7 @@ const ERROR_CODES = {
   ALREADY_PAID: 'Déjà payé',
   INDICATOR_ALREADY_EXISTS: 'Indicateur déjà existant',
   FORBIDDEN: 'Accès refusé',
+  COLLECTIVITY_ALREADY_EXISTS: 'Collectivité déjà existante',
 };
 
 module.exports = ERROR_CODES;

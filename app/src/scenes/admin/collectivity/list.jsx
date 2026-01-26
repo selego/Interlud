@@ -72,12 +72,12 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
       try {
         setLoading(true)
         if (!name.trim()) return toast.error("Veuillez entrer un nom pour la collectivité")
-        const { ok, data } = await api.post("/collectivity/", { name })
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        const { ok, data, code } = await api.post("/collectivity/", { name })
+        if (!ok) return toast.error(code || "Une erreur est survenue")
         setUser({ ...user })
         navigate(`/admin/collectivity/${data._id}`)
       } catch (error) {
-        toast.error(error || "Une erreur est survenue")
+        toast.error(error.code || "Une erreur est survenue")
       } finally {
         setLoading(false)
       }

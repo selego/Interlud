@@ -63,6 +63,9 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const existingCollectivity = await Collectivity.findOne({ name: req.body.name });
+    if (existingCollectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.COLLECTIVITY_ALREADY_EXISTS });
+
     const collectivity = await Collectivity.create(req.body);
     collectivity.excelFileId = await duplicateExcelFile(`${collectivity.name}.xlsx`);
     await collectivity.save();
