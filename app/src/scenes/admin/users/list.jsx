@@ -64,7 +64,6 @@ export default function List() {
               </td>
               <td className="px-6 py-4 text-sm text-gray-600">{user.collectivities?.length || 0}</td>
               <td className="px-6 py-4 text-sm text-gray-600">
-                {" "}
                 {user.last_login_at && !isNaN(new Date(user.last_login_at).getTime()) ? new Date(user.last_login_at).toLocaleDateString("fr-FR") : "Jamais"}
               </td>
             </tr>

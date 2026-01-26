@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
+import { FiList, FiCheckCircle, FiTrendingUp, FiAlertTriangle, FiPlusCircle } from "react-icons/fi"
 import { Navigate, useNavigate } from "react-router-dom"
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
@@ -9,6 +10,7 @@ import ProgressCircle from "@/components/ProgressCircle"
 import DebouncedInput from "@/components/debounceInput"
 import Loader from "@/components/loader"
 import Modal from "@/components/modal"
+import Onboarding from "./Onboarding"
 
 const getStatutBadgeClass = (statut) => {
   if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
@@ -18,34 +20,41 @@ const getStatutBadgeClass = (statut) => {
   return { class: "bg-gray-100 text-gray-700", text: "Nouvelle" }
 }
 
+const INDICATORS_CONFIG = [
+  { key: 'GES', label: 'GES', unit: 'tCO2e', color: '#2DAC6A' },
+  { key: 'PM', label: 'PM', unit: 'tPart', color: '#56BDB8' },
+  { key: 'HC', label: 'HC', unit: 'tHC', color: '#F59600' },
+  { key: 'NOx', label: 'NOx', unit: 'tNOx', color: '#8B5CF6' },
+  { key: 'CO', label: 'CO', unit: 'tCO', color: '#EC4899' },
+  { key: 'Énergie', label: 'Énergie', unit: 'GWh', color: '#3B82F6' },
+];
+
+const formatGES = (value) => {
+  if (value === 0 || isNaN(value)) return '0 tCO₂e';
+  const absVal = Math.abs(value);
+  if (absVal >= 1000) return `${(value / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ktCO₂e`;
+  return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} tCO₂e`;
+};
+
+const formatEnergie = (value) => {
+  if (value === 0 || isNaN(value)) return '0 GWh';
+  return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} GWh`;
+};
+
 export default function Home() {
   const [actions, setActions] = useState([])
   const navigate = useNavigate()
   const { collectivity, user } = useStore()
   const [filters, setFilters] = useState({ search: "", status: "" })
   const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
-  const [evolutionStatuts, setEvolutionStatuts] = useState([])
-  const [period, setPeriod] = useState("month")
-  const [visibleLines, setVisibleLines] = useState({ actionsCompleted: true, actionsInProgress: true, actionsBlocked: true, actionsUpcoming: true })
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [globalGains, setGlobalGains] = useState(null)
   
-  const fetchEvolutionStatuts = async () => {
-    try {
-      const { ok, data, code } = await api.post("/dashboard/evolution-statuts", { collectivity_id: collectivity._id, period: period })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setEvolutionStatuts(data)
-      console.log("evolutionStatuts", data)
-    } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
-    }
-  }
-
   const fetchSynthese = async () => {
     try {
-      const { ok, data, code } = await api.post("/dashboard/synthese", { collectivity_id: collectivity._id, period: period })
+      const { ok, data, code } = await api.post("/dashboard/synthese", { collectivity_id: collectivity._id })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setSynthese(data)
-      console.log("synthese", data)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }
@@ -60,6 +69,17 @@ export default function Home() {
       toast.error(error.code || "Une erreur est survenue")
     }
   }
+
+  const fetchGlobalGains = async () => {
+    if (!collectivity) return;
+    try {
+      const { ok, data } = await api.post('/excel/global-gains', { collectivity: collectivity });
+      if (!ok) return console.error(data.error || "Une erreur est survenue");
+      setGlobalGains(data);
+    } catch (error) {
+      console.error(error.message || "Une erreur est survenue");
+    }
+  };
 
   const exportExcelFile = async () => {
     try {
@@ -80,20 +100,21 @@ export default function Home() {
     if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin")
       return navigate("/collectivity/join", { replace: true })
     if (!collectivity) return
+
     fetchActions()
     fetchSynthese()
-    fetchEvolutionStatuts()
-  }, [collectivity, filters, period])
+    fetchGlobalGains()
+  }, [collectivity, filters])
 
   if (!collectivity) return <Loader />
 
-  const pieData = [
-    { name: "Terminées", value: synthese.actionsCompleted || 0 },
-    { name: "À venir", value: synthese.actionsUpcoming || 0 },
-    { name: "En progression", value: synthese.actionsInProgress || 0 },
-    { name: "Sans statut", value: synthese.actionsWithoutStatus || 0 },
-    { name: "Bloquées", value: synthese.actionsBlocked || 0 }
-  ]
+  if (!collectivity.is_onboarded) {
+    return (
+      <div className="min-h-screen bg-gray-50/50 p-8">
+         <Onboarding collectivity={collectivity} />
+      </div>
+    )
+  }
 
   return (
     <div className="">
@@ -104,7 +125,6 @@ export default function Home() {
               <h1 className="text-font-primary text-4xl">
                 Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
               </h1>
-              <p className="text-base mt-1">Ce tableau de bord est personnel</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -113,275 +133,26 @@ export default function Home() {
               >
                 Export Excel
               </button>
-              <Select
-                value={period}
-                onChange={(value) => setPeriod(value)}
-                options={[
-                  { value: "today", label: "Aujourd'hui" },
-                  { value: "week", label: "Cette semaine" },
-                  { value: "month", label: "Ce mois-ci" },
-                  { value: "year", label: "Cette année" }
-                ]}
-              />
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-15 gap-6 mb-12">
-          <div className="xl:col-span-3 p-6 h-[430px] card-shadow">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-font-primary text-2xl">Synthèse</h3>
-            </div>
-
-            <div className="space-y-4">
-              <div className=" gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCreated}</span>
-                </div>
-                <span className="text-lg text-font-secondary">Total actions</span>
-              </div>
-
-              <div className="gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsInProgress}</span>
-                </div>
-
-                <span className="text-lg text-font-secondary">Actions en progression</span>
-              </div>
-
-              <div className="gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsCompleted}</span>
-                </div>
-
-                <span className="text-lg text-font-secondary">Actions complétées</span>
-              </div>
-              <div className="gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-gray-900">{synthese.actionsBlocked}</span>
-                </div>
-
-                <span className="text-lg text-font-secondary">Actions bloquées</span>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
+          <div className="xl:col-span-9">
+            <KeyIndicatorsCard globalGains={globalGains} />
           </div>
-
-          {/* Card Répartition des actions */}
-          <div className="xl:col-span-4 p-6 h-full card-shadow">
-            <h3 className="font-bold text-font-primary text-2xl mb-4">Répartition des actions</h3>
-
-            {/* Donut Chart */}
-            <div className="h-[340px] flex flex-col items-center justify-center relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={4} dataKey="value">
-                    {pieData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          entry.name === "Complétées"
-                            ? "#2DAC6A"
-                            : entry.name === "En progression"
-                            ? "#F59600"
-                            : entry.name === "À venir"
-                            ? "#56BDB8"
-                            : entry.name === "Sans statut"
-                            ? "#9CA3AF"
-                            : entry.name === "Bloquées"
-                            ? "#EE4B2B"
-                            : "#56BDB8"
-                        }
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white border-2 border-gray-800 rounded-lg p-3 shadow-lg">
-                            <p className="font-bold text-sm mb-1">{payload[0].name}</p>
-                            <p className="text-sm text-gray-600">
-                              Nombre <span className="text-primary-teal font-bold text-lg ml-1">{payload[0].value}</span>
-                            </p>
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-
-              <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-center text-xs text-gray-600">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                  <span>Actions complétées</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
-                  <span>Actions en progression</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
-                  <span>Actions à venir</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                  <span>Actions bloquées</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  <span>Nouvelles actions</span>
-                </div>
-              </div>
-            </div>
+          <div className="xl:col-span-3">
+            <ActionsDistribution synthese={synthese} />
           </div>
+        </div>
 
-          <div className="xl:col-span-8 p-6 h-full card-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-font-primary text-2xl">Évolutions du statut des actions</h3>
-            </div>
-
-            <div className="flex gap-2 mb-6 flex-wrap">
-              <button
-                onClick={() => setVisibleLines({ ...visibleLines, actionsCompleted: !visibleLines.actionsCompleted })}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsCompleted ? "bg-primary-green text-white" : "border border-gray-300 text-gray-700 bg-white"
-                }`}
-              >
-                Complétées
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.actionsCompleted ? (
-                    <>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </>
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  )}
-                </svg>
-              </button>
-              <button
-                onClick={() => setVisibleLines({ ...visibleLines, actionsInProgress: !visibleLines.actionsInProgress })}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsInProgress ? "bg-primary-orange text-white" : "border border-gray-300 text-gray-700 bg-white"
-                }`}
-              >
-                En progression
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.actionsInProgress ? (
-                    <>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </>
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  )}
-                </svg>
-              </button>
-              <button
-                onClick={() => setVisibleLines({ ...visibleLines, actionsUpcoming: !visibleLines.actionsUpcoming })}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  visibleLines.actionsUpcoming ? "bg-primary-teal text-white" : "border border-gray-300 text-gray-700 bg-white"
-                }`}
-              >
-                À venir
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {visibleLines.actionsUpcoming ? (
-                    <>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </>
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                    />
-                  )}
-                </svg>
-              </button>
-            </div>
-
-            <div className="h-[260px] rounded-lg overflow-hidden mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={evolutionStatuts} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="mois" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={{ stroke: "#e5e7eb" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={{ stroke: "#e5e7eb" }} />
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white border-2 border-primary-orange rounded-lg p-3 shadow-lg">
-                            <p className="font-bold text-sm mb-1">{label}</p>
-                            {payload.map((entry, index) => (
-                              <p key={index} className="text-sm text-gray-600">
-                                Nombre d'actions {entry.name?.toLowerCase()}
-                                <span className="text-primary-orange font-bold text-lg ml-1">{entry.value}</span>
-                              </p>
-                            ))}
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                  {visibleLines.actionsCompleted && (
-                    <Line type="monotone" dataKey="actionsCompleted" stroke="#2DAC6A" strokeWidth={3} name="Complétées" dot={{ fill: "#2DAC6A", r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                  {visibleLines.actionsUpcoming && (
-                    <Line type="monotone" dataKey="actionsUpcoming" stroke="#56BDB8" strokeWidth={3} name="À venir" dot={{ fill: "#56BDB8", r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                  {visibleLines.actionsInProgress && (
-                    <Line type="monotone" dataKey="actionsInProgress" stroke="#F59600" strokeWidth={3} name="En progression" dot={{ fill: "#F59600", r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Légende */}
-            <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-start text-xs text-gray-600">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary-green"></div>
-                <span>Actions complétées</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary-teal"></div>
-                <span>Actions à venir</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary-orange"></div>
-                <span>Actions en progression</span>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-12">
+           <div className="xl:col-span-6">
+            <EvolutionChart globalGains={globalGains} />
+           </div>
+           <div className="xl:col-span-6">
+            <ActionContributionSection collectivity={collectivity} />
+           </div>
         </div>
 
         <div className="mb-6">
@@ -407,10 +178,12 @@ export default function Home() {
                 value={filters.status}
                 onChange={(value) => setFilters({ ...filters, status: value })}
                 options={[
-                  { value: "", label: "Tous" },
+                  { value: "", label: "Tous les statuts" },
                   { value: "completed", label: "Terminée" },
                   { value: "in_progress", label: "À compléter" },
-                  { value: "upcoming", label: "En attente" }
+                  { value: "upcoming", label: "En attente" },
+                  { value: "blocked", label: "Bloquée" },
+                  { value: "no_status", label: "Sans statut" }
                 ]}
               />
             </div>
@@ -460,6 +233,237 @@ export default function Home() {
         </div>
       </div>
       <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
+    </div>
+  )
+}
+
+function KeyIndicatorsCard({ globalGains }) {
+  if (!globalGains) return <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[300px]"><Loader /></div>;
+
+  return (
+    <div className="h-full rounded-2xl p-8 text-white relative overflow-hidden flex flex-col justify-between shadow-lg" style={{ background: 'linear-gradient(135deg, #2DAC6A 0%, #1D7E4F 100%)' }}>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-white opacity-5 rounded-full transform translate-x-1/3 -translate-y-1/3 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-black opacity-5 rounded-full transform -translate-x-1/3 translate-y-1/3 pointer-events-none"></div>
+
+      <div className="relative z-10">
+        <h3 className="text-green-50 text-base font-medium mb-1 opacity-90">GES évités (mesuré) • Évolution cumulée</h3>
+        
+        <div className="mt-4 mb-6">
+          <div className="text-6xl font-bold tracking-tight mb-4">
+            {formatGES(globalGains.gesData.evolutionCumuleeReel).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
+            <span className="text-3xl font-medium ml-2 opacity-80">
+               {globalGains.gesData.evolutionCumuleeReel >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
+            </span>
+          </div>
+          
+          <div className="inline-flex items-center bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/10">
+            <span className="text-2xl mr-2">✈️</span>
+            <span className="text-sm font-medium">
+              Équivalent à <strong className="text-white">{Math.round((globalGains.gesData.evolutionCumuleeReel / 250)*2).toLocaleString('fr-FR')} vols transatlantiques évités</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 grid grid-cols-3 gap-8 border-t border-white/20 pt-6">
+        <div>
+          <p className="text-green-100 text-sm mb-1 opacity-80">Taux d'avancement de la trajectoire GES</p>
+          <p className="text-2xl font-bold">{globalGains.avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} <span className="text-base font-medium opacity-80">%</span></p>
+        </div>
+        <div>
+          <p className="text-green-100 text-sm mb-1 opacity-80">Écart entre gains prévisionnels et réels</p>
+          <p className={`text-2xl font-bold ${globalGains.gesData.ecartAbsolu < 0 ? 'text-red-300' : 'text-green-300'}`}>
+            {globalGains.gesData.ecartAbsolu > 0 ? '+' : ''}{formatGES(globalGains.gesData.ecartAbsolu).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
+             <span className="text-base font-medium opacity-80 ml-1">
+               {Math.abs(globalGains.gesData.ecartAbsolu) >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
+            </span>
+          </p>
+        </div>
+        <div>
+          <p className="text-green-100 text-sm mb-1 opacity-80">Énergie économisée</p>
+          <p className="text-2xl font-bold">{formatEnergie(globalGains.energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ActionsDistribution({ synthese }) {
+  const total = synthese.actionsCreated || 0;
+  
+  const pieData = [
+    { name: "Complétées", value: synthese.actionsCompleted || 0, color: "#2DAC6A" },
+    { name: "En progression", value: synthese.actionsInProgress || 0, color: "#F59600" },
+    { name: "À venir", value: synthese.actionsUpcoming || 0, color: "#56BDB8" },
+    { name: "Sans statut", value: synthese.actionsWithoutStatus || 0, color: "#9CA3AF" },
+    { name: "Bloquées", value: synthese.actionsBlocked || 0, color: "#EE4B2B" }
+  ].filter(d => d.value > 0);
+
+  const displayData = pieData.length > 0 ? pieData : [{ name: "Aucune", value: 1, color: "#E5E7EB" }];
+
+  return (
+    <div className="h-full card-shadow p-6 flex flex-col">
+      <h3 className="font-bold text-font-primary text-xl mb-4 text-center">Répartition des actions</h3>
+      
+      <div className="flex-1 flex flex-col min-h-[250px]">
+        <div className="flex-1 relative min-h-[180px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie 
+                data={displayData} 
+                cx="50%" 
+                cy="50%" 
+                innerRadius={60} 
+                outerRadius={80} 
+                paddingAngle={4} 
+                dataKey="value"
+              >
+                {displayData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                ))}
+              </Pie>
+              <Tooltip
+                wrapperStyle={{ zIndex: 1000 }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length && pieData.length > 0) {
+                    return (
+                      <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-xl">
+                        <p className="font-bold text-sm mb-1">{payload[0].name}</p>
+                        <p className="text-sm text-gray-600">
+                          <span className="font-bold text-lg ml-1" style={{color: payload[0].payload.color}}>{payload[0].value}</span> actions
+                        </p>
+                      </div>
+                    )
+                  }
+                  return null
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-3xl font-bold text-gray-900">{synthese.actionsCreated}</span>
+            <span className="text-sm text-gray-500 font-medium">Total</span>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
+          {pieData.map((item, index) => (
+            <div key={index} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 truncate">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="text-gray-600 truncate" title={item.name}>{item.name}</span>
+              </div>
+              <span className="font-semibold text-gray-900 ml-2">
+                {total > 0 ? Math.round((item.value / total) * 100) : 0}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EvolutionChart({ globalGains }) {
+  const [selectedIndicator, setSelectedIndicator] = useState('GES');
+  
+  if (!globalGains) return <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]"><Loader /></div>;
+  
+  const selectedIndex = INDICATORS_CONFIG.findIndex(c => c.key === selectedIndicator);
+  
+  const evolutionData =  globalGains.indicators[selectedIndex].yearlyPrev.map((item, i) => ({year: item.year, previsionnel: item.value, reel:  globalGains.indicators[selectedIndex].yearlyReel[i]?.value || 0 }));
+
+  return (
+    <div className="h-full card-shadow p-6 flex flex-col">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h3 className="font-bold text-font-primary text-xl">Évolution {selectedIndicator} ({ globalGains.indicators[selectedIndex].unit})</h3>
+          <p className="text-sm text-gray-500 mt-1">Impact de la charte sur la collectivité</p>
+        </div>
+        
+        <div className="flex bg-gray-100 rounded-lg p-1">
+          {INDICATORS_CONFIG.map((config) => (
+             <button
+               key={config.key}
+               onClick={() => setSelectedIndicator(config.key)}
+               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                 selectedIndicator === config.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+               }`}
+             >
+               {config.label}
+             </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-[300px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={evolutionData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+            <XAxis 
+              dataKey="year" 
+              axisLine={false} 
+              tickLine={false} 
+              tick={{ fontSize: 12, fill: '#6B7280' }} 
+              dy={10}
+            />
+            <YAxis 
+              axisLine={false} 
+              tickLine={false} 
+              tick={{ fontSize: 12, fill: '#6B7280' }} 
+              tickFormatter={(v) => {
+                if (v >= 1000) return `${(v/1000).toFixed(0)}k`;
+                return v;
+              }}
+            />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-xl">
+                      <p className="font-bold text-sm mb-2">{label}</p>
+                      {payload.map((entry, index) => (
+                        <div key={index} className="flex items-center gap-2 text-sm mb-1">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                          <span className="text-gray-600">{entry.name}:</span>
+                          <span className="font-semibold">{entry.value.toLocaleString('fr-FR')} { globalGains.indicators[selectedIndex].unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Legend 
+               verticalAlign="bottom" 
+               height={36} 
+               iconType="circle"
+               formatter={(value, entry) => <span className="text-sm text-gray-600 ml-2">{value}</span>}
+            />
+            <Line
+              type="monotone"
+              dataKey="reel"
+              name="Mesuré (réel cumulé)"
+              stroke="#2DAC6A"
+              strokeWidth={3}
+              dot={{ fill: '#2DAC6A', r: 4, strokeWidth: 2, stroke: '#fff' }}
+              activeDot={{ r: 6, strokeWidth: 0 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="previsionnel"
+              name="Trajectoire prévisionnelle"
+              stroke="#86EFAC"
+              strokeWidth={3}
+              strokeDasharray="4 4"
+              dot={false}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -629,3 +633,95 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     </Modal>
   )
 }
+
+function ActionContributionSection({ collectivity }) {
+  const [actionGains, setActionGains] = useState([]);
+  const [collectivityActions, setCollectivityActions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchActionGains = async () => {
+    if (!collectivity) return;
+    try {
+      setIsLoading(true);
+      const { ok, data, code } = await api.post('/excel/action-contribution', { collectivity: collectivity });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      setActionGains(data);
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchCollectivityActions = async () => {
+    if (!collectivity) return;
+    try {
+      const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id });
+      if (!ok) return toast.error(data.code || "Une erreur est survenue");
+      setCollectivityActions(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    fetchActionGains();
+    fetchCollectivityActions();
+  }, [collectivity]);
+
+  if (isLoading) {
+    return (
+      <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
+        <Loader />
+      </div>
+    );
+  }
+
+  const filteredGains = actionGains.filter(gain => {
+    return collectivityActions.some(action => action.excel_worksheetname === gain.action);
+  }).map(gain => {
+    const action = collectivityActions.find(a => a.excel_worksheetname === gain.action);
+    return {...gain, displayName: action ? action.name : gain.action
+    };
+  });
+
+
+  return (
+    <div className="h-full card-shadow p-6 flex flex-col">
+      <div className="mb-6">
+        <h3 className="font-bold text-font-primary text-xl">Contribution des actions</h3>
+        <p className="text-sm text-gray-500 mt-1">Part de chaque action dans les GES évités</p>
+      </div>
+
+      <div className="flex-1 space-y-4">
+        {filteredGains.slice(0, 4).map((action, index) => {
+          const totalReduction = filteredGains.reduce((acc, curr) => acc + Math.abs(curr.ges), 0);
+          return (
+            <div key={index} className={`flex flex-col gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors`}>
+              <div className="font-bold text-gray-900 text-sm truncate" title={action.displayName}>
+                {action.displayName}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-6 bg-gray-100 rounded flex overflow-hidden relative">
+                   <div 
+                     className={`h-full ${action.ges < 0 ? 'bg-[#2DAC6A]' : 'bg-[#EF4444]'}`} 
+                     style={{ width: `${Math.min((Math.abs(action.ges) /  Math.max(...filteredGains.map(a => Math.abs(a.ges)), 1)) * 100, 100)}%` }}
+                   />
+                   <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-gray-700 drop-shadow-sm">
+                     {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
+                   </span>
+                </div>
+                
+                <div className={`w-14 text-right text-sm font-bold ${action.ges < 0 ? 'text-[#2DAC6A]' : 'text-[#EF4444]'}`}>
+                  {(totalReduction > 0 ? (Math.abs(action.ges) / totalReduction) * 100 : 0).toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

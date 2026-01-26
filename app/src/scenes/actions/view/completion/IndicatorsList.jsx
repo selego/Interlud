@@ -6,11 +6,6 @@ const groupIndicatorValuesByCategory = indicatorValues => {
   if (!indicatorValues || indicatorValues.length === 0) return {};
   
   const grouped = indicatorValues
-    .sort((a, b) => {
-      const nameA = (a.indicator_name || "").toLowerCase();
-      const nameB = (b.indicator_name || "").toLowerCase();
-      return nameA !== nameB ? nameA.localeCompare(nameB) : (a.indicator_id || "").localeCompare(b.indicator_id || "");
-    })
     .reduce((acc, indicatorValue) => {
       const categoryName = indicatorValue.indicator_category_name;
       const subCategoryName = indicatorValue.indicator_sub_category_name;

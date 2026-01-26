@@ -19,14 +19,6 @@ const isIndicatorValueFilled = (indicatorValue) => {
   return false;
 };
 
-const sortIndicatorValues = (a, b) => {
-  if (a.indicator_category_name !== b.indicator_category_name) return a.indicator_category_name.localeCompare(b.indicator_category_name);
-  const subCatA = a.indicator_sub_category_name || '';
-  const subCatB = b.indicator_sub_category_name || '';
-  if (subCatA !== subCatB) return subCatA.localeCompare(subCatB);
-  return (a.indicator_name || "").toLowerCase().localeCompare((b.indicator_name || "").toLowerCase());
-};
-
 export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
   const [economicActorData, setEconomicActorData] = useState({});
 
@@ -108,7 +100,6 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
             if (!conditionIndicator) return true;
             return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
           })
-          .sort(sortIndicatorValues)
           .map(indicatorValue => {
           const isSelected = selectedIndicatorValue?._id === indicatorValue._id;
           
@@ -132,7 +123,7 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                 <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <IndicatorValueInput
-                    key={`${indicatorValue._id}-${indicatorValue.value?.[indicatorValue.indicator_type] || 'empty'}`}
+                    key={indicatorValue._id}
                     value={indicatorValue.value?.[indicatorValue.indicator_type]}
                     indicatorType={indicatorValue.indicator_type}
                     options={indicatorValue.indicator_value_possibilities}

@@ -5,6 +5,7 @@ import Select from "@/components/Select"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
+import Loader from "@/components/loader"
 
 const getStatusLabel = (status) => {
   if (status === "completed") return "Terminée"
@@ -99,7 +100,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [isCustomVersion, setIsCustomVersion] = useState(false)
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
-
+    const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
+    const [isLoading, setIsLoading] = useState(false)
     const fetchActions = async () => {
       try {
         const { ok, data , code} = await api.post("/action/search", { type: "global" })
@@ -116,9 +118,11 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
     const createAction = async () => {
       try {
+        setIsLoading(true)
         if (!collectivity?._id) return toast.error("Collectivité non trouvée")
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
+        if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
 
         const selectedAction = actions.find(a => a._id === selectedActionId)
         const payload = {
@@ -127,7 +131,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           name: isCustomVersion ? customName : selectedAction.name,
           type: isCustomVersion ? "custom" : "reference",
           collectivity_id: collectivity._id,
-          collectivity_name: collectivity.name
+          collectivity_name: collectivity.name,
+          started_before_interlud: startedBeforeInterlud
         }
 
         const { ok, data , code} = await api.post("/action/create_action_with_default_indicators", payload)
@@ -135,8 +140,10 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {
         toast.error(error.message || "Une erreur est survenue")
+      } finally {
+        setIsLoading(false)
       }
-    }
+    }   
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
@@ -145,7 +152,13 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
         </div>
 
-        {/* Action Selection */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+          </div>
+        )}
+        {!isLoading && (
+          <>
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Choisissez parmi les actions disponibles <span className="text-red-500">*</span>
@@ -159,8 +172,38 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           />
         </div>
 
+
+
         {selectedActionId && (
+          
           <div className="mb-6">
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                La mise en œuvre avait-elle commencé en amont de l'engagement de votre territoire dans la démarche InTerLUD+ ? <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="startedBeforeInterlud"
+                    checked={startedBeforeInterlud === true}
+                    onChange={() => setStartedBeforeInterlud(true)}
+                    className="w-4 h-4 text-[#2DAC6A] border-gray-300 focus:ring-[#2DAC6A]"
+                  />
+                  <span className="text-sm text-gray-700">Oui</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="startedBeforeInterlud"
+                    checked={startedBeforeInterlud === false}
+                    onChange={() => setStartedBeforeInterlud(false)}
+                    className="w-4 h-4 text-[#2DAC6A] border-gray-300 focus:ring-[#2DAC6A]"
+                  />
+                  <span className="text-sm text-gray-700">Non</span>
+                </label>
+              </div>
+            </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <div className="relative flex items-center">
                 <input
@@ -181,6 +224,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 Créer une version personnalisée de cette action
               </span>
             </label>
+
+
           </div>
         )}
 
@@ -209,6 +254,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
             Créer
           </button>
         </div>
+        </>
+        )}
       </div>
     </Modal>
   )

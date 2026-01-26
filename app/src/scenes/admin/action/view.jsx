@@ -221,31 +221,15 @@ export default function View() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-2">Type</label>
-                <Select
-                  value={action.type}
-                  onChange={(value) => setAction({...action, type: value})}
-                  options={[
-                    { value: "custom", label: "Custom" },
-                    { value: "reference", label: "Reference" }
-                  ]}
-                />
+                <div className="w-full input-primary bg-gray-50">
+                  {action.type || "Aucun type"}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Parent Action liée</label>
-                <Select
-                  value={action.action_parent_id || ""}
-                  onChange={(value) => {
-                    const selectedAction = parentActions.find(action => action._id === value);
-                    setAction({ ...action, action_parent_id: value, action_parent_name: selectedAction?.name || "" });
-                  }}
-                  options={[
-                    { value: "", label: "Sélectionner" },
-                    ...parentActions.map((parentAction) => ({
-                      value: parentAction._id,
-                      label: parentAction.name
-                    }))
-                  ]}
-                />
+                <div className="w-full input-primary bg-gray-50">
+                  {action.action_parent_name || "Aucune action"}
+                </div>
               </div>
             </div>
 
@@ -268,21 +252,9 @@ export default function View() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-2">Collectivité</label>
-                <Select
-                  value={action.collectivity_id || ""}
-                  onChange={(value) => setAction({
-                    ...action,
-                    collectivity_id: value,
-                    collectivity_name: collectivities.find(c => c._id === value)?.name
-                  })}
-                  options={[
-                    { value: "", label: "Sélectionner" },
-                    ...collectivities.map((collectivity) => ({
-                      value: collectivity._id,
-                      label: collectivity.name
-                    }))
-                  ]}
-                />
+                <div className="w-full input-primary bg-gray-50">
+                  {action.collectivity_name || "Aucune collectivité"}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Date de début</label>

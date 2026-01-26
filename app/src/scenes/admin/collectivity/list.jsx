@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Modal from "@/components/modal"
 import api from "@/services/api"
+import useStore from "@/services/store"
 import toast from "react-hot-toast"
 
 export default function List() {
@@ -63,16 +64,22 @@ export default function List() {
 
 const AddCollectivityModal = ({ isOpen, onClose }) => {
     const navigate = useNavigate()
+    const { user, setUser } = useStore()
     const [name, setName] = useState("")
+    const [loading, setLoading] = useState(false)
 
     const createCollectivity = async () => {
       try {
+        setLoading(true)
         if (!name.trim()) return toast.error("Veuillez entrer un nom pour la collectivité")
         const { ok, data } = await api.post("/collectivity/", { name })
         if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        setUser({ ...user })
         navigate(`/admin/collectivity/${data._id}`)
       } catch (error) {
         toast.error(error || "Une erreur est survenue")
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -83,6 +90,14 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une collectivité</h2>
         </div>
 
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+          </div>
+        )}
+
+        {!loading && (
+          <>
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Nom de la collectivité
@@ -97,10 +112,12 @@ const AddCollectivityModal = ({ isOpen, onClose }) => {
         </div>
 
         <div className="flex justify-end gap-3">
-          <button onClick={createCollectivity} className="button-primary">
+          <button onClick={createCollectivity} className="button-primary" disabled={loading}>
             Créer
           </button>
         </div>
+        </>
+        )}
       </div>
     </Modal>
   )

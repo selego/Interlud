@@ -47,18 +47,16 @@ export default function List() {
         <thead className="bg-gray-100">
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Collectivité</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {actions.map((action) => (
             <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/action/${action._id}`)}>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
-              <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-xs">{action.description}</td>
+              <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-xs">{action.collectivity_name}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.type}</td>
             </tr>
           ))}
         </tbody>
