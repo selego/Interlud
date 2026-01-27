@@ -86,6 +86,15 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
     if (req.body.createdAt) query.createdAt = { $gte: new Date(req.body.createdAt) };
 
+    // Seul admin@selego.co peut voir les actions des 2 collectivités spécifiques
+    const restrictedCollectivities = ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20'];
+    if (req.user.email !== 'admin@selego.co') {
+      if (req.body.collectivity_id && restrictedCollectivities.includes(req.body.collectivity_id)) {
+        return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+      }
+      if (!req.body.collectivity_id) query.collectivity_id = { $nin: restrictedCollectivities };
+    }
+
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
       query.owner = 'economic_actor';
