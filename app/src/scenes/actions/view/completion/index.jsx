@@ -27,9 +27,19 @@ export default function Completion({ action }) {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
+  const dynamicTabs = [
+    { key: SITUATION_TYPES.INIT, label: "Initiale", situation: SITUATION_TYPES.INIT },
+    { key: SITUATION_TYPES.REF, label: "Référence", situation: SITUATION_TYPES.REF },
+    ...(action.excel_files || []).map((file) => ({key: `prev_${file.year_prev}`,label: `Prév. ${file.year_prev}`,year: file.year_prev,situation: SITUATION_TYPES.PREV})),
+    { key: SITUATION_TYPES.EXPOST, label: "Ex-post", situation: SITUATION_TYPES.EXPOST }
+  ]
+
   const fetchIndicatorsValues = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, situation: activeTab, limit: 10000 })
+      const currentTab = dynamicTabs.find((t) => t.key === activeTab)
+      const searchParams = { action_id: action._id, situation : currentTab?.situation, limit: 10000 }
+      if (currentTab?.year && currentTab?.situation === SITUATION_TYPES.PREV) searchParams.year = currentTab.year
+      const { ok, data, code } = await api.post(`/indicator_value/search`, searchParams)
       if (!ok) return toast.error(code || "Erreur lors du chargement")
       setIndicatorValues(data)
     } catch (error) {
@@ -113,8 +123,9 @@ export default function Completion({ action }) {
     return val !== null && val !== undefined && val !== ""
   }
 
-  const getSituationProgress = (situationKey) => {
-    const values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv))
+  const getSituationProgress = (situationKey, year = null) => {
+    let values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv))
+    if (year && situationKey === SITUATION_TYPES.PREV) values = values.filter((iv) => iv.year === year)
     if (values.length === 0) return 0
     const filled = values.filter(isIndicatorValueFilled).length
     return Math.round((filled / values.length) * 100)
@@ -219,8 +230,8 @@ export default function Completion({ action }) {
         </div>
 
         <div className="flex items-center justify-between border-b border-gray-200 mb-8">
-          <div className="flex">
-            {SITUATION_TABS.map((tab) => (
+          <div className="flex items-center">
+            {dynamicTabs.map((tab) => (
               <button
                 key={tab.key}
                 className={`px-6 py-3 text-sm font-semibold transition-all ${
@@ -231,8 +242,8 @@ export default function Completion({ action }) {
                 <div className="flex items-center gap-2">
                   {tab.label}
                   <div className="flex items-center gap-1 text-xs text-gray-600">
-                    <ProgressCircle percentage={getSituationProgress(tab.key)} size={16} />
-                    <span>{getSituationProgress(tab.key)}%</span>
+                    <ProgressCircle percentage={getSituationProgress(tab.situation, tab.year)} size={16} />
+                    <span>{getSituationProgress(tab.situation, tab.year)}%</span>
                   </div>
                 </div>
               </button>
@@ -281,7 +292,7 @@ export default function Completion({ action }) {
           <div className="w-full lg:w-72 shrink-0">
             <div className="card-shadow p-4 sticky top-8 self-start">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{SITUATION_TABS.find((tab) => tab.key === activeTab)?.label}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{dynamicTabs.find((tab) => tab.key === activeTab)?.label}</h3>
               </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
                 <IndicatorsList indicatorValues={indicatorValues.filter(shouldDisplayIndicator)} onSelectIndicatorValue={setSelectedIndicatorValue} />
@@ -291,7 +302,7 @@ export default function Completion({ action }) {
 
           <div className="flex-1">
             <SituationTab
-              situation={activeTab}
+              situation={dynamicTabs.find((t) => t.key === activeTab)?.situation || activeTab}
               indicatorValues={indicatorValues.filter(shouldDisplayIndicator)}
               onUpdate={() => {
                 fetchIndicatorsValues()

@@ -2,14 +2,10 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const Collectivity = require('../models/collectivity');
-const Action = require('../models/action');
-const Indicator = require('../models/indicator');
-const IndicatorValue = require('../models/indicator_value');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
-const { duplicateExcelFile } = require('../services/microsoftGraph');
+const { createFolder } = require('../services/microsoftGraph');
 
-// Catégories d'indicateurs à inclure lors de la création d'une collectivité
 const GLOBAL_INDICATOR_CATEGORIES = [
   'Fret routier',
   'Données de base',
@@ -19,6 +15,7 @@ const GLOBAL_INDICATOR_CATEGORIES = [
   'Cyclologistique',
   'Déplacements de particuliers',
 ];
+
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -50,7 +47,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
 
     // Seul admin@selego.co peut voir ces 2 collectivités, les autres ne les voient pas
-    if (req.user.email !== 'admin@selego.co') query._id = { $nin: ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20'] };
+    if (req.user.email !== 'admin@selego.co') query._id = { $nin: ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20',] };
 
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
@@ -70,51 +67,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (existingCollectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.COLLECTIVITY_ALREADY_EXISTS });
 
     const collectivity = await Collectivity.create(req.body);
-    collectivity.excelFileId = await duplicateExcelFile(`${collectivity.name}.xlsx`);
+    collectivity.sharepoint_folder_id = await createFolder(collectivity.name);
     await collectivity.save();
-
-    const actionParcTypes = await Action.create({name: 'Parc types',type: 'reference',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status'});
-    const actionBasicData = await Action.create({name: 'Données de base',type: 'reference',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status'});
-
-    const indicators = await Indicator.find({ indicator_category_name: { $in: GLOBAL_INDICATOR_CATEGORIES } });
-    const allSituations = ['init', 'ref', 'prev', 'expost'];
-    const createdIndicatorValues = [];
-
-    for (const indicator of indicators) {
-      const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
-      const action = indicator.indicator_category_name === 'Données de base' ? actionBasicData : actionParcTypes;
-      for (const situation of situationsForIndicator) {
-        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
-        const indicatorValue = {
-          action_id: action._id,
-          action_name: action.name,
-          collectivity_id: collectivity._id,
-          collectivity_name: collectivity.name,
-          owner: 'collectivity',
-          indicator_id: indicator._id,
-          indicator_name: indicator.name,
-          indicator_type: indicator.value_type,
-          situation,
-          indicator_value_unit: indicator.value_unit,
-          value_default: { [indicator.value_type]: defaultValue },
-          indicator_value_possibilities: indicator.value_possibilities || [],
-          indicator_category_id: indicator.indicator_category_id,
-          indicator_category_name: indicator.indicator_category_name,
-          indicator_sub_category_id: indicator.indicator_sub_category_id,
-          indicator_sub_category_name: indicator.indicator_sub_category_name,
-          indicator_excel_id: indicator.excel_indicator_id,
-          excel_line_number: indicator.excel_line_number?.[situation],
-        };
-
-        if (action.name === 'Parc types') indicatorValue.value = { [indicator.value_type]: defaultValue };
-
-        const displayCondition = indicator.display_condition?.[situation];
-        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
-        createdIndicatorValues.push(indicatorValue);
-      }
-    }
-
-    if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
     return res.status(200).send({ ok: true, data: collectivity });
   } catch (error) {

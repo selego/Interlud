@@ -8,7 +8,9 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
-const { updateExcelCellByIndicatorId } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile } = require('../services/microsoftGraph');
+
+const GLOBAL_INDICATOR_CATEGORIES = ['Fret routier','Données de base',"Données de production/consommation d'énergie",'Fret fluvial','Fret ferroviaire','Cyclologistique','Déplacements de particuliers'];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -150,13 +152,29 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_init) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_ref) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    const collectivity = await Collectivity.findById(req.body.collectivity_id);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Vérifier si une action avec la même année init existe déjà
+    const existingActionSameYear = await Action.findOne({ collectivity_id: collectivity._id, year_init: req.body.year_init, 'excel_files.0.excel_file_id': { $exists: true } });
+
+    // Créer l'Excel : dupliquer depuis une action existante ou depuis le master template
+    const sourceExcelId = existingActionSameYear?.excel_files?.[0]?.excel_file_id || null;
+    const excelFileId = await duplicateExcelFile(`${req.body.name}_Prev${req.body.year_prev}.xlsx`,collectivity.sharepoint_folder_id,sourceExcelId);
+
+    // Créer l'action
     const action = await Action.create({
       ...req.body,
       excel_worksheetname: parentAction.excel_worksheetname,
+      excel_files: [{ year_prev: req.body.year_prev, excel_file_id: excelFileId }],
       last_modif_by_id: req.user._id,
       last_modif_by_name: req.user.name,
       last_modif_by_email: req.user.email,
@@ -164,6 +182,79 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    // Vérifier si les actions config existent déjà pour cette année init
+    const configActionExists = await Action.findOne({collectivity_id: collectivity._id,type: 'config',year_init: req.body.year_init});
+
+    if (!configActionExists) {
+      const configActions = [];
+
+      // Action base_data
+      const actionBasicData = await Action.create({name: `Données de base - ${req.body.year_init}`,type: 'config',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status',year_init: req.body.year_init});
+      configActions.push({ action: actionBasicData, category: 'Données de base' });
+
+      // Action parc_type
+      const actionParcTypes = await Action.create({name: `Parc types - ${req.body.year_init}`,type: 'config',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status',year_init: req.body.year_init});
+      configActions.push({ action: actionParcTypes, category: 'Parc types' });
+
+      // Créer les indicator values pour les actions config
+      const indicators = await Indicator.find({ indicator_category_name: { $in: GLOBAL_INDICATOR_CATEGORIES } });
+      const allSituations = ['init', 'ref', 'prev', 'expost'];
+      const configIndicatorValues = [];
+      const parcTypesDefaultValues = { init: [], ref: [], prev: [], expost: [] };
+
+      for (const indicator of indicators) {
+        const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
+        const configAction = indicator.indicator_category_name === 'Données de base' ? configActions[0].action : configActions[1].action;
+        const isParcTypes = configAction.name.startsWith('Parc types');
+
+        for (const situation of situationsForIndicator) {
+          const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+          const indicatorValue = {
+            action_id: configAction._id,
+            action_name: configAction.name,
+            collectivity_id: collectivity._id,
+            collectivity_name: collectivity.name,
+            owner: 'collectivity',
+            indicator_id: indicator._id,
+            indicator_name: indicator.name,
+            indicator_type: indicator.value_type,
+            situation,
+            year: req.body[`year_${situation}`],
+            indicator_value_unit: indicator.value_unit,
+            value_default: { [indicator.value_type]: defaultValue },
+            indicator_value_possibilities: indicator.value_possibilities || [],
+            indicator_category_id: indicator.indicator_category_id,
+            indicator_category_name: indicator.indicator_category_name,
+            indicator_sub_category_id: indicator.indicator_sub_category_id,
+            indicator_sub_category_name: indicator.indicator_sub_category_name,
+            indicator_excel_id: indicator.excel_indicator_id,
+            excel_line_number: indicator.excel_line_number?.[situation],
+          };
+
+          if (isParcTypes) {
+            indicatorValue.value = { [indicator.value_type]: defaultValue };
+            if (defaultValue !== null && indicator.excel_indicator_id) {
+              parcTypesDefaultValues[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue });
+            }
+          }
+
+          const displayCondition = indicator.display_condition?.[situation];
+          if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+          configIndicatorValues.push(indicatorValue);
+        }
+      }
+
+      if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
+
+      // Update Excel with Parc types default values in batch
+      const excelBatchPromises = [];
+      for (const situation of allSituations) {
+        if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileId, parcTypesDefaultValues[situation], situation).catch(capture));
+      }
+      await Promise.all(excelBatchPromises);
+    }
+
+    // Créer les indicator values pour l'action principale
     const indicators = await Indicator.find({ linked_action_id: parentAction._id });
 
     const allSituations = ['init', 'ref', 'prev', 'expost'];
@@ -182,6 +273,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           indicator_name: indicator.name,
           indicator_type: indicator.value_type,
           situation,
+          year: req.body[`year_${situation}`],
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -199,17 +291,32 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     }
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
-    const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
-    const collectivity = await Collectivity.findById(action.collectivity_id);
+    // Trouver l'action "Données de base" pour cette année init
+    const configActionBasicData = await Action.findOne({collectivity_id: collectivity._id,type: 'config',year_init: req.body.year_init,name: { $regex: /^Données de base/ }});
 
+    // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base
+    if (configActionBasicData) {
+    const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
     for (const situation of ['init', 'expost']) {
       const iv = await IndicatorValue.findOneAndUpdate(
-        { collectivity_id: action.collectivity_id, indicator_excel_id: targetExcelId, situation },
+          { action_id: configActionBasicData._id, indicator_excel_id: targetExcelId, situation },
         { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } },
         { new: true }
       );
-      if (iv && collectivity?.excelFileId) {
-        await updateExcelCellByIndicatorId(collectivity.excelFileId, targetExcelId, iv.value?.checkbox, situation);
+        if (iv && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, iv.value?.checkbox, situation);
+      }
+
+      // Mapping des IDs Excel par situation pour les années
+      const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
+      const anneeValues = { init: req.body.year_init, ref: req.body.year_ref, prev: req.body.year_prev, expost: req.body.year_expost };
+
+      for (const situation of ['init', 'ref', 'prev', 'expost']) {
+        await IndicatorValue.findOneAndUpdate(
+          { action_id: configActionBasicData._id, indicator_excel_id: anneeExcelIds[situation], situation },
+          { 'value.number': anneeValues[situation] },
+          { new: true },
+        );
+        if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, anneeExcelIds[situation], anneeValues[situation], situation);
       }
     }
 
@@ -321,6 +428,100 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
   }
 });
 
+router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { action_id, year_prev } = req.body;
+    if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const action = await Action.findById(action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Vérifier si cette année prévisionnelle existe déjà
+    const existingPrev = action.excel_files?.find(f => f.year_prev === year_prev);
+    if (existingPrev) return res.status(400).send({ ok: false, code: 'YEAR_PREV_ALREADY_EXISTS' });
+
+    const collectivity = await Collectivity.findById(action.collectivity_id);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Dupliquer l'Excel depuis le premier fichier existant de cette action
+    const sourceExcelId = action.excel_files?.[0]?.excel_file_id || null;
+    const excelFileId = await duplicateExcelFile(`${action.name}_Prev${year_prev}.xlsx`, collectivity.sharepoint_folder_id, sourceExcelId);
+
+    // Ajouter le nouveau fichier Excel à l'action
+    action.excel_files.push({ year_prev, excel_file_id: excelFileId });
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
+    action.last_modif_date = new Date();
+    await action.save();
+
+    // Créer les indicator values pour la nouvelle situation prev
+    const parentAction = await Action.findById(action.action_parent_id);
+    const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
+    const createdIndicatorValues = [];
+
+    for (const indicator of indicators) {
+      if (indicator.presence_in_excel?.prev !== true) continue;
+
+      const defaultValue = indicator.value_default?.prev?.[indicator.value_type] ?? null;
+      const indicatorValue = {
+        action_id: action._id,
+        action_name: action.name,
+        collectivity_id: action.collectivity_id,
+        collectivity_name: action.collectivity_name,
+        indicator_id: indicator._id,
+        indicator_name: indicator.name,
+        indicator_type: indicator.value_type,
+        situation: 'prev',
+        year: year_prev,
+        excel_line_number: indicator.excel_line_number?.prev,
+        indicator_value_unit: indicator.value_unit,
+        value_default: { [indicator.value_type]: defaultValue },
+        indicator_value_possibilities: indicator.value_possibilities || [],
+        indicator_category_id: indicator.indicator_category_id,
+        indicator_category_name: indicator.indicator_category_name,
+        indicator_sub_category_id: indicator.indicator_sub_category_id,
+        indicator_sub_category_name: indicator.indicator_sub_category_name,
+        indicator_excel_id: indicator.excel_indicator_id,
+      };
+      const displayCondition = indicator.display_condition?.prev;
+      if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+      createdIndicatorValues.push(indicatorValue);
+    }
+
+    if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
+
+    // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
+    if (excelFileId) {
+      await updateExcelCellByIndicatorId(excelFileId, 'AnPrev', year_prev, 'prev');
+    }
+
+    await Log.create({
+      model_name: 'action',
+      name: action.name,
+      field: 'excel_files',
+      operation: 'add_previsionnel',
+      new_value: { number: year_prev },
+      type_value: 'number',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+
+    return res.status(200).send({ ok: true, data: action });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+// page settings obselete ne pas utiliser
 router.post('/initialize_indicator_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });

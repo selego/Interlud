@@ -8,7 +8,7 @@ const Schema = new mongoose.Schema(
     name: { type: String },
 
     field: { type: String },
-    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate'] },
+    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate', 'add_previsionnel'] },
     new_value: {
       string: { type: String, trim: true },
       array: { type: Array, default: [] },

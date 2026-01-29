@@ -8,10 +8,10 @@ const Schema = new mongoose.Schema(
     description: { type: String, trim: true },
     department: { type: Number, trim: true },
     population: { type: Number, trim: true },
-    excelFileId: { type: String, trim: true },
     is_onboarded: { type: Boolean, default: false },
+    sharepoint_folder_id: { type: String, trim: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);

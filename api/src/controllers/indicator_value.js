@@ -123,7 +123,24 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     }
 
     res.status(200).send({ ok: true, data: indicatorValue });
-    await updateExcelCellByIndicatorId(collectivity.excelFileId, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation);
+    const excelUpdatePromises = [];
+
+    if (action.type === 'config') {
+      const actionsWithSameYearInit = await Action.find({collectivity_id: action.collectivity_id,year_init: action.year_init,'excel_files.0.excel_file_id': { $exists: true }});
+
+      for (const targetAction of actionsWithSameYearInit) {
+        for (const excelFile of targetAction.excel_files || []) {
+          if (excelFile.excel_file_id)excelUpdatePromises.push( updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+        }
+      }
+    }
+    if (action.type !== 'config') {
+      for (const excelFile of action.excel_files || []) {
+        if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+      }
+    }
+
+    await Promise.all(excelUpdatePromises);
 
     if (logs.length > 0) await Log.insertMany(logs);
 
@@ -200,6 +217,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.action_name) query.action_name = req.body.action_name;
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.situation) query.situation = req.body.situation;
+    if (req.body.year) query.year = req.body.year;
     if (req.body.indicator_category_name) query.indicator_category_name = req.body.indicator_category_name;
     if (req.body.indicator_value_collectivity_id) query.indicator_value_collectivity_id = req.body.indicator_value_collectivity_id;
     if (req.body.indicator_value_collectivity_ids) query.indicator_value_collectivity_id = { $in: req.body.indicator_value_collectivity_ids };
@@ -378,13 +396,36 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
 
 router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const { fileBase64, collectivity } = req.body;
+    const { fileBase64, collectivity, action_id } = req.body;
     if (!fileBase64) return res.status(400).json({ ok: false, data: { error: 'fileBase64 is required' } });
     if (!collectivity) return res.status(400).json({ ok: false, data: { error: 'collectivity is required' } });
+    if (!action_id) return res.status(400).json({ ok: false, data: { error: 'action_id is required' } });
+
+    const action = await Action.findById(action_id);
+    if (!action) return res.status(404).json({ ok: false, data: { error: 'Action not found' } });
 
     const fileBuffer = Buffer.from(fileBase64, 'base64');
 
-    const { extractedData } = await importSheetsToExcelFile(collectivity.excelFileId, fileBuffer, SITUATION_SHEETS);
+    // Collect all Excel file IDs to import to
+    const excelFileIds = [];
+
+    for (const excelFile of action.excel_files || []) {
+      if (excelFile.excel_file_id) excelFileIds.push(excelFile.excel_file_id);
+    }
+
+    if (action.type === 'config') {
+      const actionsWithSameYearInit = await Action.find({collectivity_id: action.collectivity_id,year_init: action.year_init,_id: { $ne: action._id },'excel_files.0.excel_file_id': { $exists: true }});
+
+      for (const targetAction of actionsWithSameYearInit) {
+        for (const excelFile of targetAction.excel_files || []) {
+          if (excelFile.excel_file_id) excelFileIds.push(excelFile.excel_file_id);
+        }
+      }
+    }
+
+    const importResults = await Promise.all( excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
+
+    const extractedData = importResults.find((r) => r?.extractedData)?.extractedData || [];
     if (!extractedData || extractedData.length === 0) return res.status(200).json({ ok: true });
     const indicators = await Indicator.find({ excel_indicator_id: { $in: [...new Set(extractedData.map((d) => d.excel_indicator_id))] } });
     const indicatorMap = new Map(indicators.map((ind) => [ind.excel_indicator_id, ind]));

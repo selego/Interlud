@@ -4,8 +4,14 @@ const MODELNAME = 'action';
 
 const Schema = new mongoose.Schema(
   {
-    type: { type: String, enum: ['custom', 'reference', 'global'], trim: true },
+    type: { type: String, enum: ['custom', 'reference', 'global', 'config'], trim: true },
     excel_worksheetname: { type: String, trim: true },
+
+    excel_files: [{ year_prev: { type: Number, trim: true }, excel_file_id: { type: String, trim: true } }],
+    year_init: { type: Number, trim: true },
+    year_ref: { type: Number, trim: true },
+    year_prev: { type: Number, trim: true },
+    year_expost: { type: Number, trim: true },
 
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },

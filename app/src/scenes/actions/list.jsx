@@ -40,17 +40,17 @@ export default function List() {
     fetchActions()
   }, [collectivity])
 
-  if ( actions.length === 0 ) return (
-    <div className="p-8"> 
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Liste des Actions</h1>
-      </div>
+  // if ( actions.length === 0 ) return (
+  //   <div className="p-8"> 
+  //     <div className="flex justify-between items-center mb-6">
+  //       <h1 className="text-3xl font-bold">Liste des Actions</h1>
+  //     </div>
 
-      <div className="flex items-center justify-center">
-        <div className="text-lg text-gray-600">Aucune action dans cette collectivité</div>
-      </div>
-    </div>
-  )
+  //     <div className="flex items-center justify-center">
+  //       <div className="text-lg text-gray-600">Aucune action dans cette collectivité</div>
+  //     </div>
+  //   </div>
+  // )
 
   return (
     <div className="p-8">
@@ -82,7 +82,7 @@ export default function List() {
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.date_start}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.year_init}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.date_end}</td>
             </tr>
           ))}
@@ -101,6 +101,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
+    const [year,setYear] = useState( { init: null, ref: null, prev: null, expost: null })
     const [isLoading, setIsLoading] = useState(false)
     const fetchActions = async () => {
       try {
@@ -122,6 +123,10 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (!collectivity?._id) return toast.error("Collectivité non trouvée")
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
+        if (!year.init) return toast.error("Veuillez sélectionner une année initiale")
+        if (!year.ref) return toast.error("Veuillez sélectionner une année de référence")
+        if (!year.prev) return toast.error("Veuillez sélectionner une année prévisionnelle")
+        if (!year.expost) return toast.error("Veuillez sélectionner une année ex-post")
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
 
         const selectedAction = actions.find(a => a._id === selectedActionId)
@@ -132,7 +137,11 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           type: isCustomVersion ? "custom" : "reference",
           collectivity_id: collectivity._id,
           collectivity_name: collectivity.name,
-          started_before_interlud: startedBeforeInterlud
+          year_init: parseInt(year.init),
+          year_ref: parseInt(year.ref),
+          year_prev: parseInt(year.prev),
+          year_expost: parseInt(year.expost),
+          started_before_interlud: startedBeforeInterlud,
         }
 
         const { ok, data , code} = await api.post("/action/create_action_with_default_indicators", payload)
@@ -175,8 +184,61 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
 
         {selectedActionId && (
-          
           <div className="mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Année initiale <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={year.init}
+                  onChange={(e) => setYear({ ...year, init: e.target.value })}
+                  className="input-primary"
+                  placeholder="Année"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Année référence <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={year.ref}
+                  onChange={(e) => setYear({ ...year, ref: e.target.value })}
+                  className="input-primary"
+                  placeholder="Année"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Année prévisionnelle <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={year.prev}
+                  onChange={(e) => setYear({ ...year, prev: e.target.value })}
+                  className="input-primary"
+                  placeholder="Année"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Année ex-post <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={year.expost}
+                  onChange={(e) => setYear({ ...year, expost: e.target.value })}
+                  className="input-primary"
+                  placeholder="Année"
+                />
+              </div>
+            </div>
+
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 La mise en œuvre avait-elle commencé en amont de l'engagement de votre territoire dans la démarche InTerLUD+ ? <span className="text-red-500">*</span>
@@ -204,6 +266,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 </label>
               </div>
             </div>
+
             <label className="flex items-center gap-2 cursor-pointer">
               <div className="relative flex items-center">
                 <input
@@ -224,8 +287,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 Créer une version personnalisée de cette action
               </span>
             </label>
-
-
           </div>
         )}
 

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
-import { FiList, FiSettings, FiClock, FiArrowLeft } from "react-icons/fi";
+import { FiList, FiSettings, FiClock, FiArrowLeft, FiPlus } from "react-icons/fi";
 import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
@@ -118,7 +118,7 @@ export default function Settings({ action: initialAction, onSave }) {
       </div>
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
-      {activeTab === "settings" && ( <ActionSettingsTab  action={action} onUpdate={handleUpdate} onDelete={handleDelete} />)}
+      {activeTab === "settings" && ( <ActionSettingsTab action={action} onUpdate={handleUpdate} onDelete={handleDelete} onActionUpdate={(updatedAction) => { setAction(updatedAction); if (onSave) onSave(); }} />)}
       {activeTab === "history" && <History action={action} />}
     </div>
     </div>
@@ -208,7 +208,31 @@ function IndicatorsTab({ action }) {
   );
 }
 
-function ActionSettingsTab({ action, onUpdate, onDelete }) {
+function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
+  const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
+  const [newPrevYear, setNewPrevYear] = useState("");
+  const [isAddingPrev, setIsAddingPrev] = useState(false);
+
+  const addPrevisionnel = async () => {
+    if (!newPrevYear) return toast.error("Veuillez sélectionner une année");
+    const existingYears = (action.excel_files || []).map(f => f.year_prev);
+    if (existingYears.includes(parseInt(newPrevYear))) return toast.error("Cette année existe déjà");
+
+    try {
+      setIsAddingPrev(true);
+      const { ok, data, code } = await api.post("/action/add_previsionnel", { action_id: action._id, year_prev: parseInt(newPrevYear) });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Situation prévisionnelle ajoutée");
+      setIsAddPrevModalOpen(false);
+      setNewPrevYear("");
+      if (onActionUpdate) onActionUpdate(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsAddingPrev(false);
+    }
+  };
+
 
   return (
     <div className="card-shadow">
@@ -299,6 +323,47 @@ function ActionSettingsTab({ action, onUpdate, onDelete }) {
             />
             <span className="text-sm font-medium text-gray-800">Subventionné par le programme</span>
           </label>
+        </div>
+      </div>
+
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Situations</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Année initiale</label>
+            <div className="w-full input-primary bg-gray-50">{action.year_init || "-"}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-2">Année référence</label>
+            <div className="w-full input-primary bg-gray-50">{action.year_ref || "-"}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-2">Année ex-post</label>
+            <div className="w-full input-primary bg-gray-50">{action.year_expost || "-"}</div>
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold">Années prévisionnelles</label>
+            <button
+              onClick={() => setIsAddPrevModalOpen(true)}
+              className="text-sm text-primary-green hover:underline flex items-center gap-1"
+            >
+              <FiPlus size={14} />
+              Ajouter
+            </button>
+          </div>
+          {(action.excel_files || []).map(f => f.year_prev).sort((a, b) => a - b).length === 0 ? (
+            <div className="w-full input-primary bg-gray-50 text-gray-400">Aucune année prévisionnelle</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(action.excel_files || []).map(f => f.year_prev).sort((a, b) => a - b).map((year) => (
+                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
+                  {year}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -487,6 +552,35 @@ function ActionSettingsTab({ action, onUpdate, onDelete }) {
           </button>
         </div>
       </div>
+
+      <Modal isOpen={isAddPrevModalOpen} onClose={() => setIsAddPrevModalOpen(false)} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Ajouter une situation prévisionnelle</h2>
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Année prévisionnelle <span className="text-red-500">*</span>
+            </label>
+            <Select
+              options={Array.from({ length: 30 }, (_, i) => {
+                const year = new Date().getFullYear() + i;
+                return { value: year.toString(), label: year.toString() };
+              })}
+              value={newPrevYear}
+              onChange={(value) => setNewPrevYear(value)}
+              placeholder="Sélectionner une année"
+              constrained={true}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setIsAddPrevModalOpen(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+              Annuler
+            </button>
+            <button onClick={addPrevisionnel} disabled={isAddingPrev} className="button-primary">
+              {isAddingPrev ? "Création..." : "Créer"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

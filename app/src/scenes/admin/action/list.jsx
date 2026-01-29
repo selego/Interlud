@@ -35,12 +35,6 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="button-primary"
-        >
-          Ajouter
-        </button>
       </div>
       
       <table className="w-full overflow-hidden card-shadow">

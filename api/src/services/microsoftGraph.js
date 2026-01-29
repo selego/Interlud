@@ -75,38 +75,105 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   });
 }
 
-async function duplicateExcelFile(newFileName) {
+// Update multiple cells in batch - updates is array of { excel_indicator_id, value }
+async function updateExcelCellsBatch(fileId, updates, situation) {
+  if (!updates || updates.length === 0) return;
+
+  const worksheetName = WORKSHEETS[situation];
+  if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
-  const sourceFile = await graphFetch(`/sites/${siteId}/drive/items/${masterExcelFileId}`);
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
+  const rows = usedRange.values || [];
+  const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
-  const copyResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${masterExcelFileId}/copy`, {
+  // Build a map of indicator_id -> row index
+  const indicatorRowMap = new Map();
+  rows.forEach((row, i) => {
+    if (row[4]) indicatorRowMap.set(String(row[4]).trim(), i);
+  });
+
+  // Find all updates that match existing rows
+  const matchedUpdates = updates
+    .map((u) => {
+      const rowIndex = indicatorRowMap.get(String(u.excel_indicator_id).trim());
+      if (rowIndex === undefined) return null;
+      const cellValue = Array.isArray(u.value) ? u.value.join(', ') : (u.value ?? '');
+      return { rowIndex, cellValue };
+    })
+    .filter(Boolean);
+
+  if (matchedUpdates.length === 0) return;
+
+  // Find min and max row indices to create a contiguous range
+  const minRowIndex = Math.min(...matchedUpdates.map((u) => u.rowIndex));
+  const maxRowIndex = Math.max(...matchedUpdates.map((u) => u.rowIndex));
+
+  // Build the update map
+  const updateMap = new Map(matchedUpdates.map((u) => [u.rowIndex, u.cellValue]));
+
+  // Build values array - keep existing values for rows not in updates
+  const rangeValues = [];
+  for (let i = minRowIndex; i <= maxRowIndex; i++) {
+    rangeValues.push([updateMap.has(i) ? updateMap.get(i) : (rows[i]?.[5] ?? '')]);
+  }
+
+  // Update the range in one call
+  await graphFetch(
+    `/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ values: rangeValues }),
+    }
+  );
+}
+
+async function createFolder(folderName, parentFolderId = null) {
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  let endpoint;
+  if (parentFolderId) {
+    endpoint = `/sites/${siteId}/drive/items/${parentFolderId}/children`;
+  } else {
+    endpoint = `/sites/${siteId}/drive/root/children`;
+  }
+
+  const folder = await graphFetch(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: folderName,
+      folder: {},
+      '@microsoft.graph.conflictBehavior': 'rename',
+    }),
+  });
+
+  return folder.id;
+}
+
+async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFileId = null) {
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const fileIdToCopy = sourceFileId || masterExcelFileId;
+  const sourceFile = await graphFetch(`/sites/${siteId}/drive/items/${fileIdToCopy}`);
+  const parentReference = targetFolderId ? { driveId: sourceFile.parentReference.driveId, id: targetFolderId } : { driveId: sourceFile.parentReference.driveId, id: sourceFile.parentReference.id };
+
+  const copyResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileIdToCopy}/copy`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${await getAccessToken()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      name: newFileName,
-      parentReference: {
-        driveId: sourceFile.parentReference.driveId,
-        id: sourceFile.parentReference.id,
-      },
-    }),
+    body: JSON.stringify({ name: newFileName, parentReference }),
   });
 
   if (!copyResponse.ok) {
     const error = await copyResponse.json().catch(() => ({}));
     throw new Error(error.error?.message || 'Cannot copy Excel file');
   }
-
   await new Promise((r) => setTimeout(r, 2000));
-
-  const parentFolderId = sourceFile.parentReference.id;
+  const searchFolderId = targetFolderId || sourceFile.parentReference.id;
   for (let attempts = 0; attempts < 20; attempts++) {
     await new Promise((r) => setTimeout(r, 1000));
-
-    const searchResult = await graphFetch(`/sites/${siteId}/drive/items/${parentFolderId}/children?$filter=name eq '${newFileName}'`);
+    const searchResult = await graphFetch(`/sites/${siteId}/drive/items/${searchFolderId}/children?$filter=name eq '${newFileName}'`);
     if (searchResult.value?.length > 0) return searchResult.value[0].id;
   }
 
@@ -211,7 +278,9 @@ module.exports = {
   getAccessToken,
   graphFetch,
   sharePointSiteName,
+  createFolder,
   updateExcelCellByIndicatorId,
+  updateExcelCellsBatch,
   duplicateExcelFile,
   exportExcelFile,
   exportExcelFileWithSpecificSheets,
