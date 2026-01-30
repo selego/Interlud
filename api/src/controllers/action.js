@@ -182,20 +182,18 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    // Vérifier si les actions config existent déjà pour cette année init
-    const configActionExists = await Action.findOne({collectivity_id: collectivity._id,type: 'config',year_init: req.body.year_init});
+    // Vérifier si les actions config consolidées existent déjà pour cette collectivité
+    let configActionBasicDataObj = await Action.findOne({ collectivity_id: collectivity._id, type: 'config', name: 'Données de base' });
+    let configActionParcTypesObj = await Action.findOne({ collectivity_id: collectivity._id, type: 'config', name: 'Parc types' });
 
-    if (!configActionExists) {
-      const configActions = [];
+    // Créer les actions config si elles n'existent pas
+    if (!configActionBasicDataObj)  configActionBasicDataObj = await Action.create({ name: 'Données de base', type: 'config', collectivity_id: collectivity._id, collectivity_name: collectivity.name, owner: 'collectivity', status: 'no_status' });
+    if (!configActionParcTypesObj) configActionParcTypesObj = await Action.create({ name: 'Parc types', type: 'config', collectivity_id: collectivity._id, collectivity_name: collectivity.name, owner: 'collectivity', status: 'no_status' });
 
-      // Action base_data
-      const actionBasicData = await Action.create({name: `Données de base - ${req.body.year_init}`,type: 'config',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status',year_init: req.body.year_init});
-      configActions.push({ action: actionBasicData, category: 'Données de base' });
+    // Vérifier si les indicator values existent déjà pour cette combinaison d'années
+    const existingConfigIndicatorValue = await IndicatorValue.findOne({action_id: { $in: [configActionBasicDataObj._id.toString(), configActionParcTypesObj._id.toString()] },situation: 'init',year: req.body.year_init});
 
-      // Action parc_type
-      const actionParcTypes = await Action.create({name: `Parc types - ${req.body.year_init}`,type: 'config',collectivity_id: collectivity._id,collectivity_name: collectivity.name,owner: 'collectivity',status: 'no_status',year_init: req.body.year_init});
-      configActions.push({ action: actionParcTypes, category: 'Parc types' });
-
+    if (!existingConfigIndicatorValue) {
       // Créer les indicator values pour les actions config
       const indicators = await Indicator.find({ indicator_category_name: { $in: GLOBAL_INDICATOR_CATEGORIES } });
       const allSituations = ['init', 'ref', 'prev', 'expost'];
@@ -204,8 +202,8 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
 
       for (const indicator of indicators) {
         const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
-        const configAction = indicator.indicator_category_name === 'Données de base' ? configActions[0].action : configActions[1].action;
-        const isParcTypes = configAction.name.startsWith('Parc types');
+        const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicDataObj : configActionParcTypesObj;
+        const isParcTypes = configAction.name === 'Parc types';
 
         for (const situation of situationsForIndicator) {
           const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
@@ -220,6 +218,10 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
             indicator_type: indicator.value_type,
             situation,
             year: req.body[`year_${situation}`],
+            year_init: req.body.year_init,
+            year_ref: req.body.year_ref,
+            year_prev: req.body.year_prev,
+            year_expost: req.body.year_expost,
             indicator_value_unit: indicator.value_unit,
             value_default: { [indicator.value_type]: defaultValue },
             indicator_value_possibilities: indicator.value_possibilities || [],
@@ -233,9 +235,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
 
           if (isParcTypes) {
             indicatorValue.value = { [indicator.value_type]: defaultValue };
-            if (defaultValue !== null && indicator.excel_indicator_id) {
-              parcTypesDefaultValues[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue });
-            }
+            if (defaultValue !== null && indicator.excel_indicator_id) parcTypesDefaultValues[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue });
           }
 
           const displayCondition = indicator.display_condition?.[situation];
@@ -274,6 +274,10 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           indicator_type: indicator.value_type,
           situation,
           year: req.body[`year_${situation}`],
+          year_init: req.body.year_init,
+          year_ref: req.body.year_ref,
+          year_prev: req.body.year_prev,
+          year_expost: req.body.year_expost,
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -291,18 +295,15 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     }
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
-    // Trouver l'action "Données de base" pour cette année init
-    const configActionBasicData = await Action.findOne({collectivity_id: collectivity._id,type: 'config',year_init: req.body.year_init,name: { $regex: /^Données de base/ }});
-
-    // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base
-    if (configActionBasicData) {
-    const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
-    for (const situation of ['init', 'expost']) {
-      const iv = await IndicatorValue.findOneAndUpdate(
-          { action_id: configActionBasicData._id, indicator_excel_id: targetExcelId, situation },
-        { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } },
-        { new: true }
-      );
+    // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base consolidée
+    if (configActionBasicDataObj) {
+      const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
+      for (const situation of ['init', 'expost']) {
+        const iv = await IndicatorValue.findOneAndUpdate(
+          { action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation, year: req.body[`year_${situation}`] },
+          { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } },
+          { new: true }
+        );
         if (iv && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, iv.value?.checkbox, situation);
       }
 
@@ -312,7 +313,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
 
       for (const situation of ['init', 'ref', 'prev', 'expost']) {
         await IndicatorValue.findOneAndUpdate(
-          { action_id: configActionBasicData._id, indicator_excel_id: anneeExcelIds[situation], situation },
+          { action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year: req.body[`year_${situation}`] },
           { 'value.number': anneeValues[situation] },
           { new: true },
         );
@@ -475,6 +476,10 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
         indicator_type: indicator.value_type,
         situation: 'prev',
         year: year_prev,
+        year_init: action.year_init,
+        year_ref: action.year_ref,
+        year_prev: year_prev,
+        year_expost: action.year_expost,
         excel_line_number: indicator.excel_line_number?.prev,
         indicator_value_unit: indicator.value_unit,
         value_default: { [indicator.value_type]: defaultValue },

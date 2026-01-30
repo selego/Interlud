@@ -27,18 +27,37 @@ export default function Completion({ action }) {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
-  const dynamicTabs = [
-    { key: SITUATION_TYPES.INIT, label: "Initiale", situation: SITUATION_TYPES.INIT },
-    { key: SITUATION_TYPES.REF, label: "Référence", situation: SITUATION_TYPES.REF },
-    ...(action.excel_files || []).map((file) => ({key: `prev_${file.year_prev}`,label: `Prév. ${file.year_prev}`,year: file.year_prev,situation: SITUATION_TYPES.PREV})),
-    { key: SITUATION_TYPES.EXPOST, label: "Ex-post", situation: SITUATION_TYPES.EXPOST }
-  ]
+  // Pour les actions config, construire les onglets à partir des années distinctes dans les indicatorValues
+  const buildDynamicTabs = () => {
+    if (action.type === 'config' && allIndicatorValues.length > 0) {
+      const situationLabels = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' }
+      const situations = ['init', 'ref', 'prev', 'expost']
+      const tabs = []
+
+      for (const situation of situations) {
+        const years = [...new Set(allIndicatorValues.filter(iv => iv.situation === situation && iv.year).map(iv => iv.year))].sort()
+        for (const year of years) {
+          tabs.push({ key: `${situation}_${year}`, label: `${situationLabels[situation]} ${year}`,situation,year})
+        }
+      }
+      return tabs.length > 0 ? tabs : [{ key: SITUATION_TYPES.INIT, label: "Initiale", situation: SITUATION_TYPES.INIT }]
+    }
+
+    return [
+      { key: SITUATION_TYPES.INIT, label: "Initiale", situation: SITUATION_TYPES.INIT },
+      { key: SITUATION_TYPES.REF, label: "Référence", situation: SITUATION_TYPES.REF },
+      ...(action.excel_files || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: SITUATION_TYPES.PREV })),
+      { key: SITUATION_TYPES.EXPOST, label: "Ex-post", situation: SITUATION_TYPES.EXPOST }
+    ]
+  }
+
+  const dynamicTabs = buildDynamicTabs()
 
   const fetchIndicatorsValues = async () => {
     try {
       const currentTab = dynamicTabs.find((t) => t.key === activeTab)
-      const searchParams = { action_id: action._id, situation : currentTab?.situation, limit: 10000 }
-      if (currentTab?.year && currentTab?.situation === SITUATION_TYPES.PREV) searchParams.year = currentTab.year
+      const searchParams = { action_id: action._id, situation: currentTab?.situation, limit: 10000 }
+      if (currentTab?.year && (action.type === 'config' || currentTab?.situation === SITUATION_TYPES.PREV)) searchParams.year = currentTab.year
       const { ok, data, code } = await api.post(`/indicator_value/search`, searchParams)
       if (!ok) return toast.error(code || "Erreur lors du chargement")
       setIndicatorValues(data)
@@ -125,7 +144,8 @@ export default function Completion({ action }) {
 
   const getSituationProgress = (situationKey, year = null) => {
     let values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv))
-    if (year && situationKey === SITUATION_TYPES.PREV) values = values.filter((iv) => iv.year === year)
+    // Pour les actions config ou les prev, filtrer par année
+    if (year && (action.type === 'config' || situationKey === SITUATION_TYPES.PREV)) values = values.filter((iv) => iv.year === year)
     if (values.length === 0) return 0
     const filled = values.filter(isIndicatorValueFilled).length
     return Math.round((filled / values.length) * 100)
@@ -136,27 +156,27 @@ export default function Completion({ action }) {
 
     // Utiliser tous les indicator values de la collectivité pour évaluer les conditions d'affichage
     const results = indicatorValue.display_condition.conditions.map((cond) => {
-      const sourceValueObj = allCollectivityIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
+      const targetSituation = cond.excel_indicator_situation || indicatorValue.situation
 
+      let sourceValueObj = allCollectivityIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === targetSituation && iv.year === indicatorValue[`year_${targetSituation}`])
       if (!sourceValueObj) return false
-
       const val = sourceValueObj.value?.[sourceValueObj.indicator_type]
 
       let isMatch = false
-        if (cond.type === "equals") {
-          isMatch = val == cond.value
-          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify(val.sort()) === JSON.stringify(cond.value.sort())
-        }
-        if (cond.type === "contains") {
-          if (Array.isArray(val)) isMatch = val.includes(cond.value)
-          if (typeof val === "string") isMatch = val.includes(cond.value)
-        }
-        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
-        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
-        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
-        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
-        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
-        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
+      if (cond.type === "equals") {
+        isMatch = val == cond.value
+        if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify(val.sort()) === JSON.stringify(cond.value.sort())
+      }
+      if (cond.type === "contains") {
+        if (Array.isArray(val)) isMatch = val.includes(cond.value)
+        if (typeof val === "string") isMatch = val.includes(cond.value)
+      }
+      if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
+      if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
+      if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
+      if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
+      if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
+      if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
 
       if (cond.negate) isMatch = !isMatch
       return isMatch
@@ -176,6 +196,13 @@ export default function Completion({ action }) {
     fetchAllIndicatorsValues()
     fetchAllCollectivityIndicatorValues()
   }, [action._id, action.collectivity_id])
+
+  useEffect(() => {
+    if (action.type === 'config' && allIndicatorValues.length > 0 && dynamicTabs.length > 0) {
+      const currentTabExists = dynamicTabs.some(t => t.key === activeTab)
+      if (!currentTabExists) setActiveTab(dynamicTabs[0].key)
+    }
+  }, [allIndicatorValues, action.type])
 
   return (
     <div className="min-h-screen p-8">

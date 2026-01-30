@@ -126,11 +126,14 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const excelUpdatePromises = [];
 
     if (action.type === 'config') {
-      const actionsWithSameYearInit = await Action.find({collectivity_id: action.collectivity_id,year_init: action.year_init,'excel_files.0.excel_file_id': { $exists: true }});
+      // Pour les actions config consolidées, chercher les actions régulières avec la même année pour cette situation
+      const yearFieldMap = { init: 'year_init', ref: 'year_ref', prev: 'year_prev', expost: 'year_expost' };
+      const yearField = yearFieldMap[indicatorValue.situation] || 'year_init';
 
-      for (const targetAction of actionsWithSameYearInit) {
+      const actionsWithSameYear = await Action.find({collectivity_id: action.collectivity_id,[yearField]: indicatorValue.year,type: { $ne: 'config' },'excel_files.0.excel_file_id': { $exists: true }});
+      for (const targetAction of actionsWithSameYear) {
         for (const excelFile of targetAction.excel_files || []) {
-          if (excelFile.excel_file_id)excelUpdatePromises.push( updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
         }
       }
     }
@@ -236,8 +239,11 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
-    const total = await IndicatorValue.countDocuments(query);
-    const data = await IndicatorValue.find(query).sort({ excel_line_number: 1 }).skip(skip).limit(limit).allowDiskUse(true);
+
+    const data = await IndicatorValue.find(query).sort({ excel_line_number: 1 }).skip(skip).limit(limit);
+    let total = data.length;
+    if (req.body.includeTotal || (data.length === limit && limit < 10000)) total = await IndicatorValue.countDocuments(query);
+
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
     capture(error);
