@@ -139,7 +139,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     }
     if (action.type !== 'config') {
       for (const excelFile of action.excel_files || []) {
-        if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+        if (indicatorValue.situation === 'prev' && excelFile.year_prev !== indicatorValue.year) continue;
+        excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
       }
     }
 

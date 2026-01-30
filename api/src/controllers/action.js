@@ -498,9 +498,7 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
     // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
-    if (excelFileId) {
-      await updateExcelCellByIndicatorId(excelFileId, 'AnPrev', year_prev, 'prev');
-    }
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
 
     await Log.create({
       model_name: 'action',
