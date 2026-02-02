@@ -6,17 +6,6 @@ const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const { createFolder } = require('../services/microsoftGraph');
 
-const GLOBAL_INDICATOR_CATEGORIES = [
-  'Fret routier',
-  'Données de base',
-  "Données de production/consommation d'énergie",
-  'Fret fluvial',
-  'Fret ferroviaire',
-  'Cyclologistique',
-  'Déplacements de particuliers',
-];
-
-
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const collectivity = await Collectivity.findById(req.params.id);

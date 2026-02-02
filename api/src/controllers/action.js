@@ -11,8 +11,6 @@ const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile } = require('../services/microsoftGraph');
 
-const GLOBAL_INDICATOR_CATEGORIES = ['Fret routier','Données de base',"Données de production/consommation d'énergie",'Fret fluvial','Fret ferroviaire','Cyclologistique','Déplacements de particuliers'];
-
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const action = await Action.findById(req.params.id);
@@ -194,8 +192,8 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
 
     let configIndicatorValues = [];
     if (!existingConfigIndicatorValue) {
-      // Créer les indicator values pour les actions config
-      const indicators = await Indicator.find({ indicator_category_name: { $in: GLOBAL_INDICATOR_CATEGORIES } });
+      // Créer les indicator values pour les actions config (indicateurs sans action liée)
+      const indicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
       const allSituations = ['init', 'ref', 'prev', 'expost'];
       const parcTypesDefaultValues = { init: [], ref: [], prev: [], expost: [] };
 
