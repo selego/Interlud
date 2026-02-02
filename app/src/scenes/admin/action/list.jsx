@@ -15,7 +15,6 @@ const getStatusLabel = (status) => {
 export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
-  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const fetchActions = async () => {
     try {
@@ -55,53 +54,6 @@ export default function List() {
           ))}
         </tbody>
       </table>
-      <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
-  )
-}
-
-
-const AddActionModal = ({ isOpen, onClose }) => {
-    const navigate = useNavigate()
-    const [name, setName] = useState("")
-
-    const createAction = async () => {
-      try {
-        if (!name.trim()) return toast.error("Veuillez entrer un nom pour l'action")
-        const { ok, data } = await api.post("/action", { name })
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
-        navigate(`/admin/action/${data._id}`)
-      } catch (error) {
-        toast.error(error || "Une erreur est survenue")
-      }
-    }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Nom de l'action
-          </label>
-          <input
-            type="text"
-            placeholder="Entrez le nom"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-          />
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button onClick={createAction} className="button-primary">
-            Créer
-          </button>
-        </div>
-      </div>
-    </Modal>
   )
 }

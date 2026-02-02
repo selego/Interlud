@@ -8,6 +8,7 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
+const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile } = require('../services/microsoftGraph');
 
 const GLOBAL_INDICATOR_CATEGORIES = ['Fret routier','Données de base',"Données de production/consommation d'énergie",'Fret fluvial','Fret ferroviaire','Cyclologistique','Déplacements de particuliers'];
@@ -162,8 +163,6 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
 
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-
-    // Vérifier si une action avec la même année init existe déjà
     const existingActionSameYear = await Action.findOne({ collectivity_id: collectivity._id, year_init: req.body.year_init, 'excel_files.0.excel_file_id': { $exists: true } });
 
     // Créer l'Excel : dupliquer depuis une action existante ou depuis le master template
@@ -193,11 +192,11 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     // Vérifier si les indicator values existent déjà pour cette combinaison d'années
     const existingConfigIndicatorValue = await IndicatorValue.findOne({action_id: { $in: [configActionBasicDataObj._id.toString(), configActionParcTypesObj._id.toString()] },situation: 'init',year: req.body.year_init});
 
+    let configIndicatorValues = [];
     if (!existingConfigIndicatorValue) {
       // Créer les indicator values pour les actions config
       const indicators = await Indicator.find({ indicator_category_name: { $in: GLOBAL_INDICATOR_CATEGORIES } });
       const allSituations = ['init', 'ref', 'prev', 'expost'];
-      const configIndicatorValues = [];
       const parcTypesDefaultValues = { init: [], ref: [], prev: [], expost: [] };
 
       for (const indicator of indicators) {
@@ -269,6 +268,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           action_name: action.name,
           collectivity_id: action.collectivity_id,
           collectivity_name: action.collectivity_name,
+          owner: 'collectivity',
           indicator_id: indicator._id,
           indicator_name: indicator.name,
           indicator_type: indicator.value_type,
@@ -305,6 +305,9 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           { new: true }
         );
         if (iv && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, iv.value?.checkbox, situation);
+
+        // Propager la mise à jour d'ActionsCharte/ActionsAutres aux acteurs économiques
+        if (iv) await IndicatorValue.updateMany({indicator_excel_id: targetExcelId,situation,year: req.body[`year_${situation}`],collectivity_id: collectivity._id,owner: 'economic_actor'},{ $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } });
       }
 
       // Mapping des IDs Excel par situation pour les années
@@ -335,6 +338,131 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
       collectivity_name: action.collectivity_name,
     });
 
+    // Propager la création de l'action aux acteurs économiques de cette collectivité
+    const economicActors = await EconomicActor.find({ 'collectivities.id': collectivity._id.toString() });
+
+    for (const actor of economicActors) {
+      // Créer le fichier Excel pour l'acteur économique
+      let actorExcelFileId = null;
+      try {
+        actorExcelFileId = await duplicateExcelFile(`${actor.name}_${action.name}_Prev${req.body.year_prev}.xlsx`,collectivity.sharepoint_folder_id,excelFileId);
+      } catch (excelError) {
+        capture(excelError);
+      }
+
+      // Créer l'action pour l'acteur économique
+      const actorAction = await Action.create({
+        ...action.toObject(),
+        owner: 'economic_actor',
+        status: 'no_status',
+        economic_actor_id: actor._id,
+        economic_actor_name: actor.name,
+        action_collectivity_id: action._id,
+        excel_files: actorExcelFileId ? [{ year_prev: req.body.year_prev, excel_file_id: actorExcelFileId }] : [],
+        _id: undefined,
+        __v: undefined,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+
+      // Créer les indicator values pour l'acteur économique (actions régulières - valeurs vides)
+      const actorIndicatorValues = createdIndicatorValues.map(iv => ({
+        ...iv,
+        owner: 'economic_actor',
+        economic_actor_id: actor._id,
+        economic_actor_name: actor.name,
+        action_id: actorAction._id,
+        action_name: actorAction.name,
+        indicator_value_collectivity_id: undefined, // Sera mis à jour après l'insertion des IV de la collectivité
+        value: { text: null, number: null, radio: null, checkbox: [] },
+      }));
+
+      if (actorIndicatorValues.length > 0) await IndicatorValue.insertMany(actorIndicatorValues);
+
+      // Créer les indicator values config pour l'acteur économique si les actions config ont été créées
+      if (!existingConfigIndicatorValue && configIndicatorValues.length > 0) {
+        // Trouver ou créer les actions config pour l'acteur économique
+        let actorConfigBasicData = await Action.findOne({ collectivity_id: collectivity._id, type: 'config', name: 'Données de base', owner: 'economic_actor', economic_actor_id: actor._id });
+        let actorConfigParcTypes = await Action.findOne({ collectivity_id: collectivity._id, type: 'config', name: 'Parc types', owner: 'economic_actor', economic_actor_id: actor._id });
+
+        if (!actorConfigBasicData) {
+          actorConfigBasicData = await Action.create({
+            name: 'Données de base',
+            type: 'config',
+            collectivity_id: collectivity._id,
+            collectivity_name: collectivity.name,
+            owner: 'economic_actor',
+            status: 'no_status',
+            economic_actor_id: actor._id,
+            economic_actor_name: actor.name,
+            action_collectivity_id: configActionBasicDataObj._id,
+          });
+        }
+        if (!actorConfigParcTypes) {
+          actorConfigParcTypes = await Action.create({
+            name: 'Parc types',
+            type: 'config',
+            collectivity_id: collectivity._id,
+            collectivity_name: collectivity.name,
+            owner: 'economic_actor',
+            status: 'no_status',
+            economic_actor_id: actor._id,
+            economic_actor_name: actor.name,
+            action_collectivity_id: configActionParcTypesObj._id,
+          });
+        }
+
+        const actorConfigIndicatorValues = [];
+        for (const configIV of configIndicatorValues) {
+          const isParcTypes = configIV.action_name === 'Parc types';
+          const isDonneesDeBase = configIV.action_name === 'Données de base';
+          const targetAction = isDonneesDeBase ? actorConfigBasicData : actorConfigParcTypes;
+
+          // Déterminer la valeur à mettre
+          let valueToSet = { text: null, number: null, radio: null, checkbox: [] };
+          if (isParcTypes) {
+            const defaultVal = configIV.value_default?.[configIV.indicator_type];
+            if (defaultVal !== undefined && defaultVal !== null) valueToSet = { ...valueToSet, [configIV.indicator_type]: defaultVal };
+          }
+          if (isDonneesDeBase) {
+            if (configIV.indicator_excel_id === 'ActionsCharte' || configIV.indicator_excel_id === 'ActionsAutres') valueToSet = configIV.value || valueToSet;
+          }
+
+          actorConfigIndicatorValues.push({
+            ...configIV,
+            owner: 'economic_actor',
+            economic_actor_id: actor._id,
+            economic_actor_name: actor.name,
+            action_id: targetAction._id,
+            action_name: targetAction.name,
+            value: valueToSet,
+          });
+        }
+
+        if (actorConfigIndicatorValues.length > 0) await IndicatorValue.insertMany(actorConfigIndicatorValues);
+      }
+
+      // Mettre à jour les années dans l'Excel de l'acteur économique
+      if (actorExcelFileId) {
+        const anneeUpdates = [
+          { situation: 'init', excelId: 'AnneeRempl', value: req.body.year_init },
+          { situation: 'ref', excelId: 'AnRef', value: req.body.year_ref },
+          { situation: 'prev', excelId: 'AnneeRempl', value: req.body.year_prev },
+          { situation: 'expost', excelId: 'AnneeRempl', value: req.body.year_expost },
+        ];
+
+        for (const update of anneeUpdates) {
+          if (update.value) {
+            try {
+              await updateExcelCellByIndicatorId(actorExcelFileId, update.excelId, update.value, update.situation);
+            } catch (excelError) {
+              capture(excelError);
+            }
+          }
+        }
+      }
+    }
+
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -347,18 +475,35 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
     const { collectivity, economic_actor } = req.body;
     if (!collectivity || !economic_actor) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    const collectivityDoc = await Collectivity.findById(collectivity._id);
+
+    // Inclure TOUTES les actions de la collectivité (y compris les actions config)
     const sourceActions = await Action.find({ collectivity_id: collectivity._id, owner: 'collectivity' });
     if (!sourceActions.length) return res.status(200).send({ ok: true, data: [] });
 
-    const payloads = [];
+    // Créer les actions avec leurs propres fichiers Excel
+    const duplicatedActions = [];
     for (const action of sourceActions) {
-      payloads.push({
+      const excelFiles = [];
+      if (action.type !== 'config') {
+        for (const excelFile of action.excel_files || []) {
+          try {
+            const newExcelFileId = await duplicateExcelFile(`${economic_actor.name}_${action.name}_Prev${excelFile.year_prev}.xlsx`,collectivityDoc?.sharepoint_folder_id,excelFile.excel_file_id);
+            excelFiles.push({ year_prev: excelFile.year_prev, excel_file_id: newExcelFileId });
+          } catch (excelError) {
+            capture(excelError);
+          }
+        }
+      }
+
+      const newAction = await Action.create({
         ...action.toObject(),
         owner: 'economic_actor',
         status: 'no_status',
         economic_actor_id: economic_actor._id,
         economic_actor_name: economic_actor.name,
         action_collectivity_id: action._id,
+        excel_files: excelFiles,
         last_modif_by_id: null,
         last_modif_by_name: null,
         last_modif_date: null,
@@ -367,11 +512,9 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
         createdAt: undefined,
         updatedAt: undefined,
       });
+      duplicatedActions.push(newAction);
     }
 
-    if (!payloads.length) return res.status(200).send({ ok: true, data: [] });
-
-    const duplicatedActions = await Action.insertMany(payloads);
     const logs = duplicatedActions.map((duplicatedAction) => ({
       model_name: 'action',
       name: duplicatedAction.name,
@@ -445,9 +588,13 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     const collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    // Construire le nom du fichier Excel selon le owner
+    let excelFileName = `${action.name}_Prev${year_prev}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Prev${year_prev}.xlsx`;
+
     // Dupliquer l'Excel depuis le premier fichier existant de cette action
     const sourceExcelId = action.excel_files?.[0]?.excel_file_id || null;
-    const excelFileId = await duplicateExcelFile(`${action.name}_Prev${year_prev}.xlsx`, collectivity.sharepoint_folder_id, sourceExcelId);
+    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
     // Ajouter le nouveau fichier Excel à l'action
     action.excel_files.push({ year_prev, excel_file_id: excelFileId });
@@ -471,6 +618,7 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
         action_name: action.name,
         collectivity_id: action.collectivity_id,
         collectivity_name: action.collectivity_name,
+        owner: action.owner,
         indicator_id: indicator._id,
         indicator_name: indicator.name,
         indicator_type: indicator.value_type,
@@ -490,15 +638,97 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
         indicator_sub_category_name: indicator.indicator_sub_category_name,
         indicator_excel_id: indicator.excel_indicator_id,
       };
+
+      // Ajouter les champs spécifiques aux acteurs économiques
+      if (action.owner === 'economic_actor') {
+        indicatorValue.economic_actor_id = action.economic_actor_id;
+        indicatorValue.economic_actor_name = action.economic_actor_name;
+        const collectivityIV = await IndicatorValue.findOne({ collectivity_id: action.collectivity_id, indicator_id: indicator._id, situation: 'prev', year: year_prev, owner: 'collectivity' });
+        if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
+        indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
+      }
+
       const displayCondition = indicator.display_condition?.prev;
       if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
       createdIndicatorValues.push(indicatorValue);
     }
 
-    if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
+    let insertedCollectivityIVs = [];
+    if (createdIndicatorValues.length > 0) insertedCollectivityIVs = await IndicatorValue.insertMany(createdIndicatorValues);
 
     // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
+
+    // Si c'est une action de collectivité, propager l'ajout de l'année prévisionnelle aux acteurs économiques
+    if (action.owner === 'collectivity') {
+      // Trouver toutes les actions des acteurs économiques liées à cette action
+      const economicActorActions = await Action.find({ action_collectivity_id: action._id, owner: 'economic_actor' });
+
+      for (const actorAction of economicActorActions) {
+        try {
+          // Vérifier si cette année prévisionnelle existe déjà pour l'acteur
+          const actorExistingPrev = actorAction.excel_files?.find(f => f.year_prev === year_prev);
+          if (actorExistingPrev) continue;
+
+          // Créer le fichier Excel pour l'acteur économique
+          const actorExcelFileId = await duplicateExcelFile(`${actorAction.economic_actor_name}_${actorAction.name}_Prev${year_prev}.xlsx`, collectivity.sharepoint_folder_id, excelFileId);
+
+          // Ajouter le fichier Excel à l'action de l'acteur
+          actorAction.excel_files = actorAction.excel_files || [];
+          actorAction.excel_files.push({ year_prev, excel_file_id: actorExcelFileId });
+          await actorAction.save();
+
+          // Créer les indicator values pour l'acteur économique (valeurs vides)
+          const actorIndicatorValues = [];
+          for (const indicator of indicators) {
+            if (indicator.presence_in_excel?.prev !== true) continue;
+
+            const defaultValue = indicator.value_default?.prev?.[indicator.value_type] ?? null;
+
+            // Trouver l'IV de la collectivité correspondant pour le lien
+            const collectivityIV = insertedCollectivityIVs.find(iv => iv.indicator_id.toString() === indicator._id.toString());
+
+            actorIndicatorValues.push({
+              action_id: actorAction._id,
+              action_name: actorAction.name,
+              collectivity_id: actorAction.collectivity_id,
+              collectivity_name: actorAction.collectivity_name,
+              owner: 'economic_actor',
+              economic_actor_id: actorAction.economic_actor_id,
+              economic_actor_name: actorAction.economic_actor_name,
+              indicator_id: indicator._id,
+              indicator_name: indicator.name,
+              indicator_type: indicator.value_type,
+              situation: 'prev',
+              year: year_prev,
+              year_init: actorAction.year_init,
+              year_ref: actorAction.year_ref,
+              year_prev: year_prev,
+              year_expost: actorAction.year_expost,
+              excel_line_number: indicator.excel_line_number?.prev,
+              indicator_value_unit: indicator.value_unit,
+              value_default: { [indicator.value_type]: defaultValue },
+              indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_category_id: indicator.indicator_category_id,
+              indicator_category_name: indicator.indicator_category_name,
+              indicator_sub_category_id: indicator.indicator_sub_category_id,
+              indicator_sub_category_name: indicator.indicator_sub_category_name,
+              indicator_excel_id: indicator.excel_indicator_id,
+              indicator_value_collectivity_id: collectivityIV?._id,
+              value: { text: null, number: null, radio: null, checkbox: [] },
+              display_condition: indicator.display_condition?.prev?.operator || indicator.display_condition?.prev?.conditions?.length ? indicator.display_condition.prev : undefined,
+            });
+          }
+
+          if (actorIndicatorValues.length > 0) await IndicatorValue.insertMany(actorIndicatorValues);
+
+          await updateExcelCellByIndicatorId(actorExcelFileId, 'AnneeRempl', year_prev, 'prev');
+        } catch (error) {
+          capture(error);
+          continue;
+        }
+      }
+    }
 
     await Log.create({
       model_name: 'action',

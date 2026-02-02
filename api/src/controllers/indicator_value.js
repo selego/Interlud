@@ -155,10 +155,11 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       year: indicatorValue.year,
       collectivity_id: indicatorValue.collectivity_id,
       source_type: indicatorValue.source_type,
+      owner: indicatorValue.owner,
       _id: { $ne: indicatorValue._id },
     };
 
-    if (indicatorValue.economic_actor_id) payload.economic_actor_id = indicatorValue.economic_actor_id;
+    if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) payload.economic_actor_id = indicatorValue.economic_actor_id;
     const otherIndicatorValues = await IndicatorValue.find(payload);
 
     const syncLogs = [];
@@ -197,10 +198,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       }
     }
 
-    await IndicatorValue.updateMany(
-      { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, collectivity_id: indicatorValue.collectivity_id },
-      { $set: { value: indicatorValue.value } }
-    );
+    // Construire la requête de mise à jour avec les mêmes filtres que payload pour éviter la synchronisation croisée
+    const updateQuery = {indicator_id: indicatorValue.indicator_id,situation: indicatorValue.situation,year: indicatorValue.year,collectivity_id: indicatorValue.collectivity_id,owner: indicatorValue.owner};
+    if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
+    await IndicatorValue.updateMany(updateQuery, { $set: { value: indicatorValue.value } });
 
     if (syncLogs.length > 0) await Log.insertMany(syncLogs);
   } catch (error) {
@@ -232,6 +233,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
         query.indicator_sub_category_name = req.body.indicator_sub_category_name;
       }
     }
+    if (req.body.economic_actor_id) query.economic_actor_id = req.body.economic_actor_id;
 
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
@@ -266,6 +268,16 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
       for (const sourceIndicatorValue of sourceIndicatorValues) {
         if (sourceIndicatorValue.action_id !== economicActorAction.action_collectivity_id) continue;
 
+        let valueToSet = { text: null, number: null, radio: null, checkbox: [] };
+
+        if (economicActorAction.type === 'config' && economicActorAction.name === 'Parc types') {
+          const defaultVal = sourceIndicatorValue.value_default?.[sourceIndicatorValue.indicator_type];
+          if (defaultVal !== undefined && defaultVal !== null) valueToSet = { ...valueToSet, [sourceIndicatorValue.indicator_type]: defaultVal };
+        }
+        if (economicActorAction.type === 'config' && economicActorAction.name === 'Données de base') {
+          if (sourceIndicatorValue.indicator_excel_id === 'ActionsCharte' || sourceIndicatorValue.indicator_excel_id === 'ActionsAutres') valueToSet = sourceIndicatorValue.value;
+        }
+
         payloads.push({
           ...sourceIndicatorValue,
           owner: 'economic_actor',
@@ -276,7 +288,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
           indicator_value_collectivity_id: sourceIndicatorValue._id,
           indicator_excel_id: sourceIndicatorValue.indicator_excel_id,
           display_condition: sourceIndicatorValue.display_condition || undefined,
-          value: { text: null, number: null, radio: null, checkbox: [] },
+          value: valueToSet,
           _id: undefined,
           __v: undefined,
           createdAt: undefined,

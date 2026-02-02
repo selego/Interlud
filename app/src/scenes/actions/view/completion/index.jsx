@@ -78,7 +78,12 @@ export default function Completion({ action }) {
 
   const fetchAllCollectivityIndicatorValues = async () => {
     try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { collectivity_id: action.collectivity_id, limit: 10000 })
+      const searchParams = { collectivity_id: action.collectivity_id, limit: 10000 }
+      if (action.owner === 'economic_actor') {
+        searchParams.owner = 'economic_actor'
+        searchParams.economic_actor_id = action.economic_actor_id
+      }
+      const { ok, data, code } = await api.post(`/indicator_value/search`, searchParams)
       if (!ok) return toast.error(code || "Erreur lors du chargement")
       setAllCollectivityIndicatorValues(data)
     } catch (error) {
