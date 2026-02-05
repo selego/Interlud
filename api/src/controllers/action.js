@@ -88,7 +88,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.createdAt) query.createdAt = { $gte: new Date(req.body.createdAt) };
 
     // Seul admin@selego.co peut voir les actions des 2 collectivités spécifiques
-    const restrictedCollectivities = ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20'];
+    const restrictedCollectivities = ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20', '697a125487170f4e08ffa93b'];
     if (req.user.email !== 'admin@selego.co') {
       if (req.body.collectivity_id && restrictedCollectivities.includes(req.body.collectivity_id)) {
         return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });

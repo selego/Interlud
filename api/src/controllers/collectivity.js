@@ -36,7 +36,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
 
     // Seul admin@selego.co peut voir ces 2 collectivités, les autres ne les voient pas
-    if (req.user.email !== 'admin@selego.co') query._id = { $nin: ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20',] };
+    if (req.user.email !== 'admin@selego.co') query._id = { $nin: ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20', '697a125487170f4e08ffa93b'] };
 
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
