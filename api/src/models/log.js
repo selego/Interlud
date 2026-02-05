@@ -8,7 +8,7 @@ const Schema = new mongoose.Schema(
     name: { type: String },
 
     field: { type: String },
-    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate', 'add_previsionnel'] },
+    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate', 'add_previsionnel', 'add_expost'] },
     new_value: {
       string: { type: String, trim: true },
       array: { type: Array, default: [] },
@@ -55,7 +55,7 @@ const Schema = new mongoose.Schema(
     indicator_id: { type: String },
     indicator_name: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);

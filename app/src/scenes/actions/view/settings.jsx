@@ -212,6 +212,9 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
   const [newPrevYear, setNewPrevYear] = useState("");
   const [isAddingPrev, setIsAddingPrev] = useState(false);
+  const [isAddExpostModalOpen, setIsAddExpostModalOpen] = useState(false);
+  const [newExpostYear, setNewExpostYear] = useState("");
+  const [isAddingExpost, setIsAddingExpost] = useState(false);
 
   const addPrevisionnel = async () => {
     if (!newPrevYear) return toast.error("Veuillez sélectionner une année");
@@ -230,6 +233,26 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
       toast.error(error.message || "Une erreur est survenue");
     } finally {
       setIsAddingPrev(false);
+    }
+  };
+
+  const addExpost = async () => {
+    if (!newExpostYear) return toast.error("Veuillez sélectionner une année");
+    const existingYears = (action.excel_files_expost || []).map(f => f.year_expost);
+    if (existingYears.includes(parseInt(newExpostYear))) return toast.error("Cette année existe déjà");
+
+    try {
+      setIsAddingExpost(true);
+      const { ok, data, code } = await api.post("/action/add_expost", { action_id: action._id, year_expost: parseInt(newExpostYear) });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Situation ex-post ajoutée");
+      setIsAddExpostModalOpen(false);
+      setNewExpostYear("");
+      if (onActionUpdate) onActionUpdate(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsAddingExpost(false);
     }
   };
 
@@ -337,10 +360,29 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
             <label className="block text-sm font-semibold mb-2">Année référence</label>
             <div className="w-full input-primary bg-gray-50">{action.year_ref || "-"}</div>
           </div>
-          <div>
-            <label className="block text-sm font-semibold mb-2">Année ex-post</label>
-            <div className="w-full input-primary bg-gray-50">{action.year_expost || "-"}</div>
+        </div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold">Années ex-post</label>
+            <button
+              onClick={() => setIsAddExpostModalOpen(true)}
+              className="text-sm text-primary-green hover:underline flex items-center gap-1"
+            >
+              <FiPlus size={14} />
+              Ajouter
+            </button>
           </div>
+          {(action.excel_files_expost || []).map(f => f.year_expost).sort((a, b) => a - b).length === 0 ? (
+            <div className="w-full input-primary bg-gray-50 text-gray-400">Aucune année ex-post</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(action.excel_files_expost || []).map(f => f.year_expost).sort((a, b) => a - b).map((year) => (
+                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
+                  {year}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -577,6 +619,35 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
             </button>
             <button onClick={addPrevisionnel} disabled={isAddingPrev} className="button-primary">
               {isAddingPrev ? "Création..." : "Créer"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isAddExpostModalOpen} onClose={() => setIsAddExpostModalOpen(false)} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Ajouter une situation ex-post</h2>
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Année ex-post <span className="text-red-500">*</span>
+            </label>
+            <Select
+              options={Array.from({ length: 30 }, (_, i) => {
+                const year = new Date().getFullYear() + i;
+                return { value: year.toString(), label: year.toString() };
+              })}
+              value={newExpostYear}
+              onChange={(value) => setNewExpostYear(value)}
+              placeholder="Sélectionner une année"
+              constrained={true}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setIsAddExpostModalOpen(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+              Annuler
+            </button>
+            <button onClick={addExpost} disabled={isAddingExpost} className="button-primary">
+              {isAddingExpost ? "Création..." : "Créer"}
             </button>
           </div>
         </div>

@@ -47,7 +47,7 @@ export default function Completion({ action }) {
       { key: SITUATION_TYPES.INIT, label: "Initiale", situation: SITUATION_TYPES.INIT },
       { key: SITUATION_TYPES.REF, label: "Référence", situation: SITUATION_TYPES.REF },
       ...(action.excel_files || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: SITUATION_TYPES.PREV })),
-      { key: SITUATION_TYPES.EXPOST, label: "Ex-post", situation: SITUATION_TYPES.EXPOST }
+      ...(action.excel_files_expost || []).map((file) => ({ key: `expost_${file.year_expost}`, label: `Expost ${file.year_expost}`, year: file.year_expost, situation: SITUATION_TYPES.EXPOST })),
     ]
   }
 
@@ -57,7 +57,7 @@ export default function Completion({ action }) {
     try {
       const currentTab = dynamicTabs.find((t) => t.key === activeTab)
       const searchParams = { action_id: action._id, situation: currentTab?.situation, limit: 10000 }
-      if (currentTab?.year && (action.type === 'config' || currentTab?.situation === SITUATION_TYPES.PREV)) searchParams.year = currentTab.year
+      if (currentTab?.year && (action.type === 'config' || currentTab?.situation === SITUATION_TYPES.PREV || currentTab?.situation === SITUATION_TYPES.EXPOST)) searchParams.year = currentTab.year
       const { ok, data, code } = await api.post(`/indicator_value/search`, searchParams)
       if (!ok) return toast.error(code || "Erreur lors du chargement")
       setIndicatorValues(data)
@@ -149,8 +149,8 @@ export default function Completion({ action }) {
 
   const getSituationProgress = (situationKey, year = null) => {
     let values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv))
-    // Pour les actions config ou les prev, filtrer par année
-    if (year && (action.type === 'config' || situationKey === SITUATION_TYPES.PREV)) values = values.filter((iv) => iv.year === year)
+    // Pour les actions config, les prev ou les expost, filtrer par année
+    if (year && (action.type === 'config' || situationKey === SITUATION_TYPES.PREV || situationKey === SITUATION_TYPES.EXPOST)) values = values.filter((iv) => iv.year === year)
     if (values.length === 0) return 0
     const filled = values.filter(isIndicatorValueFilled).length
     return Math.round((filled / values.length) * 100)

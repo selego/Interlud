@@ -130,17 +130,62 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       const yearFieldMap = { init: 'year_init', ref: 'year_ref', prev: 'year_prev', expost: 'year_expost' };
       const yearField = yearFieldMap[indicatorValue.situation] || 'year_init';
 
-      const actionsWithSameYear = await Action.find({collectivity_id: action.collectivity_id,[yearField]: indicatorValue.year,type: { $ne: 'config' },'excel_files.0.excel_file_id': { $exists: true }});
+      const actionsWithSameYear = await Action.find({
+        collectivity_id: action.collectivity_id,
+        [yearField]: indicatorValue.year,
+        type: { $ne: 'config' },
+        'excel_files.0.excel_file_id': { $exists: true },
+      });
       for (const targetAction of actionsWithSameYear) {
         for (const excelFile of targetAction.excel_files || []) {
-          if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          if (excelFile.excel_file_id)
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
+        }
+        for (const excelFile of targetAction.excel_files_expost || []) {
+          if (excelFile.excel_file_id)
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
         }
       }
     }
     if (action.type !== 'config') {
-      for (const excelFile of action.excel_files || []) {
-        if (indicatorValue.situation === 'prev' && excelFile.year_prev !== indicatorValue.year) continue;
-        excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+      if (indicatorValue.situation !== 'expost') {
+        for (const excelFile of action.excel_files || []) {
+          if (indicatorValue.situation === 'prev' && excelFile.year_prev !== indicatorValue.year) continue;
+          excelUpdatePromises.push(
+            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+              capture,
+            ),
+          );
+        }
+      }
+      if (indicatorValue.situation === 'expost') {
+        // Si c'est l'année expost principale → mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
+        if (indicatorValue.year === action.year_expost) {
+          for (const excelFile of action.excel_files || []) {
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
+          }
+        }
+        // Mettre à jour le bon fichier excel_files_expost correspondant à l'année
+        for (const excelFile of action.excel_files_expost || []) {
+          if (excelFile.year_expost !== indicatorValue.year) continue;
+          excelUpdatePromises.push(
+            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+              capture,
+            ),
+          );
+        }
       }
     }
 
@@ -199,7 +244,13 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     }
 
     // Construire la requête de mise à jour avec les mêmes filtres que payload pour éviter la synchronisation croisée
-    const updateQuery = {indicator_id: indicatorValue.indicator_id,situation: indicatorValue.situation,year: indicatorValue.year,collectivity_id: indicatorValue.collectivity_id,owner: indicatorValue.owner};
+    const updateQuery = {
+      indicator_id: indicatorValue.indicator_id,
+      situation: indicatorValue.situation,
+      year: indicatorValue.year,
+      collectivity_id: indicatorValue.collectivity_id,
+      owner: indicatorValue.owner,
+    };
     if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
     await IndicatorValue.updateMany(updateQuery, { $set: { value: indicatorValue.value } });
 
@@ -433,7 +484,12 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
     }
 
     if (action.type === 'config') {
-      const actionsWithSameYearInit = await Action.find({collectivity_id: action.collectivity_id,year_init: action.year_init,_id: { $ne: action._id },'excel_files.0.excel_file_id': { $exists: true }});
+      const actionsWithSameYearInit = await Action.find({
+        collectivity_id: action.collectivity_id,
+        year_init: action.year_init,
+        _id: { $ne: action._id },
+        'excel_files.0.excel_file_id': { $exists: true },
+      });
 
       for (const targetAction of actionsWithSameYearInit) {
         for (const excelFile of targetAction.excel_files || []) {
@@ -442,7 +498,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       }
     }
 
-    const importResults = await Promise.all( excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
+    const importResults = await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
 
     const extractedData = importResults.find((r) => r?.extractedData)?.extractedData || [];
     if (!extractedData || extractedData.length === 0) return res.status(200).json({ ok: true });
@@ -509,7 +565,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             indicator_name: indicatorValue.indicator_name,
             indicator_value_id: indicatorValue._id.toString(),
             indicator_value_name: indicatorValue.name,
-          })
+          }),
         );
         bulkOps.push({ updateOne: { filter: { _id: indicatorValue._id }, update: { $set: { [`value.${indicatorValue.indicator_type}`]: data.value } } } });
       }
