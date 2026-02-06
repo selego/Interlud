@@ -201,14 +201,14 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Année référence <span className="text-red-500">*</span>
+                  Année référence
                 </label>
                 <input
                   type="number"
-                  value={year.ref}
-                  onChange={(e) => setYear({ ...year, ref: e.target.value })}
-                  className="input-primary"
-                  placeholder="Année"
+                  value={year.prev || ""}
+                  disabled
+                  className="input-primary bg-gray-100 cursor-not-allowed"
+                  placeholder="= Année prévisionnelle"
                 />
               </div>
 
@@ -219,7 +219,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 <input
                   type="number"
                   value={year.prev}
-                  onChange={(e) => setYear({ ...year, prev: e.target.value })}
+                  onChange={(e) => setYear({ ...year, prev: e.target.value, ref: e.target.value })}
                   className="input-primary"
                   placeholder="Année"
                 />

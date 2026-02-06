@@ -655,66 +655,173 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     action.last_modif_date = new Date();
     await action.save();
 
-    // Créer les indicator values pour la nouvelle situation prev
-    const parentAction = await Action.findById(action.action_parent_id);
-    const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
-    const createdIndicatorValues = [];
+    // Créer les indicator values config (Données de base, Parc types) pour les situations prev et ref si elles n'existent pas
+    const configActionBasicData = await Action.findOne({collectivity_id: action.collectivity_id,type: 'config',name: 'Données de base',owner: action.owner,...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {})});
+    const configActionParcTypes = await Action.findOne({collectivity_id: action.collectivity_id,type: 'config',name: 'Parc types',owner: action.owner,...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {})});
 
-    for (const indicator of indicators) {
-      if (indicator.presence_in_excel?.prev !== true) continue;
-
-      const defaultValue = indicator.value_default?.prev?.[indicator.value_type] ?? null;
-      const indicatorValue = {
-        action_id: action._id,
-        action_name: action.name,
-        collectivity_id: action.collectivity_id,
-        collectivity_name: action.collectivity_name,
-        owner: action.owner,
-        indicator_id: indicator._id,
-        indicator_name: indicator.name,
-        indicator_type: indicator.value_type,
+    if (configActionBasicData || configActionParcTypes) {
+      // Vérifier si les indicateurs config existent déjà pour ces années (prev et ref)
+      const existingConfigPrevIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
         situation: 'prev',
         year: year_prev,
-        year_init: action.year_init,
-        year_ref: action.year_ref,
-        year_prev: year_prev,
-        year_expost: action.year_expost,
-        excel_line_number: indicator.excel_line_number?.prev,
-        indicator_value_unit: indicator.value_unit,
-        value_default: { [indicator.value_type]: defaultValue },
-        indicator_value_possibilities: indicator.value_possibilities || [],
-        indicator_category_id: indicator.indicator_category_id,
-        indicator_category_name: indicator.indicator_category_name,
-        indicator_sub_category_id: indicator.indicator_sub_category_id,
-        indicator_sub_category_name: indicator.indicator_sub_category_name,
-        indicator_excel_id: indicator.excel_indicator_id,
-      };
+      });
+      const existingConfigRefIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
+        situation: 'ref',
+        year: year_prev,
+      });
 
-      // Ajouter les champs spécifiques aux acteurs économiques
-      if (action.owner === 'economic_actor') {
-        indicatorValue.economic_actor_id = action.economic_actor_id;
-        indicatorValue.economic_actor_name = action.economic_actor_name;
-        const collectivityIV = await IndicatorValue.findOne({
-          collectivity_id: action.collectivity_id,
-          indicator_id: indicator._id,
-          situation: 'prev',
-          year: year_prev,
-          owner: 'collectivity',
-        });
-        if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
-        indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
+      if (!existingConfigPrevIV || !existingConfigRefIV) {
+        const configIndicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
+        const configIndicatorValues = [];
+
+        for (const indicator of configIndicators) {
+          const situations = [];
+          if (!existingConfigPrevIV && indicator.presence_in_excel?.prev === true) situations.push('prev');
+          if (!existingConfigRefIV && indicator.presence_in_excel?.ref === true) situations.push('ref');
+
+          const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicData : configActionParcTypes;
+          if (!configAction) continue;
+
+          const isParcTypes = configAction.name === 'Parc types';
+
+          for (const situation of situations) {
+            const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+            const iv = {
+              action_id: configAction._id,
+              action_name: configAction.name,
+              collectivity_id: action.collectivity_id,
+              collectivity_name: action.collectivity_name,
+              owner: action.owner,
+              indicator_id: indicator._id,
+              indicator_name: indicator.name,
+              indicator_type: indicator.value_type,
+              situation,
+              year: year_prev,
+              year_init: action.year_init,
+              year_ref: year_prev,
+              year_prev: year_prev,
+              year_expost: action.year_expost,
+              indicator_value_unit: indicator.value_unit,
+              value_default: { [indicator.value_type]: defaultValue },
+              indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_category_id: indicator.indicator_category_id,
+              indicator_category_name: indicator.indicator_category_name,
+              indicator_sub_category_id: indicator.indicator_sub_category_id,
+              indicator_sub_category_name: indicator.indicator_sub_category_name,
+              indicator_excel_id: indicator.excel_indicator_id,
+              excel_line_number: indicator.excel_line_number?.[situation],
+            };
+
+            if (isParcTypes) iv.value = { [indicator.value_type]: defaultValue };
+            if (action.owner === 'economic_actor') {
+              iv.economic_actor_id = action.economic_actor_id;
+              iv.economic_actor_name = action.economic_actor_name;
+            }
+
+            const displayCondition = indicator.display_condition?.[situation];
+            if (displayCondition?.operator || displayCondition?.conditions?.length) iv.display_condition = displayCondition;
+            configIndicatorValues.push(iv);
+          }
+        }
+
+        if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
+
+        // Mettre à jour AnneeRempl et AnRef pour les config
+        if (configActionBasicData) {
+          if (!existingConfigPrevIV) {
+            await IndicatorValue.findOneAndUpdate(
+              { action_id: configActionBasicData._id, indicator_excel_id: 'AnneeRempl', situation: 'prev', year: year_prev },
+              { 'value.number': year_prev },
+              { new: true },
+            );
+          }
+          if (!existingConfigRefIV) {
+            await IndicatorValue.findOneAndUpdate(
+              { action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_prev },
+              { 'value.number': year_prev },
+              { new: true },
+            );
+          }
+        }
       }
-
-      const displayCondition = indicator.display_condition?.prev;
-      if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
-      createdIndicatorValues.push(indicatorValue);
     }
 
-    let insertedCollectivityIVs = [];
-    if (createdIndicatorValues.length > 0) insertedCollectivityIVs = await IndicatorValue.insertMany(createdIndicatorValues);
+    // Créer les indicator values pour les situations prev et ref (year_ref = year_prev)
+    const parentAction = await Action.findById(action.action_parent_id);
+    const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
+    const createdPrevIndicatorValues = [];
+    const createdRefIndicatorValues = [];
+
+    for (const indicator of indicators) {
+      const situations = [];
+      if (indicator.presence_in_excel?.prev === true) situations.push('prev');
+      if (indicator.presence_in_excel?.ref === true) situations.push('ref');
+
+      for (const situation of situations) {
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = {
+          action_id: action._id,
+          action_name: action.name,
+          collectivity_id: action.collectivity_id,
+          collectivity_name: action.collectivity_name,
+          owner: action.owner,
+          indicator_id: indicator._id,
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
+          year: year_prev,
+          year_init: action.year_init,
+          year_ref: year_prev,
+          year_prev: year_prev,
+          year_expost: action.year_expost,
+          excel_line_number: indicator.excel_line_number?.[situation],
+          indicator_value_unit: indicator.value_unit,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_category_id: indicator.indicator_category_id,
+          indicator_category_name: indicator.indicator_category_name,
+          indicator_sub_category_id: indicator.indicator_sub_category_id,
+          indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+        };
+
+        // Ajouter les champs spécifiques aux acteurs économiques
+        if (action.owner === 'economic_actor') {
+          indicatorValue.economic_actor_id = action.economic_actor_id;
+          indicatorValue.economic_actor_name = action.economic_actor_name;
+          if (situation === 'prev') {
+            const collectivityIV = await IndicatorValue.findOne({
+              collectivity_id: action.collectivity_id,
+              indicator_id: indicator._id,
+              situation: 'prev',
+              year: year_prev,
+              owner: 'collectivity',
+            });
+            if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
+          }
+          indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
+        }
+
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+
+        if (situation === 'prev') createdPrevIndicatorValues.push(indicatorValue);
+        else createdRefIndicatorValues.push(indicatorValue);
+      }
+    }
+
+    let insertedPrevIVs = [];
+    let insertedRefIVs = [];
+    if (createdPrevIndicatorValues.length > 0) insertedPrevIVs = await IndicatorValue.insertMany(createdPrevIndicatorValues);
+    if (createdRefIndicatorValues.length > 0) insertedRefIVs = await IndicatorValue.insertMany(createdRefIndicatorValues);
 
     // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
+
+    // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_prev) dans l'Excel
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_prev, 'ref');
 
     // Si c'est une action de collectivité, propager l'ajout de l'année prévisionnelle aux acteurs économiques
     if (action.owner === 'collectivity') {
@@ -739,52 +846,56 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
           actorAction.excel_files.push({ year_prev, excel_file_id: actorExcelFileId });
           await actorAction.save();
 
-          // Créer les indicator values pour l'acteur économique (valeurs vides)
+          // Créer les indicator values pour l'acteur économique (situations prev et ref)
           const actorIndicatorValues = [];
           for (const indicator of indicators) {
-            if (indicator.presence_in_excel?.prev !== true) continue;
+            const situations = [];
+            if (indicator.presence_in_excel?.prev === true) situations.push('prev');
+            if (indicator.presence_in_excel?.ref === true) situations.push('ref');
 
-            const defaultValue = indicator.value_default?.prev?.[indicator.value_type] ?? null;
+            for (const situation of situations) {
+              const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+              const collectivityIVs = situation === 'prev' ? insertedPrevIVs : insertedRefIVs;
+              const collectivityIV = collectivityIVs.find((iv) => iv.indicator_id.toString() === indicator._id.toString());
 
-            // Trouver l'IV de la collectivité correspondant pour le lien
-            const collectivityIV = insertedCollectivityIVs.find((iv) => iv.indicator_id.toString() === indicator._id.toString());
-
-            actorIndicatorValues.push({
-              action_id: actorAction._id,
-              action_name: actorAction.name,
-              collectivity_id: actorAction.collectivity_id,
-              collectivity_name: actorAction.collectivity_name,
-              owner: 'economic_actor',
-              economic_actor_id: actorAction.economic_actor_id,
-              economic_actor_name: actorAction.economic_actor_name,
-              indicator_id: indicator._id,
-              indicator_name: indicator.name,
-              indicator_type: indicator.value_type,
-              situation: 'prev',
-              year: year_prev,
-              year_init: actorAction.year_init,
-              year_ref: actorAction.year_ref,
-              year_prev: year_prev,
-              year_expost: actorAction.year_expost,
-              excel_line_number: indicator.excel_line_number?.prev,
-              indicator_value_unit: indicator.value_unit,
-              value_default: { [indicator.value_type]: defaultValue },
-              indicator_value_possibilities: indicator.value_possibilities || [],
-              indicator_category_id: indicator.indicator_category_id,
-              indicator_category_name: indicator.indicator_category_name,
-              indicator_sub_category_id: indicator.indicator_sub_category_id,
-              indicator_sub_category_name: indicator.indicator_sub_category_name,
-              indicator_excel_id: indicator.excel_indicator_id,
-              indicator_value_collectivity_id: collectivityIV?._id,
-              value: { text: null, number: null, radio: null, checkbox: [] },
-              display_condition:
-                indicator.display_condition?.prev?.operator || indicator.display_condition?.prev?.conditions?.length ? indicator.display_condition.prev : undefined,
-            });
+              actorIndicatorValues.push({
+                action_id: actorAction._id,
+                action_name: actorAction.name,
+                collectivity_id: actorAction.collectivity_id,
+                collectivity_name: actorAction.collectivity_name,
+                owner: 'economic_actor',
+                economic_actor_id: actorAction.economic_actor_id,
+                economic_actor_name: actorAction.economic_actor_name,
+                indicator_id: indicator._id,
+                indicator_name: indicator.name,
+                indicator_type: indicator.value_type,
+                situation,
+                year: year_prev,
+                year_init: actorAction.year_init,
+                year_ref: year_prev,
+                year_prev: year_prev,
+                year_expost: actorAction.year_expost,
+                excel_line_number: indicator.excel_line_number?.[situation],
+                indicator_value_unit: indicator.value_unit,
+                value_default: { [indicator.value_type]: defaultValue },
+                indicator_value_possibilities: indicator.value_possibilities || [],
+                indicator_category_id: indicator.indicator_category_id,
+                indicator_category_name: indicator.indicator_category_name,
+                indicator_sub_category_id: indicator.indicator_sub_category_id,
+                indicator_sub_category_name: indicator.indicator_sub_category_name,
+                indicator_excel_id: indicator.excel_indicator_id,
+                indicator_value_collectivity_id: collectivityIV?._id,
+                value: { text: null, number: null, radio: null, checkbox: [] },
+                display_condition:
+                  indicator.display_condition?.[situation]?.operator || indicator.display_condition?.[situation]?.conditions?.length ? indicator.display_condition[situation] : undefined,
+              });
+            }
           }
 
           if (actorIndicatorValues.length > 0) await IndicatorValue.insertMany(actorIndicatorValues);
 
           await updateExcelCellByIndicatorId(actorExcelFileId, 'AnneeRempl', year_prev, 'prev');
+          await updateExcelCellByIndicatorId(actorExcelFileId, 'AnRef', year_prev, 'ref');
         } catch (error) {
           capture(error);
           continue;
@@ -866,66 +977,76 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
     });
 
     if (configActionBasicData || configActionParcTypes) {
-      const existingConfigIV = await IndicatorValue.findOne({
+      // Vérifier si les indicateurs config existent déjà pour ces années (expost et ref)
+      const existingConfigExpostIV = await IndicatorValue.findOne({
         action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
         situation: 'expost',
         year: year_expost,
       });
+      const existingConfigRefIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
+        situation: 'ref',
+        year: year_expost,
+      });
 
-      if (!existingConfigIV) {
+      if (!existingConfigExpostIV || !existingConfigRefIV) {
         const configIndicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
         const configIndicatorValues = [];
 
         for (const indicator of configIndicators) {
-          if (indicator.presence_in_excel?.expost !== true) continue;
+          const situations = [];
+          if (!existingConfigExpostIV && indicator.presence_in_excel?.expost === true) situations.push('expost');
+          if (!existingConfigRefIV && indicator.presence_in_excel?.ref === true) situations.push('ref');
 
           const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicData : configActionParcTypes;
           if (!configAction) continue;
 
-          const defaultValue = indicator.value_default?.expost?.[indicator.value_type] ?? null;
           const isParcTypes = configAction.name === 'Parc types';
 
-          const iv = {
-            action_id: configAction._id,
-            action_name: configAction.name,
-            collectivity_id: action.collectivity_id,
-            collectivity_name: action.collectivity_name,
-            owner: action.owner,
-            indicator_id: indicator._id,
-            indicator_name: indicator.name,
-            indicator_type: indicator.value_type,
-            situation: 'expost',
-            year: year_expost,
-            year_init: action.year_init,
-            year_ref: action.year_ref,
-            year_prev: action.year_prev,
-            year_expost: year_expost,
-            indicator_value_unit: indicator.value_unit,
-            value_default: { [indicator.value_type]: defaultValue },
-            indicator_value_possibilities: indicator.value_possibilities || [],
-            indicator_category_id: indicator.indicator_category_id,
-            indicator_category_name: indicator.indicator_category_name,
-            indicator_sub_category_id: indicator.indicator_sub_category_id,
-            indicator_sub_category_name: indicator.indicator_sub_category_name,
-            indicator_excel_id: indicator.excel_indicator_id,
-            excel_line_number: indicator.excel_line_number?.expost,
-          };
+          for (const situation of situations) {
+            const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+            const iv = {
+              action_id: configAction._id,
+              action_name: configAction.name,
+              collectivity_id: action.collectivity_id,
+              collectivity_name: action.collectivity_name,
+              owner: action.owner,
+              indicator_id: indicator._id,
+              indicator_name: indicator.name,
+              indicator_type: indicator.value_type,
+              situation,
+              year: year_expost,
+              year_init: action.year_init,
+              year_ref: year_expost,
+              year_prev: action.year_prev,
+              year_expost: year_expost,
+              indicator_value_unit: indicator.value_unit,
+              value_default: { [indicator.value_type]: defaultValue },
+              indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_category_id: indicator.indicator_category_id,
+              indicator_category_name: indicator.indicator_category_name,
+              indicator_sub_category_id: indicator.indicator_sub_category_id,
+              indicator_sub_category_name: indicator.indicator_sub_category_name,
+              indicator_excel_id: indicator.excel_indicator_id,
+              excel_line_number: indicator.excel_line_number?.[situation],
+            };
 
-          if (isParcTypes) iv.value = { [indicator.value_type]: defaultValue };
-          if (action.owner === 'economic_actor') {
-            iv.economic_actor_id = action.economic_actor_id;
-            iv.economic_actor_name = action.economic_actor_name;
+            if (isParcTypes) iv.value = { [indicator.value_type]: defaultValue };
+            if (action.owner === 'economic_actor') {
+              iv.economic_actor_id = action.economic_actor_id;
+              iv.economic_actor_name = action.economic_actor_name;
+            }
+
+            const displayCondition = indicator.display_condition?.[situation];
+            if (displayCondition?.operator || displayCondition?.conditions?.length) iv.display_condition = displayCondition;
+            configIndicatorValues.push(iv);
           }
-
-          const displayCondition = indicator.display_condition?.expost;
-          if (displayCondition?.operator || displayCondition?.conditions?.length) iv.display_condition = displayCondition;
-          configIndicatorValues.push(iv);
         }
 
         if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
 
         // Mettre à jour ActionsCharte/ActionsAutres pour la nouvelle année expost
-        if (configActionBasicData) {
+        if (configActionBasicData && !existingConfigExpostIV) {
           const parentAction = await Action.findById(action.action_parent_id);
           if (parentAction) {
             // Copier les valeurs ActionsCharte/ActionsAutres depuis la situation expost existante
@@ -954,69 +1075,92 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
             { new: true },
           );
         }
+
+        // Mettre à jour AnRef pour la situation ref dans les config
+        if (configActionBasicData && !existingConfigRefIV) {
+          await IndicatorValue.findOneAndUpdate(
+            { action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost },
+            { 'value.number': year_expost },
+            { new: true },
+          );
+        }
       }
     }
 
-    // Créer les indicator values pour la nouvelle situation expost
+    // Créer les indicator values pour les situations expost et ref (year_ref = year_expost)
     const parentAction = await Action.findById(action.action_parent_id);
     const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
-    const createdIndicatorValues = [];
+    const createdExpostIndicatorValues = [];
+    const createdRefIndicatorValues = [];
 
     for (const indicator of indicators) {
-      if (indicator.presence_in_excel?.expost !== true) continue;
+      const situations = [];
+      if (indicator.presence_in_excel?.expost === true) situations.push('expost');
+      if (indicator.presence_in_excel?.ref === true) situations.push('ref');
 
-      const defaultValue = indicator.value_default?.expost?.[indicator.value_type] ?? null;
-      const indicatorValue = {
-        action_id: action._id,
-        action_name: action.name,
-        collectivity_id: action.collectivity_id,
-        collectivity_name: action.collectivity_name,
-        owner: action.owner,
-        indicator_id: indicator._id,
-        indicator_name: indicator.name,
-        indicator_type: indicator.value_type,
-        situation: 'expost',
-        year: year_expost,
-        year_init: action.year_init,
-        year_ref: action.year_ref,
-        year_prev: action.year_prev,
-        year_expost: year_expost,
-        excel_line_number: indicator.excel_line_number?.expost,
-        indicator_value_unit: indicator.value_unit,
-        value_default: { [indicator.value_type]: defaultValue },
-        indicator_value_possibilities: indicator.value_possibilities || [],
-        indicator_category_id: indicator.indicator_category_id,
-        indicator_category_name: indicator.indicator_category_name,
-        indicator_sub_category_id: indicator.indicator_sub_category_id,
-        indicator_sub_category_name: indicator.indicator_sub_category_name,
-        indicator_excel_id: indicator.excel_indicator_id,
-      };
-
-      // Ajouter les champs spécifiques aux acteurs économiques
-      if (action.owner === 'economic_actor') {
-        indicatorValue.economic_actor_id = action.economic_actor_id;
-        indicatorValue.economic_actor_name = action.economic_actor_name;
-        const collectivityIV = await IndicatorValue.findOne({
+      for (const situation of situations) {
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = {
+          action_id: action._id,
+          action_name: action.name,
           collectivity_id: action.collectivity_id,
+          collectivity_name: action.collectivity_name,
+          owner: action.owner,
           indicator_id: indicator._id,
-          situation: 'expost',
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
           year: year_expost,
-          owner: 'collectivity',
-        });
-        if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
-        indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
-      }
+          year_init: action.year_init,
+          year_ref: year_expost,
+          year_prev: action.year_prev,
+          year_expost: year_expost,
+          excel_line_number: indicator.excel_line_number?.[situation],
+          indicator_value_unit: indicator.value_unit,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_category_id: indicator.indicator_category_id,
+          indicator_category_name: indicator.indicator_category_name,
+          indicator_sub_category_id: indicator.indicator_sub_category_id,
+          indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+        };
 
-      const displayCondition = indicator.display_condition?.expost;
-      if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
-      createdIndicatorValues.push(indicatorValue);
+        // Ajouter les champs spécifiques aux acteurs économiques
+        if (action.owner === 'economic_actor') {
+          indicatorValue.economic_actor_id = action.economic_actor_id;
+          indicatorValue.economic_actor_name = action.economic_actor_name;
+          if (situation === 'expost') {
+            const collectivityIV = await IndicatorValue.findOne({
+              collectivity_id: action.collectivity_id,
+              indicator_id: indicator._id,
+              situation: 'expost',
+              year: year_expost,
+              owner: 'collectivity',
+            });
+            if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
+          }
+          indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
+        }
+
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+
+        if (situation === 'expost') createdExpostIndicatorValues.push(indicatorValue);
+        else createdRefIndicatorValues.push(indicatorValue);
+      }
     }
 
-    let insertedCollectivityIVs = [];
-    if (createdIndicatorValues.length > 0) insertedCollectivityIVs = await IndicatorValue.insertMany(createdIndicatorValues);
+    let insertedExpostIVs = [];
+    let insertedRefIVs = [];
+    if (createdExpostIndicatorValues.length > 0) insertedExpostIVs = await IndicatorValue.insertMany(createdExpostIndicatorValues);
+    if (createdRefIndicatorValues.length > 0) insertedRefIVs = await IndicatorValue.insertMany(createdRefIndicatorValues);
 
     // Mettre à jour l'indicateur AnneeRempl avec la nouvelle année expost dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_expost, 'expost');
+
+    // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_expost) dans l'Excel
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_expost, 'ref');
 
     // Si c'est une action de collectivité, propager l'ajout de l'année expost aux acteurs économiques
     if (action.owner === 'collectivity') {
@@ -1040,47 +1184,56 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
           actorAction.excel_files_expost.push({ year_expost, excel_file_id: actorExcelFileId });
           await actorAction.save();
 
-          // Créer les indicator values pour l'acteur économique (valeurs vides)
+          // Créer les indicator values pour l'acteur économique (situations expost et ref)
           const actorIndicatorValues = [];
           for (const indicator of indicators) {
-            if (indicator.presence_in_excel?.expost !== true) continue;
+            const situations = [];
+            if (indicator.presence_in_excel?.expost === true) situations.push('expost');
+            if (indicator.presence_in_excel?.ref === true) situations.push('ref');
 
-            const defaultValue = indicator.value_default?.expost?.[indicator.value_type] ?? null;
-            const collectivityIV = insertedCollectivityIVs.find((iv) => iv.indicator_id.toString() === indicator._id.toString());
+            for (const situation of situations) {
+              const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+              const collectivityIVs = situation === 'expost' ? insertedExpostIVs : insertedRefIVs;
+              const collectivityIV = collectivityIVs.find((iv) => iv.indicator_id.toString() === indicator._id.toString());
 
-            actorIndicatorValues.push({
-              action_id: actorAction._id,
-              action_name: actorAction.name,
-              collectivity_id: actorAction.collectivity_id,
-              collectivity_name: actorAction.collectivity_name,
-              owner: 'economic_actor',
-              economic_actor_id: actorAction.economic_actor_id,
-              economic_actor_name: actorAction.economic_actor_name,
-              indicator_id: indicator._id,
-              indicator_name: indicator.name,
-              indicator_type: indicator.value_type,
-              situation: 'expost',
-              year: year_expost,
-              year_expost: year_expost,
-              excel_line_number: indicator.excel_line_number?.expost,
-              indicator_value_unit: indicator.value_unit,
-              value_default: { [indicator.value_type]: defaultValue },
-              indicator_value_possibilities: indicator.value_possibilities || [],
-              indicator_category_id: indicator.indicator_category_id,
-              indicator_category_name: indicator.indicator_category_name,
-              indicator_sub_category_id: indicator.indicator_sub_category_id,
-              indicator_sub_category_name: indicator.indicator_sub_category_name,
-              indicator_excel_id: indicator.excel_indicator_id,
-              indicator_value_collectivity_id: collectivityIV?._id,
-              value: { text: null, number: null, radio: null, checkbox: [] },
-              display_condition:
-                indicator.display_condition?.expost?.operator || indicator.display_condition?.expost?.conditions?.length ? indicator.display_condition.expost : undefined,
-            });
+              actorIndicatorValues.push({
+                action_id: actorAction._id,
+                action_name: actorAction.name,
+                collectivity_id: actorAction.collectivity_id,
+                collectivity_name: actorAction.collectivity_name,
+                owner: 'economic_actor',
+                economic_actor_id: actorAction.economic_actor_id,
+                economic_actor_name: actorAction.economic_actor_name,
+                indicator_id: indicator._id,
+                indicator_name: indicator.name,
+                indicator_type: indicator.value_type,
+                situation,
+                year: year_expost,
+                year_init: actorAction.year_init,
+                year_ref: year_expost,
+                year_prev: actorAction.year_prev,
+                year_expost: year_expost,
+                excel_line_number: indicator.excel_line_number?.[situation],
+                indicator_value_unit: indicator.value_unit,
+                value_default: { [indicator.value_type]: defaultValue },
+                indicator_value_possibilities: indicator.value_possibilities || [],
+                indicator_category_id: indicator.indicator_category_id,
+                indicator_category_name: indicator.indicator_category_name,
+                indicator_sub_category_id: indicator.indicator_sub_category_id,
+                indicator_sub_category_name: indicator.indicator_sub_category_name,
+                indicator_excel_id: indicator.excel_indicator_id,
+                indicator_value_collectivity_id: collectivityIV?._id,
+                value: { text: null, number: null, radio: null, checkbox: [] },
+                display_condition:
+                  indicator.display_condition?.[situation]?.operator || indicator.display_condition?.[situation]?.conditions?.length ? indicator.display_condition[situation] : undefined,
+              });
+            }
           }
 
           if (actorIndicatorValues.length > 0) await IndicatorValue.insertMany(actorIndicatorValues);
 
           await updateExcelCellByIndicatorId(actorExcelFileId, 'AnneeRempl', year_expost, 'expost');
+          await updateExcelCellByIndicatorId(actorExcelFileId, 'AnRef', year_expost, 'ref');
         } catch (error) {
           capture(error);
           continue;

@@ -127,38 +127,99 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     if (action.type === 'config') {
       // Pour les actions config consolidées, chercher les actions régulières avec la même année pour cette situation
-      const yearFieldMap = { init: 'year_init', ref: 'year_ref', prev: 'year_prev', expost: 'year_expost' };
-      const yearField = yearFieldMap[indicatorValue.situation] || 'year_init';
+      let actionsWithSameYear = [];
 
-      const actionsWithSameYear = await Action.find({
-        collectivity_id: action.collectivity_id,
-        [yearField]: indicatorValue.year,
-        type: { $ne: 'config' },
-        'excel_files.0.excel_file_id': { $exists: true },
-      });
+      if (indicatorValue.situation === 'ref') {
+        // Pour ref, chercher les actions où year_prev OU year_expost === indicatorValue.year
+        actionsWithSameYear = await Action.find({
+          collectivity_id: action.collectivity_id,
+          $or: [{ 'excel_files.year_prev': indicatorValue.year }, { 'excel_files_expost.year_expost': indicatorValue.year }],
+          type: { $ne: 'config' },
+        });
+      } else {
+        const yearFieldMap = { init: 'year_init', prev: 'year_prev', expost: 'year_expost' };
+        const yearField = yearFieldMap[indicatorValue.situation] || 'year_init';
+        actionsWithSameYear = await Action.find({
+          collectivity_id: action.collectivity_id,
+          [yearField]: indicatorValue.year,
+          type: { $ne: 'config' },
+          'excel_files.0.excel_file_id': { $exists: true },
+        });
+      }
+
       for (const targetAction of actionsWithSameYear) {
-        for (const excelFile of targetAction.excel_files || []) {
-          if (excelFile.excel_file_id)
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
-        }
-        for (const excelFile of targetAction.excel_files_expost || []) {
-          if (excelFile.excel_file_id)
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
+        if (indicatorValue.situation === 'ref') {
+          // Pour ref, mettre à jour les fichiers où year_prev OU year_expost === indicatorValue.year
+          for (const excelFile of targetAction.excel_files || []) {
+            if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year)
+              excelUpdatePromises.push(
+                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                  capture,
+                ),
+              );
+          }
+          for (const excelFile of targetAction.excel_files_expost || []) {
+            if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year)
+              excelUpdatePromises.push(
+                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                  capture,
+                ),
+              );
+          }
+        } else {
+          for (const excelFile of targetAction.excel_files || []) {
+            if (excelFile.excel_file_id)
+              excelUpdatePromises.push(
+                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                  capture,
+                ),
+              );
+          }
+          for (const excelFile of targetAction.excel_files_expost || []) {
+            if (excelFile.excel_file_id)
+              excelUpdatePromises.push(
+                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                  capture,
+                ),
+              );
+          }
         }
       }
     }
     if (action.type !== 'config') {
-      if (indicatorValue.situation !== 'expost') {
+      if (indicatorValue.situation === 'init') {
+        // Situation init : mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
         for (const excelFile of action.excel_files || []) {
-          if (indicatorValue.situation === 'prev' && excelFile.year_prev !== indicatorValue.year) continue;
+          excelUpdatePromises.push(
+            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+              capture,
+            ),
+          );
+        }
+      }
+      if (indicatorValue.situation === 'prev') {
+        // Situation prev : mettre à jour le fichier excel_files correspondant à l'année prev
+        for (const excelFile of action.excel_files || []) {
+          if (excelFile.year_prev !== indicatorValue.year) continue;
+          excelUpdatePromises.push(
+            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+              capture,
+            ),
+          );
+        }
+      }
+      if (indicatorValue.situation === 'ref') {
+        // Situation ref : mettre à jour tous les fichiers où year_prev OU year_expost === indicatorValue.year
+        for (const excelFile of action.excel_files || []) {
+          if (excelFile.year_prev !== indicatorValue.year) continue;
+          excelUpdatePromises.push(
+            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+              capture,
+            ),
+          );
+        }
+        for (const excelFile of action.excel_files_expost || []) {
+          if (excelFile.year_expost !== indicatorValue.year) continue;
           excelUpdatePromises.push(
             updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
               capture,

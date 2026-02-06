@@ -614,9 +614,6 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
             />
           </div>
           <div className="flex justify-end gap-3">
-            <button onClick={() => setIsAddPrevModalOpen(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
-              Annuler
-            </button>
             <button onClick={addPrevisionnel} disabled={isAddingPrev} className="button-primary">
               {isAddingPrev ? "Création..." : "Créer"}
             </button>
@@ -643,9 +640,6 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
             />
           </div>
           <div className="flex justify-end gap-3">
-            <button onClick={() => setIsAddExpostModalOpen(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
-              Annuler
-            </button>
             <button onClick={addExpost} disabled={isAddingExpost} className="button-primary">
               {isAddingExpost ? "Création..." : "Créer"}
             </button>
