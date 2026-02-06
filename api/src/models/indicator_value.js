@@ -70,14 +70,13 @@ const Schema = new mongoose.Schema(
 
 Schema.index({ indicator_id: 1, situation: 1 });
 Schema.index({ collectivity_id: 1, situation: 1 });
-// Index pour la page completion - recherche par action_id + situation + year
 Schema.index({ action_id: 1, situation: 1, year: 1 });
-// Index pour recherche par action_id seul (fetchAllIndicatorsValues)
 Schema.index({ action_id: 1, excel_line_number: 1 });
-// Index pour owner + action_id (requêtes fréquentes)
 Schema.index({ owner: 1, action_id: 1 });
-// Index pour conditions d'affichage cross-situation (chercher par excel_indicator_id + situation + year_init)
 Schema.index({ collectivity_id: 1, indicator_excel_id: 1, situation: 1, year_init: 1 });
+Schema.index({ collectivity_id: 1, indicator_excel_id: 1, situation: 1, year: 1 });
+
+
 
 const OBJ = mongoose.model(MODELNAME, Schema);
 module.exports = OBJ;
