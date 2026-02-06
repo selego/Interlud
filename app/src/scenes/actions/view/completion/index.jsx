@@ -141,6 +141,9 @@ export default function Completion({ action }) {
     }
   }
 
+  const HIDDEN_INDICATOR_IDS = ['AnneeRempl', 'AnRef']
+  const isYearIndicator = (iv) => HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id)
+
   const isIndicatorValueFilled = (indicatorValue) => {
     const val = indicatorValue.value?.[indicatorValue.indicator_type]
     if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0
@@ -148,7 +151,7 @@ export default function Completion({ action }) {
   }
 
   const getSituationProgress = (situationKey, year = null) => {
-    let values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv))
+    let values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv) && !isYearIndicator(iv))
     // Pour les actions config, les prev ou les expost, filtrer par année
     if (year && (action.type === 'config' || situationKey === SITUATION_TYPES.PREV || situationKey === SITUATION_TYPES.EXPOST)) values = values.filter((iv) => iv.year === year)
     if (values.length === 0) return 0
@@ -191,7 +194,7 @@ export default function Completion({ action }) {
     return results.every((r) => r)
   }
 
-  const allDisplayedIndicatorValues = allIndicatorValues.filter(shouldDisplayIndicator)
+  const allDisplayedIndicatorValues = allIndicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))
 
   useEffect(() => {
     fetchIndicatorsValues()
@@ -327,7 +330,7 @@ export default function Completion({ action }) {
                 <h3 className="text-lg font-semibold text-gray-900">{dynamicTabs.find((tab) => tab.key === activeTab)?.label}</h3>
               </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
-                <IndicatorsList indicatorValues={indicatorValues.filter(shouldDisplayIndicator)} onSelectIndicatorValue={setSelectedIndicatorValue} />
+                <IndicatorsList indicatorValues={indicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))} onSelectIndicatorValue={setSelectedIndicatorValue} />
               </div>
             </div>
           </div>
@@ -335,7 +338,7 @@ export default function Completion({ action }) {
           <div className="flex-1">
             <SituationTab
               situation={dynamicTabs.find((t) => t.key === activeTab)?.situation || activeTab}
-              indicatorValues={indicatorValues.filter(shouldDisplayIndicator)}
+              indicatorValues={indicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))}
               onUpdate={() => {
                 fetchIndicatorsValues()
                 fetchAllIndicatorsValues()
