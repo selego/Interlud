@@ -274,6 +274,45 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
   return { success: true, extractedData };
 }
 
+// Clear all values in column F for a given worksheet
+async function clearWorksheetValues(fileId, situation) {
+  const worksheetName = WORKSHEETS[situation];
+  if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
+
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
+  const rows = usedRange.values || [];
+  const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
+
+  // Find all rows that have an indicator ID in column E (index 4)
+  const rowsWithIndicators = [];
+  rows.forEach((row, i) => {
+    if (row[4] && String(row[4]).trim()) rowsWithIndicators.push(i);
+  });
+
+  if (rowsWithIndicators.length === 0) return;
+
+  // Find min and max row indices to create a contiguous range
+  const minRowIndex = Math.min(...rowsWithIndicators);
+  const maxRowIndex = Math.max(...rowsWithIndicators);
+
+  // Create array of empty values
+  const rangeValues = [];
+  for (let i = minRowIndex; i <= maxRowIndex; i++) {
+    rangeValues.push(['']);
+  }
+
+  // Clear the range in one call
+  await graphFetch(
+    `/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ values: rangeValues }),
+    }
+  );
+}
+
 module.exports = {
   getAccessToken,
   graphFetch,
@@ -285,4 +324,5 @@ module.exports = {
   exportExcelFile,
   exportExcelFileWithSpecificSheets,
   importSheetsToExcelFile,
+  clearWorksheetValues,
 };

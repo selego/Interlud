@@ -91,7 +91,7 @@ router.put('/:id/add_collectivity', passport.authenticate(['admin', 'user'], { s
         for (const excelFile of action.excel_files || []) {
           try {
             const newExcelFileId = await duplicateExcelFile(`${actor.name}_${action.name}_Prev${excelFile.year_prev}.xlsx`,collectivity.sharepoint_folder_id,excelFile.excel_file_id);
-            excelFiles.push({ year_prev: excelFile.year_prev, excel_file_id: newExcelFileId });
+            excelFiles.push({ year_prev: excelFile.year_prev, year_ref: excelFile.year_ref || excelFile.year_prev, excel_file_id: newExcelFileId });
           } catch (excelError) {
             capture(excelError);
           }

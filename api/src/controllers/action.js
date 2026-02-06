@@ -9,7 +9,7 @@ const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues } = require('../services/microsoftGraph');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -171,8 +171,8 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     const action = await Action.create({
       ...req.body,
       excel_worksheetname: parentAction.excel_worksheetname,
-      excel_files: [{ year_prev: req.body.year_prev, excel_file_id: excelFileId }],
-      excel_files_expost: [{ year_expost: req.body.year_expost, excel_file_id: excelFileId }],
+      excel_files: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
+      excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
       last_modif_by_id: req.user._id,
       last_modif_by_name: req.user.name,
       last_modif_by_email: req.user.email,
@@ -382,8 +382,8 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
         economic_actor_id: actor._id,
         economic_actor_name: actor.name,
         action_collectivity_id: action._id,
-        excel_files: actorExcelFileId ? [{ year_prev: req.body.year_prev, excel_file_id: actorExcelFileId }] : [],
-        excel_files_expost: actorExcelFileId ? [{ year_expost: req.body.year_expost, excel_file_id: actorExcelFileId }] : [],
+        excel_files: actorExcelFileId ? [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: actorExcelFileId }] : [],
+        excel_files_expost: actorExcelFileId ? [{ year_expost: req.body.year_expost, year_ref: req.body.year_prev, excel_file_id: actorExcelFileId }] : [],
       });
 
       // Créer les indicator values pour l'acteur économique (actions régulières - valeurs vides)
@@ -527,7 +527,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
               collectivityDoc?.sharepoint_folder_id,
               excelFile.excel_file_id,
             );
-            excelFiles.push({ year_prev: excelFile.year_prev, excel_file_id: newExcelFileId });
+            excelFiles.push({ year_prev: excelFile.year_prev, year_ref: excelFile.year_ref || excelFile.year_prev, excel_file_id: newExcelFileId });
           } catch (excelError) {
             capture(excelError);
           }
@@ -539,7 +539,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
               collectivityDoc?.sharepoint_folder_id,
               excelFile.excel_file_id,
             );
-            excelFilesExpost.push({ year_expost: excelFile.year_expost, excel_file_id: newExcelFileId });
+            excelFilesExpost.push({ year_expost: excelFile.year_expost, year_ref: excelFile.year_ref || excelFile.year_expost, excel_file_id: newExcelFileId });
           } catch (excelError) {
             capture(excelError);
           }
@@ -647,8 +647,11 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     const sourceExcelId = action.excel_files?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
+    // Vider les feuilles init et expost du nouveau fichier Excel
+    await clearWorksheetValues(excelFileId, 'expost');
+
     // Ajouter le nouveau fichier Excel à l'action
-    action.excel_files.push({ year_prev, excel_file_id: excelFileId });
+    action.excel_files.push({ year_prev, year_ref: year_prev, excel_file_id: excelFileId });
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
     action.last_modif_by_email = req.user.email;
@@ -841,9 +844,12 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
             excelFileId,
           );
 
+          // Vider les feuilles init et expost du nouveau fichier Excel
+          await clearWorksheetValues(actorExcelFileId, 'expost');
+
           // Ajouter le fichier Excel à l'action de l'acteur
           actorAction.excel_files = actorAction.excel_files || [];
-          actorAction.excel_files.push({ year_prev, excel_file_id: actorExcelFileId });
+          actorAction.excel_files.push({ year_prev, year_ref: year_prev, excel_file_id: actorExcelFileId });
           await actorAction.save();
 
           // Créer les indicator values pour l'acteur économique (situations prev et ref)
@@ -951,9 +957,12 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
     const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.excel_files?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
+    // Vider les feuilles init et prev du nouveau fichier Excel
+    await clearWorksheetValues(excelFileId, 'prev');
+
     // Ajouter le nouveau fichier Excel à l'action
     action.excel_files_expost = action.excel_files_expost || [];
-    action.excel_files_expost.push({ year_expost, excel_file_id: excelFileId });
+    action.excel_files_expost.push({ year_expost, year_ref: year_expost, excel_file_id: excelFileId });
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
     action.last_modif_by_email = req.user.email;
@@ -1179,9 +1188,12 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
             excelFileId,
           );
 
+          // Vider les feuilles init et prev du nouveau fichier Excel
+          await clearWorksheetValues(actorExcelFileId, 'prev');
+
           // Ajouter le fichier Excel à l'action de l'acteur
           actorAction.excel_files_expost = actorAction.excel_files_expost || [];
-          actorAction.excel_files_expost.push({ year_expost, excel_file_id: actorExcelFileId });
+          actorAction.excel_files_expost.push({ year_expost, year_ref: year_expost, excel_file_id: actorExcelFileId });
           await actorAction.save();
 
           // Créer les indicator values pour l'acteur économique (situations expost et ref)
