@@ -19,22 +19,26 @@ const isIndicatorValueFilled = (indicatorValue) => {
   return false;
 };
 
-export default function SituationTab({ situation, indicatorValues, onUpdate, selectedIndicatorValue }) {
+export default function SituationTab({ situation, year, indicatorValues, onUpdate, selectedIndicatorValue }) {
   const [economicActorData, setEconomicActorData] = useState({});
 
   const fetchEconomicActorData = async () => {
     try {
-    const { ok, data, code } = await api.post(`/indicator_value/search`, { indicator_value_collectivity_ids: indicatorValues.map(iv => iv._id), owner: 'economic_actor', limit: 10000 });
+    const indicatorIds = [...new Set(indicatorValues.map(iv => iv.indicator_id))];
+    if (indicatorIds.length === 0) return;
+
+    const searchParams = {indicator_ids: indicatorIds,situation,collectivity_id: indicatorValues[0]?.collectivity_id,owner: 'economic_actor',limit: 10000, year: year};
+    const { ok, data, code } = await api.post(`/indicator_value/search`, searchParams);
     if (!ok) return toast.error(code || "Une erreur est survenue");
     const grouped = {};
     data.forEach(iv => {
-      if (!grouped[iv.indicator_value_collectivity_id]) grouped[iv.indicator_value_collectivity_id] = [];
-      grouped[iv.indicator_value_collectivity_id].push(iv);
+      if (!grouped[iv.indicator_id]) grouped[iv.indicator_id] = [];
+      grouped[iv.indicator_id].push(iv);
     });
     setEconomicActorData(grouped);
-  } catch (error) {
-    toast.error("Une erreur est survenue");
-  }
+    } catch (error) {
+      toast.error("Une erreur est survenue");
+    }
   };
 
   useEffect(() => {
@@ -169,9 +173,9 @@ export default function SituationTab({ situation, indicatorValues, onUpdate, sel
                  )}
               </div>
 
-              <EconomicActorValues 
-                indicatorValue={indicatorValue} 
-                economicActorData={economicActorData[indicatorValue._id] || []}
+              <EconomicActorValues
+                indicatorValue={indicatorValue}
+                economicActorData={economicActorData[indicatorValue.indicator_id] || []}
                 onApplyValue={(value) => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: value } })}
               />
             </div>

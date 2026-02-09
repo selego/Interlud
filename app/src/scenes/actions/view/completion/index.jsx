@@ -338,6 +338,7 @@ export default function Completion({ action }) {
           <div className="flex-1">
             <SituationTab
               situation={dynamicTabs.find((t) => t.key === activeTab)?.situation || activeTab}
+              year={dynamicTabs.find((t) => t.key === activeTab)?.year}
               indicatorValues={indicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))}
               onUpdate={() => {
                 fetchIndicatorsValues()
