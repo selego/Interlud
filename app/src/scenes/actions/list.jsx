@@ -56,7 +56,7 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
-        { isAdmin && (
+        { (isAdmin || user.role === 'economic_actor') && (
           <button
           onClick={() => setIsModalOpen(true)}
           className="button-primary"
@@ -96,6 +96,7 @@ export default function List() {
 
 const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const navigate = useNavigate()
+    const { user } = useStore()
     const [selectedActionId, setSelectedActionId] = useState("")
     const [isCustomVersion, setIsCustomVersion] = useState(false)
     const [customName, setCustomName] = useState("")
@@ -142,6 +143,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           year_prev: parseInt(year.prev),
           year_expost: parseInt(year.expost),
           started_before_interlud: startedBeforeInterlud,
+          ...(user.role === 'economic_actor' ? {owner: 'economic_actor', economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name} : {}),
         }
 
         const { ok, data , code} = await api.post("/action/create_action_with_default_indicators", payload)
