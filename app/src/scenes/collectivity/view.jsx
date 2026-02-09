@@ -156,10 +156,7 @@ function UserInfoTab({ user, setUser }) {
 
   const duplicateActionsForEconomicActor = async () => {
     try {
-      const { ok } = await api.post("/action/duplicate_for_economic_actor", {
-        collectivity,
-        economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }
-      })
+      const { ok } = await api.post("/action/duplicate_for_economic_actor", {collectivity,economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }})
       if (!ok) return toast.error("Une erreur est survenue")
     } catch (e) {
       console.log(e)
@@ -169,10 +166,7 @@ function UserInfoTab({ user, setUser }) {
 
   const duplicateIndicatorValuesForEconomicActor = async () => {
     try {
-      const { ok } = await api.post("/indicator_value/duplicate_for_economic_actor", {
-        collectivity,
-        economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }
-      })
+      const { ok } = await api.post("/indicator_value/duplicate_for_economic_actor", { collectivity,economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }})
       if (!ok) return toast.error("Une erreur est survenue")
     } catch (e) {
       console.log(e)
