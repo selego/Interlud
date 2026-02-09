@@ -129,11 +129,12 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       // Pour les actions config consolidées, chercher les actions régulières avec la même année pour cette situation
       let actionsWithSameYear = [];
       const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
+      const collectivityFilter = action.owner === 'economic_actor' ? {} : { collectivity_id: action.collectivity_id };
 
       if (indicatorValue.situation === 'ref') {
         // Pour ref, chercher les actions dont un excel_file a year_ref === indicatorValue.year
         actionsWithSameYear = await Action.find({
-          collectivity_id: action.collectivity_id,
+          ...collectivityFilter,
           $or: [{ 'excel_files.year_ref': indicatorValue.year }, { 'excel_files_expost.year_ref': indicatorValue.year }],
           type: { $ne: 'config' },
           ...ownerFilter,
@@ -141,7 +142,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       } else if (indicatorValue.situation === 'prev') {
         // Pour prev, chercher dans le tableau excel_files (une action peut avoir plusieurs années prev)
         actionsWithSameYear = await Action.find({
-          collectivity_id: action.collectivity_id,
+          ...collectivityFilter,
           'excel_files.year_prev': indicatorValue.year,
           type: { $ne: 'config' },
           ...ownerFilter,
@@ -149,7 +150,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       } else if (indicatorValue.situation === 'expost') {
         // Pour expost, chercher dans le tableau excel_files_expost
         actionsWithSameYear = await Action.find({
-          collectivity_id: action.collectivity_id,
+          ...collectivityFilter,
           'excel_files_expost.year_expost': indicatorValue.year,
           type: { $ne: 'config' },
           ...ownerFilter,
@@ -157,7 +158,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       } else {
         // Pour init, chercher par year_init au niveau racine
         actionsWithSameYear = await Action.find({
-          collectivity_id: action.collectivity_id,
+          ...collectivityFilter,
           year_init: indicatorValue.year,
           type: { $ne: 'config' },
           'excel_files.0.excel_file_id': { $exists: true },
@@ -224,51 +225,23 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       }
     }
     if (action.type !== 'config') {
-      if (indicatorValue.situation === 'init') {
-        // Situation init : mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
-        const AllExcelFiles = [...(action.excel_files || []), ...(action.excel_files_expost || [])];
-        for (const excelFile of AllExcelFiles) {
-          excelUpdatePromises.push(
-            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-              capture,
-            ),
-          );
-        }
+      // Pour les acteurs économiques, propager aussi aux actions similaires dans les autres collectivités
+      let actionsToUpdate = [action];
+      if (action.owner === 'economic_actor' && action.economic_actor_id) {
+        const siblingActions = await Action.find({
+          owner: 'economic_actor',
+          economic_actor_id: action.economic_actor_id,
+          collectivity_id: { $ne: action.collectivity_id },
+          action_parent_id: action.action_parent_id,
+        });
+        actionsToUpdate = [action, ...siblingActions];
       }
-      if (indicatorValue.situation === 'prev') {
-        // Situation prev : mettre à jour le fichier excel_files correspondant à l'année prev
-        for (const excelFile of action.excel_files || []) {
-          if (excelFile.year_prev !== indicatorValue.year) continue;
-          excelUpdatePromises.push(
-            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-              capture,
-            ),
-          );
-        }
-      }
-      if (indicatorValue.situation === 'ref') {
-        // Situation ref : mettre à jour tous les fichiers dont year_ref === indicatorValue.year
-        for (const excelFile of action.excel_files || []) {
-          if (excelFile.year_ref !== indicatorValue.year) continue;
-          excelUpdatePromises.push(
-            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-              capture,
-            ),
-          );
-        }
-        for (const excelFile of action.excel_files_expost || []) {
-          if (excelFile.year_ref !== indicatorValue.year) continue;
-          excelUpdatePromises.push(
-            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-              capture,
-            ),
-          );
-        }
-      }
-      if (indicatorValue.situation === 'expost') {
-        // Si c'est l'année expost principale → mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
-        if (indicatorValue.year === action.year_expost) {
-          for (const excelFile of action.excel_files || []) {
+
+      for (const currentAction of actionsToUpdate) {
+        if (indicatorValue.situation === 'init') {
+          // Situation init : mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
+          const AllExcelFiles = [...(currentAction.excel_files || []), ...(currentAction.excel_files_expost || [])];
+          for (const excelFile of AllExcelFiles) {
             excelUpdatePromises.push(
               updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
                 capture,
@@ -276,14 +249,56 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
             );
           }
         }
-        // Mettre à jour le bon fichier excel_files_expost correspondant à l'année
-        for (const excelFile of action.excel_files_expost || []) {
-          if (excelFile.year_expost !== indicatorValue.year) continue;
-          excelUpdatePromises.push(
-            updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-              capture,
-            ),
-          );
+        if (indicatorValue.situation === 'prev') {
+          // Situation prev : mettre à jour le fichier excel_files correspondant à l'année prev
+          for (const excelFile of currentAction.excel_files || []) {
+            if (excelFile.year_prev !== indicatorValue.year) continue;
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
+          }
+        }
+        if (indicatorValue.situation === 'ref') {
+          // Situation ref : mettre à jour tous les fichiers dont year_ref === indicatorValue.year
+          for (const excelFile of currentAction.excel_files || []) {
+            if (excelFile.year_ref !== indicatorValue.year) continue;
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
+          }
+          for (const excelFile of currentAction.excel_files_expost || []) {
+            if (excelFile.year_ref !== indicatorValue.year) continue;
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
+          }
+        }
+        if (indicatorValue.situation === 'expost') {
+          // Si c'est l'année expost principale → mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
+          if (indicatorValue.year === currentAction.year_expost) {
+            for (const excelFile of currentAction.excel_files || []) {
+              excelUpdatePromises.push(
+                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                  capture,
+                ),
+              );
+            }
+          }
+          // Mettre à jour le bon fichier excel_files_expost correspondant à l'année
+          for (const excelFile of currentAction.excel_files_expost || []) {
+            if (excelFile.year_expost !== indicatorValue.year) continue;
+            excelUpdatePromises.push(
+              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
+                capture,
+              ),
+            );
+          }
         }
       }
     }
@@ -297,13 +312,16 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       indicator_id: indicatorValue.indicator_id,
       situation: indicatorValue.situation,
       year: indicatorValue.year,
-      collectivity_id: indicatorValue.collectivity_id,
       source_type: indicatorValue.source_type,
       owner: indicatorValue.owner,
       _id: { $ne: indicatorValue._id },
     };
 
-    if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) payload.economic_actor_id = indicatorValue.economic_actor_id;
+    if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
+      payload.economic_actor_id = indicatorValue.economic_actor_id;
+    } else {
+      payload.collectivity_id = indicatorValue.collectivity_id;
+    }
     const otherIndicatorValues = await IndicatorValue.find(payload);
 
     const syncLogs = [];
@@ -347,10 +365,13 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       indicator_id: indicatorValue.indicator_id,
       situation: indicatorValue.situation,
       year: indicatorValue.year,
-      collectivity_id: indicatorValue.collectivity_id,
       owner: indicatorValue.owner,
     };
-    if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
+    if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
+      updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
+    } else {
+      updateQuery.collectivity_id = indicatorValue.collectivity_id;
+    }
     await IndicatorValue.updateMany(updateQuery, { $set: { value: indicatorValue.value } });
 
     if (syncLogs.length > 0) await Log.insertMany(syncLogs);
