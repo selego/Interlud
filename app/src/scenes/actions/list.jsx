@@ -82,8 +82,8 @@ export default function List() {
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.date_start}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.date_end}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{ action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{ action.date_end ? new Date(action.date_end).toLocaleDateString() : "-"}</td>
             </tr>
           ))}
         </tbody>
