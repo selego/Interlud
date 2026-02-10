@@ -439,7 +439,7 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
             <p style="font-size: 16px; margin-bottom: 20px;">Bonjour${user.name ? ` ${user.name}` : ''},</p>
             
             <p style="font-size: 16px; margin-bottom: 20px;">
-              Vous avez été invité à rejoindre <strong>${collectivityName}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+              Vous avez été invité à rejoindre <strong>${collectivityName}</strong>
             </p>
             
             <p style="font-size: 16px; margin-bottom: 30px;">
