@@ -87,16 +87,6 @@ export default function Settings({ action: initialAction, onSave }) {
       </div>
 
       <div className="flex mb-6">
-        {/* <button
-          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-            activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
-          }`}
-          onClick={() => setActiveTab("indicators")}
-        >
-          <FiList size={16} />
-          Liste des Indicateurs
-        </button> */}
-
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
             activeTab === "settings" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
@@ -115,7 +105,19 @@ export default function Settings({ action: initialAction, onSave }) {
           <FiClock size={16} />
           Historique de l'Action
         </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
+          }`}
+          onClick={() => setActiveTab("indicators")}
+        >
+          <FiList size={16} />
+          Liste des Indicateurs
+        </button>
       </div>
+
+
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
       {activeTab === "settings" && ( <ActionSettingsTab  action={action} onUpdate={handleUpdate} onDelete={handleDelete} />)}
