@@ -10,6 +10,7 @@ const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues } = require('../services/microsoftGraph');
+const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -349,6 +350,11 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
       }
     }
 
+    // Recalculer la completion pour l'action créée et les actions config
+    await computeActionCompletion(action._id);
+    if (configActionBasicDataObj) await computeActionCompletion(configActionBasicDataObj._id);
+    if (configActionParcTypesObj) await computeActionCompletion(configActionParcTypesObj._id);
+
     await Log.create({
       model_name: 'action',
       name: action.name,
@@ -686,6 +692,11 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_prev) dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_prev, 'ref');
 
+    // Recalculer la completion pour l'action et les actions config
+    await computeActionCompletion(action._id);
+    if (configActionBasicData) await computeActionCompletion(configActionBasicData._id);
+    if (configActionParcTypes) await computeActionCompletion(configActionParcTypes._id);
+
     await Log.create({
       model_name: 'action',
       name: action.name,
@@ -933,6 +944,11 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
 
     // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_expost) dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_expost, 'ref');
+
+    // Recalculer la completion pour l'action et les actions config
+    await computeActionCompletion(action._id);
+    if (configActionBasicData) await computeActionCompletion(configActionBasicData._id);
+    if (configActionParcTypes) await computeActionCompletion(configActionParcTypes._id);
 
     await Log.create({
       model_name: 'action',

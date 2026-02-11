@@ -481,26 +481,9 @@ function EvolutionChart({ globalGains }) {
 }
 
 function CardAction({ action }) {
-  const [indicatorValues, setIndicatorValues] = useState([])
   const navigate = useNavigate()
-
-  const fetchIndicatorValues = async () => {
-    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id, limit: 10000 })
-    if (!ok) return toast.error(code || "Une erreur est survenue")
-    setIndicatorValues(data)
-  }
-
-  const isIndicatorValueFilled = (indicatorValue) => {
-    const val = indicatorValue.value?.[indicatorValue.indicator_type]
-    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0
-    return val !== null && val !== undefined && val !== ""
-  }
-
-  useEffect(() => {
-    fetchIndicatorValues()
-  }, [action._id])
-
   const statutBadge = getStatutBadgeClass(action.status)
+  const completion = Math.round(((action.completion_init || 0) + (action.completion_ref || 0) + (action.completion_prev || 0) + (action.completion_expost || 0)) / 4)
 
   return (
     <div key={action._id} className="card-shadow p-6 h-full flex flex-col" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
@@ -514,9 +497,9 @@ function CardAction({ action }) {
       <div className="mt-auto pt-3 flex items-center justify-between">
         <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">Voir l'action</button>
         <div className="flex items-center gap-1">
-          <ProgressCircle percentage={Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)} size={20} />
+          <ProgressCircle percentage={completion} size={20} />
           <span className="text-xs text-gray-600">
-            Complétée à <strong>{Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)}%</strong>
+            Complétée à <strong>{completion}%</strong>
           </span>
         </div>
       </div>

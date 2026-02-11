@@ -4,12 +4,7 @@ import toast from "react-hot-toast"
 import ProgressCircle from "@/components/ProgressCircle"
 import useStore from "@/services/store"
 import IndicatorValueInput from "../actions/view/completion/IndicatorValueInput"
-
-const isIndicatorValueFilled = (indicatorValue) => {
-  const val = indicatorValue.value?.[indicatorValue.indicator_type]
-  if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0
-  return val !== null && val !== undefined && val !== ""
-}
+import { isIndicatorValueFilled, shouldDisplayIndicator as shouldDisplayIndicatorHelper } from "@/utils/indicatorHelpers"
 
 export default function Onboarding({ collectivity }) {
   const { setCollectivity } = useStore()
@@ -41,39 +36,7 @@ export default function Onboarding({ collectivity }) {
     }
   }
 
-  const shouldDisplayIndicator = (indicatorValue) => {
-    if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
-
-    const results = indicatorValue.display_condition.conditions.map((cond) => {
-      const sourceValueObj = allCollectivityIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
-
-      if (!sourceValueObj) return false
-
-      const val = sourceValueObj.value?.[sourceValueObj.indicator_type]
-
-      let isMatch = false
-        if (cond.type === "equals") {
-          isMatch = val == cond.value
-          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify(val.sort()) === JSON.stringify(cond.value.sort())
-        }
-        if (cond.type === "contains") {
-          if (Array.isArray(val)) isMatch = val.includes(cond.value)
-          if (typeof val === "string") isMatch = val.includes(cond.value)
-        }
-        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
-        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
-        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
-        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
-        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
-        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
-
-      if (cond.negate) isMatch = !isMatch
-      return isMatch
-    })
-
-    if (indicatorValue.display_condition.operator === "OR") return results.some((r) => r)
-    return results.every((r) => r)
-  }
+  const shouldDisplayIndicator = (indicatorValue) => shouldDisplayIndicatorHelper(indicatorValue, allCollectivityIndicatorValues)
 
   const handleSaveIndicatorValue = async (indicatorValue, newValue) => {
     const currentValue = indicatorValue.value?.[indicatorValue.indicator_type]

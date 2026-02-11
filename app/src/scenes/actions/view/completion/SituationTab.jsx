@@ -3,20 +3,13 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
 import IndicatorValueInput from "./IndicatorValueInput";
+import { isIndicatorValueFilled } from "@/utils/indicatorHelpers";
 
 export const SITUATION_LABELS = {
   [SITUATION_TYPES.INIT]: "Initiale",
   [SITUATION_TYPES.REF]: "Référence",
   [SITUATION_TYPES.PREV]: "Prévisionnel",
   [SITUATION_TYPES.EXPOST]: "Ex-post"
-}
-
-const isIndicatorValueFilled = (indicatorValue) => {
-  if (indicatorValue.indicator_type === 'number') return indicatorValue.value?.number !== null && indicatorValue.value?.number !== undefined;
-  if (indicatorValue.indicator_type === 'text') return indicatorValue.value?.text && indicatorValue.value.text.trim() !== '';
-  if (indicatorValue.indicator_type === 'radio') return indicatorValue.value?.radio && indicatorValue.value.radio.trim() !== '';
-  if (indicatorValue.indicator_type === 'checkbox') return indicatorValue.value?.checkbox && indicatorValue.value.checkbox.length > 0;
-  return false;
 };
 
 export default function SituationTab({ situation, year, indicatorValues, allSituationIndicatorValues, onUpdate, selectedIndicatorValue }) {

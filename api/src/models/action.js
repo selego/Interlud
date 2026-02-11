@@ -76,6 +76,11 @@ const Schema = new mongoose.Schema(
     last_modif_by_name: { type: String, trim: true },
     last_modif_by_email: { type: String, trim: true },
     last_modif_date: { type: Date, default: Date.now },
+
+    completion_init: { type: Number, default: 0 },
+    completion_ref: { type: Number, default: 0 },
+    completion_prev: { type: Number, default: 0 },
+    completion_expost: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

@@ -8,6 +8,7 @@ import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
 import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo } from "react-icons/fi"
 import useStore from "@/services/store"
+import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 
 export const SITUATION_TABS = [
   { key: SITUATION_TYPES.INIT, label: "Initiale" },
@@ -144,12 +145,6 @@ export default function Completion({ action }) {
 
   const HIDDEN_INDICATOR_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte']
   const isYearIndicator = (iv) => HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id)
-
-  const isIndicatorValueFilled = (indicatorValue) => {
-    const val = indicatorValue.value?.[indicatorValue.indicator_type]
-    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0
-    return val !== null && val !== undefined && val !== ""
-  }
 
   const getSituationProgress = (situationKey, year = null) => {
     let values = allIndicatorValues.filter((iv) => iv.situation === situationKey && shouldDisplayIndicator(iv) && !isYearIndicator(iv))

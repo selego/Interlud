@@ -11,6 +11,7 @@ const Indicator = require('../models/indicator');
 const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
+const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -106,14 +107,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     indicatorValue.set(updateData);
     await indicatorValue.save();
 
-    const isValueFilled = (iv) => {
-      const val = iv.value?.[iv.indicator_type];
-      if (iv.indicator_type === 'checkbox') return Array.isArray(val) && val.length > 0;
-      return val !== null && val !== undefined && val !== '';
-    };
+    await computeActionCompletion(indicatorValue.action_id);
 
     const actionIndicatorValues = await IndicatorValue.find({ action_id: indicatorValue.action_id, collectivity_id: indicatorValue.collectivity_id });
-    if (actionIndicatorValues.length > 0 && actionIndicatorValues.every(isValueFilled)) {
+    if (actionIndicatorValues.length > 0 && actionIndicatorValues.every(isIndicatorValueFilled)) {
       action.status = 'completed';
       await action.save();
     }
@@ -694,6 +691,8 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
 
     if (bulkOps.length > 0) await IndicatorValue.bulkWrite(bulkOps);
     if (logs.length > 0) await Log.insertMany(logs);
+
+    if (bulkOps.length > 0) await computeActionCompletion(action_id);
 
     res.status(200).json({ ok: true });
   } catch (error) {

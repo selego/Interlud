@@ -19,10 +19,6 @@ export default function Dashboard({ action }) {
   const { userActionRights, user, collectivity } = useStore()
   const navigate = useNavigate()
   
-  const [stats, setStats] = useState({ total: 0, filled: 0, empty: 0, completeness: 0, bySituation: { init: { filled: 0, total: 0 }, ref: { filled: 0, total: 0 }, prev: { filled: 0, total: 0 }, expost: { filled: 0, total: 0 } } })
-  const [allIndicatorValues, setAllIndicatorValues] = useState([])
-  const [allCollectivityIndicatorValues, setAllCollectivityIndicatorValues] = useState([])
-
   const [processedData, setProcessedData] = useState({ges: { value: 0, trend: 0 }, energy: { value: 0, trend: 0 }, pollutants: { value: 0, count: 0 }, score: 0, bestIndicator: { label: "-", val: -1 }, worstIndicator: { label: "-", val: 9999 }, indicators: [] })
   const [isAggregationLoading, setIsAggregationLoading] = useState(false)
 
@@ -30,77 +26,13 @@ export default function Dashboard({ action }) {
   const isEconomicActorAsRight = user.role === "economic_actor" && action.owner === "economic_actor" && user.economic_actor_id === action.economic_actor_id
   const right = userActionRights.find((right) => right.action_id === action._id)
 
-  const isIndicatorValueFilled = (indicatorValue) => {
-    const val = indicatorValue.value?.[indicatorValue.indicator_type]
-    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0
-    return val !== null && val !== undefined && val !== ""
+  const completionBySituation = {
+    init: action.completion_init || 0,
+    ref: action.completion_ref || 0,
+    prev: action.completion_prev || 0,
+    expost: action.completion_expost || 0,
   }
-
-  const shouldDisplayIndicator = (indicatorValue) => {
-    if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
-
-    const results = indicatorValue.display_condition.conditions.map((cond) => {
-      const sourceValueObj = allCollectivityIndicatorValues.find((iv) => iv.indicator_excel_id === cond.excel_indicator_id && iv.situation === (cond.excel_indicator_situation || indicatorValue.situation))
-
-      if (!sourceValueObj) return false
-
-      const val = sourceValueObj.value?.[sourceValueObj.indicator_type]
-
-      let isMatch = false
-        if (cond.type === "equals") {
-          isMatch = val == cond.value
-          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify(val.sort()) === JSON.stringify(cond.value.sort())
-        }
-        if (cond.type === "contains") {
-          if (Array.isArray(val)) isMatch = val.includes(cond.value)
-          if (typeof val === "string") isMatch = val.includes(cond.value)
-        }
-        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
-        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
-        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
-        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
-        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
-        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
-
-      if (cond.negate) isMatch = !isMatch
-      return isMatch
-    })
-
-    if (indicatorValue.display_condition.operator === "OR") return results.some((r) => r)
-    return results.every((r) => r)
-  }
-
-  const calculateStats = (data) => {
-    const bySituation = {
-      init: { filled: data.filter((v) => v.situation === "init" && isIndicatorValueFilled(v)).length, total: data.filter((v) => v.situation === "init").length },
-      ref: { filled: data.filter((v) => v.situation === "ref" && isIndicatorValueFilled(v)).length, total: data.filter((v) => v.situation === "ref").length },
-      prev: { filled: data.filter((v) => v.situation === "prev" && isIndicatorValueFilled(v)).length, total: data.filter((v) => v.situation === "prev").length },
-      expost: { filled: data.filter((v) => v.situation === "expost" && isIndicatorValueFilled(v)).length, total: data.filter((v) => v.situation === "expost").length },
-    }
-    return { total: data.length, filled: data.filter(isIndicatorValueFilled).length, empty: data.length - data.filter(isIndicatorValueFilled).length, completeness: Math.round((data.filter(isIndicatorValueFilled).length / data.length) * 100) || 0, bySituation }
-  }
-
-  const fetchAllIndicatorValues = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setAllIndicatorValues(data)
-    } catch (error) {
-      console.error(error)
-      toast.error("Une erreur est survenue lors du chargement des indicateurs")
-    }
-  }
-
-  const fetchAllCollectivityIndicatorValues = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/indicator_value/search`, { collectivity_id: action.collectivity_id, limit: 10000 })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setAllCollectivityIndicatorValues(data)
-    } catch (error) {
-      console.error(error)
-      toast.error("Une erreur est survenue lors du chargement des indicateurs")
-    }
-  }
+  const completeness = Math.round((completionBySituation.init + completionBySituation.ref + completionBySituation.prev + completionBySituation.expost) / 4)
 
   const loadAggregation = async () => {
     if (!collectivity || !action?.excel_worksheetname) return
@@ -119,19 +51,8 @@ export default function Dashboard({ action }) {
   }
 
   useEffect(() => {
-    fetchAllIndicatorValues()
-    fetchAllCollectivityIndicatorValues()
-  }, [action._id, action.collectivity_id])
-
-  useEffect(() => {
     loadAggregation()
   }, [collectivity, action])
-
-  useEffect(() => {
-    if (allCollectivityIndicatorValues.length === 0) return
-    const filteredData = allIndicatorValues.filter(shouldDisplayIndicator)
-    setStats(calculateStats(filteredData))
-  }, [allIndicatorValues, allCollectivityIndicatorValues])
 
   if (!isAdmin && !isEconomicActorAsRight && !right?.can_read) {
     return (
@@ -253,21 +174,21 @@ export default function Dashboard({ action }) {
                                 />
                                 <path
                                     className="text-primary-green transition-all duration-1000 ease-out"
-                                    strokeDasharray={`${stats.completeness}, 100`}
+                                    strokeDasharray={`${completeness}, 100`}
                                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                                     fill="none"
                                     stroke="currentColor"
                                     strokeWidth="3"
                                 />
                             </svg>
-                            <span className="absolute text-xl font-bold text-gray-900">{stats.completeness}%</span>
+                            <span className="absolute text-xl font-bold text-gray-900">{completeness}%</span>
                         </div>
                     </div>
 
                     <div className="space-y-4">
                         {["init", "ref", "prev", "expost"].map((key) => {
-                            const { filled, total } = stats.bySituation[key];
-                            const isComplete = total > 0 && filled === total;
+                            const pct = completionBySituation[key];
+                            const isComplete = pct === 100;
                             return (
                                 <div key={key} className="flex items-center justify-between rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/actions/${action._id}/completion`)}>
                                     <div className="flex items-center gap-3">
@@ -277,7 +198,7 @@ export default function Dashboard({ action }) {
                                     {isComplete ? (
                                         <HiCheckCircle className="text-primary-green" size={20} />
                                     ) : (
-                                        <span className="text-xs text-gray-400">{filled}/{total}</span>
+                                        <span className="text-xs text-gray-400">{pct}%</span>
                                     )}
                                 </div>
                             )
