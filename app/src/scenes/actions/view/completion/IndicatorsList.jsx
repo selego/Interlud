@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { FiChevronDown, FiChevronRight } from "react-icons/fi";
 import ProgressCircle from "@/components/ProgressCircle";
 
 const groupIndicatorValuesByCategory = indicatorValues => {
   if (!indicatorValues || indicatorValues.length === 0) return {};
-  
   const grouped = indicatorValues
     .reduce((acc, indicatorValue) => {
       const categoryName = indicatorValue.indicator_category_name;
-      const subCategoryName = indicatorValue.indicator_sub_category_name;
-      
+      const subCategoryName = indicatorValue.indicator_sub_category_name; 
       if (!acc[categoryName]) acc[categoryName] = { subCategories: {}, directIndicatorValues: [] };
 
       if (subCategoryName) {
@@ -19,7 +17,6 @@ const groupIndicatorValuesByCategory = indicatorValues => {
       if (!subCategoryName) acc[categoryName].directIndicatorValues.push(indicatorValue);
       return acc;
     }, {});
-
   return grouped;
 };
 
@@ -41,10 +38,8 @@ const getAllCategoryIndicators = categoryData => {
 };
 
 
-export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue}) {
+export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue, selectedCategory, onSelectCategory }) {
   const [openCategories, setOpenCategories] = useState(new Set());
-  const [openSubCategories, setOpenSubCategories] = useState(new Set());
-  const [selectedIndicatorValue, setSelectedIndicatorValue] = useState(null);
   const grouped = groupIndicatorValuesByCategory(indicatorValues);
 
   const toggleSet = (setState, value) => {
@@ -55,16 +50,19 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
     });
   };
 
+  const isCategoryActive = (categoryName) => selectedCategory?.categoryName === categoryName && !selectedCategory?.subCategoryName;
+  const isSubCategoryActive = (categoryName, subCategoryName) => selectedCategory?.categoryName === categoryName && selectedCategory?.subCategoryName === subCategoryName;
+
   return (
     <div className="space-y-1">
       {Object.entries(grouped).map(([categoryName, categoryData]) => {
         return (
           <div key={categoryName}>
             <div
-              className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium hover:bg-gray-50"
-              onClick={() => toggleSet(setOpenCategories, categoryName)}
+              className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium ${isCategoryActive(categoryName) ? 'bg-primary-green/10 border-l-2 border-primary-green' : 'hover:bg-gray-50'}`}
+              onClick={() => { toggleSet(setOpenCategories, categoryName); onSelectCategory({ categoryName }) }}
             >
-              {openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+              {Object.keys(categoryData.subCategories).length > 0 ? (openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />) : <span className="w-4" />}
               <span className="flex-1">{categoryName}</span>
               <div className="flex items-center gap-2">
                 <ProgressCircle percentage={calculateCompletion(getAllCategoryIndicators(categoryData))} size={20} />
@@ -74,58 +72,19 @@ export default function IndicatorsList({ indicatorValues, onSelectIndicatorValue
 
             {openCategories.has(categoryName) && (
               <div className="ml-4 space-y-1">
-                {categoryData.directIndicatorValues.length > 0 && (
-                  <div className="space-y-1">
-                    {categoryData.directIndicatorValues.map(indicatorValue => {
-                      return (
-                        <button 
-                          key={indicatorValue._id} 
-                          className={`text-xs p-2 rounded text-left w-full transition-all ${
-                            selectedIndicatorValue?._id === indicatorValue._id   ? 'bg-primary-green text-white font-medium'  : 'text-gray-700 hover:bg-gray-50' }`}
-                          onClick={() => {  setSelectedIndicatorValue(indicatorValue); onSelectIndicatorValue(indicatorValue) }}
-                        >
-                          {indicatorValue.indicator_name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {Object.entries(categoryData.subCategories).map(([subCategoryName, indicatorValues]) => {
-
-                  return (
-                    <div key={subCategoryName}>
-                      <div
-                        className="flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs hover:bg-gray-50"
-                        onClick={() => toggleSet(setOpenSubCategories, `${categoryName}-${subCategoryName}`)}
-                      >
-                        {openSubCategories.has(`${categoryName}-${subCategoryName}`) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-                        <span className="flex-1 text-gray-700">{subCategoryName}</span>
-                        <div className="flex items-center gap-2">
-                          <ProgressCircle percentage={calculateCompletion(indicatorValues)} size={18} />
-                          <span className="text-xs text-gray-500">{calculateCompletion(indicatorValues)}%</span>
-                        </div>
-                      </div>
-
-                      {openSubCategories.has(`${categoryName}-${subCategoryName}`) && (
-                        <div className="ml-4 space-y-1">
-                          {indicatorValues.map(indicatorValue => {
-                            return (
-                              <button 
-                                key={indicatorValue._id} 
-                                className={`text-xs p-2 rounded text-left w-full transition-all ${
-                                  selectedIndicatorValue?._id === indicatorValue._id ? 'bg-primary-green text-white font-medium' : 'text-gray-700 hover:bg-gray-50' }`}
-                                onClick={() => { setSelectedIndicatorValue(indicatorValue); onSelectIndicatorValue(indicatorValue) }}
-                              >
-                                {indicatorValue.indicator_name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                {Object.entries(categoryData.subCategories).map(([subCategoryName, indicatorValues]) => (
+                  <div
+                    key={subCategoryName}
+                    className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs ${isSubCategoryActive(categoryName, subCategoryName) ? 'bg-primary-green/10 border-l-2 border-primary-green' : 'hover:bg-gray-50'}`}
+                    onClick={() => onSelectCategory({ categoryName, subCategoryName })}
+                  >
+                    <span className="flex-1 text-gray-700">{subCategoryName}</span>
+                    <div className="flex items-center gap-2">
+                      <ProgressCircle percentage={calculateCompletion(indicatorValues)} size={18} />
+                      <span className="text-xs text-gray-500">{calculateCompletion(indicatorValues)}%</span>
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -21,6 +21,7 @@ export default function Completion({ action }) {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(SITUATION_TYPES.INIT)
   const [selectedIndicatorValue, setSelectedIndicatorValue] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState(null) // { categoryName, subCategoryName? }
   const [indicatorValues, setIndicatorValues] = useState([])
   const [allIndicatorValues, setAllIndicatorValues] = useState([])
   const [allCollectivityIndicatorValues, setAllCollectivityIndicatorValues] = useState([])
@@ -141,7 +142,7 @@ export default function Completion({ action }) {
     }
   }
 
-  const HIDDEN_INDICATOR_IDS = ['AnneeRempl', 'AnRef']
+  const HIDDEN_INDICATOR_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte']
   const isYearIndicator = (iv) => HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id)
 
   const isIndicatorValueFilled = (indicatorValue) => {
@@ -195,6 +196,15 @@ export default function Completion({ action }) {
   }
 
   const allDisplayedIndicatorValues = allIndicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))
+  const displayedIndicatorValues = indicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))
+
+  const getFilteredIndicatorValues = () => {
+    if (!selectedCategory) return displayedIndicatorValues
+    if (selectedCategory.subCategoryName) {
+      return displayedIndicatorValues.filter((iv) => iv.indicator_category_name === selectedCategory.categoryName && iv.indicator_sub_category_name === selectedCategory.subCategoryName)
+    }
+    return displayedIndicatorValues.filter((iv) => iv.indicator_category_name === selectedCategory.categoryName && !iv.indicator_sub_category_name)
+  }
 
   useEffect(() => {
     fetchIndicatorsValues()
@@ -211,6 +221,16 @@ export default function Completion({ action }) {
       if (!currentTabExists) setActiveTab(dynamicTabs[0].key)
     }
   }, [allIndicatorValues, action.type])
+
+  // Initialiser selectedCategory à la première catégorie quand les indicateurs changent
+  useEffect(() => {
+    if (displayedIndicatorValues.length > 0) {
+      const firstCategory = displayedIndicatorValues[0]?.indicator_category_name
+      if (firstCategory && (!selectedCategory || !displayedIndicatorValues.some((iv) => iv.indicator_category_name === selectedCategory.categoryName))) {
+        setSelectedCategory({ categoryName: firstCategory })
+      }
+    }
+  }, [displayedIndicatorValues.length, activeTab])
 
   return (
     <div className="min-h-screen p-8">
@@ -330,7 +350,12 @@ export default function Completion({ action }) {
                 <h3 className="text-lg font-semibold text-gray-900">{dynamicTabs.find((tab) => tab.key === activeTab)?.label}</h3>
               </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
-                <IndicatorsList indicatorValues={indicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))} onSelectIndicatorValue={setSelectedIndicatorValue} />
+                <IndicatorsList
+                  indicatorValues={displayedIndicatorValues}
+                  onSelectIndicatorValue={setSelectedIndicatorValue}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                />
               </div>
             </div>
           </div>
@@ -339,7 +364,8 @@ export default function Completion({ action }) {
             <SituationTab
               situation={dynamicTabs.find((t) => t.key === activeTab)?.situation || activeTab}
               year={dynamicTabs.find((t) => t.key === activeTab)?.year}
-              indicatorValues={indicatorValues.filter((iv) => shouldDisplayIndicator(iv) && !isYearIndicator(iv))}
+              indicatorValues={getFilteredIndicatorValues()}
+              allSituationIndicatorValues={displayedIndicatorValues}
               onUpdate={() => {
                 fetchIndicatorsValues()
                 fetchAllIndicatorsValues()

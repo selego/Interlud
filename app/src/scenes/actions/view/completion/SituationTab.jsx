@@ -19,7 +19,7 @@ const isIndicatorValueFilled = (indicatorValue) => {
   return false;
 };
 
-export default function SituationTab({ situation, year, indicatorValues, onUpdate, selectedIndicatorValue }) {
+export default function SituationTab({ situation, year, indicatorValues, allSituationIndicatorValues, onUpdate, selectedIndicatorValue }) {
   const [economicActorData, setEconomicActorData] = useState({});
 
   const fetchEconomicActorData = async () => {
@@ -108,7 +108,7 @@ export default function SituationTab({ situation, year, indicatorValues, onUpdat
         {[...indicatorValues]
           .filter(iv => {
             if (!iv.display_indicator_excel_id) return true;
-            const conditionIndicator = indicatorValues.find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
+            const conditionIndicator = (allSituationIndicatorValues || indicatorValues).find((c) => c.indicator_excel_id === iv.display_indicator_excel_id);
             if (!conditionIndicator) return true;
             return conditionIndicator.value?.[conditionIndicator.indicator_type] === iv.display_condition_indicator_value;
           })
@@ -152,7 +152,7 @@ export default function SituationTab({ situation, year, indicatorValues, onUpdat
                   <label className="block text-xs font-medium text-gray-600">
                     Valeur par défaut
                   </label>
-                  {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
+                  {indicatorValue.value_default?.[indicatorValue.indicator_type] != null && (
                     <Tooltip content="Appliquer cette valeur">
                       <button
                         onClick={() => handleSaveIndicatorValue({ ...indicatorValue, value: { [indicatorValue.indicator_type]: indicatorValue.value_default[indicatorValue.indicator_type] } })}
@@ -165,8 +165,8 @@ export default function SituationTab({ situation, year, indicatorValues, onUpdat
                     </Tooltip>
                   )}
                 </div>
-                 {!indicatorValue.value_default?.[indicatorValue.indicator_type] && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
-                 {indicatorValue.value_default?.[indicatorValue.indicator_type] && (
+                 {indicatorValue.value_default?.[indicatorValue.indicator_type] == null && <p className="text-gray-600 mt-2">Aucune valeur par défaut</p>}
+                 {indicatorValue.value_default?.[indicatorValue.indicator_type] != null && (
                    <p className="text-gray-600 text-sm truncate max-w-[20em]" title={Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}>
                      {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
                    </p>
