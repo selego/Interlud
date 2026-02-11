@@ -4,6 +4,7 @@ export const isIndicatorValueFilled = (indicatorValue) => {
   return val !== null && val !== undefined && val !== ""
 }
 
+// que dans onboarding
 export const shouldDisplayIndicator = (indicatorValue, allCollectivityIndicatorValues) => {
   if (!indicatorValue.display_condition || !indicatorValue.display_condition.conditions || indicatorValue.display_condition.conditions.length === 0) return true
 

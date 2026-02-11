@@ -168,55 +168,29 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           // Prev : uniquement le exel_files_prev correspondant à l'année prev
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year)
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         } else if (indicatorValue.situation === 'ref') {
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
           for (const excelFile of targetAction.excel_files_expost || []) {
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         } else if (indicatorValue.situation === 'expost') {
           for (const excelFile of targetAction.excel_files_expost || []) {
             if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year)
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         } else {
           // init : mettre à jour tous les fichiers
           for (const excelFile of targetAction.exel_files_prev || []) {
-            if (excelFile.excel_file_id)
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+            if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
           for (const excelFile of targetAction.excel_files_expost || []) {
-            if (excelFile.excel_file_id)
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+            if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         }
       }
@@ -239,62 +213,38 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           // Situation init : mettre à jour tous les exel_files_prev (le fichier initial contient toutes les situations)
           const AllExcelFiles = [...(currentAction.exel_files_prev || []), ...(currentAction.excel_files_expost || [])];
           for (const excelFile of AllExcelFiles) {
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
+            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         }
         if (indicatorValue.situation === 'prev') {
           // Situation prev : mettre à jour le fichier exel_files_prev correspondant à l'année prev
           for (const excelFile of currentAction.exel_files_prev || []) {
             if (excelFile.year_prev !== indicatorValue.year) continue;
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
+            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         }
         if (indicatorValue.situation === 'ref') {
           // Situation ref : mettre à jour tous les fichiers dont year_ref === indicatorValue.year
           for (const excelFile of currentAction.exel_files_prev || []) {
             if (excelFile.year_ref !== indicatorValue.year) continue;
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
+            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
           for (const excelFile of currentAction.excel_files_expost || []) {
             if (excelFile.year_ref !== indicatorValue.year) continue;
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
+            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         }
         if (indicatorValue.situation === 'expost') {
           // Si c'est l'année expost principale → mettre à jour tous les exel_files_prev (le fichier initial contient toutes les situations)
           if (indicatorValue.year === currentAction.year_expost) {
             for (const excelFile of currentAction.exel_files_prev || []) {
-              excelUpdatePromises.push(
-                updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                  capture,
-                ),
-              );
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
             }
           }
           // Mettre à jour le bon fichier excel_files_expost correspondant à l'année
           for (const excelFile of currentAction.excel_files_expost || []) {
             if (excelFile.year_expost !== indicatorValue.year) continue;
-            excelUpdatePromises.push(
-              updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
-                capture,
-              ),
-            );
+            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
         }
       }
@@ -413,8 +363,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const skip = req.body.offset || 0;
 
     const data = await IndicatorValue.find(query).sort({ excel_line_number: 1 }).skip(skip).limit(limit);
-    let total = data.length;
-    if (req.body.includeTotal || (data.length === limit && limit < 10000)) total = await IndicatorValue.countDocuments(query);
+    const total = await IndicatorValue.countDocuments(query);
 
     return res.status(200).send({ ok: true, data, total });
   } catch (error) {
