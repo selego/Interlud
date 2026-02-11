@@ -223,9 +223,16 @@ export default function Dashboard({ action }) {
                     </div>
 
                     <div className="space-y-8">
-                        {processedData.indicators.map((indicator, index) => (
+                      {processedData.indicators.length > 0 && (
+                        processedData.indicators.map((indicator, index) => (
                             <ProgressBar key={index} indicator={indicator} />
-                        ))}
+                        ))
+                      )}
+                      {!processedData.indicators.length > 0 && (
+                        <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
+                          <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
+                        </div>
+                      )}
                     </div>
                 </div>
             </div>

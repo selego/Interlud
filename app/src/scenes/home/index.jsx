@@ -139,7 +139,14 @@ export default function Home() {
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
           <div className="xl:col-span-8">
+            {globalGains && (
             <KeyIndicatorsCard globalGains={globalGains} />
+            )}
+            {!globalGains && (
+              <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
+                <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
+              </div>
+            )}
           </div>
           <div className="xl:col-span-4">
             <ActionsDistribution synthese={synthese} />
@@ -148,7 +155,14 @@ export default function Home() {
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-12">
            <div className="xl:col-span-6">
-            <EvolutionChart globalGains={globalGains} />
+            {globalGains && (
+              <EvolutionChart globalGains={globalGains} />
+            )}
+            {!globalGains && (
+              <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
+                <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
+              </div>
+            )}
            </div>
            <div className="xl:col-span-6">
             <ActionContributionSection collectivity={collectivity} />
@@ -662,10 +676,10 @@ function ActionContributionSection({ collectivity }) {
     }
   };
 
-  useEffect(() => {
-    fetchActionGains();
-    fetchCollectivityActions();
-  }, [collectivity]);
+  // useEffect(() => {
+  //   fetchActionGains();
+  //   fetchCollectivityActions();
+  // }, [collectivity]);
 
   if (isLoading) {
     return (
