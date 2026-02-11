@@ -46,7 +46,7 @@ export default function Completion({ action }) {
     return [
       { key: SITUATION_TYPES.INIT, label: `Initiale${action.year_init ? ` ${action.year_init}` : ""}`, situation: SITUATION_TYPES.INIT },
       { key: SITUATION_TYPES.REF, label: `Référence${action.year_ref ? ` ${action.year_ref}` : ""}`, situation: SITUATION_TYPES.REF },
-      ...(action.excel_files || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: SITUATION_TYPES.PREV })),
+      ...(action.exel_files_prev || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: SITUATION_TYPES.PREV })),
       ...(action.excel_files_expost || []).map((file) => ({ key: `expost_${file.year_expost}`, label: `Expost ${file.year_expost}`, year: file.year_expost, situation: SITUATION_TYPES.EXPOST })),
     ]
   }

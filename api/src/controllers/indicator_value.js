@@ -135,15 +135,15 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         // Pour ref, chercher les actions dont un excel_file a year_ref === indicatorValue.year
         actionsWithSameYear = await Action.find({
           ...collectivityFilter,
-          $or: [{ 'excel_files.year_ref': indicatorValue.year }, { 'excel_files_expost.year_ref': indicatorValue.year }],
+          $or: [{ 'exel_files_prev.year_ref': indicatorValue.year }, { 'excel_files_expost.year_ref': indicatorValue.year }],
           type: { $ne: 'config' },
           ...ownerFilter,
         });
       } else if (indicatorValue.situation === 'prev') {
-        // Pour prev, chercher dans le tableau excel_files (une action peut avoir plusieurs années prev)
+        // Pour prev, chercher dans le tableau exel_files_prev (une action peut avoir plusieurs années prev)
         actionsWithSameYear = await Action.find({
           ...collectivityFilter,
-          'excel_files.year_prev': indicatorValue.year,
+          'exel_files_prev.year_prev': indicatorValue.year,
           type: { $ne: 'config' },
           ...ownerFilter,
         });
@@ -161,15 +161,15 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           ...collectivityFilter,
           year_init: indicatorValue.year,
           type: { $ne: 'config' },
-          'excel_files.0.excel_file_id': { $exists: true },
+          'exel_files_prev.0.excel_file_id': { $exists: true },
           ...ownerFilter,
         });
       }
 
       for (const targetAction of actionsWithSameYear) {
         if (indicatorValue.situation === 'prev') {
-          // Prev : uniquement le excel_files correspondant à l'année prev
-          for (const excelFile of targetAction.excel_files || []) {
+          // Prev : uniquement le exel_files_prev correspondant à l'année prev
+          for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year)
               excelUpdatePromises.push(
                 updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
@@ -178,7 +178,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
               );
           }
         } else if (indicatorValue.situation === 'ref') {
-          for (const excelFile of targetAction.excel_files || []) {
+          for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
               excelUpdatePromises.push(
                 updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
@@ -205,7 +205,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           }
         } else {
           // init : mettre à jour tous les fichiers
-          for (const excelFile of targetAction.excel_files || []) {
+          for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id)
               excelUpdatePromises.push(
                 updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
@@ -239,8 +239,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
       for (const currentAction of actionsToUpdate) {
         if (indicatorValue.situation === 'init') {
-          // Situation init : mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
-          const AllExcelFiles = [...(currentAction.excel_files || []), ...(currentAction.excel_files_expost || [])];
+          // Situation init : mettre à jour tous les exel_files_prev (le fichier initial contient toutes les situations)
+          const AllExcelFiles = [...(currentAction.exel_files_prev || []), ...(currentAction.excel_files_expost || [])];
           for (const excelFile of AllExcelFiles) {
             excelUpdatePromises.push(
               updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
@@ -250,8 +250,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           }
         }
         if (indicatorValue.situation === 'prev') {
-          // Situation prev : mettre à jour le fichier excel_files correspondant à l'année prev
-          for (const excelFile of currentAction.excel_files || []) {
+          // Situation prev : mettre à jour le fichier exel_files_prev correspondant à l'année prev
+          for (const excelFile of currentAction.exel_files_prev || []) {
             if (excelFile.year_prev !== indicatorValue.year) continue;
             excelUpdatePromises.push(
               updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
@@ -262,7 +262,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         }
         if (indicatorValue.situation === 'ref') {
           // Situation ref : mettre à jour tous les fichiers dont year_ref === indicatorValue.year
-          for (const excelFile of currentAction.excel_files || []) {
+          for (const excelFile of currentAction.exel_files_prev || []) {
             if (excelFile.year_ref !== indicatorValue.year) continue;
             excelUpdatePromises.push(
               updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
@@ -280,9 +280,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           }
         }
         if (indicatorValue.situation === 'expost') {
-          // Si c'est l'année expost principale → mettre à jour tous les excel_files (le fichier initial contient toutes les situations)
+          // Si c'est l'année expost principale → mettre à jour tous les exel_files_prev (le fichier initial contient toutes les situations)
           if (indicatorValue.year === currentAction.year_expost) {
-            for (const excelFile of currentAction.excel_files || []) {
+            for (const excelFile of currentAction.exel_files_prev || []) {
               excelUpdatePromises.push(
                 updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(
                   capture,
@@ -600,7 +600,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
     // Collect all Excel file IDs to import to
     const excelFileIds = [];
 
-    for (const excelFile of action.excel_files || []) {
+    for (const excelFile of action.exel_files_prev || []) {
       if (excelFile.excel_file_id) excelFileIds.push(excelFile.excel_file_id);
     }
 
@@ -609,11 +609,11 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
         collectivity_id: action.collectivity_id,
         year_init: action.year_init,
         _id: { $ne: action._id },
-        'excel_files.0.excel_file_id': { $exists: true },
+        'exel_files_prev.0.excel_file_id': { $exists: true },
       });
 
       for (const targetAction of actionsWithSameYearInit) {
-        for (const excelFile of targetAction.excel_files || []) {
+        for (const excelFile of targetAction.exel_files_prev || []) {
           if (excelFile.excel_file_id) excelFileIds.push(excelFile.excel_file_id);
         }
       }

@@ -158,18 +158,18 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
       year_init: req.body.year_init,
       owner: isEconomicActor ? 'economic_actor' : 'collectivity',
       ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
-      'excel_files.0.excel_file_id': { $exists: true },
+      'exel_files_prev.0.excel_file_id': { $exists: true },
     });
 
     // Créer l'Excel : dupliquer depuis une action existante ou depuis le master template
     const excelFileName = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
-    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, existingActionSameYear?.excel_files?.[0]?.excel_file_id || null);
+    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null);
 
     // Créer l'action
     const action = await Action.create({
       ...req.body,
       excel_worksheetname: parentAction.excel_worksheetname,
-      excel_files: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
+      exel_files_prev: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
       excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
       last_modif_by_id: req.user._id,
       last_modif_by_name: req.user.name,
@@ -264,6 +264,13 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
       }
 
       if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
+      // Collecter les valeurs des IVs Parc types déjà existantes pour les écrire dans le nouvel Excel
+      const existingParcTypesIVs = existingConfigIVs.filter((iv) => iv.action_id.toString() === configActionParcTypesObj._id.toString());
+      for (const iv of existingParcTypesIVs) {
+        if (iv.indicator_excel_id && iv.value) {
+          if (iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) parcTypesDefaultValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+        }
+      }
 
       // Update Excel with Parc types default values in batch
       const excelBatchPromises = [];
@@ -380,7 +387,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
       const excelFiles = [];
       const excelFilesExpost = [];
       if (action.type !== 'config') {
-        for (const excelFile of action.excel_files || []) {
+        for (const excelFile of action.exel_files_prev || []) {
           try {
             const newExcelFileId = await duplicateExcelFile(`${economic_actor.name}_${action.name}_Prev${excelFile.year_prev}.xlsx`, collectivityDoc?.sharepoint_folder_id, excelFile.excel_file_id);
             excelFiles.push({ year_prev: excelFile.year_prev, year_ref: excelFile.year_ref || excelFile.year_prev, excel_file_id: newExcelFileId });
@@ -405,7 +412,7 @@ router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'us
         economic_actor_id: economic_actor._id,
         economic_actor_name: economic_actor.name,
         action_collectivity_id: action._id,
-        excel_files: excelFiles,
+        exel_files_prev: excelFiles,
         excel_files_expost: excelFilesExpost,
         last_modif_by_id: null,
         last_modif_by_name: null,
@@ -485,7 +492,7 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     // Vérifier si cette année prévisionnelle existe déjà
-    const existingPrev = action.excel_files?.find((f) => f.year_prev === year_prev);
+    const existingPrev = action.exel_files_prev?.find((f) => f.year_prev === year_prev);
     if (existingPrev) return res.status(400).send({ ok: false, code: 'YEAR_PREV_ALREADY_EXISTS' });
 
     const collectivity = await Collectivity.findById(action.collectivity_id);
@@ -496,14 +503,14 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Prev${year_prev}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier existant de cette action
-    const sourceExcelId = action.excel_files?.[0]?.excel_file_id || null;
+    const sourceExcelId = action.exel_files_prev?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
     // Vider les feuilles init et expost du nouveau fichier Excel
     await clearWorksheetValues(excelFileId, 'expost');
 
     // Ajouter le nouveau fichier Excel à l'action
-    action.excel_files.push({ year_prev, year_ref: year_prev, excel_file_id: excelFileId });
+    action.exel_files_prev.push({ year_prev, year_ref: year_prev, excel_file_id: excelFileId });
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
     action.last_modif_by_email = req.user.email;
@@ -682,7 +689,7 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
     await Log.create({
       model_name: 'action',
       name: action.name,
-      field: 'excel_files',
+      field: 'exel_files_prev',
       operation: 'add_previsionnel',
       new_value: { number: year_prev },
       type_value: 'number',
@@ -724,7 +731,7 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
     if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Expost${year_expost}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier existant de cette action
-    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.excel_files?.[0]?.excel_file_id || null;
+    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.exel_files_prev?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
     // Vider les feuilles init et prev du nouveau fichier Excel

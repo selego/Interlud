@@ -218,7 +218,7 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
 
   const addPrevisionnel = async () => {
     if (!newPrevYear) return toast.error("Veuillez sélectionner une année");
-    const existingYears = (action.excel_files || []).map(f => f.year_prev);
+    const existingYears = (action.exel_files_prev || []).map(f => f.year_prev);
     if (existingYears.includes(parseInt(newPrevYear))) return toast.error("Cette année existe déjà");
 
     try {
@@ -395,11 +395,11 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
               Ajouter
             </button>
           </div>
-          {(action.excel_files || []).map(f => f.year_prev).sort((a, b) => a - b).length === 0 ? (
+          {(action.exel_files_prev || []).map(f => f.year_prev).sort((a, b) => a - b).length === 0 ? (
             <div className="w-full input-primary bg-gray-50 text-gray-400">Aucune année prévisionnelle</div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {(action.excel_files || []).map(f => f.year_prev).sort((a, b) => a - b).map((year) => (
+              {(action.exel_files_prev || []).map(f => f.year_prev).sort((a, b) => a - b).map((year) => (
                 <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
                   {year}
                 </span>
