@@ -50,9 +50,9 @@ export default function Dashboard({ action }) {
     }
   }
 
-  useEffect(() => {
-    loadAggregation()
-  }, [collectivity, action])
+  // useEffect(() => {
+  //   loadAggregation()
+  // }, [collectivity, action])
 
   if (!isAdmin && !isEconomicActorAsRight && !right?.can_read) {
     return (
