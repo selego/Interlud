@@ -342,7 +342,7 @@ export default function Completion({ action }) {
           <div className="w-full lg:w-72 shrink-0">
             <div className="card-shadow p-4 sticky top-8 self-start">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{dynamicTabs.find((tab) => tab.key === activeTab)?.label}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Situation : {dynamicTabs.find((tab) => tab.key === activeTab)?.label}</h3>
               </div>
               <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
                 <IndicatorsList
@@ -367,6 +367,7 @@ export default function Completion({ action }) {
                 fetchAllCollectivityIndicatorValues()
               }}
               selectedIndicatorValue={selectedIndicatorValue}
+              selectedCategory={selectedCategory}
             />
           </div>
         </div>

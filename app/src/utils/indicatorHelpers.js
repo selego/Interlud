@@ -15,36 +15,22 @@ export const shouldDisplayIndicator = (indicatorValue, allCollectivityIndicatorV
     const val = sourceValueObj.value?.[sourceValueObj.indicator_type]
 
     let result = false
-    switch (cond.type) {
-      case "equals":
-        result = String(val) === String(cond.value)
-        break
-      case "contains":
-        if (Array.isArray(val)) result = val.includes(cond.value)
-        else result = String(val || "").includes(String(cond.value))
-        break
-      case "greaterThan":
-        result = Number(val) > Number(cond.value)
-        break
-      case "lessThan":
-        result = Number(val) < Number(cond.value)
-        break
-      case "greaterOrEqual":
-        result = Number(val) >= Number(cond.value)
-        break
-      case "lessOrEqual":
-        result = Number(val) <= Number(cond.value)
-        break
-      case "notEmpty":
-        if (Array.isArray(val)) result = val.length > 0
-        else result = val !== null && val !== undefined && val !== ""
-        break
-      case "isEmpty":
-        if (Array.isArray(val)) result = val.length === 0
-        else result = val === null || val === undefined || val === ""
-        break
-      default:
-        result = false
+    if (cond.type === "equals") result = String(val) === String(cond.value)
+    if (cond.type === "contains") {
+      if (Array.isArray(val)) result = val.includes(cond.value)
+      else result = String(val || "").includes(String(cond.value))
+    }
+    if (cond.type === "greaterThan") result = Number(val) > Number(cond.value)
+    if (cond.type === "lessThan") result = Number(val) < Number(cond.value)
+    if (cond.type === "greaterOrEqual") result = Number(val) >= Number(cond.value)
+    if (cond.type === "lessOrEqual") result = Number(val) <= Number(cond.value)
+    if (cond.type === "notEmpty") {
+      if (Array.isArray(val)) result = val.length > 0
+      else result = val !== null && val !== undefined && val !== ""
+    }
+    if (cond.type === "isEmpty") {
+      if (Array.isArray(val)) result = val.length === 0
+      else result = val === null || val === undefined || val === ""
     }
 
     return cond.negate ? !result : result
