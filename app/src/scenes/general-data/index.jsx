@@ -157,6 +157,11 @@ export default function Index() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-6">
+          <FiInfo className="w-4 h-4 text-blue-500 shrink-0" />
+          <p className="text-sm text-blue-700">Les données de parc type sont remplies avec des données par défaut d'Interlud.</p>
+        </div>
+
         {configActions.length > 1 && (
           <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
             {configActions.map((ca, index) => (
