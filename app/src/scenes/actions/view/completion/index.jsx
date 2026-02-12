@@ -9,6 +9,7 @@ import SituationTab from "./SituationTab"
 import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo } from "react-icons/fi"
 import useStore from "@/services/store"
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
+import Loader from "@/components/loader"
 
 export const SITUATION_TABS = [
   { key: SITUATION_TYPES.INIT, label: "Initiale" },
@@ -26,6 +27,7 @@ export default function Completion({ action }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [allIndicatorValues, setAllIndicatorValues] = useState([])
   const [allCollectivityIndicatorValues, setAllCollectivityIndicatorValues] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
@@ -205,8 +207,12 @@ export default function Completion({ action }) {
   }, [action._id, activeTab])
 
   useEffect(() => {
-    fetchAllIndicatorsValues()
-    fetchAllCollectivityIndicatorValues()
+    const loadAll = async () => {
+      setIsLoading(true)
+      await Promise.all([fetchAllIndicatorsValues(), fetchAllCollectivityIndicatorValues(), fetchIndicatorsValues()])
+      setIsLoading(false)
+    }
+    loadAll()
   }, [action._id, action.collectivity_id])
 
   useEffect(() => {
@@ -225,6 +231,8 @@ export default function Completion({ action }) {
       }
     }
   }, [displayedIndicatorValues.length, activeTab])
+
+  if (isLoading) return <Loader />
 
   return (
     <div className="min-h-screen p-8">

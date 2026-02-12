@@ -93,6 +93,10 @@ export default function Header() {
           {
             text: "Mes Actions",
             linkProps: { to: "/actions" }
+          },
+          {
+            text: "Mes Données générales",
+            linkProps: { to: "/general-data" }
           }
         ]
       : []

@@ -81,7 +81,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = { owner: 'collectivity' };
+    let query = { owner: 'collectivity', type: { $ne: 'config' } };
 
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;

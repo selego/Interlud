@@ -19,6 +19,116 @@ const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
 ];
 
+// Aggregated stats for an action (situation/year mapping + completion) - avoids fetching all documents client-side
+router.post('/stats', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const _t0 = Date.now();
+    const { action_id } = req.body;
+    if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
+
+    const matchQuery = { action_id, indicator_excel_id: { $nin: HIDDEN_IDS } };
+    matchQuery.owner = req.body.owner || 'collectivity';
+    if (req.body.economic_actor_id) matchQuery.economic_actor_id = req.body.economic_actor_id;
+    if (req.user.role === 'economic_actor') {
+      matchQuery.economic_actor_id = req.user.economic_actor_id;
+      matchQuery.owner = 'economic_actor';
+    }
+
+    const stats = await IndicatorValue.aggregate([
+      { $match: matchQuery },
+      {
+        $addFields: {
+          _is_filled: {
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: ['$indicator_type', 'checkbox'] },
+                  then: { $cond: [{ $isArray: '$value.checkbox' }, { $gt: [{ $size: '$value.checkbox' }, 0] }, false] },
+                },
+                {
+                  case: { $eq: ['$indicator_type', 'number'] },
+                  then: { $ne: ['$value.number', null] },
+                },
+                {
+                  case: { $eq: ['$indicator_type', 'text'] },
+                  then: { $and: [{ $ne: ['$value.text', null] }, { $ne: ['$value.text', ''] }] },
+                },
+                {
+                  case: { $eq: ['$indicator_type', 'radio'] },
+                  then: { $and: [{ $ne: ['$value.radio', null] }, { $ne: ['$value.radio', ''] }] },
+                },
+              ],
+              default: false,
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { situation: '$situation', year: '$year' },
+          total: { $sum: 1 },
+          filled: { $sum: { $cond: ['$_is_filled', 1, 0] } },
+        },
+      },
+    ]);
+
+    const situationYears = {};
+    const completion = {};
+    let totalAll = 0;
+    let filledAll = 0;
+
+    for (const stat of stats) {
+      const { situation, year } = stat._id;
+      if (!situationYears[situation]) situationYears[situation] = [];
+      if (year != null && !situationYears[situation].includes(year)) {
+        situationYears[situation].push(year);
+      }
+      completion[`${situation}_${year}`] = { total: stat.total, filled: stat.filled };
+      totalAll += stat.total;
+      filledAll += stat.filled;
+    }
+
+    for (const sit in situationYears) {
+      situationYears[sit].sort((a, b) => a - b);
+    }
+
+    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll }, _serverMs: Date.now() - _t0 });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+// Fetch only the indicator values needed for display condition evaluation (by excel_indicator_id)
+router.post('/condition_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const _t0 = Date.now();
+    const { collectivity_id, excel_indicator_ids, owner, economic_actor_id } = req.body;
+    if (!collectivity_id || !excel_indicator_ids?.length) {
+      return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
+
+    const query = {
+      collectivity_id,
+      indicator_excel_id: { $in: excel_indicator_ids },
+      owner: owner || 'collectivity',
+    };
+    if (economic_actor_id) query.economic_actor_id = economic_actor_id;
+    if (req.user.role === 'economic_actor') {
+      query.economic_actor_id = req.user.economic_actor_id;
+      query.owner = 'economic_actor';
+    }
+
+    const data = await IndicatorValue.find(query).select('indicator_excel_id situation year value indicator_type').lean();
+    return res.status(200).send({ ok: true, data, _serverMs: Date.now() - _t0 });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = await IndicatorValue.findById(req.params.id);
@@ -330,6 +440,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    const _t0 = Date.now();
     let query = {};
 
     query.owner = 'collectivity';
@@ -365,7 +476,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const data = await IndicatorValue.find(query).sort({ excel_line_number: 1 }).skip(skip).limit(limit);
     const total = await IndicatorValue.countDocuments(query);
 
-    return res.status(200).send({ ok: true, data, total });
+    return res.status(200).send({ ok: true, data, total, _serverMs: Date.now() - _t0 });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
