@@ -106,11 +106,7 @@ router.post('/condition_values', passport.authenticate(['admin', 'user'], { sess
       return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     }
 
-    const query = {
-      collectivity_id,
-      indicator_excel_id: { $in: excel_indicator_ids },
-      owner: owner || 'collectivity',
-    };
+    const query = { collectivity_id, indicator_excel_id: { $in: excel_indicator_ids }, owner: owner || 'collectivity' };
     if (economic_actor_id) query.economic_actor_id = economic_actor_id;
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
