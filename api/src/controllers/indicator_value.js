@@ -19,6 +19,108 @@ const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
 ];
 
+// Aggregated stats for an action (situation/year mapping + completion) - avoids fetching all documents client-side
+router.post('/stats', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { action_id } = req.body;
+    if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
+
+    const matchQuery = { action_id, indicator_excel_id: { $nin: HIDDEN_IDS } };
+    matchQuery.owner = req.body.owner || 'collectivity';
+    if (req.body.economic_actor_id) matchQuery.economic_actor_id = req.body.economic_actor_id;
+    if (req.user.role === 'economic_actor') {
+      matchQuery.economic_actor_id = req.user.economic_actor_id;
+      matchQuery.owner = 'economic_actor';
+    }
+
+    const stats = await IndicatorValue.aggregate([
+      { $match: matchQuery },
+      {
+        $addFields: {
+          _is_filled: {
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: ['$indicator_type', 'checkbox'] },
+                  then: { $cond: [{ $isArray: '$value.checkbox' }, { $gt: [{ $size: '$value.checkbox' }, 0] }, false] },
+                },
+                {
+                  case: { $eq: ['$indicator_type', 'number'] },
+                  then: { $ne: ['$value.number', null] },
+                },
+                {
+                  case: { $eq: ['$indicator_type', 'text'] },
+                  then: { $and: [{ $ne: ['$value.text', null] }, { $ne: ['$value.text', ''] }] },
+                },
+                {
+                  case: { $eq: ['$indicator_type', 'radio'] },
+                  then: { $and: [{ $ne: ['$value.radio', null] }, { $ne: ['$value.radio', ''] }] },
+                },
+              ],
+              default: false,
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { situation: '$situation', year: '$year' },
+          total: { $sum: 1 },
+          filled: { $sum: { $cond: ['$_is_filled', 1, 0] } },
+        },
+      },
+    ]);
+
+    const situationYears = {};
+    const completion = {};
+    let totalAll = 0;
+    let filledAll = 0;
+
+    for (const stat of stats) {
+      const { situation, year } = stat._id;
+      if (!situationYears[situation]) situationYears[situation] = [];
+      if (year != null && !situationYears[situation].includes(year)) situationYears[situation].push(year);
+      completion[`${situation}_${year}`] = { total: stat.total, filled: stat.filled };
+      totalAll += stat.total;
+      filledAll += stat.filled;
+    }
+
+    for (const sit in situationYears) {
+      situationYears[sit].sort((a, b) => a - b);
+    }
+
+    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll } });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+// Fetch only the indicator values needed for display condition evaluation (by excel_indicator_id)
+router.post('/condition_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity_id, excel_indicator_ids, owner, economic_actor_id } = req.body;
+    if (!collectivity_id || !excel_indicator_ids?.length) {
+      return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
+
+    const query = { collectivity_id, indicator_excel_id: { $in: excel_indicator_ids }, owner: owner || 'collectivity' };
+    if (economic_actor_id) query.economic_actor_id = economic_actor_id;
+    if (req.user.role === 'economic_actor') {
+      query.economic_actor_id = req.user.economic_actor_id;
+      query.owner = 'economic_actor';
+    }
+
+    const data = await IndicatorValue.find(query).select('indicator_excel_id situation year value indicator_type').lean();
+    return res.status(200).send({ ok: true, data });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicatorValue = await IndicatorValue.findById(req.params.id);
@@ -123,54 +225,23 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const excelUpdatePromises = [];
 
     if (action.type === 'config') {
-      // Pour les actions config consolidées, chercher les actions régulières avec la même année pour cette situation
       let actionsWithSameYear = [];
       const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
       const collectivityFilter = action.owner === 'economic_actor' ? {} : { collectivity_id: action.collectivity_id };
 
-      if (indicatorValue.situation === 'ref') {
-        // Pour ref, chercher les actions dont un excel_file a year_ref === indicatorValue.year
-        actionsWithSameYear = await Action.find({
-          ...collectivityFilter,
-          $or: [{ 'exel_files_prev.year_ref': indicatorValue.year }, { 'excel_files_expost.year_ref': indicatorValue.year }],
-          type: { $ne: 'config' },
-          ...ownerFilter,
-        });
-      } else if (indicatorValue.situation === 'prev') {
-        // Pour prev, chercher dans le tableau exel_files_prev (une action peut avoir plusieurs années prev)
-        actionsWithSameYear = await Action.find({
-          ...collectivityFilter,
-          'exel_files_prev.year_prev': indicatorValue.year,
-          type: { $ne: 'config' },
-          ...ownerFilter,
-        });
-      } else if (indicatorValue.situation === 'expost') {
-        // Pour expost, chercher dans le tableau excel_files_expost
-        actionsWithSameYear = await Action.find({
-          ...collectivityFilter,
-          'excel_files_expost.year_expost': indicatorValue.year,
-          type: { $ne: 'config' },
-          ...ownerFilter,
-        });
-      } else {
-        // Pour init, chercher par year_init au niveau racine
-        actionsWithSameYear = await Action.find({
-          ...collectivityFilter,
-          year_init: indicatorValue.year,
-          type: { $ne: 'config' },
-          'exel_files_prev.0.excel_file_id': { $exists: true },
-          ...ownerFilter,
-        });
-      }
+      if (indicatorValue.situation === 'ref') actionsWithSameYear = await Action.find({ ...collectivityFilter, $or: [{ 'exel_files_prev.year_ref': indicatorValue.year }, { 'excel_files_expost.year_ref': indicatorValue.year }], type: { $ne: 'config' }, ...ownerFilter });
+      if (indicatorValue.situation === 'prev') actionsWithSameYear = await Action.find({ ...collectivityFilter, 'exel_files_prev.year_prev': indicatorValue.year, type: { $ne: 'config' }, ...ownerFilter });
+      if (indicatorValue.situation === 'expost') actionsWithSameYear = await Action.find({ ...collectivityFilter, 'excel_files_expost.year_expost': indicatorValue.year, type: { $ne: 'config' }, ...ownerFilter });
+      if (indicatorValue.situation === 'init') actionsWithSameYear = await Action.find({ ...collectivityFilter, year_init: indicatorValue.year, type: { $ne: 'config' }, 'exel_files_prev.0.excel_file_id': { $exists: true }, ...ownerFilter });
 
       for (const targetAction of actionsWithSameYear) {
         if (indicatorValue.situation === 'prev') {
-          // Prev : uniquement le exel_files_prev correspondant à l'année prev
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year)
               excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
-        } else if (indicatorValue.situation === 'ref') {
+        }
+        if (indicatorValue.situation === 'ref') {
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
               excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
@@ -179,12 +250,14 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
               excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
-        } else if (indicatorValue.situation === 'expost') {
+        }
+        if (indicatorValue.situation === 'expost') {
           for (const excelFile of targetAction.excel_files_expost || []) {
             if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year)
               excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
           }
-        } else {
+        }
+        if (indicatorValue.situation === 'init') {
           // init : mettre à jour tous les fichiers
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
@@ -199,12 +272,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       // Pour les acteurs économiques, propager aussi aux actions similaires dans les autres collectivités
       let actionsToUpdate = [action];
       if (action.owner === 'economic_actor' && action.economic_actor_id) {
-        const siblingActions = await Action.find({
-          owner: 'economic_actor',
-          economic_actor_id: action.economic_actor_id,
-          collectivity_id: { $ne: action.collectivity_id },
-          action_parent_id: action.action_parent_id,
-        });
+        const siblingActions = await Action.find({ owner: 'economic_actor', economic_actor_id: action.economic_actor_id, collectivity_id: { $ne: action.collectivity_id }, action_parent_id: action.action_parent_id });
         actionsToUpdate = [action, ...siblingActions];
       }
 
@@ -255,14 +323,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     if (logs.length > 0) await Log.insertMany(logs);
 
     if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
-    const payload = {
-      indicator_id: indicatorValue.indicator_id,
-      situation: indicatorValue.situation,
-      year: indicatorValue.year,
-      source_type: indicatorValue.source_type,
-      owner: indicatorValue.owner,
-      _id: { $ne: indicatorValue._id },
-    };
+    const payload = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, source_type: indicatorValue.source_type, owner: indicatorValue.owner, _id: { $ne: indicatorValue._id } };
 
     if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
       payload.economic_actor_id = indicatorValue.economic_actor_id;
@@ -307,13 +368,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       }
     }
 
-    // Construire la requête de mise à jour avec les mêmes filtres que payload pour éviter la synchronisation croisée
-    const updateQuery = {
-      indicator_id: indicatorValue.indicator_id,
-      situation: indicatorValue.situation,
-      year: indicatorValue.year,
-      owner: indicatorValue.owner,
-    };
+    const updateQuery = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, owner: indicatorValue.owner };
     if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
       updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
     } else {
@@ -366,76 +421,6 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const total = await IndicatorValue.countDocuments(query);
 
     return res.status(200).send({ ok: true, data, total });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const { collectivity, economic_actor } = req.body;
-    if (!collectivity || !economic_actor) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const sourceIndicatorValues = await IndicatorValue.find({ collectivity_id: collectivity._id, owner: 'collectivity' });
-    if (!sourceIndicatorValues.length) return res.status(200).send({ ok: true, data: [] });
-    const economicActorActions = await Action.find({ collectivity_id: collectivity._id, owner: 'economic_actor', economic_actor_id: economic_actor._id });
-    if (!economicActorActions.length) return res.status(200).send({ ok: true, data: [] });
-
-    const payloads = [];
-    for (const economicActorAction of economicActorActions) {
-      for (const sourceIndicatorValue of sourceIndicatorValues) {
-        if (sourceIndicatorValue.action_id !== economicActorAction.action_collectivity_id) continue;
-
-        let valueToSet = { text: null, number: null, radio: null, checkbox: [] };
-
-        if (economicActorAction.type === 'config' && economicActorAction.name === 'Parc types') {
-          const defaultVal = sourceIndicatorValue.value_default?.[sourceIndicatorValue.indicator_type];
-          if (defaultVal !== undefined && defaultVal !== null) valueToSet = { ...valueToSet, [sourceIndicatorValue.indicator_type]: defaultVal };
-        }
-        if (economicActorAction.type === 'config' && economicActorAction.name === 'Données de base') {
-          if (sourceIndicatorValue.indicator_excel_id === 'ActionsCharte' || sourceIndicatorValue.indicator_excel_id === 'ActionsAutres') valueToSet = sourceIndicatorValue.value;
-        }
-
-        payloads.push({
-          ...sourceIndicatorValue,
-          owner: 'economic_actor',
-          economic_actor_id: economic_actor._id,
-          economic_actor_name: economic_actor.name,
-          action_id: economicActorAction._id,
-          action_name: economicActorAction.name,
-          indicator_value_collectivity_id: sourceIndicatorValue._id,
-          indicator_excel_id: sourceIndicatorValue.indicator_excel_id,
-          display_condition: sourceIndicatorValue.display_condition || undefined,
-          value: valueToSet,
-          _id: undefined,
-          __v: undefined,
-          createdAt: undefined,
-          updatedAt: undefined,
-        });
-      }
-    }
-
-    if (!payloads.length) return res.status(200).send({ ok: true, data: [] });
-    const duplicatedIndicatorValues = await IndicatorValue.insertMany(payloads);
-
-    const logs = duplicatedIndicatorValues.map((duplicatedIndicatorValue) => ({
-      model_name: 'indicator_value',
-      name: duplicatedIndicatorValue.name,
-      operation: 'duplicate',
-      date: new Date(),
-      user_id: req.user._id,
-      user_name: req.user.name,
-      user_email: req.user.email,
-      indicator_value_id: duplicatedIndicatorValue._id,
-      indicator_value_name: duplicatedIndicatorValue.name,
-      collectivity_id: duplicatedIndicatorValue.collectivity_id,
-      collectivity_name: duplicatedIndicatorValue.collectivity_name,
-      economic_actor_id: economic_actor._id,
-      economic_actor_name: economic_actor.name,
-    }));
-
-    if (logs.length) await Log.insertMany(logs);
-    return res.status(200).send({ ok: true, data: duplicatedIndicatorValues });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

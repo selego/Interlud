@@ -13,7 +13,7 @@ import AdminIndicator from "@/scenes/admin/indicator"
 import Collectivity from "@/scenes/collectivity"
 import Settings from "@/scenes/settings"
 import Notification from "@/scenes/notification"
-
+import GeneralData from "@/scenes/general-data"
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
 import NotFound from "@/scenes/not-found"
@@ -67,6 +67,7 @@ export default function App() {
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
           <Route path="/admin/economic-actors/*" element={<AdminEconomicActors />} />
+          <Route path="/general-data" element={<GeneralData />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -81,7 +81,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = { owner: 'collectivity' };
+    let query = { owner: 'collectivity', type: { $ne: 'config' } };
 
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
@@ -328,11 +328,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     if (configActionBasicDataObj) {
       const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
       for (const situation of ['init', 'expost']) {
-        const iv = await IndicatorValue.findOneAndUpdate(
-          { action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation, year: req.body[`year_${situation}`] },
-          { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } },
-          { new: true },
-        );
+        const iv = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation, year: req.body[`year_${situation}`] }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
         if (iv && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, iv.value?.checkbox, situation);
       }
 
@@ -341,11 +337,7 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
       const anneeValues = { init: req.body.year_init, ref: req.body.year_ref, prev: req.body.year_prev, expost: req.body.year_expost };
 
       for (const situation of ['init', 'ref', 'prev', 'expost']) {
-        await IndicatorValue.findOneAndUpdate(
-          { action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year: req.body[`year_${situation}`] },
-          { 'value.number': anneeValues[situation] },
-          { new: true },
-        );
+        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year: req.body[`year_${situation}`] }, { 'value.number': anneeValues[situation] }, { new: true });
         if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, anneeExcelIds[situation], anneeValues[situation], situation);
       }
     }
@@ -370,89 +362,6 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     });
 
     return res.status(200).send({ ok: true, data: action });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const { collectivity, economic_actor } = req.body;
-    if (!collectivity || !economic_actor) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-
-    const collectivityDoc = await Collectivity.findById(collectivity._id);
-
-    // Inclure TOUTES les actions de la collectivité (y compris les actions config)
-    const sourceActions = await Action.find({ collectivity_id: collectivity._id, owner: 'collectivity' });
-    if (!sourceActions.length) return res.status(200).send({ ok: true, data: [] });
-
-    // Créer les actions avec leurs propres fichiers Excel
-    const duplicatedActions = [];
-    for (const action of sourceActions) {
-      const excelFiles = [];
-      const excelFilesExpost = [];
-      if (action.type !== 'config') {
-        for (const excelFile of action.exel_files_prev || []) {
-          try {
-            const newExcelFileId = await duplicateExcelFile(`${economic_actor.name}_${action.name}_Prev${excelFile.year_prev}.xlsx`, collectivityDoc?.sharepoint_folder_id, excelFile.excel_file_id);
-            excelFiles.push({ year_prev: excelFile.year_prev, year_ref: excelFile.year_ref || excelFile.year_prev, excel_file_id: newExcelFileId });
-          } catch (excelError) {
-            capture(excelError);
-          }
-        }
-        for (const excelFile of action.excel_files_expost || []) {
-          try {
-            const newExcelFileId = await duplicateExcelFile(`${economic_actor.name}_${action.name}_Expost${excelFile.year_expost}.xlsx`, collectivityDoc?.sharepoint_folder_id, excelFile.excel_file_id);
-            excelFilesExpost.push({ year_expost: excelFile.year_expost, year_ref: excelFile.year_ref || excelFile.year_expost, excel_file_id: newExcelFileId });
-          } catch (excelError) {
-            capture(excelError);
-          }
-        }
-      }
-
-      const newAction = await Action.create({
-        ...action.toObject(),
-        owner: 'economic_actor',
-        status: 'no_status',
-        economic_actor_id: economic_actor._id,
-        economic_actor_name: economic_actor.name,
-        action_collectivity_id: action._id,
-        exel_files_prev: excelFiles,
-        excel_files_expost: excelFilesExpost,
-        last_modif_by_id: null,
-        last_modif_by_name: null,
-        last_modif_date: null,
-        _id: undefined,
-        __v: undefined,
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
-      duplicatedActions.push(newAction);
-    }
-
-    const logs = duplicatedActions.map((duplicatedAction) => ({
-      model_name: 'action',
-      name: duplicatedAction.name,
-      operation: 'duplicate',
-      date: new Date(),
-      user_id: req.user._id,
-      user_name: req.user.name,
-      user_email: req.user.email,
-      action_id: duplicatedAction._id,
-      action_name: duplicatedAction.name,
-      collectivity_id: duplicatedAction.collectivity_id,
-      collectivity_name: duplicatedAction.collectivity_name,
-      economic_actor_id: economic_actor._id,
-      economic_actor_name: economic_actor.name,
-    }));
-
-    if (logs.length) await Log.insertMany(logs);
-
-    return res.status(200).send({
-      ok: true,
-      data: duplicatedActions,
-    });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
