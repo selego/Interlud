@@ -545,8 +545,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           collectivity_name: collectivity.name
         }
 
-        const { ok, data } = await api.post("/action/create_action_with_default_indicators", payload)
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        const { ok, data, code } = await api.post("/action/", payload)
+        if (!ok) return toast.error(code || "Une erreur est survenue")
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {
         toast.error(error || "Une erreur est survenue")

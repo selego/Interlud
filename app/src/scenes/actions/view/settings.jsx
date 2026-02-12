@@ -87,15 +87,7 @@ export default function Settings({ action: initialAction, onSave }) {
       </div>
 
       <div className="flex mb-6">
-        {/* <button
-          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
-            activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
-          }`}
-          onClick={() => setActiveTab("indicators")}
-        >
-          <FiList size={16} />
-          Liste des Indicateurs
-        </button> */}
+
 
         <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
@@ -115,6 +107,16 @@ export default function Settings({ action: initialAction, onSave }) {
           <FiClock size={16} />
           Historique de l'Action
         </button>
+
+        <button
+          className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
+          }`}
+          onClick={() => setActiveTab("indicators")}
+        >
+          <FiList size={16} />
+          Liste des Indicateurs
+        </button>
       </div>
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
@@ -128,7 +130,6 @@ export default function Settings({ action: initialAction, onSave }) {
 function IndicatorsTab({ action }) {
   const [indicatorValues, setIndicatorValues] = useState([]);
   const [indicators, setIndicators] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [filters, setFilters] = useState({ page: 0, limit: 10 });
   const [total, setTotal] = useState(0);
 
@@ -137,7 +138,6 @@ function IndicatorsTab({ action }) {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setIndicatorValues(data);
-      console.log(data);
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
@@ -203,7 +203,6 @@ function IndicatorsTab({ action }) {
         onPrevious={() => setFilters({ ...filters, page: filters.page - 1 })}
       />
 
-      <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} action={action} onAdd={fetchIndicatorValues} />
     </div>
   );
 }
@@ -223,7 +222,7 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
 
     try {
       setIsAddingPrev(true);
-      const { ok, data, code } = await api.post("/action/add_previsionnel", { action_id: action._id, year_prev: parseInt(newPrevYear) });
+      const { ok, data, code } = await api.post("/action/add_year_previsionnel", { action_id: action._id, year_prev: parseInt(newPrevYear) });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Situation prévisionnelle ajoutée");
       setIsAddPrevModalOpen(false);
@@ -243,7 +242,7 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
 
     try {
       setIsAddingExpost(true);
-      const { ok, data, code } = await api.post("/action/add_expost", { action_id: action._id, year_expost: parseInt(newExpostYear) });
+      const { ok, data, code } = await api.post("/action/add_year_expost", { action_id: action._id, year_expost: parseInt(newExpostYear) });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Situation ex-post ajoutée");
       setIsAddExpostModalOpen(false);
@@ -649,82 +648,3 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
     </div>
   );
 }
-
-const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
-  const [allIndicators, setAllIndicators] = useState([]);
-  const [selectedIndicator, setSelectedIndicator] = useState(null);
-
-  useEffect(() => {
-    fetchAllIndicators();
-  }, []);
-
-  const fetchAllIndicators = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/indicator/search`, {});
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setAllIndicators(data);
-    } catch (error) {
-      toast.error("Une erreur est survenue");
-    }
-  };
-
-  const handleAddIndicator = async () => {
-    if (!selectedIndicator) return toast.error("Veuillez sélectionner un indicateur");
-
-    try {
-      const { ok, code } = await api.post(`/action/initialize_indicator_values`, {
-        action_id: action._id,
-        action_name: action.name,
-        collectivity_id: action.collectivity_id,
-        collectivity_name: action.collectivity_name,
-        indicator_id: selectedIndicator._id,
-        indicator_name: selectedIndicator.name,
-        indicator_type: selectedIndicator.value_type,
-        indicator_value_possibilities: selectedIndicator.value_possibilities
-      });
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-
-      toast.success("Indicateur ajouté avec succès");
-      setSelectedIndicator(null);
-      onClose();
-      onAdd();
-    } catch (error) {
-      toast.error(error.message || "Indicateur déjà associé à cette action");
-    }
-  };
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => { onClose(); setSelectedIndicator(null)}}
-      className="max-w-lg"
-    >
-      <div className="p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un indicateur</h2>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un indicateur</label>
-          <Select 
-            value={selectedIndicator?._id}
-            onChange={(value) => {
-              const indicator = allIndicators.find(i => i._id === value);
-              setSelectedIndicator(indicator);
-            }}
-            options={[
-              { value: "", label: "-- Choisir un indicateur --" },
-              ...allIndicators.map((indicator) => ({
-                value: indicator._id,
-                label: indicator.name
-              }))
-            ]}
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <button onClick={handleAddIndicator} className="button-primary">
-            Ajouter
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-};

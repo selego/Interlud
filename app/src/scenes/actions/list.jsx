@@ -146,7 +146,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           ...(user.role === 'economic_actor' ? {owner: 'economic_actor', economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name} : {}),
         }
 
-        const { ok, data , code} = await api.post("/action/create_action_with_default_indicators", payload)
+        const { ok, data , code} = await api.post("/action/", payload)
         if (!ok) return toast.error(code || "Une erreur est survenue")
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {

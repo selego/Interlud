@@ -8,7 +8,6 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
-const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
@@ -113,33 +112,6 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 });
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const action = await Action.create(req.body);
-    if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-
-    await Log.create({
-      model_name: 'action',
-      name: action.name,
-      operation: 'add',
-      date: new Date(),
-      user_id: req.user._id,
-      user_name: req.user.name,
-      user_email: req.user.email,
-      action_id: action._id,
-      action_name: action.name,
-      collectivity_id: action.collectivity_id,
-      collectivity_name: action.collectivity_name,
-    });
-
-    return res.status(200).send({ ok: true, data: action });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.post('/create_action_with_default_indicators', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
@@ -397,7 +369,7 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
   }
 });
 
-router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { action_id, year_prev } = req.body;
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
@@ -630,7 +602,7 @@ router.post('/add_previsionnel', passport.authenticate(['admin', 'user'], { sess
   }
 });
 
-router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { action_id, year_expost } = req.body;
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
@@ -877,48 +849,6 @@ router.post('/add_expost', passport.authenticate(['admin', 'user'], { session: f
     });
 
     return res.status(200).send({ ok: true, data: action });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-// page settings obselete ne pas utiliser
-router.post('/initialize_indicator_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    if (!req.body.indicator_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-
-    const existing = await IndicatorValue.findOne({ action_id: req.body.action_id, indicator_id: req.body.indicator_id });
-    if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
-
-    const indicator = await Indicator.findById(req.body.indicator_id);
-    if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-
-    const situations = ['init', 'ref', 'prev', 'expost'];
-    const createdIndicatorValues = [];
-
-    for (const situation of situations) {
-      const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
-      const indicatorValue = {
-        ...req.body,
-        situation,
-        value_default: { [indicator.value_type]: defaultValue },
-        indicator_value_possibilities: indicator.value_possibilities || [],
-        indicator_category_id: indicator.indicator_category_id,
-        indicator_category_name: indicator.indicator_category_name,
-        indicator_sub_category_id: indicator.indicator_sub_category_id,
-        indicator_sub_category_name: indicator.indicator_sub_category_name,
-        indicator_value_unit: indicator.value_unit,
-        indicator_excel_id: indicator.excel_indicator_id,
-        excel_line_number: indicator.excel_line_number?.[situation],
-      };
-      const displayCondition = indicator.display_condition?.[situation];
-      if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
-      createdIndicatorValues.push(indicatorValue);
-    }
-    await IndicatorValue.insertMany(createdIndicatorValues);
-    return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
