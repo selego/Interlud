@@ -81,9 +81,7 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     for (const stat of stats) {
       const { situation, year } = stat._id;
       if (!situationYears[situation]) situationYears[situation] = [];
-      if (year != null && !situationYears[situation].includes(year)) {
-        situationYears[situation].push(year);
-      }
+      if (year != null && !situationYears[situation].includes(year)) situationYears[situation].push(year);
       completion[`${situation}_${year}`] = { total: stat.total, filled: stat.filled };
       totalAll += stat.total;
       filledAll += stat.filled;
