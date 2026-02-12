@@ -211,16 +211,6 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     await computeActionCompletion(indicatorValue.action_id);
 
-    const actionIndicatorValues = await IndicatorValue.find({ action_id: indicatorValue.action_id, collectivity_id: indicatorValue.collectivity_id });
-    if (actionIndicatorValues.length > 0 && actionIndicatorValues.every(isIndicatorValueFilled)) {
-      action.status = 'completed';
-      await action.save();
-    }
-    if (action.status === 'no_status') {
-      action.status = 'in_progress';
-      await action.save();
-    }
-
     res.status(200).send({ ok: true, data: indicatorValue });
     const excelUpdatePromises = [];
 

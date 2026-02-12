@@ -8,23 +8,27 @@ const isIndicatorValueFilled = (iv) => {
 };
 
 const computeActionCompletion = async (actionId) => {
-  const indicatorValues = await IndicatorValue.find({ action_id: actionId });
-  if (indicatorValues.length === 0) return;
+  const [indicatorValues, action] = await Promise.all([IndicatorValue.find({ action_id: actionId }).select('value indicator_type situation').lean(), Action.findById(actionId).select('status').lean()]);
+  if (!action || indicatorValues.length === 0) return;
 
   const situations = ['init', 'ref', 'prev', 'expost'];
-  const completion = {};
+  const update = {};
 
   for (const situation of situations) {
     const values = indicatorValues.filter((iv) => iv.situation === situation);
     if (values.length === 0) {
-      completion[`completion_${situation}`] = 0;
+      update[`completion_${situation}`] = 0;
       continue;
     }
     const filled = values.filter(isIndicatorValueFilled).length;
-    completion[`completion_${situation}`] = Math.round((filled / values.length) * 100);
+    update[`completion_${situation}`] = Math.round((filled / values.length) * 100);
   }
 
-  await Action.updateOne({ _id: actionId }, { $set: completion });
+  const allFilled = indicatorValues.every(isIndicatorValueFilled);
+  if (allFilled) update.status = 'completed';
+  if (action.status === 'no_status') update.status = 'in_progress';
+
+  await Action.updateOne({ _id: actionId }, { $set: update });
 };
 
 module.exports = { isIndicatorValueFilled, computeActionCompletion };

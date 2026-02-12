@@ -104,6 +104,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
     const [year,setYear] = useState( { init: null, ref: null, prev: null, expost: null })
     const [isLoading, setIsLoading] = useState(false)
+    const [createdActionId, setCreatedActionId] = useState(null)
     const fetchActions = async () => {
       try {
         const { ok, data , code} = await api.post("/action/search", { type: "global" })
@@ -148,7 +149,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
         const { ok, data , code} = await api.post("/action/", payload)
         if (!ok) return toast.error(code || "Une erreur est survenue")
-        navigate(`/actions/${data._id}/settings`)
+        setCreatedActionId(data._id)
       } catch (error) {
         toast.error(error.message || "Une erreur est survenue")
       } finally {
@@ -157,8 +158,38 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     }   
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
+    <Modal isOpen={isOpen} onClose={() => { if (!createdActionId) onClose(); }} className="max-w-lg">
       <div className="p-8">
+        {createdActionId ? (
+          <div className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Action créée avec succès !</h2>
+            <p className="text-sm text-gray-600 mb-8">
+              Les données de parc types dans votre action ont été remplies par des valeurs par défaut.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => navigate("/general-data")}
+                className="w-full px-4 py-2 rounded-lg border-2 border-primary-green text-primary-green text-sm font-semibold hover:bg-green-50 transition-colors"
+              >
+                Voir mes données parc type
+              </button>
+              <button
+                onClick={() => navigate(`/actions/${createdActionId}/completion`)}
+                className="button-primary w-full"
+              >
+                Remplir mon action
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
         </div>
@@ -317,6 +348,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
             Créer
           </button>
         </div>
+        </>
+        )}
         </>
         )}
       </div>

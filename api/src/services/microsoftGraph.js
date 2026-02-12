@@ -33,25 +33,50 @@ async function getAccessToken() {
   return res.access_token;
 }
 
-async function graphFetch(endpoint, options = {}) {
-  const token = await getAccessToken();
-  const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 2000;
 
-  if (!response.ok) {
+function isRetryableError(status, errorMessage) {
+  if (RETRYABLE_STATUS_CODES.includes(status)) return true;
+  if (errorMessage && errorMessage.includes("We're sorry")) return true;
+  return false;
+}
+
+async function graphFetch(endpoint, options = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const token = await getAccessToken();
+    const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (response.ok) {
+      if (response.status === 202) return response;
+      return response.json();
+    }
+
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Graph API error: ${response.status}`);
+    const errorMessage = error.error?.message || `Graph API error: ${response.status}`;
+
+    if (attempt < MAX_RETRIES && isRetryableError(response.status, errorMessage)) {
+      const retryAfter = response.headers.get('Retry-After');
+      const delay = retryAfter ? parseInt(retryAfter) * 1000 : BASE_DELAY_MS * Math.pow(2, attempt);
+      console.log(`[Graph API] Tentative ${attempt + 1}/${MAX_RETRIES} échouée (${response.status}), retry dans ${delay}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
+    lastError = new Error(errorMessage);
   }
 
-  if (response.status === 202) return response;
-
-  return response.json();
+  throw lastError;
 }
 
 async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation) {
@@ -119,13 +144,10 @@ async function updateExcelCellsBatch(fileId, updates, situation) {
   }
 
   // Update the range in one call
-  await graphFetch(
-    `/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ values: rangeValues }),
-    }
-  );
+  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+    method: 'PATCH',
+    body: JSON.stringify({ values: rangeValues }),
+  });
 }
 
 async function createFolder(folderName, parentFolderId = null) {
@@ -255,16 +277,13 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
 
     const rangeValues = [];
     for (let i = minRowIndex; i <= maxRowIndex; i++) {
-      rangeValues.push([updateMap.has(i) ? updateMap.get(i) : rows[i][5] ?? '']);
+      rangeValues.push([updateMap.has(i) ? updateMap.get(i) : (rows[i][5] ?? '')]);
     }
 
-    await graphFetch(
-      `/sites/${siteId}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ values: rangeValues }),
-      }
-    );
+    await graphFetch(`/sites/${siteId}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+      method: 'PATCH',
+      body: JSON.stringify({ values: rangeValues }),
+    });
 
     for (const update of updates) {
       extractedData.push({ excel_indicator_id: update.excelIndicatorId, value: update.newValue, situation });
@@ -304,13 +323,10 @@ async function clearWorksheetValues(fileId, situation) {
   }
 
   // Clear the range in one call
-  await graphFetch(
-    `/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ values: rangeValues }),
-    }
-  );
+  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+    method: 'PATCH',
+    body: JSON.stringify({ values: rangeValues }),
+  });
 }
 
 module.exports = {
