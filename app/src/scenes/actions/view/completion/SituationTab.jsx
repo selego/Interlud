@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { SITUATION_TYPES } from "@/utils/constants";
 import IndicatorValueInput from "./IndicatorValueInput";
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers";
+import Loader from "@/components/loader";
 
 export const SITUATION_LABELS = {
   [SITUATION_TYPES.INIT]: "Initiale",
@@ -14,9 +15,11 @@ export const SITUATION_LABELS = {
 
 export default function SituationTab({ situation, year, indicatorValues, allSituationIndicatorValues, onUpdate, selectedIndicatorValue, selectedCategory }) {
   const [economicActorData, setEconomicActorData] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchEconomicActorData = async () => {
     try {
+    setIsLoading(true);
     const indicatorIds = [...new Set(indicatorValues.map(iv => iv.indicator_id))];
     if (indicatorIds.length === 0) return;
 
@@ -31,6 +34,8 @@ export default function SituationTab({ situation, year, indicatorValues, allSitu
     setEconomicActorData(grouped);
     } catch (error) {
       toast.error("Une erreur est survenue");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -77,6 +82,7 @@ export default function SituationTab({ situation, year, indicatorValues, allSitu
     await onUpdate();
   };
 
+  if (isLoading) return <Loader />  
   return (
     <div className="card-shadow p-6">
       <div className="flex justify-between items-center mb-6">
