@@ -121,7 +121,7 @@ export default function Settings({ action: initialAction, onSave }) {
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
       {activeTab === "settings" && ( <ActionSettingsTab action={action} onUpdate={handleUpdate} onDelete={handleDelete} onActionUpdate={(updatedAction) => { setAction(updatedAction); if (onSave) onSave(); }} />)}
-      {activeTab === "history" && <History action={action} />}
+      {activeTab === "history" && <History action={action} onSave={onSave} />}
     </div>
     </div>
   )

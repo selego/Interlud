@@ -188,7 +188,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         previous_value: { [logType]: actualOldValue },
         type_value: logType,
         date: new Date(),
-        source: req.body.source || 'manual',
+        source: indicatorValue.value_source,
         user_id: req.user._id,
         user_name: req.user.name,
         user_email: req.user.email,
