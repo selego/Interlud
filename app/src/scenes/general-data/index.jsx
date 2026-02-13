@@ -146,19 +146,9 @@ export default function Index() {
   return (
     <div className="">
       <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
-        <div className="mb-8">
-          <h1 className="text-font-primary text-4xl">Données générales</h1>
-          <div className="flex gap-2 items-center">
-            <ProgressCircle percentage={stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0} size={20} />
-            <p className="text-sm text-gray-900">
-              Complété à <strong>{stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0}%</strong>
-            </p>
-          </div>
-        </div>
-
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-6">
           <FiInfo className="w-4 h-4 text-blue-500 shrink-0" />
-          <p className="text-sm text-blue-700">Les données de parc type sont remplies avec des données par défaut d'Interlud.</p>
+          <p className="text-sm text-blue-700">Ces données sont obligatoires pour les calculs des gains environnementaux des actions. Les données de parc type sont remplies avec des données par défaut d'Interlud.</p>
         </div>
 
         {configActions.length > 1 && (
