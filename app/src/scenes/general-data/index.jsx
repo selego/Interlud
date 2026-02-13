@@ -77,7 +77,6 @@ export default function Index() {
 
   const importIndicatorValues = async (file) => {
     try {
-      if (!collectivity.excelFileId) return toast.error("Aucun fichier Excel associé")
       if (!file) return
       setIsImporting(true)
       const reader = new FileReader()

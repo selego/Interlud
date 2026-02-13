@@ -26,7 +26,7 @@ const computeActionCompletion = async (actionId) => {
 
   const allFilled = indicatorValues.every(isIndicatorValueFilled);
   if (allFilled) update.status = 'completed';
-  if (action.status === 'no_status') update.status = 'in_progress';
+  else if (action.status === 'no_status') update.status = 'in_progress';
 
   await Action.updateOne({ _id: actionId }, { $set: update });
 };
