@@ -43,11 +43,11 @@ export default function History({ action, onSave }) {
     if (!window.confirm("Êtes-vous sûr de vouloir restaurer l'ancienne valeur ?")) return
     try {
       if (log.model_name === "indicator_value" && log.indicator_value_id) {
-        const { ok, code } = await api.put(`/indicator_value/${log.indicator_value_id}`, { value: { [log.type_value]: log.previous_value?.[log.type_value] } })
+        const { ok, code } = await api.put(`/indicator_value/${log.indicator_value_id}`, { value: { [log.type_value]: log.previous_value?.[log.type_value] }, source: 'restore' })
         if (!ok) return toast.error(code || "Une erreur est survenue")
       }
       if (log.model_name === "action" && log.action_id) {
-        const { ok, code } = await api.put(`/action/${log.action_id}`, {[log.field]: log.previous_value?.[log.type_value]})
+        const { ok, code } = await api.put(`/action/${log.action_id}`, { [log.field]: log.previous_value?.[log.type_value], source: 'restore' })
         if (!ok) return toast.error(code || "Une erreur est survenue")
       }
       toast.success("Valeur restaurée")

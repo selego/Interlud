@@ -161,7 +161,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const logs = [];
 
     for (const field of Object.keys(req.body)) {
-      if (['updatedAt', '__v', 'createdAt', '_id', 'owner', 'value_source'].includes(field)) continue;
+      if (['updatedAt', '__v', 'createdAt', '_id', 'owner', 'value_source', 'source'].includes(field)) continue;
       let newValue = req.body[field];
       const originalValue = indicatorValue[field];
 
@@ -188,7 +188,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         previous_value: { [logType]: actualOldValue },
         type_value: logType,
         date: new Date(),
-        source: indicatorValue.value_source,
+        source: req.body.source || indicatorValue.value_source,
         user_id: req.user._id,
         user_name: req.user.name,
         user_email: req.user.email,
