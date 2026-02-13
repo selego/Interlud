@@ -91,7 +91,26 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
       situationYears[sit].sort((a, b) => a - b);
     }
 
-    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll } });
+    // Find which regular actions use each situation/year combination
+    const configAction = await Action.findById(action_id).select('collectivity_id owner economic_actor_id').lean();
+    let actionsBySituationYear = {};
+    if (configAction) {
+      const ownerFilter = { owner: configAction.owner };
+      if (configAction.owner === 'economic_actor' && configAction.economic_actor_id) ownerFilter.economic_actor_id = configAction.economic_actor_id;
+
+      const regularActions = await Action.find({ collectivity_id: configAction.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }).select('name year_init exel_files_prev excel_files_expost');
+      for (const a of regularActions) {
+        if (a.year_init != null) (actionsBySituationYear[`init_${a.year_init}`] ||= []).push(a.name);
+        const refYears = new Set();
+        for (const f of a.exel_files_prev || []) if (f.year_ref != null) refYears.add(f.year_ref);
+        for (const f of a.excel_files_expost || []) if (f.year_ref != null) refYears.add(f.year_ref);
+        for (const y of refYears) (actionsBySituationYear[`ref_${y}`] ||= []).push(a.name);
+        for (const f of a.exel_files_prev || []) if (f.year_prev != null) (actionsBySituationYear[`prev_${f.year_prev}`] ||= []).push(a.name);
+        for (const f of a.excel_files_expost || []) if (f.year_expost != null) (actionsBySituationYear[`expost_${f.year_expost}`] ||= []).push(a.name);
+      }
+    }
+
+    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll, actionsBySituationYear } });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

@@ -242,23 +242,35 @@ export default function Index() {
           </div>
 
           {activeSituation && situationYears[activeSituation]?.length > 0 && (
-            <div className="flex items-center gap-2 mb-8">
-              {situationYears[activeSituation].map((year) => (
-                <button
-                  key={year}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all ${
-                    activeYear === year ? "bg-primary-green text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                  onClick={() => setActiveYear(year)}
-                >
-                  <div className="flex items-center gap-1.5">
-                    {year}
-                    <ProgressCircle percentage={getSituationProgress(activeSituation, year)} size={14} />
-                    <span className="text-xs opacity-80">{getSituationProgress(activeSituation, year)}%</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                {situationYears[activeSituation].map((year) => (
+                  <button
+                    key={year}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all ${
+                      activeYear === year ? "bg-primary-green text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                    onClick={() => setActiveYear(year)}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {year}
+                      <ProgressCircle percentage={getSituationProgress(activeSituation, year)} size={14} />
+                      <span className="text-xs opacity-80">{getSituationProgress(activeSituation, year)}%</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {activeYear && stats?.actionsBySituationYear?.[`${activeSituation}_${activeYear}`]?.length > 0 && (
+                <div className="flex items-center gap-2 mb-6 flex-wrap text-sm text-gray-500">
+                  <span className="font-medium text-gray-600">Actions concernées :</span>
+                  {stats?.actionsBySituationYear?.[`${activeSituation}_${activeYear}`].map((name) => (
+                    <span key={name} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           <IndicatorView
