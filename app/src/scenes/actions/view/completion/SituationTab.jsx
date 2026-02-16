@@ -14,11 +14,6 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
     )
   }
 
-  const excelIdMap = new Map()
-  for (const iv of displayedIndicatorValues) {
-    if (iv.indicator_excel_id) excelIdMap.set(iv.indicator_excel_id, iv)
-  }
-
   let filteredValues = displayedIndicatorValues
   if (selectedCategory) {
     if (selectedCategory.subCategoryName) {
@@ -27,12 +22,6 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
       filteredValues = filteredValues.filter(iv => iv.indicator_category_name === selectedCategory.categoryName && !iv.indicator_sub_category_name)
     }
   }
-  filteredValues = filteredValues.filter(iv => {
-    if (!iv.display_indicator_excel_id) return true
-    const cond = excelIdMap.get(iv.display_indicator_excel_id)
-    if (!cond) return true
-    return cond.value?.[cond.indicator_type] === iv.display_condition_indicator_value
-  })
 
   return (
     <div className="card-shadow rounded-2xl p-6">

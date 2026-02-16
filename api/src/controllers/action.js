@@ -210,10 +210,6 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
             indicator_type: indicator.value_type,
             situation,
             year: req.body[`year_${situation}`],
-            year_init: req.body.year_init,
-            year_ref: req.body.year_ref,
-            year_prev: req.body.year_prev,
-            year_expost: req.body.year_expost,
             indicator_value_unit: indicator.value_unit,
             value_default: { [indicator.value_type]: defaultValue },
             indicator_value_possibilities: indicator.value_possibilities || [],
@@ -275,10 +271,6 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           indicator_type: indicator.value_type,
           situation,
           year: req.body[`year_${situation}`],
-          year_init: req.body.year_init,
-          year_ref: req.body.year_ref,
-          year_prev: req.body.year_prev,
-          year_expost: req.body.year_expost,
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -457,10 +449,6 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
               indicator_type: indicator.value_type,
               situation,
               year: year_prev,
-              year_init: action.year_init,
-              year_ref: year_prev,
-              year_prev: year_prev,
-              year_expost: action.year_expost,
               indicator_value_unit: indicator.value_unit,
               value_default: { [indicator.value_type]: defaultValue },
               indicator_value_possibilities: indicator.value_possibilities || [],
@@ -522,10 +510,6 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           indicator_type: indicator.value_type,
           situation,
           year: year_prev,
-          year_init: action.year_init,
-          year_ref: year_prev,
-          year_prev: year_prev,
-          year_expost: action.year_expost,
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -562,10 +546,8 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
       }
     }
 
-    let insertedPrevIVs = [];
-    let insertedRefIVs = [];
-    if (createdPrevIndicatorValues.length > 0) insertedPrevIVs = await IndicatorValue.insertMany(createdPrevIndicatorValues);
-    if (createdRefIndicatorValues.length > 0) insertedRefIVs = await IndicatorValue.insertMany(createdRefIndicatorValues);
+    if (createdPrevIndicatorValues.length > 0) await IndicatorValue.insertMany(createdPrevIndicatorValues);
+    if (createdRefIndicatorValues.length > 0) await IndicatorValue.insertMany(createdRefIndicatorValues);
 
     // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
@@ -692,10 +674,6 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
               indicator_type: indicator.value_type,
               situation,
               year: year_expost,
-              year_init: action.year_init,
-              year_ref: year_expost,
-              year_prev: action.year_prev,
-              year_expost: year_expost,
               indicator_value_unit: indicator.value_unit,
               value_default: { [indicator.value_type]: defaultValue },
               indicator_value_possibilities: indicator.value_possibilities || [],
@@ -775,10 +753,6 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           indicator_type: indicator.value_type,
           situation,
           year: year_expost,
-          year_init: action.year_init,
-          year_ref: year_expost,
-          year_prev: action.year_prev,
-          year_expost: year_expost,
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -815,10 +789,8 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
       }
     }
 
-    let insertedExpostIVs = [];
-    let insertedRefIVs = [];
-    if (createdExpostIndicatorValues.length > 0) insertedExpostIVs = await IndicatorValue.insertMany(createdExpostIndicatorValues);
-    if (createdRefIndicatorValues.length > 0) insertedRefIVs = await IndicatorValue.insertMany(createdRefIndicatorValues);
+    if (createdExpostIndicatorValues.length > 0) await IndicatorValue.insertMany(createdExpostIndicatorValues);
+    if (createdRefIndicatorValues.length > 0) await IndicatorValue.insertMany(createdRefIndicatorValues);
 
     // Mettre à jour l'indicateur AnneeRempl avec la nouvelle année expost dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_expost, 'expost');

@@ -243,13 +243,14 @@ export default function Completion({ action }) {
           activeYear={currentTab?.year}
           refreshKey={refreshKey}
           onStatsRefresh={fetchStats}
+          yearMappings={stats?.yearMappingsBySituationYear?.[`${currentTab?.situation}_${currentTab?.year}`]}
         />
       </div>
     </div>
   )
 }
 
-function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh }) {
+function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -259,27 +260,32 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
   const shouldDisplayIndicator = (iv) => {
     if (!iv.display_condition?.conditions?.length) return true
     const results = iv.display_condition.conditions.map(cond => {
-      const key = `${cond.excel_indicator_id}_${cond.excel_indicator_situation || iv.situation}_${iv[`year_${cond.excel_indicator_situation || iv.situation}`]}`
-      const source = conditionValuesMap.get(key)
-      if (!source) return false
-      const val = source.value?.[source.indicator_type]
-      let isMatch = false
-      if (cond.type === "equals") {
-        isMatch = val == cond.value
-        if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort())
-      }
-      if (cond.type === "contains") {
-        if (Array.isArray(val)) isMatch = val.includes(cond.value)
-        else if (typeof val === "string") isMatch = val.includes(cond.value)
-      }
-      if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
-      if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
-      if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
-      if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
-      if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
-      if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
-      if (cond.negate) isMatch = !isMatch
-      return isMatch
+      const targetSituation = cond.excel_indicator_situation || iv.situation
+      const possibleYears = yearMappings?.[`year_${targetSituation}`] || []
+
+      return possibleYears.some(year => {
+        const key = `${cond.excel_indicator_id}_${targetSituation}_${year}`
+        const source = conditionValuesMap.get(key)
+        if (!source) return false
+        const val = source.value?.[source.indicator_type]
+        let isMatch = false
+        if (cond.type === "equals") {
+          isMatch = val == cond.value
+          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort())
+        }
+        if (cond.type === "contains") {
+          if (Array.isArray(val)) isMatch = val.includes(cond.value)
+          else if (typeof val === "string") isMatch = val.includes(cond.value)
+        }
+        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
+        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
+        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
+        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
+        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
+        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
+        if (cond.negate) isMatch = !isMatch
+        return isMatch
+      })
     })
     return iv.display_condition.operator === "OR" ? results.some(r => r) : results.every(r => r)
   }

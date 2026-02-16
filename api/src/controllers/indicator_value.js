@@ -94,11 +94,17 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     // Find which regular actions use each situation/year combination
     const configAction = await Action.findById(action_id).select('collectivity_id owner economic_actor_id').lean();
     let actionsBySituationYear = {};
+    let yearMappingsBySituationYear = {};
     if (configAction) {
       const ownerFilter = { owner: configAction.owner };
       if (configAction.owner === 'economic_actor' && configAction.economic_actor_id) ownerFilter.economic_actor_id = configAction.economic_actor_id;
 
       const regularActions = await Action.find({ collectivity_id: configAction.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }).select('name year_init exel_files_prev excel_files_expost');
+
+      const ensureMapping = (k) => {
+        if (!yearMappingsBySituationYear[k]) yearMappingsBySituationYear[k] = { year_init: new Set(), year_ref: new Set(), year_prev: new Set(), year_expost: new Set() };
+      };
+
       for (const a of regularActions) {
         if (a.year_init != null) (actionsBySituationYear[`init_${a.year_init}`] ||= []).push(a.name);
         const refYears = new Set();
@@ -107,10 +113,48 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
         for (const y of refYears) (actionsBySituationYear[`ref_${y}`] ||= []).push(a.name);
         for (const f of a.exel_files_prev || []) if (f.year_prev != null) (actionsBySituationYear[`prev_${f.year_prev}`] ||= []).push(a.name);
         for (const f of a.excel_files_expost || []) if (f.year_expost != null) (actionsBySituationYear[`expost_${f.year_expost}`] ||= []).push(a.name);
+
+        // yearMappingsBySituationYear — collect all unique year values from all actions per situation/year
+        if (a.year_init != null) {
+          ensureMapping(`init_${a.year_init}`);
+          yearMappingsBySituationYear[`init_${a.year_init}`].year_init.add(a.year_init);
+        }
+        for (const f of a.exel_files_prev || []) {
+          if (f.year_prev != null) {
+            ensureMapping(`prev_${f.year_prev}`);
+            if (a.year_init != null) yearMappingsBySituationYear[`prev_${f.year_prev}`].year_init.add(a.year_init);
+            if (f.year_ref != null) yearMappingsBySituationYear[`prev_${f.year_prev}`].year_ref.add(f.year_ref);
+            yearMappingsBySituationYear[`prev_${f.year_prev}`].year_prev.add(f.year_prev);
+          }
+          if (f.year_ref != null) {
+            ensureMapping(`ref_${f.year_ref}`);
+            if (a.year_init != null) yearMappingsBySituationYear[`ref_${f.year_ref}`].year_init.add(a.year_init);
+            yearMappingsBySituationYear[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
+          }
+        }
+        for (const f of a.excel_files_expost || []) {
+          if (f.year_expost != null) {
+            ensureMapping(`expost_${f.year_expost}`);
+            if (a.year_init != null) yearMappingsBySituationYear[`expost_${f.year_expost}`].year_init.add(a.year_init);
+            if (f.year_ref != null) yearMappingsBySituationYear[`expost_${f.year_expost}`].year_ref.add(f.year_ref);
+            yearMappingsBySituationYear[`expost_${f.year_expost}`].year_expost.add(f.year_expost);
+          }
+          if (f.year_ref != null) {
+            ensureMapping(`ref_${f.year_ref}`);
+            if (a.year_init != null) yearMappingsBySituationYear[`ref_${f.year_ref}`].year_init.add(a.year_init);
+            yearMappingsBySituationYear[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
+          }
+        }
+      }
+
+      // Convert Sets to arrays
+      for (const k in yearMappingsBySituationYear) {
+        const m = yearMappingsBySituationYear[k];
+        yearMappingsBySituationYear[k] = { year_init: [...m.year_init], year_ref: [...m.year_ref], year_prev: [...m.year_prev], year_expost: [...m.year_expost] };
       }
     }
 
-    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll, actionsBySituationYear } });
+    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll, actionsBySituationYear, yearMappingsBySituationYear } });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

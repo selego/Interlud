@@ -36,20 +36,15 @@ const Schema = new mongoose.Schema(
       conditions: [
         {
           type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
-          excel_indicator_id: { type: String }, 
-          excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] }, 
+          excel_indicator_id: { type: String },
+          excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
           value: { type: mongoose.Schema.Types.Mixed },
-          negate: { type: Boolean, default: false }, 
+          negate: { type: Boolean, default: false },
         },
       ],
     },
     situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'], trim: true },
     year: { type: Number, trim: true },
-    // Années du groupe pour retrouver les correspondances cross-situation
-    year_init: { type: Number, trim: true },
-    year_ref: { type: Number, trim: true },
-    year_prev: { type: Number, trim: true },
-    year_expost: { type: Number, trim: true },
     value_source: { type: String, trim: true },
     comment: { type: String, trim: true },
     value: {
@@ -65,7 +60,7 @@ const Schema = new mongoose.Schema(
       checkbox: { type: Array, default: [] },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 Schema.index({ indicator_id: 1, situation: 1 });
@@ -73,10 +68,7 @@ Schema.index({ collectivity_id: 1, situation: 1 });
 Schema.index({ action_id: 1, situation: 1, year: 1 });
 Schema.index({ action_id: 1, excel_line_number: 1 });
 Schema.index({ owner: 1, action_id: 1 });
-Schema.index({ collectivity_id: 1, indicator_excel_id: 1, situation: 1, year_init: 1 });
 Schema.index({ collectivity_id: 1, indicator_excel_id: 1, situation: 1, year: 1 });
-
-
 
 const OBJ = mongoose.model(MODELNAME, Schema);
 module.exports = OBJ;
