@@ -39,8 +39,8 @@ export default function Completion({ action }) {
     }
 
     return [
-      { key: 'init', label: `Initiale${action.year_init ? ` ${action.year_init}` : ""}`, situation: 'init' },
-      { key: 'ref', label: `Référence${action.year_ref ? ` ${action.year_ref}` : ""}`, situation: 'ref' },
+      { key: 'init', label: `Initiale${action.year_init ? ` ${action.year_init}` : ""}`, situation: 'init', year: action.year_init },
+      { key: 'ref', label: `Référence${action.year_ref ? ` ${action.year_ref}` : ""}`, situation: 'ref', year: action.year_ref },
       ...(action.exel_files_prev || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: 'prev' })),
       ...(action.excel_files_expost || []).map((file) => ({ key: `expost_${file.year_expost}`, label: `Expost ${file.year_expost}`, year: file.year_expost, situation: 'expost' })),
     ]
