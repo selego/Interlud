@@ -35,72 +35,50 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
       matchQuery.owner = 'economic_actor';
     }
 
-    const stats = await IndicatorValue.aggregate([
-      { $match: matchQuery },
-      {
-        $addFields: {
-          _is_filled: {
-            $switch: {
-              branches: [
-                {
-                  case: { $eq: ['$indicator_type', 'checkbox'] },
-                  then: { $cond: [{ $isArray: '$value.checkbox' }, { $gt: [{ $size: '$value.checkbox' }, 0] }, false] },
-                },
-                {
-                  case: { $eq: ['$indicator_type', 'number'] },
-                  then: { $ne: ['$value.number', null] },
-                },
-                {
-                  case: { $eq: ['$indicator_type', 'text'] },
-                  then: { $and: [{ $ne: ['$value.text', null] }, { $ne: ['$value.text', ''] }] },
-                },
-                {
-                  case: { $eq: ['$indicator_type', 'radio'] },
-                  then: { $and: [{ $ne: ['$value.radio', null] }, { $ne: ['$value.radio', ''] }] },
-                },
-              ],
-              default: false,
-            },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: { situation: '$situation', year: '$year' },
-          total: { $sum: 1 },
-          filled: { $sum: { $cond: ['$_is_filled', 1, 0] } },
-        },
-      },
-    ]);
+    // Parallel: fetch indicator values + config action at the same time
+    const [indicatorValues, configAction] = await Promise.all([IndicatorValue.find(matchQuery), Action.findById(action_id)]);
 
+    // Build situationYears + collect condExcelIds in a single pass
     const situationYears = {};
-    const completion = {};
-    let totalAll = 0;
-    let filledAll = 0;
-
-    for (const stat of stats) {
-      const { situation, year } = stat._id;
+    const condExcelIds = new Set();
+    for (const iv of indicatorValues) {
+      const { situation, year } = iv;
       if (!situationYears[situation]) situationYears[situation] = [];
       if (year != null && !situationYears[situation].includes(year)) situationYears[situation].push(year);
-      completion[`${situation}_${year}`] = { total: stat.total, filled: stat.filled };
-      totalAll += stat.total;
-      filledAll += stat.filled;
+      if (iv.display_condition?.conditions) {
+        for (const cond of iv.display_condition.conditions) {
+          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+        }
+      }
     }
-
     for (const sit in situationYears) {
       situationYears[sit].sort((a, b) => a - b);
     }
 
-    // Find which regular actions use each situation/year combination
-    const configAction = await Action.findById(action_id).select('collectivity_id owner economic_actor_id').lean();
+    // Parallel: fetch regular actions + condition values at the same time
     let actionsBySituationYear = {};
     let yearMappingsBySituationYear = {};
+    const conditionValuesMap = new Map();
+
+    let regularActionsPromise = Promise.resolve([]);
     if (configAction) {
       const ownerFilter = { owner: configAction.owner };
       if (configAction.owner === 'economic_actor' && configAction.economic_actor_id) ownerFilter.economic_actor_id = configAction.economic_actor_id;
+      regularActionsPromise = Action.find({ collectivity_id: configAction.collectivity_id, type: { $ne: 'config' }, ...ownerFilter });
+    }
 
-      const regularActions = await Action.find({ collectivity_id: configAction.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }).select('name year_init exel_files_prev excel_files_expost');
+    let condValuesPromise = Promise.resolve([]);
+    if (condExcelIds.size > 0 && configAction) {
+      const condQuery = { collectivity_id: configAction.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: matchQuery.owner };
+      if (matchQuery.economic_actor_id) condQuery.economic_actor_id = matchQuery.economic_actor_id;
+      condValuesPromise = IndicatorValue.find(condQuery);
+    }
 
+    const [regularActions, condValues] = await Promise.all([regularActionsPromise, condValuesPromise]);
+
+    for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+
+    if (configAction) {
       const ensureMapping = (k) => {
         if (!yearMappingsBySituationYear[k]) yearMappingsBySituationYear[k] = { year_init: new Set(), year_ref: new Set(), year_prev: new Set(), year_expost: new Set() };
       };
@@ -114,7 +92,6 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
         for (const f of a.exel_files_prev || []) if (f.year_prev != null) (actionsBySituationYear[`prev_${f.year_prev}`] ||= []).push(a.name);
         for (const f of a.excel_files_expost || []) if (f.year_expost != null) (actionsBySituationYear[`expost_${f.year_expost}`] ||= []).push(a.name);
 
-        // yearMappingsBySituationYear — collect all unique year values from all actions per situation/year
         if (a.year_init != null) {
           ensureMapping(`init_${a.year_init}`);
           yearMappingsBySituationYear[`init_${a.year_init}`].year_init.add(a.year_init);
@@ -151,6 +128,58 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
       for (const k in yearMappingsBySituationYear) {
         const m = yearMappingsBySituationYear[k];
         yearMappingsBySituationYear[k] = { year_init: [...m.year_init], year_ref: [...m.year_ref], year_prev: [...m.year_prev], year_expost: [...m.year_expost] };
+      }
+    }
+
+    // Mirrors frontend shouldDisplayIndicator logic
+    const shouldDisplayIndicator = (iv, yearMappings) => {
+      if (!iv.display_condition?.conditions?.length) return true;
+      const results = iv.display_condition.conditions.map((cond) => {
+        const targetSituation = cond.excel_indicator_situation || iv.situation;
+        const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
+        return possibleYears.some((year) => {
+          const source = conditionValuesMap.get(`${cond.excel_indicator_id}_${targetSituation}_${year}`);
+          if (!source) return false;
+          const val = source.value?.[source.indicator_type];
+          let isMatch = false;
+          if (cond.type === 'equals') {
+            isMatch = val == cond.value;
+            if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort());
+          }
+          if (cond.type === 'contains') {
+            if (Array.isArray(val)) isMatch = val.includes(cond.value);
+            else if (typeof val === 'string') isMatch = val.includes(cond.value);
+          }
+          if (cond.type === 'greaterThan') isMatch = Number(val) > Number(cond.value);
+          if (cond.type === 'lessThan') isMatch = Number(val) < Number(cond.value);
+          if (cond.type === 'greaterOrEqual') isMatch = Number(val) >= Number(cond.value);
+          if (cond.type === 'lessOrEqual') isMatch = Number(val) <= Number(cond.value);
+          if (cond.type === 'notEmpty') isMatch = val !== null && val !== undefined && val !== '' && (!Array.isArray(val) || val.length > 0);
+          if (cond.type === 'isEmpty') isMatch = val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0);
+          if (cond.negate) isMatch = !isMatch;
+          return isMatch;
+        });
+      });
+      return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+    };
+
+    // Compute completion stats, excluding indicators hidden by display conditions
+    const completion = {};
+    let totalAll = 0;
+    let filledAll = 0;
+
+    for (const iv of indicatorValues) {
+      const key = `${iv.situation}_${iv.year}`;
+      const yearMappings = yearMappingsBySituationYear[key];
+      if (!shouldDisplayIndicator(iv, yearMappings)) continue;
+
+      if (!completion[key]) completion[key] = { total: 0, filled: 0 };
+      completion[key].total++;
+      totalAll++;
+
+      if (isIndicatorValueFilled(iv)) {
+        completion[key].filled++;
+        filledAll++;
       }
     }
 
