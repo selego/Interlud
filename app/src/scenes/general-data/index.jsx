@@ -174,7 +174,7 @@ export default function Index() {
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all border ${ showUnfilledOnly? 'bg-amber-50 border-amber-300 text-amber-700': 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             <FiFilter className="w-4 h-4" />
-            {showUnfilledOnly ? 'Afficher tout' : 'Non remplis uniquement'}
+            {showUnfilledOnly ? 'Afficher les valeurs remplies' : 'Non remplis uniquement'}
           </button>
         </div>
 
