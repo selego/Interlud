@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo } from "react-icons/fi"
+import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter } from "react-icons/fi"
+import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
@@ -22,6 +23,7 @@ export default function Completion({ action }) {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [showUnfilledOnly, setShowUnfilledOnly] = useState(true)
 
   const situationYears = stats?.situationYears || {}
 
@@ -175,6 +177,13 @@ export default function Completion({ action }) {
                 {" "}par <strong>{action.last_modif_by_name || action.last_modif_by_email || "Inconnu"}</strong>
               </span>
             </p>
+            <button
+              onClick={() => setShowUnfilledOnly(prev => !prev)}
+              className={`flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-lg transition-all border ${showUnfilledOnly ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              <FiFilter className="w-4 h-4" />
+              {showUnfilledOnly ? 'Afficher les valeurs remplies' : 'Non remplis uniquement'}
+            </button>
           </div>
         </div>
 
@@ -244,13 +253,15 @@ export default function Completion({ action }) {
           refreshKey={refreshKey}
           onStatsRefresh={fetchStats}
           yearMappings={stats?.yearMappingsBySituationYear?.[`${currentTab?.situation}_${currentTab?.year}`]}
+          showUnfilledOnly={showUnfilledOnly}
+          onToggleUnfilledOnly={() => setShowUnfilledOnly(false)}
         />
       </div>
     </div>
   )
 }
 
-function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings }) {
+function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -333,6 +344,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
     try {
       const params = { action_id: action._id, situation: activeSituation, limit: 10000 }
       if (activeYear) params.year = activeYear
+      if (showUnfilledOnly) params.unfilled_only = true
       const { ok, data, code } = await api.post("/indicator_value/search", params)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setIndicatorValues(data)
@@ -346,8 +358,8 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
-      // Optimistic update
-      setIndicatorValues(prev => prev.map(iv => iv._id === indicatorValue._id ? indicatorValue : iv))
+      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues(prev => prev.filter(iv => iv._id !== indicatorValue._id))
+      if (!showUnfilledOnly) setIndicatorValues(prev => prev.map(iv => iv._id === indicatorValue._id ? indicatorValue : iv))
       if (indicatorValue.indicator_excel_id) {
         setConditionValuesMap(prev => {
           const condKey = `${indicatorValue.indicator_excel_id}_${indicatorValue.situation}_${indicatorValue.year}`
@@ -368,7 +380,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
 
   useEffect(() => {
     loadData()
-  }, [action?._id, activeSituation, activeYear, refreshKey])
+  }, [action?._id, activeSituation, activeYear, refreshKey, showUnfilledOnly])
 
   useEffect(() => {
     setSelectedCategory(null)
@@ -385,6 +397,20 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
 
   if (isLoading && !indicatorValues.length) return <Loader />
 
+  if (!isLoading && showUnfilledOnly && displayedIndicatorValues.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <svg className="w-16 h-16 mb-4 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-lg font-medium text-gray-600">Tous les indicateurs sont remplis</p>
+        <button onClick={onToggleUnfilledOnly} className="mt-4 text-sm text-primary-green hover:underline">
+          Afficher tous les indicateurs
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col lg:flex-row gap-6">
       <div className="w-full lg:w-72 shrink-0">
@@ -400,6 +426,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
                 displayedIndicatorValues={displayedIndicatorValues}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
+                showUnfilledOnly={showUnfilledOnly}
               />
             )}
           </div>
