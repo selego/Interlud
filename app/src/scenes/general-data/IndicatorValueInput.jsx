@@ -42,13 +42,15 @@ function RadioInput({ value, onChange, options, className }) {
   }, [value])
 
   return (
-    <Select
-      value={localValue}
-      onChange={(v) => { setLocalValue(v); onChange(v) }}
-      options={options?.map(opt => ({ value: opt, label: opt })) || []}
-      placeholder="Sélectionner une option"
-      className={`text-gray-900 truncate max-w-[20em] ${className}`}
-    />
+    <div className={`max-w-[20em] ${className}`}>
+      <Select
+        value={localValue}
+        onChange={(v) => { setLocalValue(v); onChange(v) }}
+        options={options?.map(opt => ({ value: opt, label: opt })) || []}
+        placeholder="Sélectionner une option"
+        className="text-gray-900 truncate"
+      />
+    </div>
   )
 }
 
