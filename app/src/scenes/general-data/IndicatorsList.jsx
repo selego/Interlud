@@ -12,7 +12,7 @@ const getAllCategoryIndicators = (categoryData) => {
   return [...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat()]
 }
 
-export default function IndicatorsList({ displayedIndicatorValues, selectedCategory, onSelectCategory }) {
+export default function IndicatorsList({ displayedIndicatorValues, selectedCategory, onSelectCategory, showUnfilledOnly }) {
   const [openCategories, setOpenCategories] = useState(new Set())
 
   const categoriesGrouped = {}
@@ -52,10 +52,14 @@ export default function IndicatorsList({ displayedIndicatorValues, selectedCateg
                 openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />
               ) : <span className="w-4" />}
               <span className="flex-1">{categoryName}</span>
-              <div className="flex items-center gap-2">
-                <ProgressCircle percentage={calculateCompletion(getAllCategoryIndicators(categoryData))} size={20} />
-                <span className="text-xs text-gray-500">{calculateCompletion(getAllCategoryIndicators(categoryData))}%</span>
-              </div>
+              {showUnfilledOnly ? (
+                <span className="text-xs text-amber-600 font-medium whitespace-nowrap">{getAllCategoryIndicators(categoryData).length} restant(s)</span>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <ProgressCircle percentage={calculateCompletion(getAllCategoryIndicators(categoryData))} size={20} />
+                  <span className="text-xs text-gray-500">{calculateCompletion(getAllCategoryIndicators(categoryData))}%</span>
+                </div>
+              )}
             </div>
 
             {openCategories.has(categoryName) && (
@@ -69,10 +73,14 @@ export default function IndicatorsList({ displayedIndicatorValues, selectedCateg
                     onClick={() => onSelectCategory({ categoryName, subCategoryName })}
                   >
                     <span className="flex-1 text-gray-700">{subCategoryName}</span>
-                    <div className="flex items-center gap-2">
-                      <ProgressCircle percentage={calculateCompletion(subIndicators)} size={18} />
-                      <span className="text-xs text-gray-500">{calculateCompletion(subIndicators)}%</span>
-                    </div>
+                    {showUnfilledOnly ? (
+                      <span className="text-xs text-amber-600 font-medium whitespace-nowrap">{subIndicators.length} restant(s)</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <ProgressCircle percentage={calculateCompletion(subIndicators)} size={18} />
+                        <span className="text-xs text-gray-500">{calculateCompletion(subIndicators)}%</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

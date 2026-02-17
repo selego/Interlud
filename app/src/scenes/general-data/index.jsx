@@ -4,7 +4,8 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
-import { FiDownload, FiUpload, FiInfo } from "react-icons/fi"
+import { FiDownload, FiUpload, FiInfo, FiFilter } from "react-icons/fi"
+import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
 
@@ -23,6 +24,7 @@ export default function Index() {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [showUnfilledOnly, setShowUnfilledOnly] = useState(true)
 
   const activeConfigAction = configActions[activeConfigIndex]
   const situationYears = stats?.situationYears || {}
@@ -151,21 +153,30 @@ export default function Index() {
           <p className="text-sm text-blue-700">Ces données sont obligatoires pour les calculs des gains environnementaux des actions. Les données de parc type sont remplies avec des données par défaut d'Interlud.</p>
         </div>
 
-        {configActions.length > 1 && (
-          <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
-            {configActions.map((ca, index) => (
-              <button
-                key={ca._id}
-                className={`px-5 py-2 text-sm font-medium rounded-md transition-all ${
-                  activeConfigIndex === index ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveConfigIndex(index)}
-              >
-                {ca.name}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-3 mb-6">
+          {configActions.length > 1 && (
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+              {configActions.map((ca, index) => (
+                <button
+                  key={ca._id}
+                  className={`px-5 py-2 text-sm font-medium rounded-md transition-all ${
+                    activeConfigIndex === index ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveConfigIndex(index)}
+                >
+                  {ca.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setShowUnfilledOnly(prev => !prev)}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all border ${ showUnfilledOnly? 'bg-amber-50 border-amber-300 text-amber-700': 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            <FiFilter className="w-4 h-4" />
+            {showUnfilledOnly ? 'Afficher tout' : 'Non remplis uniquement'}
+          </button>
+        </div>
 
         {isStatsLoading ? (
           <Loader />
@@ -270,6 +281,8 @@ export default function Index() {
             refreshKey={refreshKey}
             onStatsRefresh={() => fetchStats(activeConfigAction._id)}
             yearMappings={stats?.yearMappingsBySituationYear?.[`${activeSituation}_${activeYear}`]}
+            showUnfilledOnly={showUnfilledOnly}
+            onToggleUnfilledOnly={() => setShowUnfilledOnly(false)}
           />
         </>)}
       </div>
@@ -277,7 +290,7 @@ export default function Index() {
   )
 }
 
-function IndicatorView({ activeConfigAction, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings }) {
+function IndicatorView({ activeConfigAction, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -360,6 +373,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
     try {
       const params = { action_id: activeConfigAction._id, situation: activeSituation, limit: 10000 }
       if (activeYear) params.year = activeYear
+      if (showUnfilledOnly) params.unfilled_only = true
       const { ok, data, code } = await api.post("/indicator_value/search", params)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setIndicatorValues(data)
@@ -373,7 +387,8 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
-      setIndicatorValues(prev => prev.map(iv => iv._id === indicatorValue._id ? indicatorValue : iv))
+      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues(prev => prev.filter(iv => iv._id !== indicatorValue._id))
+      if (!showUnfilledOnly) setIndicatorValues(prev => prev.map(iv => iv._id === indicatorValue._id ? indicatorValue : iv))
       if (indicatorValue.indicator_excel_id) {
         setConditionValuesMap(prev => {
           const condKey = `${indicatorValue.indicator_excel_id}_${indicatorValue.situation}_${indicatorValue.year}`
@@ -394,7 +409,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
 
   useEffect(() => {
     loadData()
-  }, [activeConfigAction?._id, activeSituation, activeYear, refreshKey])
+  }, [activeConfigAction?._id, activeSituation, activeYear, refreshKey, showUnfilledOnly])
 
   useEffect(() => {
     setSelectedCategory(null)
@@ -403,13 +418,25 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
   useEffect(() => {
     if (displayedIndicatorValues.length > 0) {
       const firstCat = displayedIndicatorValues[0]?.indicator_category_name
-      if (firstCat && (!selectedCategory || !displayedIndicatorValues.some(iv => iv.indicator_category_name === selectedCategory.categoryName))) {
-        setSelectedCategory({ categoryName: firstCat })
-      }
+      if (firstCat && (!selectedCategory || !displayedIndicatorValues.some(iv => iv.indicator_category_name === selectedCategory.categoryName))) setSelectedCategory({ categoryName: firstCat })
     }
   }, [displayedIndicatorValues.length])
 
   if (isLoading && !indicatorValues.length) return <Loader />
+
+  if (!isLoading && showUnfilledOnly && displayedIndicatorValues.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <svg className="w-16 h-16 mb-4 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-lg font-medium text-gray-600">Tous les indicateurs sont remplis</p>
+        <button onClick={onToggleUnfilledOnly} className="mt-4 text-sm text-primary-green hover:underline">
+          Afficher tous les indicateurs
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
@@ -426,6 +453,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
                 displayedIndicatorValues={displayedIndicatorValues}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
+                showUnfilledOnly={showUnfilledOnly}
               />
             )}
           </div>

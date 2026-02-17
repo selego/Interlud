@@ -483,17 +483,23 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.indicator_value_collectivity_ids) query.indicator_value_collectivity_id = { $in: req.body.indicator_value_collectivity_ids };
     if (req.body.indicator_ids) query.indicator_id = { $in: req.body.indicator_ids };
     if (req.body.indicator_sub_category_name !== undefined) {
-      if (req.body.indicator_sub_category_name === null) {
-        query.$and = [{ $or: [{ indicator_sub_category_name: null }, { indicator_sub_category_name: '' }, { indicator_sub_category_name: { $exists: false } }] }];
-      } else {
-        query.indicator_sub_category_name = req.body.indicator_sub_category_name;
-      }
+      if (req.body.indicator_sub_category_name === null) query.indicator_sub_category_name = { $exists: false };
+      query.indicator_sub_category_name = req.body.indicator_sub_category_name;
     }
     if (req.body.economic_actor_id) query.economic_actor_id = req.body.economic_actor_id;
 
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
       query.owner = 'economic_actor';
+    }
+
+    if (req.body.unfilled_only) {
+      query.$or = [
+        { indicator_type: 'number', 'value.number': null },
+        { indicator_type: 'text', 'value.text': { $in: [null, ''] } },
+        { indicator_type: 'radio', 'value.radio': { $in: [null, ''] } },
+        { indicator_type: 'checkbox', 'value.checkbox': { $size: 0 } },
+      ];
     }
 
     const limit = req.body.limit || 50;
