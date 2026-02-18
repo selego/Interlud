@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect } from "react"
 import { FiList, FiCheckCircle, FiTrendingUp, FiAlertTriangle, FiPlusCircle } from "react-icons/fi"
 import { useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
@@ -119,7 +119,7 @@ export default function Home() {
     }
   }
 
-  const onboardingSteps = useMemo(() => {
+  const onboardingSteps = (() => {
     if (actions.length === 0) return null
     const firstNonConfigAction = actions.find(a => a.type !== "config")
     const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.completion_expost || 0)) / 4): 0
@@ -129,7 +129,7 @@ export default function Home() {
       { label: 'Remplir Parc types dans "Mes données générales"', done: !!collectivity?.parc_types_onboarded, link: "/general-data" },
       { label: "Remplir votre action", done: firstActionCompletion > 0, link: firstNonConfigAction ? `/actions/${firstNonConfigAction._id}/dashboard` : "/actions" },
     ]
-  }, [collectivity, actions])
+  })()
 
   useEffect(() => {
     if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin") return navigate("/collectivity/join", { replace: true })
