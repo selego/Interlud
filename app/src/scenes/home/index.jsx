@@ -134,7 +134,6 @@ export default function Home() {
   useEffect(() => {
     if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin") return navigate("/collectivity/join", { replace: true })
     if (!collectivity) return
-
     fetchActions()
     fetchSynthese()
     fetchGlobalGains()
@@ -205,7 +204,7 @@ export default function Home() {
           <div className="xl:col-span-8">
             {!isOnboarded ? (
               <div className="h-full rounded-2xl p-6 text-white shadow-lg" style={{ background: 'linear-gradient(135deg, #2DAC6A 0%, #1D7E4F 100%)' }}>
-                <h3 className="text-lg font-bold mb-4">Bienvenue ! Voici les étapes pour démarrer</h3>
+                <h3 className="text-lg font-bold mb-4 text-white">Bienvenue ! Voici les étapes pour démarrer</h3>
                 <div className="space-y-3">
                   {(onboardingSteps || []).map((step, i) => (
                     <div
