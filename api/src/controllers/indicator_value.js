@@ -572,12 +572,30 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = await Action.findById(req.body.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    const indicatorValues = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS } });
+    // Build conditionValuesMap and yearMappings to filter by display_condition
+    const condExcelIds = new Set();
+    for (const iv of indicatorValues) {
+      if (iv.display_condition?.conditions) {
+        for (const cond of iv.display_condition.conditions) {
+          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+        }
+      }
+    }
 
-    const indicatorValues = await IndicatorValue.find({ action_id: action._id });
+    const ownerFilter = { owner: action.owner };
+    if (action.owner === 'economic_actor' && action.economic_actor_id) ownerFilter.economic_actor_id = action.economic_actor_id;
 
-    const indicators = await Indicator.find({ _id: { $in: [...new Set(indicatorValues.map((iv) => iv.indicator_id))] } });
+    const [regularActions, condValues, indicators] = await Promise.all([
+      Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }),
+      condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, ...ownerFilter }) : Promise.resolve([]),
+      Indicator.find({ _id: { $in: [...new Set(indicatorValues.map((iv) => iv.indicator_id))] } }),
+    ]);
+
+    const conditionValuesMap = new Map();
+    for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+    const yearMappingsBySituationYear = buildYearMappings(regularActions);
     const indicatorMap = new Map(indicators.map((ind) => [ind._id.toString(), ind]));
-
     const workbook = new ExcelJS.Workbook();
 
     const situations = [
@@ -610,6 +628,9 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
       const situationValues = indicatorValues.filter((iv) => iv.situation === situation.key);
 
       for (const indicatorValue of situationValues) {
+        const yearMappings = yearMappingsBySituationYear[`${indicatorValue.situation}_${indicatorValue.year}`];
+        if (!shouldDisplayIndicator(indicatorValue, yearMappings, conditionValuesMap)) continue;
+
         const indicator = indicatorMap.get(indicatorValue.indicator_id);
         if (!indicator) continue;
 
@@ -658,13 +679,29 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
 
     const fileBuffer = Buffer.from(fileBase64, 'base64');
 
-    // Collect all Excel file IDs to import to
-    const excelFileIds = [];
+    // Extract data directly from the uploaded Excel file for DB updates
+    const importedWorkbook = new ExcelJS.Workbook();
+    await importedWorkbook.xlsx.load(fileBuffer);
 
+    const extractedData = [];
+    for (const { sheetName, situation } of SITUATION_SHEETS) {
+      const sheet = importedWorkbook.getWorksheet(sheetName);
+      if (!sheet) continue;
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const excelIndicatorId = row.getCell(5).value;
+        const value = row.getCell(6).value;
+        if (excelIndicatorId) {
+          extractedData.push({ excel_indicator_id: String(excelIndicatorId).trim(), value: value ?? '', situation });
+        }
+      });
+    }
+
+    // Sync to SharePoint Excel files if any exist
+    const excelFileIds = [];
     for (const excelFile of action.exel_files_prev || []) {
       if (excelFile.excel_file_id) excelFileIds.push(excelFile.excel_file_id);
     }
-
     if (action.type === 'config') {
       const actionsWithSameYearInit = await Action.find({
         collectivity_id: action.collectivity_id,
@@ -672,18 +709,17 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
         _id: { $ne: action._id },
         'exel_files_prev.0.excel_file_id': { $exists: true },
       });
-
       for (const targetAction of actionsWithSameYearInit) {
         for (const excelFile of targetAction.exel_files_prev || []) {
           if (excelFile.excel_file_id) excelFileIds.push(excelFile.excel_file_id);
         }
       }
     }
+    if (excelFileIds.length > 0) {
+      await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
+    }
 
-    const importResults = await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
-
-    const extractedData = importResults.find((r) => r?.extractedData)?.extractedData || [];
-    if (!extractedData || extractedData.length === 0) return res.status(200).json({ ok: true });
+    if (!extractedData.length) return res.status(200).json({ ok: true });
     const indicators = await Indicator.find({ excel_indicator_id: { $in: [...new Set(extractedData.map((d) => d.excel_indicator_id))] } });
     const indicatorMap = new Map(indicators.map((ind) => [ind.excel_indicator_id, ind]));
 
@@ -702,6 +738,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
 
     const bulkOps = [];
     const logs = [];
+    const updatedValues = [];
 
     for (const data of extractedData) {
       const indicator = indicatorMap.get(data.excel_indicator_id);
@@ -736,7 +773,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             type_value: Array.isArray(data.value) ? 'array' : typeof data.value,
             date: new Date(),
             source: 'import_excel',
-            user_id: req.user.id,
+            user_id: req.user._id,
             user_name: req.user.name,
             user_email: req.user.email,
             collectivity_id: indicatorValue.collectivity_id,
@@ -749,14 +786,169 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             indicator_value_name: indicatorValue.name,
           }),
         );
-        bulkOps.push({ updateOne: { filter: { _id: indicatorValue._id }, update: { $set: { [`value.${indicatorValue.indicator_type}`]: data.value } } } });
+        bulkOps.push({ updateOne: { filter: { _id: indicatorValue._id }, update: { $set: { [`value.${indicatorValue.indicator_type}`]: data.value, value_source: 'import_excel' } } } });
+        updatedValues.push({ indicatorValue, indicator, newTypedValue: data.value });
       }
     }
 
     if (bulkOps.length > 0) await IndicatorValue.bulkWrite(bulkOps);
     if (logs.length > 0) await Log.insertMany(logs);
 
-    if (bulkOps.length > 0) await computeActionCompletion(action_id);
+    if (bulkOps.length > 0) {
+      // Update action last modification metadata (like PUT)
+      action.last_modif_by_id = req.user._id;
+      action.last_modif_by_name = req.user.name;
+      action.last_modif_by_email = req.user.email;
+      action.last_modif_date = new Date();
+      await action.save();
+
+      await computeActionCompletion(action_id);
+
+      // Cross-action sync: propagate updated values to other indicator values sharing same indicator_id/situation/year/owner (like PUT)
+      const syncLogs = [];
+      const excelUpdatePromises = [];
+      const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
+      const collectivityFilter = action.owner === 'economic_actor' ? {} : { collectivity_id: action.collectivity_id };
+
+      for (const { indicatorValue, indicator, newTypedValue } of updatedValues) {
+        if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) continue;
+
+        const newFullValue = { ...(indicatorValue.value?.toObject?.() || indicatorValue.value || {}), [indicatorValue.indicator_type]: newTypedValue };
+
+        // Sync to other indicator values with same indicator/situation/year
+        const syncQuery = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, source_type: indicatorValue.source_type, owner: indicatorValue.owner, _id: { $ne: indicatorValue._id } };
+        if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
+          syncQuery.economic_actor_id = indicatorValue.economic_actor_id;
+        } else {
+          syncQuery.collectivity_id = indicatorValue.collectivity_id;
+        }
+        const otherIVs = await IndicatorValue.find(syncQuery);
+
+        for (const otherIV of otherIVs) {
+          if (JSON.stringify(otherIV.value) === JSON.stringify(newFullValue)) continue;
+
+          const actualOldValue = otherIV.value?.[indicatorValue.indicator_type];
+          let logType = typeof newTypedValue;
+          if (newTypedValue instanceof Date) logType = 'date';
+          if (Array.isArray(newTypedValue)) logType = 'array';
+
+          syncLogs.push({
+            model_name: 'indicator_value',
+            name: otherIV.name,
+            field: 'value',
+            operation: 'update',
+            new_value: { [logType]: newTypedValue },
+            previous_value: { [logType]: actualOldValue },
+            type_value: logType,
+            date: new Date(),
+            source: 'synchronization',
+            user_id: req.user._id,
+            user_name: req.user.name,
+            user_email: req.user.email,
+            collectivity_id: otherIV.collectivity_id,
+            collectivity_name: otherIV.collectivity_name,
+            action_id: otherIV.action_id,
+            action_name: otherIV.action_name,
+            indicator_id: otherIV.indicator_id,
+            indicator_name: otherIV.indicator_name,
+            indicator_value_id: otherIV._id,
+            indicator_value_name: otherIV.name,
+          });
+        }
+
+        const updateQuery = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, owner: indicatorValue.owner };
+        if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
+          updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
+        } else {
+          updateQuery.collectivity_id = indicatorValue.collectivity_id;
+        }
+        await IndicatorValue.updateMany(updateQuery, { $set: { value: newFullValue } });
+
+        // Excel cell updates for synced actions (like PUT)
+        if (action.type === 'config') {
+          let actionsWithSameYear = [];
+          if (indicatorValue.situation === 'ref') actionsWithSameYear = await Action.find({ ...collectivityFilter, $or: [{ 'exel_files_prev.year_ref': indicatorValue.year }, { 'excel_files_expost.year_ref': indicatorValue.year }], type: { $ne: 'config' }, ...ownerFilter });
+          if (indicatorValue.situation === 'prev') actionsWithSameYear = await Action.find({ ...collectivityFilter, 'exel_files_prev.year_prev': indicatorValue.year, type: { $ne: 'config' }, ...ownerFilter });
+          if (indicatorValue.situation === 'expost') actionsWithSameYear = await Action.find({ ...collectivityFilter, 'excel_files_expost.year_expost': indicatorValue.year, type: { $ne: 'config' }, ...ownerFilter });
+          if (indicatorValue.situation === 'init') actionsWithSameYear = await Action.find({ ...collectivityFilter, year_init: indicatorValue.year, type: { $ne: 'config' }, 'exel_files_prev.0.excel_file_id': { $exists: true }, ...ownerFilter });
+
+          for (const targetAction of actionsWithSameYear) {
+            if (indicatorValue.situation === 'prev') {
+              for (const excelFile of targetAction.exel_files_prev || []) {
+                if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year)
+                  excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+              }
+            }
+            if (indicatorValue.situation === 'ref') {
+              for (const excelFile of targetAction.exel_files_prev || []) {
+                if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
+                  excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+              }
+              for (const excelFile of targetAction.excel_files_expost || []) {
+                if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
+                  excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+              }
+            }
+            if (indicatorValue.situation === 'expost') {
+              for (const excelFile of targetAction.excel_files_expost || []) {
+                if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year)
+                  excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+              }
+            }
+            if (indicatorValue.situation === 'init') {
+              for (const excelFile of targetAction.exel_files_prev || []) {
+                if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+              }
+              for (const excelFile of targetAction.excel_files_expost || []) {
+                if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+              }
+            }
+          }
+        }
+      }
+
+      await Promise.all(excelUpdatePromises);
+      if (syncLogs.length > 0) await Log.insertMany(syncLogs);
+
+      // Onboarding status update for config actions (like PUT)
+      if (action.type === 'config' && action.owner === 'collectivity' && (action.name === 'Données de base' || action.name === 'Parc types')) {
+        try {
+          const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, owner: 'collectivity' });
+
+          const condExcelIds = new Set();
+          for (const iv of allIVs) {
+            if (iv.display_condition?.conditions) {
+              for (const cond of iv.display_condition.conditions) {
+                if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+              }
+            }
+          }
+
+          const [regularActions, condValues] = await Promise.all([
+            Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
+            condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' }) : Promise.resolve([]),
+          ]);
+
+          const conditionValuesMap = new Map();
+          for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+
+          const yearMappingsBySituationYear = buildYearMappings(regularActions);
+
+          let total = 0;
+          let filled = 0;
+          for (const iv of allIVs) {
+            if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
+            total++;
+            if (isIndicatorValueFilled(iv)) filled++;
+          }
+
+          const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
+          await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: total > 0 && filled === total } });
+        } catch (e) {
+          capture(e);
+        }
+      }
+    }
 
     res.status(200).json({ ok: true });
   } catch (error) {
