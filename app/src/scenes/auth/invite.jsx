@@ -123,7 +123,6 @@ const Invite = () => {
                 onChange={(e) => setValues({ ...values, name: e.target.value })}
                 placeholder="Votre nom"
                 required
-                disabled
               />
               {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name}</p>}
             </div>
