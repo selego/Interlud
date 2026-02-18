@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect } from "react"
 import { FiList, FiCheckCircle, FiTrendingUp, FiAlertTriangle, FiPlusCircle } from "react-icons/fi"
-import { Navigate, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import api from "@/services/api"
 import toast from "react-hot-toast"
@@ -10,7 +10,6 @@ import ProgressCircle from "@/components/ProgressCircle"
 import DebouncedInput from "@/components/debounceInput"
 import Loader from "@/components/loader"
 import Modal from "@/components/modal"
-import Onboarding from "./Onboarding"
 
 const getStatutBadgeClass = (statut) => {
   if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
@@ -40,6 +39,30 @@ const formatEnergie = (value) => {
   if (value === 0 || isNaN(value)) return '0 GWh';
   return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} GWh`;
 };
+
+function LockedChart() {
+  return (
+    <div className="relative h-full">
+      <div className="card-shadow rounded-2xl p-6 min-h-[400px] bg-gray-50 filter blur-[5px] pointer-events-none select-none">
+        <div className="h-4 w-40 bg-gray-200 rounded mb-2"></div>
+        <div className="h-3 w-28 bg-gray-100 rounded mb-6"></div>
+        <div className="flex items-end gap-3 h-48 mt-4">
+          {[40, 65, 50, 80, 60, 75, 45, 90, 55, 70].map((h, i) => (
+            <div key={i} className="flex-1 bg-gray-200 rounded-t" style={{ height: `${h}%` }}></div>
+          ))}
+        </div>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg px-6 py-4 text-center max-w-xs">
+          <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          <p className="text-gray-700 font-semibold text-sm">Complétez les situations d'une action pour accéder au tableau de bord</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Home() {
   const [actions, setActions] = useState([])
@@ -96,11 +119,21 @@ export default function Home() {
     }
   }
 
-  useEffect(() => {
-    if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin")
-      return navigate("/collectivity/join", { replace: true })
-    if (!collectivity) return
+  const onboardingSteps = (() => {
+    if (actions.length === 0) return null
+    const firstNonConfigAction = actions.find(a => a.type !== "config")
+    const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.completion_expost || 0)) / 4): 0
+    return [
+      { label: "Créer votre première action", done: actions.length > 0, link: "/actions" },
+      { label: 'Remplir Données de base dans "Mes données générales"', done: !!collectivity?.basedata_onboarded, link: "/general-data" },
+      { label: 'Remplir Parc types dans "Mes données générales"', done: !!collectivity?.parc_types_onboarded, link: "/general-data" },
+      { label: "Remplir votre action", done: firstActionCompletion > 0, link: firstNonConfigAction ? `/actions/${firstNonConfigAction._id}/dashboard` : "/actions" },
+    ]
+  })()
 
+  useEffect(() => {
+    if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin") return navigate("/collectivity/join", { replace: true })
+    if (!collectivity) return
     fetchActions()
     fetchSynthese()
     fetchGlobalGains()
@@ -108,10 +141,38 @@ export default function Home() {
 
   if (!collectivity) return <Loader />
 
-  if (!collectivity.is_onboarded) {
+  const isOnboarded = onboardingSteps !== null && onboardingSteps.every(s => s.done)
+
+  if (!isOnboarded && actions.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50/50 p-8">
-         <Onboarding collectivity={collectivity} />
+      <div className="">
+        <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
+          <div className="mb-8">
+            <h1 className="text-font-primary text-4xl">
+              Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
+            </h1>
+          </div>
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-16 h-16 rounded-full bg-primary-green/10 flex items-center justify-center mb-6">
+              <svg className="w-8 h-8 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Créez votre première action</h2>
+            <p className="text-gray-500 text-center max-w-md mb-8">
+              Commencez par créer une action pour initialiser les données de votre collectivité.
+            </p>
+            <button
+              onClick={() => navigate("/actions")}
+              className="button-primary px-6 py-3 flex items-center gap-2"
+            >
+              Créer une action
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -126,20 +187,60 @@ export default function Home() {
                 Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
               </h1>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={ exportExcelFile }
-                className="button-primary"
-              >
-                Export Excel
-              </button>
-            </div>
+            {isOnboarded && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={ exportExcelFile }
+                  className="button-primary"
+                >
+                  Export Excel
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
           <div className="xl:col-span-8">
-            <KeyIndicatorsCard globalGains={globalGains} />
+            {!isOnboarded ? (
+              <div className="h-full rounded-2xl p-6 text-white shadow-lg" style={{ background: 'linear-gradient(135deg, #2DAC6A 0%, #1D7E4F 100%)' }}>
+                <h3 className="text-lg font-bold mb-4 text-white">Bienvenue ! Voici les étapes pour démarrer</h3>
+                <div className="space-y-3">
+                  {(onboardingSteps || []).map((step, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors ${step.done ? 'bg-white/10' : 'bg-white/20 hover:bg-white/25 cursor-pointer'}`}
+                      onClick={() => !step.done && navigate(step.link)}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${step.done ? 'bg-white' : 'border-2 border-white/60'}`}>
+                        {step.done && (
+                          <svg className="w-4 h-4 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className={`text-sm font-medium ${step.done ? 'line-through opacity-70' : ''}`}>
+                        {step.label}
+                      </span>
+                      {!step.done && (
+                        <svg className="w-4 h-4 ml-auto opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                {globalGains && <KeyIndicatorsCard globalGains={globalGains} />}
+                {!globalGains && (
+                  <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
+                    <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <div className="xl:col-span-4">
             <ActionsDistribution synthese={synthese} />
@@ -147,11 +248,26 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-12">
-           <div className="xl:col-span-6">
-            <EvolutionChart globalGains={globalGains} />
+           <div className="xl:col-span-6 relative">
+            {isOnboarded ? (
+              <>
+                {globalGains && <EvolutionChart globalGains={globalGains} />}
+                {!globalGains && (
+                  <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
+                    <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <LockedChart />
+            )}
            </div>
-           <div className="xl:col-span-6">
-            <ActionContributionSection collectivity={collectivity} />
+           <div className="xl:col-span-6 relative">
+            {isOnboarded ? (
+              <ActionContributionSection collectivity={collectivity} />
+            ) : (
+              <LockedChart />
+            )}
            </div>
         </div>
 
@@ -192,17 +308,17 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {actions.length === 0 ? (
               <div className="col-span-full">
-                <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div className="flex flex-col items-center justify-center gap-4 text-center py-8">
                   <div className="text-lg font-semibold text-gray-700">Aucune action dans cette collectivité</div>
-                  <p className="text-sm text-gray-500">Créez votre première action pour démarrer.</p>
+                  <p className="text-sm text-gray-500">Ajoutez des actions depuis la page actions.</p>
                   <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => navigate("/actions")}
                     className="button-primary px-5 py-3 flex items-center gap-2"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    <span>Voir les actions</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                    <span>Créer votre première action</span>
                   </button>
                 </div>
               </div>
@@ -467,26 +583,9 @@ function EvolutionChart({ globalGains }) {
 }
 
 function CardAction({ action }) {
-  const [indicatorValues, setIndicatorValues] = useState([])
   const navigate = useNavigate()
-
-  const fetchIndicatorValues = async () => {
-    const { ok, data, code } = await api.post("/indicator_value/search", { action_id: action._id, limit: 10000 })
-    if (!ok) return toast.error(code || "Une erreur est survenue")
-    setIndicatorValues(data)
-  }
-
-  const isIndicatorValueFilled = (indicatorValue) => {
-    const val = indicatorValue.value?.[indicatorValue.indicator_type]
-    if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0
-    return val !== null && val !== undefined && val !== ""
-  }
-
-  useEffect(() => {
-    fetchIndicatorValues()
-  }, [action._id])
-
   const statutBadge = getStatutBadgeClass(action.status)
+  const completion = Math.round(((action.completion_init || 0) + (action.completion_ref || 0) + (action.completion_prev || 0) + (action.completion_expost || 0)) / 4)
 
   return (
     <div key={action._id} className="card-shadow p-6 h-full flex flex-col" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
@@ -500,9 +599,9 @@ function CardAction({ action }) {
       <div className="mt-auto pt-3 flex items-center justify-between">
         <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">Voir l'action</button>
         <div className="flex items-center gap-1">
-          <ProgressCircle percentage={Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)} size={20} />
+          <ProgressCircle percentage={completion} size={20} />
           <span className="text-xs text-gray-600">
-            Complétée à <strong>{Math.round((indicatorValues.filter(isIndicatorValueFilled).length / indicatorValues.length) * 100)}%</strong>
+            Complétée à <strong>{completion}%</strong>
           </span>
         </div>
       </div>
@@ -548,8 +647,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           collectivity_name: collectivity.name
         }
 
-        const { ok, data } = await api.post("/action/create_action_with_default_indicators", payload)
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
+        const { ok, data, code } = await api.post("/action/", payload)
+        if (!ok) return toast.error(code || "Une erreur est survenue")
         navigate(`/actions/${data._id}/settings`)
       } catch (error) {
         toast.error(error || "Une erreur est survenue")
@@ -662,10 +761,10 @@ function ActionContributionSection({ collectivity }) {
     }
   };
 
-  useEffect(() => {
-    fetchActionGains();
-    fetchCollectivityActions();
-  }, [collectivity]);
+  // useEffect(() => {
+  //   fetchActionGains();
+  //   fetchCollectivityActions();
+  // }, [collectivity]);
 
   if (isLoading) {
     return (

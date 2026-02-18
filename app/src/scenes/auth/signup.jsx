@@ -69,7 +69,7 @@ export default () => {
               >
                 Acteur public
               </button>
-              <button
+              {/* <button
                 type="button"
                 className={`w-full px-4 py-2 text-sm font-medium border rounded-lg transition-colors ${
                   accountType === "economic_actor" ? "bg-primary-green text-white border-primary-green" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
@@ -77,7 +77,7 @@ export default () => {
                 onClick={() => setAccountType("economic_actor")}
               >
                 Acteur économique
-              </button>
+              </button> */}
             </div>
           </div>
 

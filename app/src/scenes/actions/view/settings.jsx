@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
-import { FiList, FiSettings, FiClock, FiArrowLeft } from "react-icons/fi";
+import { FiList, FiSettings, FiClock, FiArrowLeft, FiPlus } from "react-icons/fi";
 import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
@@ -120,8 +120,8 @@ export default function Settings({ action: initialAction, onSave }) {
 
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
-      {activeTab === "settings" && ( <ActionSettingsTab  action={action} onUpdate={handleUpdate} onDelete={handleDelete} />)}
-      {activeTab === "history" && <History action={action} />}
+      {activeTab === "settings" && ( <ActionSettingsTab action={action} onUpdate={handleUpdate} onDelete={handleDelete} onActionUpdate={(updatedAction) => { setAction(updatedAction); if (onSave) onSave(); }} />)}
+      {activeTab === "history" && <History action={action} onSave={onSave} />}
     </div>
     </div>
   )
@@ -130,7 +130,6 @@ export default function Settings({ action: initialAction, onSave }) {
 function IndicatorsTab({ action }) {
   const [indicatorValues, setIndicatorValues] = useState([]);
   const [indicators, setIndicators] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [filters, setFilters] = useState({ page: 0, limit: 10 });
   const [total, setTotal] = useState(0);
 
@@ -139,7 +138,6 @@ function IndicatorsTab({ action }) {
       const { ok, data, code } = await api.post(`/indicator_value/search`, { action_id: action._id, limit: 10000 });
       if (!ok) return toast.error(code || "Une erreur est survenue");
       setIndicatorValues(data);
-      console.log(data);
     } catch (error) {
       toast.error("Une erreur est survenue");
     }
@@ -205,12 +203,58 @@ function IndicatorsTab({ action }) {
         onPrevious={() => setFilters({ ...filters, page: filters.page - 1 })}
       />
 
-      <AddIndicatorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} action={action} onAdd={fetchIndicatorValues} />
     </div>
   );
 }
 
-function ActionSettingsTab({ action, onUpdate, onDelete }) {
+function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
+  const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
+  const [newPrevYear, setNewPrevYear] = useState("");
+  const [isAddingPrev, setIsAddingPrev] = useState(false);
+  const [isAddExpostModalOpen, setIsAddExpostModalOpen] = useState(false);
+  const [newExpostYear, setNewExpostYear] = useState("");
+  const [isAddingExpost, setIsAddingExpost] = useState(false);
+
+  const addPrevisionnel = async () => {
+    if (!newPrevYear) return toast.error("Veuillez sélectionner une année");
+    const existingYears = (action.exel_files_prev || []).map(f => f.year_prev);
+    if (existingYears.includes(parseInt(newPrevYear))) return toast.error("Cette année existe déjà");
+
+    try {
+      setIsAddingPrev(true);
+      const { ok, data, code } = await api.post("/action/add_year_previsionnel", { action_id: action._id, year_prev: parseInt(newPrevYear) });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Situation prévisionnelle ajoutée");
+      setIsAddPrevModalOpen(false);
+      setNewPrevYear("");
+      if (onActionUpdate) onActionUpdate(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsAddingPrev(false);
+    }
+  };
+
+  const addExpost = async () => {
+    if (!newExpostYear) return toast.error("Veuillez sélectionner une année");
+    const existingYears = (action.excel_files_expost || []).map(f => f.year_expost);
+    if (existingYears.includes(parseInt(newExpostYear))) return toast.error("Cette année existe déjà");
+
+    try {
+      setIsAddingExpost(true);
+      const { ok, data, code } = await api.post("/action/add_year_expost", { action_id: action._id, year_expost: parseInt(newExpostYear) });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Situation ex-post ajoutée");
+      setIsAddExpostModalOpen(false);
+      setNewExpostYear("");
+      if (onActionUpdate) onActionUpdate(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsAddingExpost(false);
+    }
+  };
+
 
   return (
     <div className="card-shadow">
@@ -301,6 +345,66 @@ function ActionSettingsTab({ action, onUpdate, onDelete }) {
             />
             <span className="text-sm font-medium text-gray-800">Subventionné par le programme</span>
           </label>
+        </div>
+      </div>
+
+      <div className="pt-6 mt-6 border-t border-light-border px-6">
+        <h2 className="text-lg font-semibold mb-4">Situations</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Année initiale</label>
+            <div className="w-full input-primary bg-gray-50">{action.year_init || "-"}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-2">Année référence</label>
+            <div className="w-full input-primary bg-gray-50">{action.year_ref || "-"}</div>
+          </div>
+        </div>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold">Années ex-post</label>
+            <button
+              onClick={() => setIsAddExpostModalOpen(true)}
+              className="text-sm text-primary-green hover:underline flex items-center gap-1"
+            >
+              <FiPlus size={14} />
+              Ajouter
+            </button>
+          </div>
+          {(action.excel_files_expost || []).map(f => f.year_expost).sort((a, b) => a - b).length === 0 ? (
+            <div className="w-full input-primary bg-gray-50 text-gray-400">Aucune année ex-post</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(action.excel_files_expost || []).map(f => f.year_expost).sort((a, b) => a - b).map((year) => (
+                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
+                  {year}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold">Années prévisionnelles</label>
+            <button
+              onClick={() => setIsAddPrevModalOpen(true)}
+              className="text-sm text-primary-green hover:underline flex items-center gap-1"
+            >
+              <FiPlus size={14} />
+              Ajouter
+            </button>
+          </div>
+          {(action.exel_files_prev || []).map(f => f.year_prev).sort((a, b) => a - b).length === 0 ? (
+            <div className="w-full input-primary bg-gray-50 text-gray-400">Aucune année prévisionnelle</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(action.exel_files_prev || []).map(f => f.year_prev).sort((a, b) => a - b).map((year) => (
+                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
+                  {year}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -489,85 +593,58 @@ function ActionSettingsTab({ action, onUpdate, onDelete }) {
           </button>
         </div>
       </div>
+
+      <Modal isOpen={isAddPrevModalOpen} onClose={() => setIsAddPrevModalOpen(false)} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Ajouter une situation prévisionnelle</h2>
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Année prévisionnelle <span className="text-red-500">*</span>
+            </label>
+            <Select
+              options={Array.from({ length: 30 }, (_, i) => {
+                const year = new Date().getFullYear() + i;
+                return { value: year.toString(), label: year.toString() };
+              })}
+              value={newPrevYear}
+              onChange={(value) => setNewPrevYear(value)}
+              placeholder="Sélectionner une année"
+              constrained={true}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={addPrevisionnel} disabled={isAddingPrev} className="button-primary">
+              {isAddingPrev ? "Création..." : "Créer"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isAddExpostModalOpen} onClose={() => setIsAddExpostModalOpen(false)} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Ajouter une situation ex-post</h2>
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Année ex-post <span className="text-red-500">*</span>
+            </label>
+            <Select
+              options={Array.from({ length: 30 }, (_, i) => {
+                const year = new Date().getFullYear() + i;
+                return { value: year.toString(), label: year.toString() };
+              })}
+              value={newExpostYear}
+              onChange={(value) => setNewExpostYear(value)}
+              placeholder="Sélectionner une année"
+              constrained={true}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={addExpost} disabled={isAddingExpost} className="button-primary">
+              {isAddingExpost ? "Création..." : "Créer"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
-
-const AddIndicatorModal = ({ isOpen, onClose, onAdd, action }) => {
-  const [allIndicators, setAllIndicators] = useState([]);
-  const [selectedIndicator, setSelectedIndicator] = useState(null);
-
-  useEffect(() => {
-    fetchAllIndicators();
-  }, []);
-
-  const fetchAllIndicators = async () => {
-    try {
-      const { ok, data, code } = await api.post(`/indicator/search`, {});
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setAllIndicators(data);
-    } catch (error) {
-      toast.error("Une erreur est survenue");
-    }
-  };
-
-  const handleAddIndicator = async () => {
-    if (!selectedIndicator) return toast.error("Veuillez sélectionner un indicateur");
-
-    try {
-      const { ok, code } = await api.post(`/action/initialize_indicator_values`, {
-        action_id: action._id,
-        action_name: action.name,
-        collectivity_id: action.collectivity_id,
-        collectivity_name: action.collectivity_name,
-        indicator_id: selectedIndicator._id,
-        indicator_name: selectedIndicator.name,
-        indicator_type: selectedIndicator.value_type,
-        indicator_value_possibilities: selectedIndicator.value_possibilities
-      });
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-
-      toast.success("Indicateur ajouté avec succès");
-      setSelectedIndicator(null);
-      onClose();
-      onAdd();
-    } catch (error) {
-      toast.error(error.message || "Indicateur déjà associé à cette action");
-    }
-  };
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => { onClose(); setSelectedIndicator(null)}}
-      className="max-w-lg"
-    >
-      <div className="p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Ajouter un indicateur</h2>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un indicateur</label>
-          <Select 
-            value={selectedIndicator?._id}
-            onChange={(value) => {
-              const indicator = allIndicators.find(i => i._id === value);
-              setSelectedIndicator(indicator);
-            }}
-            options={[
-              { value: "", label: "-- Choisir un indicateur --" },
-              ...allIndicators.map((indicator) => ({
-                value: indicator._id,
-                label: indicator.name
-              }))
-            ]}
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <button onClick={handleAddIndicator} className="button-primary">
-            Ajouter
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-};

@@ -27,7 +27,7 @@ const formatSource = source => ({
   'synchronization': 'Synchronisation'
 }[source] || source || '-')
 
-export default function History({ action }) {
+export default function History({ action, onSave }) {
   const [logs, setLogs] = useState([])
   const fetchLogs = async () => {
     try {
@@ -36,6 +36,25 @@ export default function History({ action }) {
       setLogs(data)
     } catch (error) {
       toast.error("Une erreur est survenue lors du chargement des logs")
+    }
+  }
+
+  const handleRestore = async (log) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir restaurer l'ancienne valeur ?")) return
+    try {
+      if (log.model_name === "indicator_value" && log.indicator_value_id) {
+        const { ok, code } = await api.put(`/indicator_value/${log.indicator_value_id}`, { value: { [log.type_value]: log.previous_value?.[log.type_value] }, source: 'restore' })
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+      }
+      if (log.model_name === "action" && log.action_id) {
+        const { ok, code } = await api.put(`/action/${log.action_id}`, { [log.field]: log.previous_value?.[log.type_value], source: 'restore' })
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+      }
+      toast.success("Valeur restaurée")
+      await fetchLogs()
+      if (onSave) onSave()
+    } catch (error) {
+      toast.error("Une erreur est survenue lors de la restauration")
     }
   }
 
@@ -74,11 +93,6 @@ export default function History({ action }) {
                         <span className="text-red-600 font-medium">{formatValue(log.previous_value?.[log.type_value])} (supprimé)</span>
                       )}
                     </div>
-                    {log.collectivity_name && (
-                      <div className="text-xs text-gray-500">
-                        Collectivité : <span className="font-medium text-gray-700">{log.collectivity_name}</span>
-                      </div>
-                    )}
                     {log.source && (
                       <div className="text-xs text-gray-500 mt-1">
                         Source : <span className="font-medium text-gray-700">{formatSource(log.source)}</span>
@@ -90,6 +104,14 @@ export default function History({ action }) {
                   <div className="text-sm font-medium text-gray-900">{formatDate(log.date)}</div>
                   {log.user_name && (
                     <div className="text-xs text-gray-500 mt-1">{log.user_name}</div>
+                  )}
+                  {log.operation === "update" && (
+                    <button
+                      onClick={() => handleRestore(log)}
+                      className="mt-2 text-xs text-blue-600 hover:underline"
+                    >
+                      Restaurer
+                    </button>
                   )}
                 </div>
               </div>

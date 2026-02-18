@@ -194,16 +194,6 @@ const InviteMemberModal = ({ isOpen, onClose, collectivity, onSuccess }) => {
         </div>
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={() => {
-              setEmail("")
-              onClose()
-            }}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            disabled={loading}
-          >
-            Annuler
-          </button>
           <button onClick={handleInvite} className="button-primary" disabled={!email.trim() || loading}>
             {loading ? "Envoi en cours..." : "Envoyer l'invitation"}
           </button>

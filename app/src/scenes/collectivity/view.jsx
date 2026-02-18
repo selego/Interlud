@@ -129,53 +129,14 @@ function UserInfoTab({ user, setUser }) {
       if (!collectivity?._id || !user?.economic_actor_id) return
       if (user.collectivities?.find((c) => c.id === collectivity._id)?.role !== "economic_actor") return
 
-      const economicActor = await getEconomicActor()
-      if (!economicActor || economicActor?.collectivities?.some((c) => c.id === collectivity._id)) return
+      const { ok, data: economicActor, code } = await api.get(`/economic_actor/${user.economic_actor_id}`)
+      if (!ok || !economicActor) return toast.error(code || "Une erreur est survenue")
+      if (economicActor?.collectivities?.some((c) => c.id === collectivity._id)) return
+
       const payload = { collectivities: [...(economicActor?.collectivities || []), { id: collectivity._id, name: collectivity.name, joined_at: new Date() }] }
-      const { ok } = await api.put(`/economic_actor/${economicActor._id}`, payload)
-      if (!ok) return toast.error("Une erreur est survenue")
-
-      await duplicateActionsForEconomicActor()
-      await duplicateIndicatorValuesForEconomicActor()
+      const { ok: updateOk, code: updateCode } = await api.put(`/economic_actor/${economicActor._id}`, payload)
+      if (!updateOk) return toast.error(updateCode || "Une erreur est survenue")
     } catch (e) {
-      console.log(e)
-      toast.error("Une erreur est survenue")
-    }
-  }
-
-  const getEconomicActor = async () => {
-    try {
-      const { ok, data } = await api.get(`/economic_actor/${user.economic_actor_id}`)
-      if (!ok) return null
-      return data
-    } catch (e) {
-      console.log(e)
-      toast.error("Une erreur est survenue")
-    }
-  }
-
-  const duplicateActionsForEconomicActor = async () => {
-    try {
-      const { ok } = await api.post("/action/duplicate_for_economic_actor", {
-        collectivity,
-        economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }
-      })
-      if (!ok) return toast.error("Une erreur est survenue")
-    } catch (e) {
-      console.log(e)
-      toast.error("Une erreur est survenue")
-    }
-  }
-
-  const duplicateIndicatorValuesForEconomicActor = async () => {
-    try {
-      const { ok } = await api.post("/indicator_value/duplicate_for_economic_actor", {
-        collectivity,
-        economic_actor: { _id: user.economic_actor_id, name: user.economic_actor_name }
-      })
-      if (!ok) return toast.error("Une erreur est survenue")
-    } catch (e) {
-      console.log(e)
       toast.error("Une erreur est survenue")
     }
   }

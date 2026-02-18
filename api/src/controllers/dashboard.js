@@ -9,7 +9,7 @@ router.post('/synthese', passport.authenticate(['admin', 'user'], { session: fal
   try {
     const { collectivity_id } = req.body;
 
-    let query = { collectivity_id, owner: 'collectivity' };
+    let query = { collectivity_id, owner: 'collectivity', type: { $ne: 'config' } };
 
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;

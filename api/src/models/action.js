@@ -4,8 +4,15 @@ const MODELNAME = 'action';
 
 const Schema = new mongoose.Schema(
   {
-    type: { type: String, enum: ['custom', 'reference', 'global'], trim: true },
+    type: { type: String, enum: ['custom', 'reference', 'global', 'config'], trim: true },
     excel_worksheetname: { type: String, trim: true },
+
+    exel_files_prev: [{ year_prev: { type: Number, trim: true }, year_ref: { type: Number, trim: true }, excel_file_id: { type: String, trim: true } }],
+    excel_files_expost: [{ year_expost: { type: Number, trim: true }, year_ref: { type: Number, trim: true }, excel_file_id: { type: String, trim: true } }],
+    year_init: { type: Number, trim: true },
+    year_ref: { type: Number, trim: true },
+    year_prev: { type: Number, trim: true },
+    year_expost: { type: Number, trim: true },
 
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },
@@ -69,8 +76,13 @@ const Schema = new mongoose.Schema(
     last_modif_by_name: { type: String, trim: true },
     last_modif_by_email: { type: String, trim: true },
     last_modif_date: { type: Date, default: Date.now },
+
+    completion_init: { type: Number, default: 0 },
+    completion_ref: { type: Number, default: 0 },
+    completion_prev: { type: Number, default: 0 },
+    completion_expost: { type: Number, default: 0 },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);

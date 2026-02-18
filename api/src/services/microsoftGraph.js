@@ -33,25 +33,50 @@ async function getAccessToken() {
   return res.access_token;
 }
 
-async function graphFetch(endpoint, options = {}) {
-  const token = await getAccessToken();
-  const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 2000;
 
-  if (!response.ok) {
+function isRetryableError(status, errorMessage) {
+  if (RETRYABLE_STATUS_CODES.includes(status)) return true;
+  if (errorMessage && errorMessage.includes("We're sorry")) return true;
+  return false;
+}
+
+async function graphFetch(endpoint, options = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const token = await getAccessToken();
+    const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (response.ok) {
+      if (response.status === 202) return response;
+      return response.json();
+    }
+
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Graph API error: ${response.status}`);
+    const errorMessage = error.error?.message || `Graph API error: ${response.status}`;
+
+    if (attempt < MAX_RETRIES && isRetryableError(response.status, errorMessage)) {
+      const retryAfter = response.headers.get('Retry-After');
+      const delay = retryAfter ? parseInt(retryAfter) * 1000 : BASE_DELAY_MS * Math.pow(2, attempt);
+      console.log(`[Graph API] Tentative ${attempt + 1}/${MAX_RETRIES} échouée (${response.status}), retry dans ${delay}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
+    lastError = new Error(errorMessage);
   }
 
-  if (response.status === 202) return response;
-
-  return response.json();
+  throw lastError;
 }
 
 async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation) {
@@ -75,38 +100,103 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   });
 }
 
-async function duplicateExcelFile(newFileName) {
+// Update multiple cells in batch - updates is array of { excel_indicator_id, value }
+async function updateExcelCellsBatch(fileId, updates, situation) {
+  if (!updates || updates.length === 0) return;
+
+  const worksheetName = WORKSHEETS[situation];
+  if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
-  const sourceFile = await graphFetch(`/sites/${siteId}/drive/items/${masterExcelFileId}`);
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
+  const rows = usedRange.values || [];
+  const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
-  const copyResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${masterExcelFileId}/copy`, {
+  // Build a map of indicator_id -> row index
+  const indicatorRowMap = new Map();
+  rows.forEach((row, i) => {
+    if (row[4]) indicatorRowMap.set(String(row[4]).trim(), i);
+  });
+
+  // Find all updates that match existing rows
+  const matchedUpdates = updates
+    .map((u) => {
+      const rowIndex = indicatorRowMap.get(String(u.excel_indicator_id).trim());
+      if (rowIndex === undefined) return null;
+      const cellValue = Array.isArray(u.value) ? u.value.join(', ') : (u.value ?? '');
+      return { rowIndex, cellValue };
+    })
+    .filter(Boolean);
+
+  if (matchedUpdates.length === 0) return;
+
+  // Find min and max row indices to create a contiguous range
+  const minRowIndex = Math.min(...matchedUpdates.map((u) => u.rowIndex));
+  const maxRowIndex = Math.max(...matchedUpdates.map((u) => u.rowIndex));
+
+  // Build the update map
+  const updateMap = new Map(matchedUpdates.map((u) => [u.rowIndex, u.cellValue]));
+
+  // Build values array - keep existing values for rows not in updates
+  const rangeValues = [];
+  for (let i = minRowIndex; i <= maxRowIndex; i++) {
+    rangeValues.push([updateMap.has(i) ? updateMap.get(i) : (rows[i]?.[5] ?? '')]);
+  }
+
+  // Update the range in one call
+  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+    method: 'PATCH',
+    body: JSON.stringify({ values: rangeValues }),
+  });
+}
+
+async function createFolder(folderName, parentFolderId = null) {
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  let endpoint;
+  if (parentFolderId) {
+    endpoint = `/sites/${siteId}/drive/items/${parentFolderId}/children`;
+  } else {
+    endpoint = `/sites/${siteId}/drive/root/children`;
+  }
+
+  const folder = await graphFetch(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: folderName,
+      folder: {},
+      '@microsoft.graph.conflictBehavior': 'rename',
+    }),
+  });
+
+  return folder.id;
+}
+
+async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFileId = null) {
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const fileIdToCopy = sourceFileId || masterExcelFileId;
+  const sourceFile = await graphFetch(`/sites/${siteId}/drive/items/${fileIdToCopy}`);
+  const parentReference = targetFolderId ? { driveId: sourceFile.parentReference.driveId, id: targetFolderId } : { driveId: sourceFile.parentReference.driveId, id: sourceFile.parentReference.id };
+
+  const copyResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileIdToCopy}/copy`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${await getAccessToken()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      name: newFileName,
-      parentReference: {
-        driveId: sourceFile.parentReference.driveId,
-        id: sourceFile.parentReference.id,
-      },
-    }),
+    body: JSON.stringify({ name: newFileName, parentReference }),
   });
 
   if (!copyResponse.ok) {
     const error = await copyResponse.json().catch(() => ({}));
     throw new Error(error.error?.message || 'Cannot copy Excel file');
   }
-
   await new Promise((r) => setTimeout(r, 2000));
-
-  const parentFolderId = sourceFile.parentReference.id;
+  const searchFolderId = targetFolderId || sourceFile.parentReference.id;
   for (let attempts = 0; attempts < 20; attempts++) {
     await new Promise((r) => setTimeout(r, 1000));
-
-    const searchResult = await graphFetch(`/sites/${siteId}/drive/items/${parentFolderId}/children?$filter=name eq '${newFileName}'`);
+    const escapedName = newFileName.replace(/'/g, "''");
+    const searchResult = await graphFetch(`/sites/${siteId}/drive/items/${searchFolderId}/children?$filter=name eq '${escapedName}'`);
     if (searchResult.value?.length > 0) return searchResult.value[0].id;
   }
 
@@ -188,16 +278,13 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
 
     const rangeValues = [];
     for (let i = minRowIndex; i <= maxRowIndex; i++) {
-      rangeValues.push([updateMap.has(i) ? updateMap.get(i) : rows[i][5] ?? '']);
+      rangeValues.push([updateMap.has(i) ? updateMap.get(i) : (rows[i][5] ?? '')]);
     }
 
-    await graphFetch(
-      `/sites/${siteId}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ values: rangeValues }),
-      }
-    );
+    await graphFetch(`/sites/${siteId}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+      method: 'PATCH',
+      body: JSON.stringify({ values: rangeValues }),
+    });
 
     for (const update of updates) {
       extractedData.push({ excel_indicator_id: update.excelIndicatorId, value: update.newValue, situation });
@@ -207,13 +294,52 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
   return { success: true, extractedData };
 }
 
+// Clear all values in column F for a given worksheet
+async function clearWorksheetValues(fileId, situation) {
+  const worksheetName = WORKSHEETS[situation];
+  if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
+
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
+  const rows = usedRange.values || [];
+  const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
+
+  // Find all rows that have an indicator ID in column E (index 4)
+  const rowsWithIndicators = [];
+  rows.forEach((row, i) => {
+    if (row[4] && String(row[4]).trim()) rowsWithIndicators.push(i);
+  });
+
+  if (rowsWithIndicators.length === 0) return;
+
+  // Find min and max row indices to create a contiguous range
+  const minRowIndex = Math.min(...rowsWithIndicators);
+  const maxRowIndex = Math.max(...rowsWithIndicators);
+
+  // Create array of empty values
+  const rangeValues = [];
+  for (let i = minRowIndex; i <= maxRowIndex; i++) {
+    rangeValues.push(['']);
+  }
+
+  // Clear the range in one call
+  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+    method: 'PATCH',
+    body: JSON.stringify({ values: rangeValues }),
+  });
+}
+
 module.exports = {
   getAccessToken,
   graphFetch,
   sharePointSiteName,
+  createFolder,
   updateExcelCellByIndicatorId,
+  updateExcelCellsBatch,
   duplicateExcelFile,
   exportExcelFile,
   exportExcelFileWithSpecificSheets,
   importSheetsToExcelFile,
+  clearWorksheetValues,
 };

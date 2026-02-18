@@ -8,7 +8,8 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
-const { updateExcelCellByIndicatorId } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues } = require('../services/microsoftGraph');
+const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -79,21 +80,12 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let query = { owner: 'collectivity' };
+    let query = { owner: 'collectivity', type: { $ne: 'config' } };
 
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
     if (req.body.createdAt) query.createdAt = { $gte: new Date(req.body.createdAt) };
-
-    // Seul admin@selego.co peut voir les actions des 2 collectivités spécifiques
-    const restrictedCollectivities = ['69774615a3bd9ea14ad392e1', '697746c2a3bd9ea14ad3dd20', '697a125487170f4e08ffa93b'];
-    if (req.user.email !== 'admin@selego.co') {
-      if (req.body.collectivity_id && restrictedCollectivities.includes(req.body.collectivity_id)) {
-        return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
-      }
-      if (!req.body.collectivity_id) query.collectivity_id = { $nin: restrictedCollectivities };
-    }
 
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
@@ -122,41 +114,36 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const action = await Action.create(req.body);
-    if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-
-    await Log.create({
-      model_name: 'action',
-      name: action.name,
-      operation: 'add',
-      date: new Date(),
-      user_id: req.user._id,
-      user_name: req.user.name,
-      user_email: req.user.email,
-      action_id: action._id,
-      action_name: action.name,
-      collectivity_id: action.collectivity_id,
-      collectivity_name: action.collectivity_name,
-    });
-
-    return res.status(200).send({ ok: true, data: action });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.post('/create_action_with_default_indicators', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_init) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_ref) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!req.body.year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    const collectivity = await Collectivity.findById(req.body.collectivity_id);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    const isEconomicActor = req.body.owner === 'economic_actor' && req.body.economic_actor_id;
+    const existingActionSameYear = await Action.findOne({
+      collectivity_id: collectivity._id,
+      year_init: req.body.year_init,
+      owner: isEconomicActor ? 'economic_actor' : 'collectivity',
+      ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
+      'exel_files_prev.0.excel_file_id': { $exists: true },
+    });
+
+    // Créer l'Excel : dupliquer depuis une action existante ou depuis le master template
+    const excelFileName = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
+    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null);
+
+    // Créer l'action
     const action = await Action.create({
       ...req.body,
       excel_worksheetname: parentAction.excel_worksheetname,
+      exel_files_prev: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
+      excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
       last_modif_by_id: req.user._id,
       last_modif_by_name: req.user.name,
       last_modif_by_email: req.user.email,
@@ -164,6 +151,105 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    // Vérifier si les actions config consolidées existent déjà
+    const configQuery = { collectivity_id: collectivity._id, type: 'config', owner: isEconomicActor ? 'economic_actor' : 'collectivity', ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}) };
+    let configActionBasicDataObj = await Action.findOne({ ...configQuery, name: 'Données de base' });
+    let configActionParcTypesObj = await Action.findOne({ ...configQuery, name: 'Parc types' });
+
+    // Créer les actions config si elles n'existent pas
+    const configBase = {
+      type: 'config',
+      collectivity_id: collectivity._id,
+      collectivity_name: collectivity.name,
+      owner: isEconomicActor ? 'economic_actor' : 'collectivity',
+      status: 'no_status',
+      ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id, economic_actor_name: req.body.economic_actor_name } : {}),
+    };
+    if (!configActionBasicDataObj) configActionBasicDataObj = await Action.create({ ...configBase, name: 'Données de base' });
+    if (!configActionParcTypesObj) configActionParcTypesObj = await Action.create({ ...configBase, name: 'Parc types' });
+
+    // Vérifier si les indicator values existent déjà pour chaque combinaison situation/année
+    const configActionIds = [configActionBasicDataObj._id.toString(), configActionParcTypesObj._id.toString()];
+    const existingConfigIVs = await IndicatorValue.find({
+      action_id: { $in: configActionIds },
+      $or: [
+        { situation: 'init', year: req.body.year_init },
+        { situation: 'ref', year: req.body.year_ref },
+        { situation: 'prev', year: req.body.year_prev },
+        { situation: 'expost', year: req.body.year_expost },
+      ],
+    });
+    const existingSituationKeys = new Set(existingConfigIVs.map((iv) => `${iv.situation}_${iv.year}`));
+
+    let configIndicatorValues = [];
+    {
+      // Créer les indicator values pour les actions config (indicateurs sans action liée)
+      const indicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
+      const allSituations = ['init', 'ref', 'prev', 'expost'];
+      const parcTypesDefaultValues = { init: [], ref: [], prev: [], expost: [] };
+
+      for (const indicator of indicators) {
+        const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
+        const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicDataObj : configActionParcTypesObj;
+        const isParcTypes = configAction.name === 'Parc types';
+
+        for (const situation of situationsForIndicator) {
+          const yearForSituation = req.body[`year_${situation}`];
+          if (existingSituationKeys.has(`${situation}_${yearForSituation}`)) continue;
+
+          const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+          const indicatorValue = {
+            action_id: configAction._id,
+            action_name: configAction.name,
+            collectivity_id: collectivity._id,
+            collectivity_name: collectivity.name,
+            owner: isEconomicActor ? 'economic_actor' : 'collectivity',
+            ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id, economic_actor_name: req.body.economic_actor_name } : {}),
+            indicator_id: indicator._id,
+            indicator_name: indicator.name,
+            indicator_type: indicator.value_type,
+            situation,
+            year: req.body[`year_${situation}`],
+            indicator_value_unit: indicator.value_unit,
+            value_default: { [indicator.value_type]: defaultValue },
+            indicator_value_possibilities: indicator.value_possibilities || [],
+            indicator_category_id: indicator.indicator_category_id,
+            indicator_category_name: indicator.indicator_category_name,
+            indicator_sub_category_id: indicator.indicator_sub_category_id,
+            indicator_sub_category_name: indicator.indicator_sub_category_name,
+            indicator_excel_id: indicator.excel_indicator_id,
+            excel_line_number: indicator.excel_line_number?.[situation],
+          };
+
+          if (isParcTypes) {
+            indicatorValue.value = { [indicator.value_type]: defaultValue };
+            if (defaultValue !== null && indicator.excel_indicator_id) parcTypesDefaultValues[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue });
+          }
+
+          const displayCondition = indicator.display_condition?.[situation];
+          if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+          configIndicatorValues.push(indicatorValue);
+        }
+      }
+
+      if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
+      // Collecter les valeurs des IVs Parc types déjà existantes pour les écrire dans le nouvel Excel
+      const existingParcTypesIVs = existingConfigIVs.filter((iv) => iv.action_id.toString() === configActionParcTypesObj._id.toString());
+      for (const iv of existingParcTypesIVs) {
+        if (iv.indicator_excel_id && iv.value) {
+          if (iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) parcTypesDefaultValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+        }
+      }
+
+      // Update Excel with Parc types default values in batch
+      const excelBatchPromises = [];
+      for (const situation of allSituations) {
+        if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileId, parcTypesDefaultValues[situation], situation).catch(capture));
+      }
+      await Promise.all(excelBatchPromises);
+    }
+
+    // Créer les indicator values pour l'action principale
     const indicators = await Indicator.find({ linked_action_id: parentAction._id });
 
     const allSituations = ['init', 'ref', 'prev', 'expost'];
@@ -178,10 +264,13 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
           action_name: action.name,
           collectivity_id: action.collectivity_id,
           collectivity_name: action.collectivity_name,
+          owner: isEconomicActor ? 'economic_actor' : 'collectivity',
+          ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id, economic_actor_name: req.body.economic_actor_name } : {}),
           indicator_id: indicator._id,
           indicator_name: indicator.name,
           indicator_type: indicator.value_type,
           situation,
+          year: req.body[`year_${situation}`],
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -199,19 +288,28 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     }
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
-    const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
-    const collectivity = await Collectivity.findById(action.collectivity_id);
+    // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base consolidée
+    if (configActionBasicDataObj) {
+      const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
+      for (const situation of ['init', 'expost']) {
+        const iv = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation, year: req.body[`year_${situation}`] }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
+        if (iv && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, iv.value?.checkbox, situation);
+      }
 
-    for (const situation of ['init', 'expost']) {
-      const iv = await IndicatorValue.findOneAndUpdate(
-        { collectivity_id: action.collectivity_id, indicator_excel_id: targetExcelId, situation },
-        { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } },
-        { new: true }
-      );
-      if (iv && collectivity?.excelFileId) {
-        await updateExcelCellByIndicatorId(collectivity.excelFileId, targetExcelId, iv.value?.checkbox, situation);
+      // Mapping des IDs Excel par situation pour les années
+      const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
+      const anneeValues = { init: req.body.year_init, ref: req.body.year_ref, prev: req.body.year_prev, expost: req.body.year_expost };
+
+      for (const situation of ['init', 'ref', 'prev', 'expost']) {
+        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year: req.body[`year_${situation}`] }, { 'value.number': anneeValues[situation] }, { new: true });
+        if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, anneeExcelIds[situation], anneeValues[situation], situation);
       }
     }
+
+    // Recalculer la completion pour l'action créée et les actions config
+    await computeActionCompletion(action._id);
+    if (configActionBasicDataObj) await computeActionCompletion(configActionBasicDataObj._id);
+    if (configActionParcTypesObj) await computeActionCompletion(configActionParcTypesObj._id);
 
     await Log.create({
       model_name: 'action',
@@ -228,64 +326,6 @@ router.post('/create_action_with_default_indicators', passport.authenticate(['ad
     });
 
     return res.status(200).send({ ok: true, data: action });
-  } catch (error) {
-    capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
-
-router.post('/duplicate_for_economic_actor', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const { collectivity, economic_actor } = req.body;
-    if (!collectivity || !economic_actor) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-
-    const sourceActions = await Action.find({ collectivity_id: collectivity._id, owner: 'collectivity' });
-    if (!sourceActions.length) return res.status(200).send({ ok: true, data: [] });
-
-    const payloads = [];
-    for (const action of sourceActions) {
-      payloads.push({
-        ...action.toObject(),
-        owner: 'economic_actor',
-        status: 'no_status',
-        economic_actor_id: economic_actor._id,
-        economic_actor_name: economic_actor.name,
-        action_collectivity_id: action._id,
-        last_modif_by_id: null,
-        last_modif_by_name: null,
-        last_modif_date: null,
-        _id: undefined,
-        __v: undefined,
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
-    }
-
-    if (!payloads.length) return res.status(200).send({ ok: true, data: [] });
-
-    const duplicatedActions = await Action.insertMany(payloads);
-    const logs = duplicatedActions.map((duplicatedAction) => ({
-      model_name: 'action',
-      name: duplicatedAction.name,
-      operation: 'duplicate',
-      date: new Date(),
-      user_id: req.user._id,
-      user_name: req.user.name,
-      user_email: req.user.email,
-      action_id: duplicatedAction._id,
-      action_name: duplicatedAction.name,
-      collectivity_id: duplicatedAction.collectivity_id,
-      collectivity_name: duplicatedAction.collectivity_name,
-      economic_actor_id: economic_actor._id,
-      economic_actor_name: economic_actor.name,
-    }));
-
-    if (logs.length) await Log.insertMany(logs);
-
-    return res.status(200).send({
-      ok: true,
-      data: duplicatedActions,
-    });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -321,41 +361,466 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
   }
 });
 
-router.post('/initialize_indicator_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    if (!req.body.indicator_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const { action_id, year_prev } = req.body;
+    if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const existing = await IndicatorValue.findOne({ action_id: req.body.action_id, indicator_id: req.body.indicator_id });
-    if (existing) return res.status(400).send({ ok: false, code: ERROR_CODES.INDICATOR_ALREADY_EXISTS });
+    const action = await Action.findById(action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const indicator = await Indicator.findById(req.body.indicator_id);
-    if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    // Vérifier si cette année prévisionnelle existe déjà
+    const existingPrev = action.exel_files_prev?.find((f) => f.year_prev === year_prev);
+    if (existingPrev) return res.status(400).send({ ok: false, code: 'YEAR_PREV_ALREADY_EXISTS' });
 
-    const situations = ['init', 'ref', 'prev', 'expost'];
-    const createdIndicatorValues = [];
+    const collectivity = await Collectivity.findById(action.collectivity_id);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    for (const situation of situations) {
-      const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
-      const indicatorValue = {
-        ...req.body,
-        situation,
-        value_default: { [indicator.value_type]: defaultValue },
-        indicator_value_possibilities: indicator.value_possibilities || [],
-        indicator_category_id: indicator.indicator_category_id,
-        indicator_category_name: indicator.indicator_category_name,
-        indicator_sub_category_id: indicator.indicator_sub_category_id,
-        indicator_sub_category_name: indicator.indicator_sub_category_name,
-        indicator_value_unit: indicator.value_unit,
-        indicator_excel_id: indicator.excel_indicator_id,
-        excel_line_number: indicator.excel_line_number?.[situation],
-      };
-      const displayCondition = indicator.display_condition?.[situation];
-      if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
-      createdIndicatorValues.push(indicatorValue);
+    // Construire le nom du fichier Excel selon le owner
+    let excelFileName = `${action.name}_Prev${year_prev}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Prev${year_prev}.xlsx`;
+
+    // Dupliquer l'Excel depuis le premier fichier existant de cette action
+    const sourceExcelId = action.exel_files_prev?.[0]?.excel_file_id || null;
+    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
+
+    // Vider les feuilles init et expost du nouveau fichier Excel
+    await clearWorksheetValues(excelFileId, 'expost');
+
+    // Ajouter le nouveau fichier Excel à l'action
+    action.exel_files_prev.push({ year_prev, year_ref: year_prev, excel_file_id: excelFileId });
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
+    action.last_modif_date = new Date();
+    await action.save();
+
+    // Créer les indicator values config (Données de base, Parc types) pour les situations prev et ref si elles n'existent pas
+    const configActionBasicData = await Action.findOne({
+      collectivity_id: action.collectivity_id,
+      type: 'config',
+      name: 'Données de base',
+      owner: action.owner,
+      ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}),
+    });
+    const configActionParcTypes = await Action.findOne({
+      collectivity_id: action.collectivity_id,
+      type: 'config',
+      name: 'Parc types',
+      owner: action.owner,
+      ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}),
+    });
+
+    if (configActionBasicData || configActionParcTypes) {
+      // Vérifier si les indicateurs config existent déjà pour ces années (prev et ref)
+      const existingConfigPrevIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
+        situation: 'prev',
+        year: year_prev,
+      });
+      const existingConfigRefIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
+        situation: 'ref',
+        year: year_prev,
+      });
+
+      if (!existingConfigPrevIV || !existingConfigRefIV) {
+        const configIndicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
+        const configIndicatorValues = [];
+
+        for (const indicator of configIndicators) {
+          const situations = [];
+          if (!existingConfigPrevIV && indicator.presence_in_excel?.prev === true) situations.push('prev');
+          if (!existingConfigRefIV && indicator.presence_in_excel?.ref === true) situations.push('ref');
+
+          const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicData : configActionParcTypes;
+          if (!configAction) continue;
+          for (const situation of situations) {
+            const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+            const iv = {
+              action_id: configAction._id,
+              action_name: configAction.name,
+              collectivity_id: action.collectivity_id,
+              collectivity_name: action.collectivity_name,
+              owner: action.owner,
+              indicator_id: indicator._id,
+              indicator_name: indicator.name,
+              indicator_type: indicator.value_type,
+              situation,
+              year: year_prev,
+              indicator_value_unit: indicator.value_unit,
+              value_default: { [indicator.value_type]: defaultValue },
+              indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_category_id: indicator.indicator_category_id,
+              indicator_category_name: indicator.indicator_category_name,
+              indicator_sub_category_id: indicator.indicator_sub_category_id,
+              indicator_sub_category_name: indicator.indicator_sub_category_name,
+              indicator_excel_id: indicator.excel_indicator_id,
+              excel_line_number: indicator.excel_line_number?.[situation],
+            };
+
+            if (configAction.name === 'Parc types') iv.value = { [indicator.value_type]: defaultValue };
+            if (action.owner === 'economic_actor') {
+              iv.economic_actor_id = action.economic_actor_id;
+              iv.economic_actor_name = action.economic_actor_name;
+            }
+
+            const displayCondition = indicator.display_condition?.[situation];
+            if (displayCondition?.operator || displayCondition?.conditions?.length) iv.display_condition = displayCondition;
+            configIndicatorValues.push(iv);
+          }
+        }
+
+        if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
+
+        // Mettre à jour AnneeRempl et AnRef pour les config
+        if (configActionBasicData) {
+          if (!existingConfigPrevIV) {
+            await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnneeRempl', situation: 'prev', year: year_prev }, { 'value.number': year_prev }, { new: true });
+          }
+          if (!existingConfigRefIV) {
+            await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_prev }, { 'value.number': year_prev }, { new: true });
+          }
+        }
+      }
     }
-    await IndicatorValue.insertMany(createdIndicatorValues);
-    return res.status(200).send({ ok: true });
+
+    // Créer les indicator values pour les situations prev et ref (year_ref = year_prev)
+    const parentAction = await Action.findById(action.action_parent_id);
+    const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
+    const createdPrevIndicatorValues = [];
+    const createdRefIndicatorValues = [];
+
+    for (const indicator of indicators) {
+      const situations = [];
+      if (indicator.presence_in_excel?.prev === true) situations.push('prev');
+      if (indicator.presence_in_excel?.ref === true) situations.push('ref');
+
+      for (const situation of situations) {
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = {
+          action_id: action._id,
+          action_name: action.name,
+          collectivity_id: action.collectivity_id,
+          collectivity_name: action.collectivity_name,
+          owner: action.owner,
+          indicator_id: indicator._id,
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
+          year: year_prev,
+          excel_line_number: indicator.excel_line_number?.[situation],
+          indicator_value_unit: indicator.value_unit,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_category_id: indicator.indicator_category_id,
+          indicator_category_name: indicator.indicator_category_name,
+          indicator_sub_category_id: indicator.indicator_sub_category_id,
+          indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+        };
+
+        // Ajouter les champs spécifiques aux acteurs économiques
+        if (action.owner === 'economic_actor') {
+          indicatorValue.economic_actor_id = action.economic_actor_id;
+          indicatorValue.economic_actor_name = action.economic_actor_name;
+          if (situation === 'prev') {
+            const collectivityIV = await IndicatorValue.findOne({
+              collectivity_id: action.collectivity_id,
+              indicator_id: indicator._id,
+              situation: 'prev',
+              year: year_prev,
+              owner: 'collectivity',
+            });
+            if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
+          }
+          indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
+        }
+
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+
+        if (situation === 'prev') createdPrevIndicatorValues.push(indicatorValue);
+        else createdRefIndicatorValues.push(indicatorValue);
+      }
+    }
+
+    if (createdPrevIndicatorValues.length > 0) await IndicatorValue.insertMany(createdPrevIndicatorValues);
+    if (createdRefIndicatorValues.length > 0) await IndicatorValue.insertMany(createdRefIndicatorValues);
+
+    // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
+
+    // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_prev) dans l'Excel
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_prev, 'ref');
+
+    // Recalculer la completion pour l'action et les actions config
+    await computeActionCompletion(action._id);
+    if (configActionBasicData) await computeActionCompletion(configActionBasicData._id);
+    if (configActionParcTypes) await computeActionCompletion(configActionParcTypes._id);
+
+    await Log.create({
+      model_name: 'action',
+      name: action.name,
+      field: 'exel_files_prev',
+      operation: 'add_previsionnel',
+      new_value: { number: year_prev },
+      type_value: 'number',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+
+    return res.status(200).send({ ok: true, data: action });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { action_id, year_expost } = req.body;
+    if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const action = await Action.findById(action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Vérifier si cette année expost existe déjà
+    const existingExpost = action.excel_files_expost?.find((f) => f.year_expost === year_expost);
+    if (existingExpost) return res.status(400).send({ ok: false, code: 'YEAR_EXPOST_ALREADY_EXISTS' });
+
+    const collectivity = await Collectivity.findById(action.collectivity_id);
+    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Construire le nom du fichier Excel selon le owner
+    let excelFileName = `${action.name}_Expost${year_expost}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Expost${year_expost}.xlsx`;
+
+    // Dupliquer l'Excel depuis le premier fichier existant de cette action
+    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.exel_files_prev?.[0]?.excel_file_id || null;
+    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
+
+    // Vider les feuilles init et prev du nouveau fichier Excel
+    await clearWorksheetValues(excelFileId, 'prev');
+
+    // Ajouter le nouveau fichier Excel à l'action
+    action.excel_files_expost = action.excel_files_expost || [];
+    action.excel_files_expost.push({ year_expost, year_ref: year_expost, excel_file_id: excelFileId });
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
+    action.last_modif_date = new Date();
+    await action.save();
+
+    // Créer les indicator values config (Données de base, Parc types) pour la nouvelle année expost si elles n'existent pas
+    const configActionBasicData = await Action.findOne({
+      collectivity_id: action.collectivity_id,
+      type: 'config',
+      name: 'Données de base',
+      owner: action.owner,
+      ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}),
+    });
+    const configActionParcTypes = await Action.findOne({
+      collectivity_id: action.collectivity_id,
+      type: 'config',
+      name: 'Parc types',
+      owner: action.owner,
+      ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}),
+    });
+
+    if (configActionBasicData || configActionParcTypes) {
+      // Vérifier si les indicateurs config existent déjà pour ces années (expost et ref)
+      const existingConfigExpostIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
+        situation: 'expost',
+        year: year_expost,
+      });
+      const existingConfigRefIV = await IndicatorValue.findOne({
+        action_id: { $in: [configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean) },
+        situation: 'ref',
+        year: year_expost,
+      });
+
+      if (!existingConfigExpostIV || !existingConfigRefIV) {
+        const configIndicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
+        const configIndicatorValues = [];
+
+        for (const indicator of configIndicators) {
+          const situations = [];
+          if (!existingConfigExpostIV && indicator.presence_in_excel?.expost === true) situations.push('expost');
+          if (!existingConfigRefIV && indicator.presence_in_excel?.ref === true) situations.push('ref');
+
+          const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicData : configActionParcTypes;
+          if (!configAction) continue;
+
+          for (const situation of situations) {
+            const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+            const iv = {
+              action_id: configAction._id,
+              action_name: configAction.name,
+              collectivity_id: action.collectivity_id,
+              collectivity_name: action.collectivity_name,
+              owner: action.owner,
+              indicator_id: indicator._id,
+              indicator_name: indicator.name,
+              indicator_type: indicator.value_type,
+              situation,
+              year: year_expost,
+              indicator_value_unit: indicator.value_unit,
+              value_default: { [indicator.value_type]: defaultValue },
+              indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_category_id: indicator.indicator_category_id,
+              indicator_category_name: indicator.indicator_category_name,
+              indicator_sub_category_id: indicator.indicator_sub_category_id,
+              indicator_sub_category_name: indicator.indicator_sub_category_name,
+              indicator_excel_id: indicator.excel_indicator_id,
+              excel_line_number: indicator.excel_line_number?.[situation],
+            };
+
+            if (configAction.name === 'Parc types') iv.value = { [indicator.value_type]: defaultValue };
+            if (action.owner === 'economic_actor') {
+              iv.economic_actor_id = action.economic_actor_id;
+              iv.economic_actor_name = action.economic_actor_name;
+            }
+
+            const displayCondition = indicator.display_condition?.[situation];
+            if (displayCondition?.operator || displayCondition?.conditions?.length) iv.display_condition = displayCondition;
+            configIndicatorValues.push(iv);
+          }
+        }
+
+        if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
+
+        // Mettre à jour ActionsCharte/ActionsAutres pour la nouvelle année expost
+        if (configActionBasicData && !existingConfigExpostIV) {
+          const parentAction = await Action.findById(action.action_parent_id);
+          if (parentAction) {
+            // Copier les valeurs ActionsCharte/ActionsAutres depuis la situation expost existante
+            for (const targetExcelId of ['ActionsCharte', 'ActionsAutres']) {
+              const existingIV = await IndicatorValue.findOne({
+                action_id: configActionBasicData._id,
+                indicator_excel_id: targetExcelId,
+                situation: 'expost',
+                year: { $ne: year_expost },
+                owner: action.owner,
+              });
+              if (existingIV?.value?.checkbox?.length > 0) {
+                await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: targetExcelId, situation: 'expost', year: year_expost }, { 'value.checkbox': existingIV.value.checkbox }, { new: true });
+              }
+            }
+          }
+
+          // Mettre à jour l'indicateur AnneeRempl pour la nouvelle année expost dans les config
+          await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnneeRempl', situation: 'expost', year: year_expost }, { 'value.number': year_expost }, { new: true });
+        }
+
+        // Mettre à jour AnRef pour la situation ref dans les config
+        if (configActionBasicData && !existingConfigRefIV) {
+          await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost }, { 'value.number': year_expost }, { new: true });
+        }
+      }
+    }
+
+    // Créer les indicator values pour les situations expost et ref (year_ref = year_expost)
+    const parentAction = await Action.findById(action.action_parent_id);
+    const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
+    const createdExpostIndicatorValues = [];
+    const createdRefIndicatorValues = [];
+
+    for (const indicator of indicators) {
+      const situations = [];
+      if (indicator.presence_in_excel?.expost === true) situations.push('expost');
+      if (indicator.presence_in_excel?.ref === true) situations.push('ref');
+
+      for (const situation of situations) {
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = {
+          action_id: action._id,
+          action_name: action.name,
+          collectivity_id: action.collectivity_id,
+          collectivity_name: action.collectivity_name,
+          owner: action.owner,
+          indicator_id: indicator._id,
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
+          year: year_expost,
+          excel_line_number: indicator.excel_line_number?.[situation],
+          indicator_value_unit: indicator.value_unit,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_category_id: indicator.indicator_category_id,
+          indicator_category_name: indicator.indicator_category_name,
+          indicator_sub_category_id: indicator.indicator_sub_category_id,
+          indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+        };
+
+        // Ajouter les champs spécifiques aux acteurs économiques
+        if (action.owner === 'economic_actor') {
+          indicatorValue.economic_actor_id = action.economic_actor_id;
+          indicatorValue.economic_actor_name = action.economic_actor_name;
+          if (situation === 'expost') {
+            const collectivityIV = await IndicatorValue.findOne({
+              collectivity_id: action.collectivity_id,
+              indicator_id: indicator._id,
+              situation: 'expost',
+              year: year_expost,
+              owner: 'collectivity',
+            });
+            if (collectivityIV) indicatorValue.indicator_value_collectivity_id = collectivityIV._id;
+          }
+          indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
+        }
+
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+
+        if (situation === 'expost') createdExpostIndicatorValues.push(indicatorValue);
+        else createdRefIndicatorValues.push(indicatorValue);
+      }
+    }
+
+    if (createdExpostIndicatorValues.length > 0) await IndicatorValue.insertMany(createdExpostIndicatorValues);
+    if (createdRefIndicatorValues.length > 0) await IndicatorValue.insertMany(createdRefIndicatorValues);
+
+    // Mettre à jour l'indicateur AnneeRempl avec la nouvelle année expost dans l'Excel
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_expost, 'expost');
+
+    // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_expost) dans l'Excel
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_expost, 'ref');
+
+    // Recalculer la completion pour l'action et les actions config
+    await computeActionCompletion(action._id);
+    if (configActionBasicData) await computeActionCompletion(configActionBasicData._id);
+    if (configActionParcTypes) await computeActionCompletion(configActionParcTypes._id);
+
+    await Log.create({
+      model_name: 'action',
+      name: action.name,
+      field: 'excel_files_expost',
+      operation: 'add_expost',
+      new_value: { number: year_expost },
+      type_value: 'number',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+
+    return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate, useSearchParams } from "react-router-dom"
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import { Toaster } from "react-hot-toast"
 import * as Sentry from "@sentry/browser"
 import toast from "react-hot-toast"
@@ -13,7 +13,7 @@ import AdminIndicator from "@/scenes/admin/indicator"
 import Collectivity from "@/scenes/collectivity"
 import Settings from "@/scenes/settings"
 import Notification from "@/scenes/notification"
-
+import GeneralData from "@/scenes/general-data"
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
 import NotFound from "@/scenes/not-found"
@@ -31,9 +31,18 @@ if (environment === "production") {
   Sentry.init({ dsn: SENTRY_URL, environment: "app" })
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route element={<AuthLayout />}>
           <Route path="/auth/*" element={<Auth />} />
@@ -58,6 +67,7 @@ export default function App() {
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
           <Route path="/admin/economic-actors/*" element={<AdminEconomicActors />} />
+          <Route path="/general-data" element={<GeneralData />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

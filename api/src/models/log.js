@@ -8,7 +8,7 @@ const Schema = new mongoose.Schema(
     name: { type: String },
 
     field: { type: String },
-    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate'] },
+    operation: { type: String, enum: ['add', 'update', 'delete', 'duplicate', 'add_previsionnel', 'add_expost'] },
     new_value: {
       string: { type: String, trim: true },
       array: { type: Array, default: [] },
@@ -27,7 +27,7 @@ const Schema = new mongoose.Schema(
 
     type_value: { type: String },
     date: { type: Date, default: Date.now },
-    source: { type: String, enum: ['manual', 'import_excel', 'default_value', 'synchronization'] },
+    source: { type: String, enum: ['manual', 'import_excel', 'default_value', 'synchronization', 'restore'] },
 
     // References
     user_id: { type: String },
@@ -55,7 +55,7 @@ const Schema = new mongoose.Schema(
     indicator_id: { type: String },
     indicator_name: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);
