@@ -11,7 +11,7 @@ const Indicator = require('../models/indicator');
 const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { isIndicatorValueFilled, computeActionCompletion, computeConfigOnboarding } = require('../utils/completion');
+const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -19,13 +19,88 @@ const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
 ];
 
+const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
+
+const buildYearMappings = (regularActions) => {
+  const mappings = {};
+  const ensure = (k) => {
+    if (!mappings[k]) mappings[k] = { year_init: new Set(), year_ref: new Set(), year_prev: new Set(), year_expost: new Set() };
+  };
+  for (const a of regularActions) {
+    if (a.year_init != null) {
+      ensure(`init_${a.year_init}`);
+      mappings[`init_${a.year_init}`].year_init.add(a.year_init);
+    }
+    for (const f of a.exel_files_prev || []) {
+      if (f.year_prev != null) {
+        ensure(`prev_${f.year_prev}`);
+        if (a.year_init != null) mappings[`prev_${f.year_prev}`].year_init.add(a.year_init);
+        if (f.year_ref != null) mappings[`prev_${f.year_prev}`].year_ref.add(f.year_ref);
+        mappings[`prev_${f.year_prev}`].year_prev.add(f.year_prev);
+      }
+      if (f.year_ref != null) {
+        ensure(`ref_${f.year_ref}`);
+        if (a.year_init != null) mappings[`ref_${f.year_ref}`].year_init.add(a.year_init);
+        mappings[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
+      }
+    }
+    for (const f of a.excel_files_expost || []) {
+      if (f.year_expost != null) {
+        ensure(`expost_${f.year_expost}`);
+        if (a.year_init != null) mappings[`expost_${f.year_expost}`].year_init.add(a.year_init);
+        if (f.year_ref != null) mappings[`expost_${f.year_expost}`].year_ref.add(f.year_ref);
+        mappings[`expost_${f.year_expost}`].year_expost.add(f.year_expost);
+      }
+      if (f.year_ref != null) {
+        ensure(`ref_${f.year_ref}`);
+        if (a.year_init != null) mappings[`ref_${f.year_ref}`].year_init.add(a.year_init);
+        mappings[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
+      }
+    }
+  }
+  for (const k in mappings) {
+    const m = mappings[k];
+    mappings[k] = { year_init: [...m.year_init], year_ref: [...m.year_ref], year_prev: [...m.year_prev], year_expost: [...m.year_expost] };
+  }
+  return mappings;
+};
+
+const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap) => {
+  if (!iv.display_condition?.conditions?.length) return true;
+  const results = iv.display_condition.conditions.map((cond) => {
+    const targetSituation = cond.excel_indicator_situation || iv.situation;
+    const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
+    return possibleYears.some((year) => {
+      const source = conditionValuesMap.get(`${cond.excel_indicator_id}_${targetSituation}_${year}`);
+      if (!source) return false;
+      const val = source.value?.[source.indicator_type];
+      let isMatch = false;
+      if (cond.type === 'equals') {
+        isMatch = val == cond.value;
+        if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort());
+      }
+      if (cond.type === 'contains') {
+        if (Array.isArray(val)) isMatch = val.includes(cond.value);
+        else if (typeof val === 'string') isMatch = val.includes(cond.value);
+      }
+      if (cond.type === 'greaterThan') isMatch = Number(val) > Number(cond.value);
+      if (cond.type === 'lessThan') isMatch = Number(val) < Number(cond.value);
+      if (cond.type === 'greaterOrEqual') isMatch = Number(val) >= Number(cond.value);
+      if (cond.type === 'lessOrEqual') isMatch = Number(val) <= Number(cond.value);
+      if (cond.type === 'notEmpty') isMatch = val !== null && val !== undefined && val !== '' && (!Array.isArray(val) || val.length > 0);
+      if (cond.type === 'isEmpty') isMatch = val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0);
+      if (cond.negate) isMatch = !isMatch;
+      return isMatch;
+    });
+  });
+  return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+};
+
 // Aggregated stats for an action (situation/year mapping + completion) - avoids fetching all documents client-side
 router.post('/stats', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { action_id } = req.body;
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-
-    const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
 
     const matchQuery = { action_id, indicator_excel_id: { $nin: HIDDEN_IDS } };
     matchQuery.owner = req.body.owner || 'collectivity';
@@ -79,10 +154,6 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
 
     if (configAction) {
-      const ensureMapping = (k) => {
-        if (!yearMappingsBySituationYear[k]) yearMappingsBySituationYear[k] = { year_init: new Set(), year_ref: new Set(), year_prev: new Set(), year_expost: new Set() };
-      };
-
       for (const a of regularActions) {
         if (a.year_init != null) (actionsBySituationYear[`init_${a.year_init}`] ||= []).push(a.name);
         const refYears = new Set();
@@ -91,77 +162,9 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
         for (const y of refYears) (actionsBySituationYear[`ref_${y}`] ||= []).push(a.name);
         for (const f of a.exel_files_prev || []) if (f.year_prev != null) (actionsBySituationYear[`prev_${f.year_prev}`] ||= []).push(a.name);
         for (const f of a.excel_files_expost || []) if (f.year_expost != null) (actionsBySituationYear[`expost_${f.year_expost}`] ||= []).push(a.name);
-
-        if (a.year_init != null) {
-          ensureMapping(`init_${a.year_init}`);
-          yearMappingsBySituationYear[`init_${a.year_init}`].year_init.add(a.year_init);
-        }
-        for (const f of a.exel_files_prev || []) {
-          if (f.year_prev != null) {
-            ensureMapping(`prev_${f.year_prev}`);
-            if (a.year_init != null) yearMappingsBySituationYear[`prev_${f.year_prev}`].year_init.add(a.year_init);
-            if (f.year_ref != null) yearMappingsBySituationYear[`prev_${f.year_prev}`].year_ref.add(f.year_ref);
-            yearMappingsBySituationYear[`prev_${f.year_prev}`].year_prev.add(f.year_prev);
-          }
-          if (f.year_ref != null) {
-            ensureMapping(`ref_${f.year_ref}`);
-            if (a.year_init != null) yearMappingsBySituationYear[`ref_${f.year_ref}`].year_init.add(a.year_init);
-            yearMappingsBySituationYear[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
-          }
-        }
-        for (const f of a.excel_files_expost || []) {
-          if (f.year_expost != null) {
-            ensureMapping(`expost_${f.year_expost}`);
-            if (a.year_init != null) yearMappingsBySituationYear[`expost_${f.year_expost}`].year_init.add(a.year_init);
-            if (f.year_ref != null) yearMappingsBySituationYear[`expost_${f.year_expost}`].year_ref.add(f.year_ref);
-            yearMappingsBySituationYear[`expost_${f.year_expost}`].year_expost.add(f.year_expost);
-          }
-          if (f.year_ref != null) {
-            ensureMapping(`ref_${f.year_ref}`);
-            if (a.year_init != null) yearMappingsBySituationYear[`ref_${f.year_ref}`].year_init.add(a.year_init);
-            yearMappingsBySituationYear[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
-          }
-        }
       }
-
-      // Convert Sets to arrays
-      for (const k in yearMappingsBySituationYear) {
-        const m = yearMappingsBySituationYear[k];
-        yearMappingsBySituationYear[k] = { year_init: [...m.year_init], year_ref: [...m.year_ref], year_prev: [...m.year_prev], year_expost: [...m.year_expost] };
-      }
+      yearMappingsBySituationYear = buildYearMappings(regularActions);
     }
-
-    // Mirrors frontend shouldDisplayIndicator logic
-    const shouldDisplayIndicator = (iv, yearMappings) => {
-      if (!iv.display_condition?.conditions?.length) return true;
-      const results = iv.display_condition.conditions.map((cond) => {
-        const targetSituation = cond.excel_indicator_situation || iv.situation;
-        const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
-        return possibleYears.some((year) => {
-          const source = conditionValuesMap.get(`${cond.excel_indicator_id}_${targetSituation}_${year}`);
-          if (!source) return false;
-          const val = source.value?.[source.indicator_type];
-          let isMatch = false;
-          if (cond.type === 'equals') {
-            isMatch = val == cond.value;
-            if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort());
-          }
-          if (cond.type === 'contains') {
-            if (Array.isArray(val)) isMatch = val.includes(cond.value);
-            else if (typeof val === 'string') isMatch = val.includes(cond.value);
-          }
-          if (cond.type === 'greaterThan') isMatch = Number(val) > Number(cond.value);
-          if (cond.type === 'lessThan') isMatch = Number(val) < Number(cond.value);
-          if (cond.type === 'greaterOrEqual') isMatch = Number(val) >= Number(cond.value);
-          if (cond.type === 'lessOrEqual') isMatch = Number(val) <= Number(cond.value);
-          if (cond.type === 'notEmpty') isMatch = val !== null && val !== undefined && val !== '' && (!Array.isArray(val) || val.length > 0);
-          if (cond.type === 'isEmpty') isMatch = val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0);
-          if (cond.negate) isMatch = !isMatch;
-          return isMatch;
-        });
-      });
-      return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
-    };
 
     // Compute completion stats, excluding indicators hidden by display conditions
     const completion = {};
@@ -171,7 +174,7 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     for (const iv of indicatorValues) {
       const key = `${iv.situation}_${iv.year}`;
       const yearMappings = yearMappingsBySituationYear[key];
-      if (!shouldDisplayIndicator(iv, yearMappings)) continue;
+      if (!shouldDisplayIndicator(iv, yearMappings, conditionValuesMap)) continue;
 
       if (!completion[key]) completion[key] = { total: 0, filled: 0 };
       completion[key].total++;
@@ -302,7 +305,45 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     await indicatorValue.save();
 
     await computeActionCompletion(indicatorValue.action_id);
-    await computeConfigOnboarding(action).catch(capture);
+
+    // Update onboarding status for config actions
+    if (action.type === 'config' && action.owner === 'collectivity' && (action.name === 'Données de base' || action.name === 'Parc types')) {
+      try {
+        const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, owner: 'collectivity' });
+
+        const condExcelIds = new Set();
+        for (const iv of allIVs) {
+          if (iv.display_condition?.conditions) {
+            for (const cond of iv.display_condition.conditions) {
+              if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+            }
+          }
+        }
+
+        const [regularActions, condValues] = await Promise.all([
+          Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
+          condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' }) : Promise.resolve([]),
+        ]);
+
+        const conditionValuesMap = new Map();
+        for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+
+        const yearMappingsBySituationYear = buildYearMappings(regularActions);
+
+        let total = 0;
+        let filled = 0;
+        for (const iv of allIVs) {
+          if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
+          total++;
+          if (isIndicatorValueFilled(iv)) filled++;
+        }
+
+        const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
+        await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: total > 0 && filled === total } });
+      } catch (e) {
+        capture(e);
+      }
+    }
 
     res.status(200).send({ ok: true, data: indicatorValue });
     const excelUpdatePromises = [];
