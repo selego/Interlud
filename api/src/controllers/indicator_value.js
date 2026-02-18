@@ -11,7 +11,7 @@ const Indicator = require('../models/indicator');
 const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
+const { isIndicatorValueFilled, computeActionCompletion, computeConfigOnboarding } = require('../utils/completion');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -302,6 +302,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     await indicatorValue.save();
 
     await computeActionCompletion(indicatorValue.action_id);
+    await computeConfigOnboarding(action).catch(capture);
 
     res.status(200).send({ ok: true, data: indicatorValue });
     const excelUpdatePromises = [];
