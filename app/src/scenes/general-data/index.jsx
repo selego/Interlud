@@ -5,7 +5,7 @@ import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
 import { FiDownload, FiUpload, FiInfo, FiFilter } from "react-icons/fi"
-import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
+import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
 
@@ -297,59 +297,10 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const shouldDisplayIndicator = (iv) => {
-    if (!iv.display_condition?.conditions?.length) return true
-    const results = iv.display_condition.conditions.map(cond => {
-      const targetSituation = cond.excel_indicator_situation || iv.situation
-      const possibleYears = yearMappings?.[`year_${targetSituation}`] || []
-
-      return possibleYears.some(year => {
-        const key = `${cond.excel_indicator_id}_${targetSituation}_${year}`
-        const source = conditionValuesMap.get(key)
-        if (!source) return false
-        const val = source.value?.[source.indicator_type]
-        let isMatch = false
-        if (cond.type === "equals") {
-          isMatch = val == cond.value
-          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort())
-        }
-        if (cond.type === "contains") {
-          if (Array.isArray(val)) isMatch = val.includes(cond.value)
-          else if (typeof val === "string") isMatch = val.includes(cond.value)
-        }
-        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
-        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
-        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
-        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
-        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
-        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
-        if (cond.negate) isMatch = !isMatch
-        return isMatch
-      })
-    })
-    return iv.display_condition.operator === "OR" ? results.some(r => r) : results.every(r => r)
-  }
-
-  const displayedIndicatorValues = indicatorValues.filter(iv => !HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id) && shouldDisplayIndicator(iv))
+  const displayedIndicatorValues = indicatorValues.filter(iv => !HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id) && shouldDisplayIndicatorFromMap(iv, yearMappings, conditionValuesMap))
 
   const fetchConditionValues = async (data) => {
-    const excelIds = new Set()
-    for (const iv of data) {
-      if (!iv.display_condition?.conditions) continue
-      for (const cond of iv.display_condition.conditions) {
-        if (cond.excel_indicator_id) excelIds.add(cond.excel_indicator_id)
-      }
-    }
-    if (excelIds.size === 0) { setConditionValuesMap(new Map()); return }
-    const condParams = { collectivity_id: activeConfigAction.collectivity_id, excel_indicator_ids: [...excelIds] }
-    if (activeConfigAction.owner === 'economic_actor') {
-      condParams.owner = 'economic_actor'
-      condParams.economic_actor_id = activeConfigAction.economic_actor_id
-    }
-    const { ok, data: resData } = await api.post("/indicator_value/condition_values", condParams)
-    if (!ok) return
-    const map = new Map()
-    for (const cv of resData) map.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv)
+    const map = await fetchConditionValuesMap(data, activeConfigAction)
     setConditionValuesMap(map)
   }
 

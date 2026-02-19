@@ -65,14 +65,18 @@ const buildYearMappings = (regularActions) => {
   return mappings;
 };
 
-const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap) => {
+const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = new Set()) => {
   if (!iv.display_condition?.conditions?.length) return true;
+  const ivKey = `${iv.indicator_excel_id}_${iv.situation}_${iv.year}`;
+  if (visited.has(ivKey)) return false;
+  visited.add(ivKey);
   const results = iv.display_condition.conditions.map((cond) => {
     const targetSituation = cond.excel_indicator_situation || iv.situation;
     const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
     return possibleYears.some((year) => {
       const source = conditionValuesMap.get(`${cond.excel_indicator_id}_${targetSituation}_${year}`);
       if (!source) return false;
+      if (source.display_condition?.conditions?.length && !shouldDisplayIndicator(source, yearMappings, conditionValuesMap, new Set(visited))) return false;
       const val = source.value?.[source.indicator_type];
       let isMatch = false;
       if (cond.type === 'equals') {
@@ -286,7 +290,7 @@ router.post('/condition_values', passport.authenticate(['admin', 'user'], { sess
       query.owner = 'economic_actor';
     }
 
-    const data = await IndicatorValue.find(query).select('indicator_excel_id situation year value indicator_type').lean();
+    const data = await IndicatorValue.find(query).lean();
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
