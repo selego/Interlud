@@ -652,9 +652,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     if (formulaRows) {
       for (let i = 0; i < formulaRows.length; i++) {
         const formula = formulaRows[i][10];
-        if (formula && String(formula).startsWith("=")) {
-          formulasMap.set(startRow + 1 + i, String(formula));
-        }
+        if (formula && String(formula).startsWith("=")) formulasMap.set(startRow + 1 + i, String(formula));
       }
       console.log(`📋 ${formulasMap.size} formules d'affichage trouvées`);
     }
@@ -690,9 +688,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
         if (sheetData.formulaRows) {
           for (let i = 0; i < sheetData.formulaRows.length; i++) {
             const formula = sheetData.formulaRows[i][10];
-            if (formula && String(formula).startsWith("=")) {
-              sitFormulasMap.set(sheetData.startRow + 1 + i, String(formula));
-            }
+            if (formula && String(formula).startsWith("=")) sitFormulasMap.set(sheetData.startRow + 1 + i, String(formula));
           }
         }
         allFormulasMapsBySituation.set(sit, sitFormulasMap);
@@ -1258,7 +1254,119 @@ if (require.main === module) {
         await createIndicatorsFromExcel(situation, worksheetName, allSheetsData);
         console.log(`✅ Feuille "${worksheetName}" traitée avec succès!`);
       }
-      console.log("\n🎉 Toutes les feuilles ont été traitées avec succès!");
+      // Étape 3: Identifier et supprimer les indicateurs absents de l'Excel
+      console.log("\n🗑️ Vérification des indicateurs supprimés...");
+
+      // 3a: Collecter tous les excel_indicator_id présents dans chaque feuille
+      const excelIdsBySituation = new Map();
+      const allExcelIds = new Set();
+
+      for (const { situation } of worksheetsToProcess) {
+        const sheetData = allSheetsData.get(situation);
+        const idsInSheet = new Set();
+        for (const row of sheetData.dataRows) {
+          const excelId = row[4];
+          if (excelId && excelId !== "") {
+            const trimmedId = String(excelId).trim();
+            idsInSheet.add(trimmedId);
+            allExcelIds.add(trimmedId);
+          }
+        }
+        excelIdsBySituation.set(situation, idsInSheet);
+      }
+
+      console.log(`📋 IDs trouvés: init=${excelIdsBySituation.get("init").size}, ref=${excelIdsBySituation.get("ref").size}, prev=${excelIdsBySituation.get("prev").size}, expost=${excelIdsBySituation.get("expost").size} (total uniques: ${allExcelIds.size})`);
+
+      // 3b: Charger tous les indicateurs existants et détecter les suppressions
+      const allDbIndicators = await Indicator.find({});
+      console.log(`📋 ${allDbIndicators.length} indicateurs en base de données`);
+
+      const indicatorsToDeleteCompletely = [];
+      const indicatorsToUpdatePartially = [];
+
+      for (const indicator of allDbIndicators) {
+        const excelId = indicator.excel_indicator_id;
+        if (!excelId) continue;
+
+        if (!allExcelIds.has(excelId)) {
+          // Indicateur complètement absent de toutes les feuilles Excel
+          indicatorsToDeleteCompletely.push(indicator);
+        } else {
+          // Vérifier les suppressions par situation
+          const situationsToRemove = [];
+          for (const sit of ["init", "ref", "prev", "expost"]) {
+            const wasPresent = indicator.presence_in_excel?.[sit] === true;
+            const isNowPresent = excelIdsBySituation.get(sit)?.has(excelId) || false;
+            if (wasPresent && !isNowPresent) {
+              situationsToRemove.push(sit);
+            }
+          }
+          if (situationsToRemove.length > 0) {
+            indicatorsToUpdatePartially.push({ indicator, situationsToRemove });
+          }
+        }
+      }
+
+      // 3c: Exécuter les suppressions complètes
+      if (indicatorsToDeleteCompletely.length > 0) {
+        const idsToDelete = indicatorsToDeleteCompletely.map((ind) => ind._id);
+
+        const ivDeleteResult = await IndicatorValue.deleteMany({ indicator_id: { $in: idsToDelete.map((id) => id.toString()) } });
+        console.log(`🗑️ ${ivDeleteResult.deletedCount} indicator_values supprimés (suppression complète)`);
+
+        const indDeleteResult = await Indicator.deleteMany({ _id: { $in: idsToDelete } });
+        console.log(`🗑️ ${indDeleteResult.deletedCount} indicateurs supprimés complètement:`);
+        for (const ind of indicatorsToDeleteCompletely) {
+          console.log(`   - ${ind.excel_indicator_id} (${ind.name || "sans nom"})`);
+        }
+      }
+
+      // 3d: Exécuter les suppressions partielles (per-situation)
+      if (indicatorsToUpdatePartially.length > 0) {
+        const partialBulkOps = [];
+        let totalIvDeleted = 0;
+
+        for (const { indicator, situationsToRemove } of indicatorsToUpdatePartially) {
+          const updateSet = {};
+          const updateUnset = {};
+
+          for (const sit of situationsToRemove) {
+            updateSet[`presence_in_excel.${sit}`] = false;
+            updateUnset[`excel_line_number.${sit}`] = "";
+            updateUnset[`display_condition.${sit}`] = "";
+            updateUnset[`value_default.${sit}`] = "";
+          }
+
+          partialBulkOps.push({
+            updateOne: {
+              filter: { _id: indicator._id },
+              update: { $set: updateSet, $unset: updateUnset },
+            },
+          });
+
+          // Supprimer les IndicatorValues pour les situations retirées
+          for (const sit of situationsToRemove) {
+            const ivResult = await IndicatorValue.deleteMany({ indicator_id: indicator._id.toString(), situation: sit });
+            totalIvDeleted += ivResult.deletedCount;
+          }
+
+          console.log(`   🔄 ${indicator.excel_indicator_id} (${indicator.name || "sans nom"}): situations retirées [${situationsToRemove.join(", ")}]`);
+        }
+
+        if (partialBulkOps.length > 0) {
+          await Indicator.bulkWrite(partialBulkOps);
+          console.log(`🔄 ${partialBulkOps.length} indicateurs mis à jour (suppression partielle)`);
+        }
+        if (totalIvDeleted > 0) {
+          console.log(`🗑️ ${totalIvDeleted} indicator_values supprimés (suppression partielle)`);
+        }
+      }
+
+      if (indicatorsToDeleteCompletely.length === 0 && indicatorsToUpdatePartially.length === 0) {
+        console.log("✅ Aucun indicateur à supprimer");
+      }
+
+      console.log("\n🎉 Toutes les feuilles ont été traitées et nettoyées avec succès!");
 
       // // Étape 2: Générer les fichiers Excel pour toutes les collectivités
       // await generateExcelForAllCollectivities();
