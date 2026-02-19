@@ -45,7 +45,7 @@ const SITUATION_LABELS = { init: 'Initiale', ref: 'Référence', prev: 'Prévisi
 export default function Home() {
   const [actions, setActions] = useState([])
   const navigate = useNavigate()
-  const { collectivity, user } = useStore()
+  const { collectivity, user, economicActor } = useStore()
   const [filters, setFilters] = useState({ search: "", status: "" })
   const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -101,10 +101,13 @@ export default function Home() {
     if (actions.length === 0) return null
     const firstNonConfigAction = actions.find(a => a.type !== "config")
     const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.completion_expost || 0)) / 4): 0
+    const onboardingSource = user.role === 'economic_actor' && economicActor
+      ? economicActor.collectivities?.find(c => c.id === collectivity._id) || {}
+      : collectivity
     return [
       { label: "Créer votre première action", done: actions.length > 0, link: "/actions" },
-      { label: 'Remplir Données de base dans "Mes données générales"', done: !!collectivity?.basedata_onboarded, link: "/general-data" },
-      { label: 'Remplir Parc types dans "Mes données générales"', done: !!collectivity?.parc_types_onboarded, link: "/general-data" },
+      { label: 'Remplir Données de base dans "Mes données générales"', done: !!onboardingSource?.basedata_onboarded, link: "/general-data" },
+      { label: 'Remplir Parc types dans "Mes données générales"', done: !!onboardingSource?.parc_types_onboarded, link: "/general-data" },
       { label: "Remplir votre action", done: firstActionCompletion > 0, link: firstNonConfigAction ? `/actions/${firstNonConfigAction._id}/dashboard` : "/actions" },
     ]
   })()

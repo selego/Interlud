@@ -12,6 +12,8 @@ const Schema = new mongoose.Schema(
         name: String,
         joined_at: { type: Date, default: Date.now },
         excelFileId: { type: String, trim: true },
+        basedata_onboarded: { type: Boolean, default: false },
+        parc_types_onboarded: { type: Boolean, default: false },
       },
     ],
   },

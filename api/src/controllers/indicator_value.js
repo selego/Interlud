@@ -100,6 +100,55 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
   return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
 };
 
+const updateOnboardingStatus = async (action) => {
+  if (action.type !== 'config' || (action.name !== 'Données de base' && action.name !== 'Parc types')) return;
+  try {
+    const ownerFilter = { owner: action.owner };
+    if (action.owner === 'economic_actor' && action.economic_actor_id) ownerFilter.economic_actor_id = action.economic_actor_id;
+
+    const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, ...ownerFilter });
+
+    const condExcelIds = new Set();
+    for (const iv of allIVs) {
+      if (iv.display_condition?.conditions) {
+        for (const cond of iv.display_condition.conditions) {
+          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+        }
+      }
+    }
+
+    const [regularActions, condValues] = await Promise.all([
+      Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }),
+      condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, ...ownerFilter }) : Promise.resolve([]),
+    ]);
+
+    const conditionValuesMap = new Map();
+    for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+
+    const yearMappingsBySituationYear = buildYearMappings(regularActions);
+
+    let total = 0;
+    let filled = 0;
+    for (const iv of allIVs) {
+      if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
+      total++;
+      if (isIndicatorValueFilled(iv)) filled++;
+    }
+
+    const isComplete = total > 0 && filled === total;
+    const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
+
+    if (action.owner === 'economic_actor' && action.economic_actor_id) {
+      await EconomicActor.updateOne({ _id: action.economic_actor_id, 'collectivities.id': action.collectivity_id }, { $set: { [`collectivities.$.${field}`]: isComplete } });
+    } else {
+      if (isComplete) await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
+    }
+    await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
+  } catch (e) {
+    capture(e);
+  }
+};
+
 // Aggregated stats for an action (situation/year mapping + completion) - avoids fetching all documents client-side
 router.post('/stats', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -388,48 +437,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     await computeActionCompletion(indicatorValue.action_id);
 
-    // Update onboarding status for config actions
-    if (action.type === 'config' && action.owner === 'collectivity' && (action.name === 'Données de base' || action.name === 'Parc types')) {
-      try {
-        const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, owner: 'collectivity' });
-
-        const condExcelIds = new Set();
-        for (const iv of allIVs) {
-          if (iv.display_condition?.conditions) {
-            for (const cond of iv.display_condition.conditions) {
-              if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-            }
-          }
-        }
-
-        const [regularActions, condValues] = await Promise.all([
-          Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
-          condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' }) : Promise.resolve([]),
-        ]);
-
-        const conditionValuesMap = new Map();
-        for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
-
-        const yearMappingsBySituationYear = buildYearMappings(regularActions);
-
-        let total = 0;
-        let filled = 0;
-        for (const iv of allIVs) {
-          if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
-          total++;
-          if (isIndicatorValueFilled(iv)) filled++;
-        }
-
-        const isComplete = total > 0 && filled === total;
-        if (isComplete) {
-          const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
-          await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
-        }
-        await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
-      } catch (e) {
-        capture(e);
-      }
-    }
+    await updateOnboardingStatus(action);
 
     res.status(200).send({ ok: true, data: indicatorValue });
     const excelUpdatePromises = [];
@@ -996,48 +1004,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       await Promise.all(excelUpdatePromises);
       if (syncLogs.length > 0) await Log.insertMany(syncLogs);
 
-      // Onboarding status update for config actions (like PUT)
-      if (action.type === 'config' && action.owner === 'collectivity' && (action.name === 'Données de base' || action.name === 'Parc types')) {
-        try {
-          const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, owner: 'collectivity' });
-
-          const condExcelIds = new Set();
-          for (const iv of allIVs) {
-            if (iv.display_condition?.conditions) {
-              for (const cond of iv.display_condition.conditions) {
-                if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-              }
-            }
-          }
-
-          const [regularActions, condValues] = await Promise.all([
-            Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
-            condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' }) : Promise.resolve([]),
-          ]);
-
-          const conditionValuesMap = new Map();
-          for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
-
-          const yearMappingsBySituationYear = buildYearMappings(regularActions);
-
-          let total = 0;
-          let filled = 0;
-          for (const iv of allIVs) {
-            if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
-            total++;
-            if (isIndicatorValueFilled(iv)) filled++;
-          }
-
-          const isComplete = total > 0 && filled === total;
-          if (isComplete) {
-            const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
-            await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
-          }
-          await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
-        } catch (e) {
-          capture(e);
-        }
-      }
+      await updateOnboardingStatus(action);
     }
 
     res.status(200).json({ ok: true });

@@ -8,7 +8,7 @@ const isIndicatorValueFilled = (iv) => {
 };
 
 const computeActionCompletion = async (actionId) => {
-  const [indicatorValues, action] = await Promise.all([IndicatorValue.find({ action_id: actionId }).select('value indicator_type situation').lean(), Action.findById(actionId).select('status').lean()]);
+  const [indicatorValues, action] = await Promise.all([IndicatorValue.find({ action_id: actionId }), Action.findById(actionId)]);
   if (!action || indicatorValues.length === 0) return;
 
   const situations = ['init', 'ref', 'prev', 'expost'];
