@@ -193,6 +193,84 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
   }
 });
 
+// Check general data completion for all config actions of a collectivity, grouped by related action
+router.post('/check-general-data-completion', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity_id } = req.body;
+    if (!collectivity_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const [configActions, regularActions] = await Promise.all([
+      Action.find({ collectivity_id, type: 'config', owner: 'collectivity' }),
+      Action.find({ collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
+    ]);
+
+    if (configActions.length === 0) return res.status(200).send({ ok: true, data: [] });
+
+    const configActionIds = configActions.map((a) => a._id.toString());
+    const indicatorValues = await IndicatorValue.find({ action_id: { $in: configActionIds }, indicator_excel_id: { $nin: HIDDEN_IDS } });
+
+    const yearMappingsBySituationYear = buildYearMappings(regularActions);
+
+    // Collect and fetch condition values
+    const condExcelIds = new Set();
+    for (const iv of indicatorValues) {
+      if (iv.display_condition?.conditions) {
+        for (const cond of iv.display_condition.conditions) {
+          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+        }
+      }
+    }
+    const conditionValuesMap = new Map();
+    if (condExcelIds.size > 0) {
+      const condValues = await IndicatorValue.find({ collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' });
+      for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+    }
+
+    // Group by configAction name + situation + year, compute completion (only for displayed indicators)
+    const groups = {};
+    for (const iv of indicatorValues) {
+      const situationYearKey = `${iv.situation}_${iv.year}`;
+      const yearMappings = yearMappingsBySituationYear[situationYearKey];
+      if (!shouldDisplayIndicator(iv, yearMappings, conditionValuesMap)) continue;
+
+      const key = `${iv.action_name}__${iv.situation}__${iv.year}`;
+      if (!groups[key]) groups[key] = { configActionName: iv.action_name, situation: iv.situation, year: iv.year, total: 0, filled: 0 };
+      groups[key].total++;
+      if (isIndicatorValueFilled(iv)) groups[key].filled++;
+    }
+
+    // Map situation/year to action names from regular actions
+    const situationYearActions = {};
+    for (const action of regularActions) {
+      if (action.year_init != null) (situationYearActions[`init_${action.year_init}`] ||= []).push(action.name);
+      const refYears = new Set();
+      for (const f of action.exel_files_prev || []) {
+        if (f.year_ref != null) refYears.add(f.year_ref);
+        if (f.year_prev != null) (situationYearActions[`prev_${f.year_prev}`] ||= []).push(action.name);
+      }
+      for (const f of action.excel_files_expost || []) {
+        if (f.year_ref != null) refYears.add(f.year_ref);
+        if (f.year_expost != null) (situationYearActions[`expost_${f.year_expost}`] ||= []).push(action.name);
+      }
+      for (const y of refYears) (situationYearActions[`ref_${y}`] ||= []).push(action.name);
+    }
+
+    // Build result grouped by action name
+    const groupedMap = {};
+    for (const group of Object.values(groups)) {
+      if (group.filled >= group.total) continue;
+      const actions = situationYearActions[`${group.situation}_${group.year}`] || [];
+      const item = { configActionName: group.configActionName, situation: group.situation, year: group.year, completion: group.total > 0 ? Math.round((group.filled / group.total) * 100) : 0 };
+      for (const actionName of actions) (groupedMap[actionName] ||= []).push(item);
+    }
+
+    return res.status(200).send({ ok: true, data: Object.entries(groupedMap).map(([actionName, items]) => ({ actionName, items })) });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 // Fetch only the indicator values needed for display condition evaluation (by excel_indicator_id)
 router.post('/condition_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
