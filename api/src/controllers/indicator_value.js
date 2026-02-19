@@ -338,8 +338,12 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           if (isIndicatorValueFilled(iv)) filled++;
         }
 
-        const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
-        await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: total > 0 && filled === total } });
+        const isComplete = total > 0 && filled === total;
+        if (isComplete) {
+          const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
+          await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
+        }
+        await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
       } catch (e) {
         capture(e);
       }
@@ -942,8 +946,12 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             if (isIndicatorValueFilled(iv)) filled++;
           }
 
-          const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
-          await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: total > 0 && filled === total } });
+          const isComplete = total > 0 && filled === total;
+          if (isComplete) {
+            const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
+            await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
+          }
+          await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
         } catch (e) {
           capture(e);
         }
