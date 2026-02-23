@@ -410,34 +410,24 @@ function UserActionRightsSection({ user }) {
 
   if (!user) return null
 
-  if (user.collectivities?.find((c) => c.id === collectivity?._id).role === "admin" || user.role === "admin")
+  const userCollectivityRole = user.collectivities?.find((c) => c.id === collectivity?._id)?.role
+
+  if (userCollectivityRole === "admin" || user.role === "admin")
     return (
       <div className="card-shadow">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-shrink-0">
-            <FiShield className="h-6 w-6 text-green-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold">Administrateur de la collectivité</h3>
-            <p className="text-sm mt-1">
-              Cet utilisateur est administrateur de cette collectivité ou administrateur global. Il dispose automatiquement de tous les droits sur toutes les actions.
-            </p>
-          </div>
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-400">
+          <FiShield className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Cet utilisateur est administrateur. Tous les droits d'action sont accordés</p>
         </div>
-        <div className="bg-white border border-green-200 rounded-md p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-sm font-medium text-gray-700">Lecture</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-sm font-medium text-gray-700">Écriture</span>
-              </div>
-            </div>
-            <span className="text-sm text-gray-500">Toutes les actions</span>
-          </div>
+      </div>
+    )
+
+  if (userCollectivityRole === "economic_actor")
+    return (
+      <div className="card-shadow">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-400">
+          <FiHome className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Cet utilisateur est acteur économique. Les droits d'action ne s'appliquent pas à ce rôle</p>
         </div>
       </div>
     )

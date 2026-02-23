@@ -566,7 +566,18 @@ function UserActionRightsSection({ user }) {
       <div className="card-shadow">
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-400">
           <FiShield className="mx-auto h-12 w-12 text-gray-400" />
-          <p className="mt-2 text-sm text-gray-600">Vous êtes administrateur global. Tous les droits d'action sont accordés</p>
+          <p className="mt-2 text-sm text-gray-600">Cet utilisateur est administrateur global. Tous les droits d'action sont accordés</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (user.role === "economic_actor") {
+    return (
+      <div className="card-shadow">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-400">
+          <FiHome className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Cet utilisateur est acteur économique. Les droits d'action ne s'appliquent pas à ce rôle</p>
         </div>
       </div>
     )
@@ -808,7 +819,18 @@ function UserCollectivitiesTab({ user, setUser }) {
       <div className="card-shadow">
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <FiShield className="mx-auto h-12 w-12 text-gray-400" />
-          <p className="mt-2 text-sm text-gray-600">Vous êtes administrateur global. Vous avez accès à toutes les collectivités en role admin</p>
+          <p className="mt-2 text-sm text-gray-600">Cet utilisateur est administrateur global. Il a accès à toutes les collectivités en rôle admin</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (user.role === "economic_actor") {
+    return (
+      <div className="card-shadow">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-400">
+          <FiHome className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-2 text-sm text-gray-600">Cet utilisateur est acteur économique. Ses collectivités sont gérées via son acteur économique associé</p>
         </div>
       </div>
     )
