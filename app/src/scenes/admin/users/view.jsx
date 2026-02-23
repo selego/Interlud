@@ -638,16 +638,19 @@ function UserActionRightsSection({ user }) {
                   />
                 </td>
                 <td className="px-6 py-4 text-center">
-                  <input
-                    type="checkbox"
-                    checked={!!r.can_read}
-                    onChange={() => {
-                      const copy = [...rights]
-                      copy[idx] = { ...copy[idx], can_read: !copy[idx].can_read }
-                      setRights(copy)
-                    }}
-                    className="w-4 h-4 input-primary"
-                  />
+                  <div className="relative inline-block" title={r.can_write ? "La lecture est requise lorsque l'écriture est activée" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={!!r.can_read}
+                      disabled={!!r.can_write}
+                      onChange={() => {
+                        const copy = [...rights]
+                        copy[idx] = { ...copy[idx], can_read: !copy[idx].can_read }
+                        setRights(copy)
+                      }}
+                      className="w-4 h-4 input-primary"
+                    />
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-center">
                   <input
@@ -655,7 +658,8 @@ function UserActionRightsSection({ user }) {
                     checked={!!r.can_write}
                     onChange={() => {
                       const copy = [...rights]
-                      copy[idx] = { ...copy[idx], can_write: !copy[idx].can_write }
+                      const newCanWrite = !copy[idx].can_write
+                      copy[idx] = { ...copy[idx], can_write: newCanWrite, can_read: newCanWrite ? true : copy[idx].can_read }
                       setRights(copy)
                     }}
                     className="w-4 h-4 input-primary"
@@ -703,17 +707,18 @@ function UserActionRightsSection({ user }) {
                 className="w-full input-primary"
                 value={addValues.description}
                 onChange={(e) => setAddValues({ ...addValues, description: e.target.value })}
-                placeholder="Description optionnelle"
+                placeholder="Ex : Accès temporaire, suivi campagne 2025…"
               />
             </div>
 
             <div className="mb-3">
               <p className="text-sm font-medium text-gray-700 mb-3">Permissions</p>
               <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer" title={addValues.can_write ? "La lecture est requise lorsque l'écriture est activée" : ""}>
                   <input
                     type="checkbox"
                     checked={addValues.can_read}
+                    disabled={addValues.can_write}
                     onChange={() => setAddValues({ ...addValues, can_read: !addValues.can_read })}
                     className="w-4 h-4 input-primary"
                   />
@@ -723,7 +728,14 @@ function UserActionRightsSection({ user }) {
                   <input
                     type="checkbox"
                     checked={addValues.can_write}
-                    onChange={() => setAddValues({ ...addValues, can_write: !addValues.can_write })}
+                    onChange={() => {
+                      const newCanWrite = !addValues.can_write
+                      setAddValues({
+                        ...addValues,
+                        can_write: newCanWrite,
+                        can_read: newCanWrite ? true : addValues.can_read,
+                      })
+                    }}
                     className="w-4 h-4 input-primary"
                   />
                   <span className="text-sm text-gray-700">Écrire</span>
