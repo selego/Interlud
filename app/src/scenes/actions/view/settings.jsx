@@ -454,13 +454,14 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               onChange={(value) => onUpdate("pilote", value)}
               options={[
                 { value: "", label: "Sélectionner" },
-                { value: "epci", label: "EPCI" },
-                { value: "acteur_economique", label: "Acteur économique" }
+                { value: "epci", label: "Acteur public" },
+                { value: "acteur_economique", label: "Acteur économique" },
+                { value: "autres", label: "Autres" }
               ]}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Description du pilote</label>
+            <label className="block text-sm font-semibold mb-2">Nom du pilote</label>
             <DebounceInput
               type="text"
               value={action.pilote_description || ""}
@@ -475,13 +476,14 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               onChange={(value) => onUpdate("partners", value)}
               options={[
                 { value: "", label: "Sélectionner" },
-                { value: "epci", label: "EPCI" },
-                { value: "acteur_economique", label: "Acteur économique" }
+                { value: "epci", label: "Acteur public" },
+                { value: "acteur_economique", label: "Acteur économique" },
+                { value: "autres", label: "Autres" }
               ]}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
+            <label className="block text-sm font-semibold mb-2">Nom des partenaires</label>
             <DebounceInput
               type="text"
               value={action.partners_description || ""}
