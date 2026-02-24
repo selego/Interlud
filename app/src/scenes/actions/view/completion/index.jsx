@@ -80,12 +80,12 @@ export default function Completion({ action }) {
   const exportIndicatorTemplate = async () => {
     try {
       setIsExporting(true)
-      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id })
+      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id, situation: currentTab?.situation, year: currentTab?.year })
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `valeurs_indicateurs_${action.name}.xlsx`
+      link.download = `valeurs_indicateurs_${action.name}_${SITUATION_LABELS[currentTab?.situation]}_${currentTab?.year}.xlsx`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -105,7 +105,7 @@ export default function Completion({ action }) {
       reader.readAsDataURL(file)
       reader.onload = async () => {
         try {
-          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: reader.result.split(",")[1], collectivity, action_id: action._id })
+          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: reader.result.split(",")[1], collectivity, action_id: action._id, situation: currentTab?.situation, year: currentTab?.year })
           if (!ok) return toast.error(code || "Erreur lors de l'import")
           toast.success("Valeurs importées avec succès")
           setRefreshKey(k => k + 1)

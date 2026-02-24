@@ -586,7 +586,12 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = await Action.findById(req.body.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    const indicatorValues = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS } });
+
+    const query = { action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS } };
+    if (req.body.situation) query.situation = req.body.situation;
+    if (req.body.year) query.year = req.body.year;
+
+    const indicatorValues = await IndicatorValue.find(query);
     // Build conditionValuesMap and yearMappings to filter by display_condition
     const condExcelIds = new Set();
     for (const iv of indicatorValues) {
@@ -612,12 +617,14 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     const indicatorMap = new Map(indicators.map((ind) => [ind._id.toString(), ind]));
     const workbook = new ExcelJS.Workbook();
 
-    const situations = [
+    const allSituations = [
       { key: 'init', label: 'Remplissage - Sit. Init.' },
       { key: 'ref', label: 'Remplissage - Sit. Ref.' },
       { key: 'prev', label: 'Remplissage - Sit. Prev.' },
       { key: 'expost', label: 'Remplissage - Sit. Expost' },
     ];
+
+    const situations = req.body.situation ? allSituations.filter((s) => s.key === req.body.situation) : allSituations;
 
     const columns = [
       { header: 'Catégorie', key: 'category', width: 20 },
@@ -697,8 +704,10 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
     const importedWorkbook = new ExcelJS.Workbook();
     await importedWorkbook.xlsx.load(fileBuffer);
 
+    const sheetsToProcess = req.body.situation ? SITUATION_SHEETS.filter((s) => s.situation === req.body.situation) : SITUATION_SHEETS;
+
     const extractedData = [];
-    for (const { sheetName, situation } of SITUATION_SHEETS) {
+    for (const { sheetName, situation } of sheetsToProcess) {
       const sheet = importedWorkbook.getWorksheet(sheetName);
       if (!sheet) continue;
       sheet.eachRow((row, rowNumber) => {
@@ -730,18 +739,20 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       }
     }
     if (excelFileIds.length > 0) {
-      await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
+      await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, sheetsToProcess).catch(capture)));
     }
 
     if (!extractedData.length) return res.status(200).json({ ok: true });
     const indicators = await Indicator.find({ excel_indicator_id: { $in: [...new Set(extractedData.map((d) => d.excel_indicator_id))] } });
     const indicatorMap = new Map(indicators.map((ind) => [ind.excel_indicator_id, ind]));
 
-    const indicatorValues = await IndicatorValue.find({
+    const ivQuery = {
       indicator_id: { $in: indicators.map((ind) => ind._id.toString()) },
       collectivity_id: collectivity._id,
       situation: { $in: [...new Set(extractedData.map((d) => d.situation))] },
-    });
+    };
+    if (req.body.year) ivQuery.year = req.body.year;
+    const indicatorValues = await IndicatorValue.find(ivQuery);
 
     const indicatorValueMap = new Map();
     for (const iv of indicatorValues) {
@@ -816,7 +827,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       action.last_modif_date = new Date();
       await action.save();
 
-      await computeActionCompletion(action_id);
+      await computeActionCompletion(action_id, { situation: req.body.situation, year: req.body.year });
 
       // Cross-action sync: propagate updated values to other indicator values sharing same indicator_id/situation/year/owner (like PUT)
       const syncLogs = [];
