@@ -13,6 +13,7 @@ export default function Header() {
   const quickAccessRef = useRef(null)
   const { user, collectivity, setCollectivity, setUser, setActionRights, setEconomicActor } = useStore()
   const [collectivities, setCollectivities] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -27,8 +28,20 @@ export default function Header() {
     }
   }
 
+  const fetchUnreadNotifications = async () => {
+    if (!user) return toast.error("Utilisateur non connecté")
+    try {
+      const { ok, total, code } = await api.post("/notification/search", { user_id: user._id, read_at: null, limit: 0 })
+      if (!ok) return toast.error(code || "Erreur lors de la récupération des notifications")
+      setUnreadCount(total)
+    } catch (error) {
+      toast.error(error.message || "Erreur lors de la récupération des notifications")
+    }
+  }
+
   useEffect(() => {
     fetchCollectivities()
+    fetchUnreadNotifications()
   }, [user])
 
   useEffect(() => {
@@ -196,7 +209,13 @@ export default function Header() {
                             className="fr-btn mt-0 ml-2 px-2 rounded hover:bg-primary-green/10 transition-colors"
                             onClick={() => setOpenQuickAccessDropdown(openQuickAccessDropdown === index ? null : index)}
                           >
-                            <span className={item.iconId} aria-hidden="true"></span>
+                            <span className={`${item.iconId} relative`} aria-hidden="true">
+                              {item.text === "Mon compte" && unreadCount > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                                  {unreadCount > 99 ? "99+" : unreadCount}
+                                </span>
+                              )}
+                            </span>
                             <span className="ml-2 text-primary-green text-0.875rem">{item.text}</span>
                             <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? "rotate-180" : ""}`} />
                           </button>

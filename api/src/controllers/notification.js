@@ -34,6 +34,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
     if (req.body.user_id) query.user_id = req.body.user_id;
     if (req.body.read_at) query.read_at = req.body.read_at;
+    if (req.body.read_at === null) query.read_at = null;
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
     const total = await Notification.countDocuments(query);
