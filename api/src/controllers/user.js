@@ -311,12 +311,9 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
 
 router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    if (req.user.role === 'user' && req.user._id.toString() !== req.params.id)
-      return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN, message: 'Vous ne pouvez pas réinitialiser le mot de passe de cet utilisateur' });
-    if (req.body.newPassword !== req.body.verifyPassword)
-      return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH, message: 'Les mots de passe ne correspondent pas' });
-    if (!validatePassword(req.body.newPassword))
-      return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED, message: 'Le mot de passe doit contenir au moins 6 caractères' });
+    if (req.user.role === 'user' && req.user._id.toString() !== req.params.id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN, message: 'Vous ne pouvez pas réinitialiser le mot de passe de cet utilisateur' });
+    if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH, message: 'Les mots de passe ne correspondent pas' });
+    if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED, message: 'Le mot de passe doit contenir au moins 6 caractères' });
     const obj = await UserObject.findById(req.params.id);
     if (!obj) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS, message: 'Utilisateur non trouvé' });
     obj.set({ password: req.body.newPassword });
@@ -543,54 +540,58 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
 
     const adminCollectivity = await UserObject.find({ collectivities: { $elemMatch: { id: collectivityId, role: 'admin' } } });
     const redirectUrl = `${config.APP_URL}/collectivity?collectivityId=${collectivityId}`;
-    
-    for (const admin of adminCollectivity) {
-      await Notification.create({
-        message: `${user.name} a demandé à rejoindre la collectivité ${collectivity.name}`,
-        user_id: admin._id,
-        user_name: admin.name,
-        user_email: admin.email,
-        redirect: redirectUrl,
-      });
 
-      const bodyHTML = `
-        <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Demande d'accès</h1>
-          </div>
-          
-          <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
-            <p style="font-size: 16px; margin-bottom: 20px;">Bonjour ${admin.name},</p>
-            
-            <p style="font-size: 16px; margin-bottom: 20px;">
-              <strong>${user.name}</strong> a demandé à rejoindre la collectivité <strong>${collectivity.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
-            </p>
-            
-            <div style="text-align: center; margin: 40px 0;">
-              <a href="${redirectUrl}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
-                Gérer les accès
-              </a>
+    for (const admin of adminCollectivity) {
+      if (admin.notifications_push !== false) {
+        await Notification.create({
+          message: `${user.name} a demandé à rejoindre la collectivité ${collectivity.name}`,
+          user_id: admin._id,
+          user_name: admin.name,
+          user_email: admin.email,
+          redirect: redirectUrl,
+        });
+      }
+
+      if (admin.notifications_email !== false) {
+        const bodyHTML = `
+          <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+            <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Demande d'accès</h1>
             </div>
 
-            <p style="font-size: 16px; margin-bottom: 0;">
-              Cordialement,<br>
-              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
-            </p>
-          </div>
-          
-          <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
-            <p style="font-size: 12px; color: #768776; margin: 0;">
-              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
-            </p>
-          </div>
-        </div>
-      `;
+            <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
+              <p style="font-size: 16px; margin-bottom: 20px;">Bonjour ${admin.name},</p>
 
-      await brevo.sendEmail(bodyHTML, {
-        subject: 'Nouvelle demande d\'accès à votre collectivité',
-        sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
-        to: [{ email: admin.email }],
-      });
+              <p style="font-size: 16px; margin-bottom: 20px;">
+                <strong>${user.name}</strong> a demandé à rejoindre la collectivité <strong>${collectivity.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+              </p>
+
+              <div style="text-align: center; margin: 40px 0;">
+                <a href="${redirectUrl}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
+                  Gérer les accès
+                </a>
+              </div>
+
+              <p style="font-size: 16px; margin-bottom: 0;">
+                Cordialement,<br>
+                <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+              </p>
+            </div>
+
+            <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
+              <p style="font-size: 12px; color: #768776; margin: 0;">
+                © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+              </p>
+            </div>
+          </div>
+        `;
+
+        await brevo.sendEmail(bodyHTML, {
+          subject: "Nouvelle demande d'accès à votre collectivité",
+          sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+          to: [{ email: admin.email }],
+        });
+      }
     }
 
     user.collectivities = [...(user.collectivities || []), { id: collectivityId, name: collectivity.name, role: user.role || 'user', status: 'pending' }];

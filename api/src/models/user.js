@@ -28,8 +28,10 @@ const Schema = new mongoose.Schema(
     invitation_sent_at: { type: Date },
     invitation_accepted_at: { type: Date },
     last_login_at: { type: Date },
+    notifications_email: { type: Boolean, default: true },
+    notifications_push: { type: Boolean, default: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 Schema.pre('save', function (next) {
