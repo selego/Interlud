@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import toast from "react-hot-toast"
-import { FiEye, FiEyeOff, FiHome, FiShield, FiUser } from "react-icons/fi"
+import { FiBell, FiEye, FiEyeOff, FiHome, FiMail, FiShield, FiSmartphone, FiUser } from "react-icons/fi"
 
 import api from "@/services/api"
 import useStore from "@/services/store"
@@ -41,8 +41,18 @@ export default function Settings() {
 }
 
 function ProfileTab({ user }) {
-  const [values, setValues] = useState({ email: user?.email || "", name: user?.name || "" })
+  const [values, setValues] = useState({email: user?.email || "", name: user?.name || "", notifications_email: user?.notifications_email ?? true, notifications_push: user?.notifications_push ?? true})
   const { setUser } = useStore()
+
+  const updateNotifications = async (updated) => {
+    try {
+      const { ok, data, code } = await api.put("/user", { notifications_email: updated.notifications_email, notifications_push: updated.notifications_push })
+      if (!ok) return toast.error(code || "Erreur lors de la mise à jour")
+      setUser(data)
+    } catch (error) {
+      console.error("Error updating notifications:", error)
+    }
+  }
 
   const updateUser = async () => {
     try {
@@ -57,25 +67,70 @@ function ProfileTab({ user }) {
   }
 
   return (
-    <div className="card-shadow">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations personnelles</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
-          <input className="w-full input-primary" value={values.name} onChange={(e) => setValues({ ...values, name: e.target.value })} placeholder="Nom de l'utilisateur" />
+    <div className="space-y-6">
+      <div className="card-shadow">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations personnelles</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
+            <input className="w-full input-primary" value={values.name} onChange={(e) => setValues({ ...values, name: e.target.value })} placeholder="Nom de l'utilisateur" />
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
+            <input className="w-full input-primary" value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} placeholder="email@exemple.fr" />
+          </div>
         </div>
 
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
-          <input className="w-full input-primary" value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} placeholder="email@exemple.fr" />
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <ResetPassword user={user} />
+          <button className="button-primary" onClick={updateUser}>
+            Enregistrer
+          </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        <ResetPassword user={user} />
-        <button className="button-primary" onClick={updateUser}>
-          Enregistrer
-        </button>
+      <div className="card-shadow">
+        <div className="flex items-center gap-2 mb-4">
+          <FiBell className="text-primary-green" size={16} />
+          <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
+        </div>
+
+        <div className="space-y-3">
+          <label className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+            <div className="flex items-center gap-2">
+              <FiMail className="text-gray-400" size={16} />
+              <span className="text-sm text-gray-700">Notifications par e-mail</span>
+            </div>
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-gray-300 text-primary-green focus:ring-primary-green cursor-pointer"
+              checked={values.notifications_email}
+              onChange={(e) => {
+                const updated = { ...values, notifications_email: e.target.checked }
+                setValues(updated)
+                updateNotifications(updated)
+              }}
+            />
+          </label>
+
+          <label className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+            <div className="flex items-center gap-2">
+              <FiSmartphone className="text-gray-400" size={16} />
+              <span className="text-sm text-gray-700">Notifications sur l'application</span>
+            </div>
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-gray-300 text-primary-green focus:ring-primary-green cursor-pointer"
+              checked={values.notifications_push}
+              onChange={(e) => {
+                const updated = { ...values, notifications_push: e.target.checked }
+                setValues(updated)
+                updateNotifications(updated)
+              }}
+            />
+          </label>
+        </div>
       </div>
     </div>
   )

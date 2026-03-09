@@ -35,17 +35,6 @@ export default function Settings({ action: initialAction, onSave }) {
     }
   };
 
-  const handleDelete = async () => {
-    try {
-      const { ok, code } = await api.delete(`/action/${action._id}`);
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      toast.success("Action supprimée");
-      navigate('/actions');
-    } catch (error) {
-      toast.error(error || "Une erreur est survenue");
-    }
-  };
-
   return (
     <div className="min-h-screen p-8">
     <div className="max-w-7xl mx-auto">
@@ -120,7 +109,7 @@ export default function Settings({ action: initialAction, onSave }) {
 
 
       {activeTab === "indicators" && <IndicatorsTab action={action} />}
-      {activeTab === "settings" && ( <ActionSettingsTab action={action} onUpdate={handleUpdate} onDelete={handleDelete} onActionUpdate={(updatedAction) => { setAction(updatedAction); if (onSave) onSave(); }} />)}
+      {activeTab === "settings" && ( <ActionSettingsTab action={action} onUpdate={handleUpdate} onActionUpdate={(updatedAction) => { setAction(updatedAction); if (onSave) onSave(); }} />)}
       {activeTab === "history" && <History action={action} onSave={onSave} />}
     </div>
     </div>
@@ -207,13 +196,30 @@ function IndicatorsTab({ action }) {
   );
 }
 
-function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
+function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
+  const navigate = useNavigate();
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
   const [newPrevYear, setNewPrevYear] = useState("");
   const [isAddingPrev, setIsAddingPrev] = useState(false);
   const [isAddExpostModalOpen, setIsAddExpostModalOpen] = useState(false);
   const [newExpostYear, setNewExpostYear] = useState("");
   const [isAddingExpost, setIsAddingExpost] = useState(false);
+
+  const handleDelete = async () => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette action ? Cette opération est irréversible.")) return;
+    try {
+      setIsDeleting(true);
+      const { ok, code } = await api.delete(`/action/${action._id}`);
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Action supprimée");
+      navigate('/actions');
+    } catch (error) {
+      toast.error(error || "Une erreur est survenue");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const addPrevisionnel = async () => {
     if (!newPrevYear) return toast.error("Veuillez sélectionner une année");
@@ -448,13 +454,14 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
               onChange={(value) => onUpdate("pilote", value)}
               options={[
                 { value: "", label: "Sélectionner" },
-                { value: "epci", label: "EPCI" },
-                { value: "acteur_economique", label: "Acteur économique" }
+                { value: "epci", label: "Acteur public" },
+                { value: "acteur_economique", label: "Acteur économique" },
+                { value: "autres", label: "Autres" }
               ]}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Description du pilote</label>
+            <label className="block text-sm font-semibold mb-2">Nom du pilote</label>
             <DebounceInput
               type="text"
               value={action.pilote_description || ""}
@@ -469,13 +476,14 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
               onChange={(value) => onUpdate("partners", value)}
               options={[
                 { value: "", label: "Sélectionner" },
-                { value: "epci", label: "EPCI" },
-                { value: "acteur_economique", label: "Acteur économique" }
+                { value: "epci", label: "Acteur public" },
+                { value: "acteur_economique", label: "Acteur économique" },
+                { value: "autres", label: "Autres" }
               ]}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
+            <label className="block text-sm font-semibold mb-2">Nom des partenaires</label>
             <DebounceInput
               type="text"
               value={action.partners_description || ""}
@@ -579,17 +587,14 @@ function ActionSettingsTab({ action, onUpdate, onDelete, onActionUpdate }) {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
           <div>
             <h3 className="font-medium text-red-800">Supprimer l'action</h3>
-            <p className="text-sm text-red-600 mt-1">Cette action est irréversible. Toutes les données associées seront perdues.</p>
+            <p className="text-sm text-red-600 mt-1">Cette action est irréversible. Toutes les données de base et Parc types associées seront perdues.</p>
           </div>
           <button
-            onClick={() => {
-              if (window.confirm("Êtes-vous sûr de vouloir supprimer cette action ? Cette opération est irréversible.")) {
-                onDelete();
-              }
-            }}
-            className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm font-medium"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Supprimer
+            {isDeleting ? "Suppression..." : "Supprimer"}
           </button>
         </div>
       </div>

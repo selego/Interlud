@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter } from "react-icons/fi"
-import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
+import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
@@ -80,12 +80,12 @@ export default function Completion({ action }) {
   const exportIndicatorTemplate = async () => {
     try {
       setIsExporting(true)
-      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id })
+      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id, situation: currentTab?.situation, year: currentTab?.year })
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `valeurs_indicateurs_${action.name}.xlsx`
+      link.download = `valeurs_indicateurs_${action.name}_${SITUATION_LABELS[currentTab?.situation]}_${currentTab?.year}.xlsx`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -105,7 +105,7 @@ export default function Completion({ action }) {
       reader.readAsDataURL(file)
       reader.onload = async () => {
         try {
-          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: reader.result.split(",")[1], collectivity, action_id: action._id })
+          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: reader.result.split(",")[1], collectivity, action_id: action._id, situation: currentTab?.situation, year: currentTab?.year })
           if (!ok) return toast.error(code || "Erreur lors de l'import")
           toast.success("Valeurs importées avec succès")
           setRefreshKey(k => k + 1)
@@ -255,72 +255,24 @@ export default function Completion({ action }) {
           yearMappings={stats?.yearMappingsBySituationYear?.[`${currentTab?.situation}_${currentTab?.year}`]}
           showUnfilledOnly={showUnfilledOnly}
           onToggleUnfilledOnly={() => setShowUnfilledOnly(false)}
+          tabTotal={stats?.completion?.[`${currentTab?.situation}_${currentTab?.year}`]?.total || 0}
         />
       </div>
     </div>
   )
 }
 
-function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly }) {
+function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly, tabTotal }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const shouldDisplayIndicator = (iv) => {
-    if (!iv.display_condition?.conditions?.length) return true
-    const results = iv.display_condition.conditions.map(cond => {
-      const targetSituation = cond.excel_indicator_situation || iv.situation
-      const possibleYears = yearMappings?.[`year_${targetSituation}`] || []
-
-      return possibleYears.some(year => {
-        const key = `${cond.excel_indicator_id}_${targetSituation}_${year}`
-        const source = conditionValuesMap.get(key)
-        if (!source) return false
-        const val = source.value?.[source.indicator_type]
-        let isMatch = false
-        if (cond.type === "equals") {
-          isMatch = val == cond.value
-          if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort())
-        }
-        if (cond.type === "contains") {
-          if (Array.isArray(val)) isMatch = val.includes(cond.value)
-          else if (typeof val === "string") isMatch = val.includes(cond.value)
-        }
-        if (cond.type === "greaterThan") isMatch = Number(val) > Number(cond.value)
-        if (cond.type === "lessThan") isMatch = Number(val) < Number(cond.value)
-        if (cond.type === "greaterOrEqual") isMatch = Number(val) >= Number(cond.value)
-        if (cond.type === "lessOrEqual") isMatch = Number(val) <= Number(cond.value)
-        if (cond.type === "notEmpty") isMatch = val !== null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0)
-        if (cond.type === "isEmpty") isMatch = val === null || val === undefined || val === "" || (Array.isArray(val) && val.length === 0)
-        if (cond.negate) isMatch = !isMatch
-        return isMatch
-      })
-    })
-    return iv.display_condition.operator === "OR" ? results.some(r => r) : results.every(r => r)
-  }
-
-  const displayedIndicatorValues = indicatorValues.filter(iv => !HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id) && shouldDisplayIndicator(iv))
+  const displayedIndicatorValues = indicatorValues.filter(iv => !HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id) && shouldDisplayIndicatorFromMap(iv, yearMappings, conditionValuesMap))
 
   const fetchConditionValues = async (data) => {
-    const excelIds = new Set()
-    for (const iv of data) {
-      if (!iv.display_condition?.conditions) continue
-      for (const cond of iv.display_condition.conditions) {
-        if (cond.excel_indicator_id) excelIds.add(cond.excel_indicator_id)
-      }
-    }
-    if (excelIds.size === 0) { setConditionValuesMap(new Map()); return }
-    const condParams = { collectivity_id: action.collectivity_id, excel_indicator_ids: [...excelIds] }
-    if (action.owner === 'economic_actor') {
-      condParams.owner = 'economic_actor'
-      condParams.economic_actor_id = action.economic_actor_id
-    }
-    const { ok, data: resData } = await api.post("/indicator_value/condition_values", condParams)
-    if (!ok) return
-    const map = new Map()
-    for (const cv of resData) map.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv)
+    const map = await fetchConditionValuesMap(data, action)
     setConditionValuesMap(map)
   }
 
@@ -396,6 +348,17 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
   }, [displayedIndicatorValues.length])
 
   if (isLoading && !indicatorValues.length) return <Loader />
+
+  if (!isLoading && tabTotal === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <p className="text-lg font-medium text-gray-600">Aucun indicateur pour cette situation</p>
+      </div>
+    )
+  }
 
   if (!isLoading && showUnfilledOnly && displayedIndicatorValues.length === 0) {
     return (

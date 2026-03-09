@@ -288,13 +288,14 @@ export default function View() {
                   onChange={(value) => setAction({...action, pilote: value})}
                   options={[
                     { value: "", label: "Sélectionner" },
-                    { value: "epci", label: "EPCI" },
-                    { value: "acteur_economique", label: "Acteur économique" }
+                    { value: "epci", label: "Acteur public" },
+                    { value: "acteur_economique", label: "Acteur économique" },
+                    { value: "autres", label: "Autres" }
                   ]}
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2">Description du pilote</label>
+                <label className="block text-sm font-semibold mb-2">Nom du pilote</label>
                 <input
                   type="text"
                   value={action.pilote_description || ""}
@@ -309,13 +310,14 @@ export default function View() {
                   onChange={(value) => setAction({...action, partners: value})}
                   options={[
                     { value: "", label: "Sélectionner" },
-                    { value: "epci", label: "EPCI" },
-                    { value: "acteur_economique", label: "Acteur économique" }
+                    { value: "epci", label: "Acteur public" },
+                    { value: "acteur_economique", label: "Acteur économique" },
+                    { value: "autres", label: "Autres" }
                   ]}
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2">Description des partenaires</label>
+                <label className="block text-sm font-semibold mb-2">Nom des partenaires</label>
                 <input
                   type="text"
                   value={action.partners_description || ""}

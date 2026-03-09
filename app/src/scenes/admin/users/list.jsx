@@ -10,12 +10,6 @@ const ROLE_LABELS = {
   economic_actor: "Acteur économique"
 }
 
-const ROLE_COLORS = {
-  admin: "bg-blue-100 text-blue-800",
-  user: "bg-gray-100 text-gray-800",
-  economic_actor: "bg-green-100 text-green-800"
-}
-
 export default function List() {
   const navigate = useNavigate()
   const [users, setUsers] = useState([])
@@ -60,9 +54,25 @@ export default function List() {
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.name}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
               <td className="px-6 py-4 text-sm text-gray-600">
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${ROLE_COLORS[user.role]}`}>{ROLE_LABELS[user.role]}</span>
+                {ROLE_LABELS[user.role]}
               </td>
-              <td className="px-6 py-4 text-sm text-gray-600">{user.collectivities?.length || 0}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">
+                {user.collectivities?.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {user.collectivities.map((c, i) => (
+                      <span
+                        key={i}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          c.status === "approved" ? "bg-green-100 text-green-800" : c.status === "pending" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
+                        }`}>
+                        {c.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-400">Aucune</span>
+                )}
+              </td>
               <td className="px-6 py-4 text-sm text-gray-600">
                 {user.last_login_at && !isNaN(new Date(user.last_login_at).getTime()) ? new Date(user.last_login_at).toLocaleDateString("fr-FR") : "Jamais"}
               </td>

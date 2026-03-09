@@ -40,34 +40,12 @@ const formatEnergie = (value) => {
   return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} GWh`;
 };
 
-function LockedChart() {
-  return (
-    <div className="relative h-full">
-      <div className="card-shadow rounded-2xl p-6 min-h-[400px] bg-gray-50 filter blur-[5px] pointer-events-none select-none">
-        <div className="h-4 w-40 bg-gray-200 rounded mb-2"></div>
-        <div className="h-3 w-28 bg-gray-100 rounded mb-6"></div>
-        <div className="flex items-end gap-3 h-48 mt-4">
-          {[40, 65, 50, 80, 60, 75, 45, 90, 55, 70].map((h, i) => (
-            <div key={i} className="flex-1 bg-gray-200 rounded-t" style={{ height: `${h}%` }}></div>
-          ))}
-        </div>
-      </div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg px-6 py-4 text-center max-w-xs">
-          <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          <p className="text-gray-700 font-semibold text-sm">Complétez les situations d'une action pour accéder au tableau de bord</p>
-        </div>
-      </div>
-    </div>
-  )
-}
+const SITUATION_LABELS = { init: 'Initiale', ref: 'Référence', prev: 'Prévisionnel', expost: 'Ex-post' }
 
 export default function Home() {
   const [actions, setActions] = useState([])
   const navigate = useNavigate()
-  const { collectivity, user } = useStore()
+  const { collectivity, user, economicActor } = useStore()
   const [filters, setFilters] = useState({ search: "", status: "" })
   const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -123,10 +101,13 @@ export default function Home() {
     if (actions.length === 0) return null
     const firstNonConfigAction = actions.find(a => a.type !== "config")
     const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.completion_expost || 0)) / 4): 0
+    const onboardingSource = user.role === 'economic_actor' && economicActor
+      ? economicActor.collectivities?.find(c => c.id === collectivity._id) || {}
+      : collectivity
     return [
       { label: "Créer votre première action", done: actions.length > 0, link: "/actions" },
-      { label: 'Remplir Données de base dans "Mes données générales"', done: !!collectivity?.basedata_onboarded, link: "/general-data" },
-      { label: 'Remplir Parc types dans "Mes données générales"', done: !!collectivity?.parc_types_onboarded, link: "/general-data" },
+      { label: 'Remplir Données de base dans "Mes données générales"', done: !!onboardingSource?.basedata_onboarded, link: "/general-data" },
+      { label: 'Remplir Parc types dans "Mes données générales"', done: !!onboardingSource?.parc_types_onboarded, link: "/general-data" },
       { label: "Remplir votre action", done: firstActionCompletion > 0, link: firstNonConfigAction ? `/actions/${firstNonConfigAction._id}/dashboard` : "/actions" },
     ]
   })()
@@ -199,6 +180,8 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {isOnboarded && <MisconfiguredActionsBanner collectivity={collectivity} />}
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
           <div className="xl:col-span-8">
@@ -826,5 +809,89 @@ function ActionContributionSection({ collectivity }) {
       </div>
     </div>
   );
+}
+
+
+function MisconfiguredActionsBanner({ collectivity }) {
+  const [incompleteActions, setIncompleteActions] = useState([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!collectivity?._id) return
+    const fetchData = async () => {
+      try {
+        const { ok, data, code } = await api.post("/indicator_value/check-general-data-completion", { collectivity_id: collectivity._id })
+        if (!ok) return toast.error(code || "Une erreur est survenue")
+        setIncompleteActions(data)
+      } catch (error) {
+        toast.error(error.code || "Une erreur est survenue")
+      }
+    }
+    fetchData()
+  }, [collectivity?._id])
+
+  if (incompleteActions.length === 0) return null
+
+  return (
+    <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
+      <div className="flex items-start gap-3">
+        <FiAlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+        <div className="flex-1">
+          <h3 className="font-semibold text-amber-800 text-sm mb-2">Données générales incomplètes</h3>
+          <p className="text-sm text-amber-700 mb-3">
+            Certaines actions ont des données générales associées non remplies. Merci de compléter les données générales pour que les calculs soient corrects.
+          </p>
+          <div className="space-y-3">
+            {incompleteActions.map(({ actionName, items }) => (
+              <div key={actionName}>
+                <div className="font-semibold text-amber-900 text-sm">{actionName}</div>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {items.map((item, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs">
+                      {item.configActionName} — {SITUATION_LABELS[item.situation]} {item.year}
+                      <span className="font-semibold">({item.completion}%)</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => navigate("/general-data")}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-900 transition-colors"
+          >
+            Compléter les données générales
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LockedChart() {
+  return (
+    <div className="relative h-full">
+      <div className="card-shadow rounded-2xl p-6 min-h-[400px] bg-gray-50 filter blur-[5px] pointer-events-none select-none">
+        <div className="h-4 w-40 bg-gray-200 rounded mb-2"></div>
+        <div className="h-3 w-28 bg-gray-100 rounded mb-6"></div>
+        <div className="flex items-end gap-3 h-48 mt-4">
+          {[40, 65, 50, 80, 60, 75, 45, 90, 55, 70].map((h, i) => (
+            <div key={i} className="flex-1 bg-gray-200 rounded-t" style={{ height: `${h}%` }}></div>
+          ))}
+        </div>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg px-6 py-4 text-center max-w-xs">
+          <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          <p className="text-gray-700 font-semibold text-sm">Complétez les situations d'une action pour accéder au tableau de bord</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 

@@ -12,6 +12,7 @@ const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../se
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
+const { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator } = require('../utils/indicators');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -19,81 +20,53 @@ const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Expost', situation: 'expost' },
 ];
 
-const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
+const updateOnboardingStatus = async (action) => {
+  if (action.type !== 'config' || (action.name !== 'Données de base' && action.name !== 'Parc types')) return;
+  try {
+    const ownerFilter = { owner: action.owner };
+    if (action.owner === 'economic_actor' && action.economic_actor_id) ownerFilter.economic_actor_id = action.economic_actor_id;
 
-const buildYearMappings = (regularActions) => {
-  const mappings = {};
-  const ensure = (k) => {
-    if (!mappings[k]) mappings[k] = { year_init: new Set(), year_ref: new Set(), year_prev: new Set(), year_expost: new Set() };
-  };
-  for (const a of regularActions) {
-    if (a.year_init != null) {
-      ensure(`init_${a.year_init}`);
-      mappings[`init_${a.year_init}`].year_init.add(a.year_init);
-    }
-    for (const f of a.exel_files_prev || []) {
-      if (f.year_prev != null) {
-        ensure(`prev_${f.year_prev}`);
-        if (a.year_init != null) mappings[`prev_${f.year_prev}`].year_init.add(a.year_init);
-        if (f.year_ref != null) mappings[`prev_${f.year_prev}`].year_ref.add(f.year_ref);
-        mappings[`prev_${f.year_prev}`].year_prev.add(f.year_prev);
-      }
-      if (f.year_ref != null) {
-        ensure(`ref_${f.year_ref}`);
-        if (a.year_init != null) mappings[`ref_${f.year_ref}`].year_init.add(a.year_init);
-        mappings[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
-      }
-    }
-    for (const f of a.excel_files_expost || []) {
-      if (f.year_expost != null) {
-        ensure(`expost_${f.year_expost}`);
-        if (a.year_init != null) mappings[`expost_${f.year_expost}`].year_init.add(a.year_init);
-        if (f.year_ref != null) mappings[`expost_${f.year_expost}`].year_ref.add(f.year_ref);
-        mappings[`expost_${f.year_expost}`].year_expost.add(f.year_expost);
-      }
-      if (f.year_ref != null) {
-        ensure(`ref_${f.year_ref}`);
-        if (a.year_init != null) mappings[`ref_${f.year_ref}`].year_init.add(a.year_init);
-        mappings[`ref_${f.year_ref}`].year_ref.add(f.year_ref);
-      }
-    }
-  }
-  for (const k in mappings) {
-    const m = mappings[k];
-    mappings[k] = { year_init: [...m.year_init], year_ref: [...m.year_ref], year_prev: [...m.year_prev], year_expost: [...m.year_expost] };
-  }
-  return mappings;
-};
+    const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, ...ownerFilter });
 
-const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap) => {
-  if (!iv.display_condition?.conditions?.length) return true;
-  const results = iv.display_condition.conditions.map((cond) => {
-    const targetSituation = cond.excel_indicator_situation || iv.situation;
-    const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
-    return possibleYears.some((year) => {
-      const source = conditionValuesMap.get(`${cond.excel_indicator_id}_${targetSituation}_${year}`);
-      if (!source) return false;
-      const val = source.value?.[source.indicator_type];
-      let isMatch = false;
-      if (cond.type === 'equals') {
-        isMatch = val == cond.value;
-        if (Array.isArray(val) && Array.isArray(cond.value)) isMatch = JSON.stringify([...val].sort()) === JSON.stringify([...cond.value].sort());
+    const condExcelIds = new Set();
+    for (const iv of allIVs) {
+      if (iv.display_condition?.conditions) {
+        for (const cond of iv.display_condition.conditions) {
+          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+        }
       }
-      if (cond.type === 'contains') {
-        if (Array.isArray(val)) isMatch = val.includes(cond.value);
-        else if (typeof val === 'string') isMatch = val.includes(cond.value);
-      }
-      if (cond.type === 'greaterThan') isMatch = Number(val) > Number(cond.value);
-      if (cond.type === 'lessThan') isMatch = Number(val) < Number(cond.value);
-      if (cond.type === 'greaterOrEqual') isMatch = Number(val) >= Number(cond.value);
-      if (cond.type === 'lessOrEqual') isMatch = Number(val) <= Number(cond.value);
-      if (cond.type === 'notEmpty') isMatch = val !== null && val !== undefined && val !== '' && (!Array.isArray(val) || val.length > 0);
-      if (cond.type === 'isEmpty') isMatch = val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0);
-      if (cond.negate) isMatch = !isMatch;
-      return isMatch;
-    });
-  });
-  return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+    }
+
+    const [regularActions, condValues] = await Promise.all([
+      Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }),
+      condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, ...ownerFilter }) : Promise.resolve([]),
+    ]);
+
+    const conditionValuesMap = new Map();
+    for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+
+    const yearMappingsBySituationYear = buildYearMappings(regularActions);
+
+    let total = 0;
+    let filled = 0;
+    for (const iv of allIVs) {
+      if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
+      total++;
+      if (isIndicatorValueFilled(iv)) filled++;
+    }
+
+    const isComplete = total > 0 && filled === total;
+    const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
+
+    if (action.owner === 'economic_actor' && action.economic_actor_id) {
+      await EconomicActor.updateOne({ _id: action.economic_actor_id, 'collectivities.id': action.collectivity_id }, { $set: { [`collectivities.$.${field}`]: isComplete } });
+    } else {
+      if (isComplete) await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
+    }
+    await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
+  } catch (e) {
+    capture(e);
+  }
 };
 
 // Aggregated stats for an action (situation/year mapping + completion) - avoids fetching all documents client-side
@@ -193,6 +166,84 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
   }
 });
 
+// Check general data completion for all config actions of a collectivity, grouped by related action
+router.post('/check-general-data-completion', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity_id } = req.body;
+    if (!collectivity_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const [configActions, regularActions] = await Promise.all([
+      Action.find({ collectivity_id, type: 'config', owner: 'collectivity' }),
+      Action.find({ collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
+    ]);
+
+    if (configActions.length === 0) return res.status(200).send({ ok: true, data: [] });
+
+    const configActionIds = configActions.map((a) => a._id.toString());
+    const indicatorValues = await IndicatorValue.find({ action_id: { $in: configActionIds }, indicator_excel_id: { $nin: HIDDEN_IDS } });
+
+    const yearMappingsBySituationYear = buildYearMappings(regularActions);
+
+    // Collect and fetch condition values
+    const condExcelIds = new Set();
+    for (const iv of indicatorValues) {
+      if (iv.display_condition?.conditions) {
+        for (const cond of iv.display_condition.conditions) {
+          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
+        }
+      }
+    }
+    const conditionValuesMap = new Map();
+    if (condExcelIds.size > 0) {
+      const condValues = await IndicatorValue.find({ collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' });
+      for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
+    }
+
+    // Group by configAction name + situation + year, compute completion (only for displayed indicators)
+    const groups = {};
+    for (const iv of indicatorValues) {
+      const situationYearKey = `${iv.situation}_${iv.year}`;
+      const yearMappings = yearMappingsBySituationYear[situationYearKey];
+      if (!shouldDisplayIndicator(iv, yearMappings, conditionValuesMap)) continue;
+
+      const key = `${iv.action_name}__${iv.situation}__${iv.year}`;
+      if (!groups[key]) groups[key] = { configActionName: iv.action_name, situation: iv.situation, year: iv.year, total: 0, filled: 0 };
+      groups[key].total++;
+      if (isIndicatorValueFilled(iv)) groups[key].filled++;
+    }
+
+    // Map situation/year to action names from regular actions
+    const situationYearActions = {};
+    for (const action of regularActions) {
+      if (action.year_init != null) (situationYearActions[`init_${action.year_init}`] ||= []).push(action.name);
+      const refYears = new Set();
+      for (const f of action.exel_files_prev || []) {
+        if (f.year_ref != null) refYears.add(f.year_ref);
+        if (f.year_prev != null) (situationYearActions[`prev_${f.year_prev}`] ||= []).push(action.name);
+      }
+      for (const f of action.excel_files_expost || []) {
+        if (f.year_ref != null) refYears.add(f.year_ref);
+        if (f.year_expost != null) (situationYearActions[`expost_${f.year_expost}`] ||= []).push(action.name);
+      }
+      for (const y of refYears) (situationYearActions[`ref_${y}`] ||= []).push(action.name);
+    }
+
+    // Build result grouped by action name
+    const groupedMap = {};
+    for (const group of Object.values(groups)) {
+      if (group.filled >= group.total) continue;
+      const actions = situationYearActions[`${group.situation}_${group.year}`] || [];
+      const item = { configActionName: group.configActionName, situation: group.situation, year: group.year, completion: group.total > 0 ? Math.round((group.filled / group.total) * 100) : 0 };
+      for (const actionName of actions) (groupedMap[actionName] ||= []).push(item);
+    }
+
+    return res.status(200).send({ ok: true, data: Object.entries(groupedMap).map(([actionName, items]) => ({ actionName, items })) });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 // Fetch only the indicator values needed for display condition evaluation (by excel_indicator_id)
 router.post('/condition_values', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -208,7 +259,7 @@ router.post('/condition_values', passport.authenticate(['admin', 'user'], { sess
       query.owner = 'economic_actor';
     }
 
-    const data = await IndicatorValue.find(query).select('indicator_excel_id situation year value indicator_type').lean();
+    const data = await IndicatorValue.find(query).lean();
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
@@ -306,48 +357,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     await computeActionCompletion(indicatorValue.action_id);
 
-    // Update onboarding status for config actions
-    if (action.type === 'config' && action.owner === 'collectivity' && (action.name === 'Données de base' || action.name === 'Parc types')) {
-      try {
-        const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, owner: 'collectivity' });
-
-        const condExcelIds = new Set();
-        for (const iv of allIVs) {
-          if (iv.display_condition?.conditions) {
-            for (const cond of iv.display_condition.conditions) {
-              if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-            }
-          }
-        }
-
-        const [regularActions, condValues] = await Promise.all([
-          Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
-          condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' }) : Promise.resolve([]),
-        ]);
-
-        const conditionValuesMap = new Map();
-        for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
-
-        const yearMappingsBySituationYear = buildYearMappings(regularActions);
-
-        let total = 0;
-        let filled = 0;
-        for (const iv of allIVs) {
-          if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
-          total++;
-          if (isIndicatorValueFilled(iv)) filled++;
-        }
-
-        const isComplete = total > 0 && filled === total;
-        if (isComplete) {
-          const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
-          await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
-        }
-        await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
-      } catch (e) {
-        capture(e);
-      }
-    }
+    await updateOnboardingStatus(action);
 
     res.status(200).send({ ok: true, data: indicatorValue });
     const excelUpdatePromises = [];
@@ -576,7 +586,12 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = await Action.findById(req.body.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    const indicatorValues = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS } });
+
+    const query = { action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS } };
+    if (req.body.situation) query.situation = req.body.situation;
+    if (req.body.year) query.year = req.body.year;
+
+    const indicatorValues = await IndicatorValue.find(query);
     // Build conditionValuesMap and yearMappings to filter by display_condition
     const condExcelIds = new Set();
     for (const iv of indicatorValues) {
@@ -602,12 +617,14 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     const indicatorMap = new Map(indicators.map((ind) => [ind._id.toString(), ind]));
     const workbook = new ExcelJS.Workbook();
 
-    const situations = [
+    const allSituations = [
       { key: 'init', label: 'Remplissage - Sit. Init.' },
       { key: 'ref', label: 'Remplissage - Sit. Ref.' },
       { key: 'prev', label: 'Remplissage - Sit. Prev.' },
       { key: 'expost', label: 'Remplissage - Sit. Expost' },
     ];
+
+    const situations = req.body.situation ? allSituations.filter((s) => s.key === req.body.situation) : allSituations;
 
     const columns = [
       { header: 'Catégorie', key: 'category', width: 20 },
@@ -687,8 +704,10 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
     const importedWorkbook = new ExcelJS.Workbook();
     await importedWorkbook.xlsx.load(fileBuffer);
 
+    const sheetsToProcess = req.body.situation ? SITUATION_SHEETS.filter((s) => s.situation === req.body.situation) : SITUATION_SHEETS;
+
     const extractedData = [];
-    for (const { sheetName, situation } of SITUATION_SHEETS) {
+    for (const { sheetName, situation } of sheetsToProcess) {
       const sheet = importedWorkbook.getWorksheet(sheetName);
       if (!sheet) continue;
       sheet.eachRow((row, rowNumber) => {
@@ -720,18 +739,20 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       }
     }
     if (excelFileIds.length > 0) {
-      await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, SITUATION_SHEETS).catch(capture)));
+      await Promise.all(excelFileIds.map((fileId) => importSheetsToExcelFile(fileId, fileBuffer, sheetsToProcess).catch(capture)));
     }
 
     if (!extractedData.length) return res.status(200).json({ ok: true });
     const indicators = await Indicator.find({ excel_indicator_id: { $in: [...new Set(extractedData.map((d) => d.excel_indicator_id))] } });
     const indicatorMap = new Map(indicators.map((ind) => [ind.excel_indicator_id, ind]));
 
-    const indicatorValues = await IndicatorValue.find({
+    const ivQuery = {
       indicator_id: { $in: indicators.map((ind) => ind._id.toString()) },
       collectivity_id: collectivity._id,
       situation: { $in: [...new Set(extractedData.map((d) => d.situation))] },
-    });
+    };
+    if (req.body.year) ivQuery.year = req.body.year;
+    const indicatorValues = await IndicatorValue.find(ivQuery);
 
     const indicatorValueMap = new Map();
     for (const iv of indicatorValues) {
@@ -806,7 +827,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       action.last_modif_date = new Date();
       await action.save();
 
-      await computeActionCompletion(action_id);
+      await computeActionCompletion(action_id, { situation: req.body.situation, year: req.body.year });
 
       // Cross-action sync: propagate updated values to other indicator values sharing same indicator_id/situation/year/owner (like PUT)
       const syncLogs = [];
@@ -914,48 +935,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       await Promise.all(excelUpdatePromises);
       if (syncLogs.length > 0) await Log.insertMany(syncLogs);
 
-      // Onboarding status update for config actions (like PUT)
-      if (action.type === 'config' && action.owner === 'collectivity' && (action.name === 'Données de base' || action.name === 'Parc types')) {
-        try {
-          const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, owner: 'collectivity' });
-
-          const condExcelIds = new Set();
-          for (const iv of allIVs) {
-            if (iv.display_condition?.conditions) {
-              for (const cond of iv.display_condition.conditions) {
-                if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-              }
-            }
-          }
-
-          const [regularActions, condValues] = await Promise.all([
-            Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' }),
-            condExcelIds.size > 0 ? IndicatorValue.find({ collectivity_id: action.collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' }) : Promise.resolve([]),
-          ]);
-
-          const conditionValuesMap = new Map();
-          for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
-
-          const yearMappingsBySituationYear = buildYearMappings(regularActions);
-
-          let total = 0;
-          let filled = 0;
-          for (const iv of allIVs) {
-            if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
-            total++;
-            if (isIndicatorValueFilled(iv)) filled++;
-          }
-
-          const isComplete = total > 0 && filled === total;
-          if (isComplete) {
-            const field = action.name === 'Données de base' ? 'basedata_onboarded' : 'parc_types_onboarded';
-            await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
-          }
-          await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
-        } catch (e) {
-          capture(e);
-        }
-      }
+      await updateOnboardingStatus(action);
     }
 
     res.status(200).json({ ok: true });

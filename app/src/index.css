@@ -123,6 +123,10 @@
     -webkit-appearance: none;
     margin: 0;
   }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
 }
 
 .fc-daygrid-day.fc-day-today {

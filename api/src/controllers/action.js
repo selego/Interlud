@@ -8,7 +8,7 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -351,7 +351,70 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       collectivity_name: action.collectivity_name,
     });
 
+    // Delete Excel files from SharePoint (deduplicated car exel_files_prev[0] et excel_files_expost[0] partagent le même fichier à la création)
+    const allExcelFileIds = [...new Set([...(action.exel_files_prev || []), ...(action.excel_files_expost || [])].map((f) => f.excel_file_id).filter(Boolean))];
+
+    if (allExcelFileIds.length > 0) {
+      const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+      for (const fileId of allExcelFileIds) {
+        try {
+          await graphFetch(`/sites/${siteId}/drive/items/${fileId}`, { method: 'DELETE' });
+        } catch (e) {
+          console.error(`Failed to delete Excel file ${fileId}:`, e.message);
+        }
+      }
+    }
+
+    // Cleanup des indicator values config liées à cette action
+    const configActions = await Action.find({ collectivity_id: action.collectivity_id, type: 'config', owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) });
+    const configActionIds = configActions.map((a) => a._id.toString());
+    const configActionBasicData = configActions.find((a) => a.name === 'Données de base');
+
+    // Retirer l'excel_worksheetname de cette action des checkbox ActionsCharte/ActionsAutres
+    if (configActionBasicData && action.excel_worksheetname) {
+      const otherActionSameWorksheet = await Action.findOne({
+        _id: { $ne: action._id },
+        collectivity_id: action.collectivity_id,
+        owner: action.owner,
+        type: { $ne: 'config' },
+        excel_worksheetname: action.excel_worksheetname,
+        ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}),
+      });
+
+      if (!otherActionSameWorksheet) await IndicatorValue.updateMany({ action_id: configActionBasicData._id.toString(), indicator_excel_id: { $in: ['ActionsCharte', 'ActionsAutres'] } }, { $pull: { 'value.checkbox': action.excel_worksheetname } });
+    }
+
+    // Supprimer les IVs de l'action
     await IndicatorValue.deleteMany({ action_id: req.params.id });
+
+    // Vérifier quels config IVs sont orphelins en cherchant si une autre ACTION régulière référence encore cette année
+    // (même logique que le PUT indicator_value qui trouve les actions par leurs champs year_init, exel_files_prev.year_prev, etc.)
+    if (configActionIds.length > 0) {
+      const configIVs = await IndicatorValue.find({ action_id: { $in: configActionIds } });
+      const configPairs = [...new Set(configIVs.map((iv) => `${iv.situation}_${iv.year}`))];
+      const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
+      const baseQuery = { collectivity_id: action.collectivity_id, type: { $ne: 'config' }, _id: { $ne: action._id }, ...ownerFilter };
+
+      for (const pair of configPairs) {
+        const [situation, year] = pair.split('_');
+        const yearNum = parseInt(year);
+
+        let otherAction = null;
+        if (situation === 'init') otherAction = await Action.findOne({ ...baseQuery, year_init: yearNum });
+        if (situation === 'prev') otherAction = await Action.findOne({ ...baseQuery, 'exel_files_prev.year_prev': yearNum });
+        if (situation === 'expost') otherAction = await Action.findOne({ ...baseQuery, 'excel_files_expost.year_expost': yearNum });
+        if (situation === 'ref') otherAction = await Action.findOne({ ...baseQuery, $or: [{ 'exel_files_prev.year_ref': yearNum }, { 'excel_files_expost.year_ref': yearNum }] });
+
+        if (!otherAction) await IndicatorValue.deleteMany({ action_id: { $in: configActionIds }, situation, year: yearNum });
+      }
+
+      // Supprimer les actions config qui n'ont plus d'indicator values
+      for (const configAction of configActions) {
+        const remainingIVs = await IndicatorValue.countDocuments({ action_id: configAction._id.toString() });
+        if (remainingIVs === 0) await Action.deleteOne({ _id: configAction._id });
+      }
+    }
+
     await Action.deleteOne({ _id: req.params.id });
 
     return res.status(200).send({ ok: true });
