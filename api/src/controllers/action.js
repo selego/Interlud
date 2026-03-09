@@ -134,16 +134,23 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       'exel_files_prev.0.excel_file_id': { $exists: true },
     });
 
-    // Créer l'Excel : dupliquer depuis une action existante ou depuis le master template
-    const excelFileName = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
-    const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null);
+    // Créer 2 fichiers Excel : un pour prev, un pour expost
+    const sourceExcelId = existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null;
+    const excelFileNamePrev = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
+    const excelFileNameExpost = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Expost${req.body.year_expost}.xlsx` : `${req.body.name}_Expost${req.body.year_expost}.xlsx`;
+    const excelFileIdPrev = await duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelId);
+    const excelFileIdExpost = await duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelId);
+
+    // Nettoyer les sheets inutiles dans chaque fichier
+    await clearWorksheetValues(excelFileIdPrev, 'expost');
+    await clearWorksheetValues(excelFileIdExpost, 'prev');
 
     // Créer l'action
     const action = await Action.create({
       ...req.body,
       excel_worksheetname: parentAction.excel_worksheetname,
-      exel_files_prev: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
-      excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_prev, excel_file_id: excelFileId }],
+      exel_files_prev: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileIdPrev }],
+      excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_expost, excel_file_id: excelFileIdExpost }],
       last_modif_by_id: req.user._id,
       last_modif_by_name: req.user.name,
       last_modif_by_email: req.user.email,
@@ -151,7 +158,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     });
     if (!action) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    // Vérifier si les actions config consolidées existent déjà
+    // Vérifier si les actions config existent déjà
     const configQuery = { collectivity_id: collectivity._id, type: 'config', owner: isEconomicActor ? 'economic_actor' : 'collectivity', ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}) };
     let configActionBasicDataObj = await Action.findOne({ ...configQuery, name: 'Données de base' });
     let configActionParcTypesObj = await Action.findOne({ ...configQuery, name: 'Parc types' });
@@ -174,7 +181,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       action_id: { $in: configActionIds },
       $or: [
         { situation: 'init', year: req.body.year_init },
-        { situation: 'ref', year: req.body.year_ref },
+        { situation: 'ref', year: req.body.year_prev },
+        ...(req.body.year_expost !== req.body.year_prev ? [{ situation: 'ref', year: req.body.year_expost }] : []),
         { situation: 'prev', year: req.body.year_prev },
         { situation: 'expost', year: req.body.year_expost },
       ],
@@ -185,17 +193,23 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     {
       // Créer les indicator values pour les actions config (indicateurs sans action liée)
       const indicators = await Indicator.find({ $or: [{ linked_action_id: null }, { linked_action_id: { $exists: false } }] });
-      const allSituations = ['init', 'ref', 'prev', 'expost'];
       const parcTypesDefaultValues = { init: [], ref: [], prev: [], expost: [] };
 
-      for (const indicator of indicators) {
-        const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
-        const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicDataObj : configActionParcTypesObj;
-        const isParcTypes = configAction.name === 'Parc types';
+      // Paires situation/année : ref a 2 entrées si year_expost != year_prev
+      const situationYearPairs = [
+        { situation: 'init', year: req.body.year_init },
+        { situation: 'ref', year: req.body.year_prev },
+        { situation: 'prev', year: req.body.year_prev },
+        { situation: 'expost', year: req.body.year_expost },
+      ];
+      if (req.body.year_expost !== req.body.year_prev) situationYearPairs.push({ situation: 'ref', year: req.body.year_expost });
 
-        for (const situation of situationsForIndicator) {
-          const yearForSituation = req.body[`year_${situation}`];
-          if (existingSituationKeys.has(`${situation}_${yearForSituation}`)) continue;
+      for (const indicator of indicators) {
+        const pairs = situationYearPairs.filter((p) => indicator.presence_in_excel?.[p.situation] === true);
+        const configAction = indicator.indicator_category_name === 'Données de base' ? configActionBasicDataObj : configActionParcTypesObj;
+
+        for (const { situation, year } of pairs) {
+          if (existingSituationKeys.has(`${situation}_${year}`)) continue;
 
           const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
           const indicatorValue = {
@@ -209,7 +223,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
             indicator_name: indicator.name,
             indicator_type: indicator.value_type,
             situation,
-            year: req.body[`year_${situation}`],
+            year,
             indicator_value_unit: indicator.value_unit,
             value_default: { [indicator.value_type]: defaultValue },
             indicator_value_possibilities: indicator.value_possibilities || [],
@@ -221,7 +235,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
             excel_line_number: indicator.excel_line_number?.[situation],
           };
 
-          if (isParcTypes) {
+          if (configAction.name === 'Parc types') {
             indicatorValue.value = { [indicator.value_type]: defaultValue };
             if (defaultValue !== null && indicator.excel_indicator_id) parcTypesDefaultValues[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue });
           }
@@ -241,10 +255,13 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         }
       }
 
-      // Update Excel with Parc types default values in batch
+      // Update Excel with Parc types default values in batch — écrire dans les 2 fichiers
       const excelBatchPromises = [];
-      for (const situation of allSituations) {
-        if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileId, parcTypesDefaultValues[situation], situation).catch(capture));
+      for (const situation of ['init', 'ref', 'prev']) {
+        if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, parcTypesDefaultValues[situation], situation).catch(capture));
+      }
+      for (const situation of ['init', 'ref', 'expost']) {
+        if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, parcTypesDefaultValues[situation], situation).catch(capture));
       }
       await Promise.all(excelBatchPromises);
     }
@@ -252,12 +269,20 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     // Créer les indicator values pour l'action principale
     const indicators = await Indicator.find({ linked_action_id: parentAction._id });
 
-    const allSituations = ['init', 'ref', 'prev', 'expost'];
+    // Paires situation/année pour l'action (ref a 2 entrées si year_expost != year_prev)
+    const actionSituationYearPairs = [
+      { situation: 'init', year: req.body.year_init },
+      { situation: 'ref', year: req.body.year_prev },
+      { situation: 'prev', year: req.body.year_prev },
+      { situation: 'expost', year: req.body.year_expost },
+    ];
+    if (req.body.year_expost !== req.body.year_prev) actionSituationYearPairs.push({ situation: 'ref', year: req.body.year_expost });
+
     const createdIndicatorValues = [];
 
     for (const indicator of indicators) {
-      const situationsForIndicator = allSituations.filter((situation) => indicator.presence_in_excel?.[situation] === true);
-      for (const situation of situationsForIndicator) {
+      const pairs = actionSituationYearPairs.filter((p) => indicator.presence_in_excel?.[p.situation] === true);
+      for (const { situation, year } of pairs) {
         const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
         const indicatorValue = {
           action_id: action._id,
@@ -270,7 +295,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           indicator_name: indicator.name,
           indicator_type: indicator.value_type,
           situation,
-          year: req.body[`year_${situation}`],
+          year,
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
@@ -291,18 +316,41 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base consolidée
     if (configActionBasicDataObj) {
       const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
-      for (const situation of ['init', 'expost']) {
-        const iv = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation, year: req.body[`year_${situation}`] }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
-        if (iv && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, iv.value?.checkbox, situation);
+
+      // init : écrire dans les 2 fichiers
+      const ivInit = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'init', year: req.body.year_init }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
+      if (ivInit) {
+        if (excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, targetExcelId, ivInit.value?.checkbox, 'init');
+        if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivInit.value?.checkbox, 'init');
       }
 
-      // Mapping des IDs Excel par situation pour les années
-      const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
-      const anneeValues = { init: req.body.year_init, ref: req.body.year_ref, prev: req.body.year_prev, expost: req.body.year_expost };
+      // expost : écrire seulement dans le fichier expost
+      const ivExpost = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'expost', year: req.body.year_expost }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
+      if (ivExpost && excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivExpost.value?.checkbox, 'expost');
 
-      for (const situation of ['init', 'ref', 'prev', 'expost']) {
-        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year: req.body[`year_${situation}`] }, { 'value.number': anneeValues[situation] }, { new: true });
-        if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, anneeExcelIds[situation], anneeValues[situation], situation);
+      // Écriture des années dans les 2 fichiers Excel
+      const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
+
+      // Fichier Prev : init→year_init, ref→year_prev, prev→year_prev
+      const prevFileYears = [
+        { situation: 'init', year: req.body.year_init },
+        { situation: 'ref', year: req.body.year_prev },
+        { situation: 'prev', year: req.body.year_prev },
+      ];
+      for (const { situation, year } of prevFileYears) {
+        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year }, { 'value.number': year }, { new: true });
+        if (excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation);
+      }
+
+      // Fichier Expost : init→year_init, ref→year_expost, expost→year_expost
+      const expostFileYears = [
+        { situation: 'init', year: req.body.year_init },
+        { situation: 'ref', year: req.body.year_expost },
+        { situation: 'expost', year: req.body.year_expost },
+      ];
+      for (const { situation, year } of expostFileYears) {
+        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year }, { 'value.number': year }, { new: true });
+        if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation);
       }
     }
 
