@@ -1,4 +1,4 @@
-const { getAccessToken } = require("../src/services/microsoftGraph");
+const { graphFetch, duplicateExcelFile } = require("../src/services/microsoftGraph");
 const Indicator = require("../src/models/indicator");
 const IndicatorValue = require("../src/models/indicator_value");
 const IndicatorCategory = require("../src/models/indicator_category");
@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADIVUZIGVTMVLVCZE36NH3QQKG6T"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADPAL7ZE5OYO3FHL7HPW7KR6J7YJ"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -589,35 +589,8 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
 
 // Récupère la plage utilisée de la feuille de calcul (values, formulas, address)
 async function getWorksheetUsedRange(fileId, worksheetName) {
-  try {
-    const token = await getAccessToken();
-
-    // Récupérer les informations du site SharePoint
-    const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-
-    if (!siteResponse.ok) {
-      const error = await siteResponse.json();
-      throw new Error(error.error?.message || "Site SharePoint not found");
-    }
-
-    const site = await siteResponse.json();
-
-    // Récupérer la plage utilisée (inclut values, formulas, address par défaut)
-    const usedRangeResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
-
-    if (!usedRangeResponse.ok) {
-      const error = await usedRangeResponse.json();
-      throw new Error(error.error?.message || "Cannot read worksheet used range");
-    }
-
-    const usedRangeData = await usedRangeResponse.json();
-    return usedRangeData; // Contient: { values, formulas, address, ... }
-  } catch (error) {
-    console.error("Erreur lors de la récupération des données:", error);
-    throw error;
-  }
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  return graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`);
 }
 
 async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData = null) {
@@ -1049,174 +1022,184 @@ function formatIndicatorValue(indicatorValue) {
   return String(val);
 }
 
-async function syncIndicatorValuesToExcel(excelFileId, collectivityId) {
-  console.log(`\n🔄 Synchronisation des valeurs pour la collectivité ${collectivityId}...`);
-
-  const token = await getAccessToken();
-
-  // Récupérer le site SharePoint
-  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+// situationYears: [{ situation: 'init', year: 2020 }, { situation: 'ref', year: 2022 }, ...]
+async function syncIndicatorValuesToExcel(excelFileId, collectivityId, situationYears, siteId) {
+  // Charger uniquement les indicator_values pertinents (par situation + year)
+  const indicatorValues = await IndicatorValue.find({
+    collectivity_id: collectivityId,
+    $or: situationYears.map((sy) => ({ situation: sy.situation, year: sy.year })),
   });
-  const site = await siteResponse.json();
 
-  // Récupérer tous les indicator_values de cette collectivité
-  const indicatorValues = await IndicatorValue.find({ collectivity_id: collectivityId });
-  console.log(`📋 ${indicatorValues.length} indicator_values trouvés`);
-
-  if (indicatorValues.length === 0) return console.log("⏭️ Aucune valeur à synchroniser");
+  if (indicatorValues.length === 0) return 0;
 
   // Créer une map par situation et indicator_excel_id pour accès rapide
   const valuesMap = new Map();
   for (const iv of indicatorValues) {
     if (!iv.indicator_excel_id || !iv.situation) continue;
-    const key = `${iv.situation}|${iv.indicator_excel_id}`;
-    valuesMap.set(key, iv);
+    valuesMap.set(`${iv.situation}|${iv.indicator_excel_id}`, iv);
   }
 
+  const relevantSituations = new Set(situationYears.map((sy) => sy.situation));
   let totalUpdated = 0;
 
   for (const { name: worksheetName, situation } of WORKSHEETS) {
-    console.log(`\n📄 Traitement de la feuille "${worksheetName}" (${situation})...`);
+    if (!relevantSituations.has(situation)) continue;
 
-    // Lire la plage utilisée de la feuille
-    const usedRangeResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
-
-    if (!usedRangeResponse.ok) continue;
-
-    const usedRange = await usedRangeResponse.json();
+    // Lire la plage utilisée de la feuille (1 seul appel API)
+    const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
     const rows = usedRange.values || [];
     const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
-    let updatedInSheet = 0;
-
+    // Identifier les lignes à mettre à jour en une passe
+    const matchedUpdates = [];
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const excelIndicatorId = row[4]; // Colonne E - ID indicateur
+      const excelIndicatorId = rows[i][4];
       if (!excelIndicatorId) continue;
 
-      const key = `${situation}|${String(excelIndicatorId).trim()}`;
-      const indicatorValue = valuesMap.get(key);
+      const indicatorValue = valuesMap.get(`${situation}|${String(excelIndicatorId).trim()}`);
       if (!indicatorValue) continue;
 
       const formattedValue = formatIndicatorValue(indicatorValue);
-
       if (formattedValue === null) continue;
 
-      const currentValue = row[5] || ""; // Colonne F - Valeur actuelle
-
-      // Ne mettre à jour que si la valeur a changé
-      if (String(currentValue) !== formattedValue) {
-        console.log(`🔄 Mise à jour de la valeur pour la ligne ${i}: "${formattedValue}"`);
-        const rowNumber = startRow + i;
-        const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${excelFileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/range(address='F${rowNumber}')`, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ values: [[formattedValue]] }),
-        });
-
-        if (response.ok) {
-          updatedInSheet++;
-        } else {
-          console.log(`   ❌ Erreur ligne ${rowNumber}`);
-        }
-      }
+      matchedUpdates.push({ rowIndex: i, cellValue: formattedValue });
     }
 
-    if (updatedInSheet > 0) {
-      console.log(`   📊 ${updatedInSheet} valeurs mises à jour`);
-      totalUpdated += updatedInSheet;
+    if (matchedUpdates.length === 0) continue;
+
+    // Construire un range contigu min..max et PATCH en 1 seul appel
+    const minRowIndex = Math.min(...matchedUpdates.map((u) => u.rowIndex));
+    const maxRowIndex = Math.max(...matchedUpdates.map((u) => u.rowIndex));
+    const updateMap = new Map(matchedUpdates.map((u) => [u.rowIndex, u.cellValue]));
+
+    const rangeValues = [];
+    for (let i = minRowIndex; i <= maxRowIndex; i++) {
+      rangeValues.push([updateMap.has(i) ? updateMap.get(i) : (rows[i]?.[5] ?? "")]);
     }
+
+    await graphFetch(`/sites/${siteId}/drive/items/${excelFileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+      method: "PATCH",
+      body: JSON.stringify({ values: rangeValues }),
+    });
+
+    totalUpdated += matchedUpdates.length;
   }
 
-  console.log(`\n✅ Synchronisation terminée: ${totalUpdated} valeurs mises à jour au total`);
+  return totalUpdated;
 }
 
 async function duplicateMasterExcel(collectivityName) {
   console.log(`\n📋 Duplication du fichier master pour "${collectivityName}"...`);
 
-  const token = await getAccessToken();
-
-  // Récupérer le site SharePoint
-  const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${sharePointSiteName}.sharepoint.com`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  const site = await siteResponse.json();
-
-  // Récupérer les infos du fichier master
-  const masterFileResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${masterFileId}`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  const masterFile = await masterFileResponse.json();
-  const parentFolderId = masterFile.parentReference.id;
+  // Récupérer les infos du fichier master pour extraire la version
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const masterFile = await graphFetch(`/sites/${siteId}/drive/items/${masterFileId}`);
 
   // Extraire la version du nom du master (ex: "Calcul des actions_V10.xlsx" → "V10")
   const masterFileName = masterFile.name.replace(".xlsx", "");
   const versionMatch = masterFileName.match(/_V(\d+)$/);
   const version = versionMatch ? `_V${versionMatch[1]}` : "";
 
-  // Dupliquer le fichier avec le nom de la collectivité + version
   const newFileName = `${collectivityName}${version}.xlsx`;
   console.log(`📄 Nouveau fichier: ${newFileName}`);
 
-  const copyResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${masterFileId}/copy`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      parentReference: { id: parentFolderId },
-      name: newFileName,
-    }),
-  });
+  // Utiliser duplicateExcelFile du service (polling robuste + retry)
+  const newFileId = await duplicateExcelFile(newFileName, null, masterFileId);
 
-  if (!copyResponse.ok && copyResponse.status !== 202) {
-    const error = await copyResponse.json();
-    throw new Error(error.error?.message || "Erreur lors de la duplication");
-  }
-
-  // La copie est asynchrone, on attend un peu puis on cherche le fichier
-  console.log("⏳ Copie en cours...");
-  await new Promise((resolve) => setTimeout(resolve, 3000));
-
-  // Chercher le fichier créé
-  const filesResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/items/${parentFolderId}/children`, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  const filesData = await filesResponse.json();
-  const newFile = filesData.value.find((f) => f.name === newFileName);
-
-  if (!newFile) {
-    throw new Error(`Fichier "${newFileName}" non trouvé après duplication`);
-  }
-
-  console.log(`✅ Fichier créé: ${newFile.name} (ID: ${newFile.id})`);
-  return newFile.id;
+  console.log(`✅ Fichier créé: ${newFileName} (ID: ${newFileId})`);
+  return newFileId;
 }
 
 async function generateExcelForAllCollectivities() {
-  console.log("\n📊 Génération des  Excel pour toutes les collectivités...");
+  console.log("\n📊 Régénération des Excel pour toutes les collectivités...");
 
-  const collectivities = await Collectivity.find({ name: "TestCollectivity" });
-  console.log(`📋 ${collectivities.length} collectivités trouvées`);
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  // Extraire la version du master (ex: "Calcul des actions_V12.xlsx" → "_V12")
+  const masterFile = await graphFetch(`/sites/${siteId}/drive/items/${masterFileId}`);
+  const versionMatch = masterFile.name.replace(".xlsx", "").match(/_V(\d+)$/);
+  const versionSuffix = versionMatch ? `_V${versionMatch[1]}` : "";
+
+  const collectivities = await Collectivity.find({ name: "Test2" });
+  console.log(`📋 ${collectivities.length} collectivités trouvées (master: ${masterFile.name})`);
+
+  let totalFiles = 0;
+  let totalValues = 0;
 
   for (const collectivity of collectivities) {
-    console.log(`\n🏙️ Traitement de "${collectivity.name}"...`);
+    if (!collectivity.sharepoint_folder_id) {
+      console.log(`⏭️ "${collectivity.name}" : pas de dossier SharePoint, ignorée`);
+      continue;
+    }
 
-    try {
-      // 1. Dupliquer le master Excel
-      const newExcelFileId = await duplicateMasterExcel(collectivity.name);
+    const actions = await Action.find({ collectivity_id: collectivity._id.toString() });
+    if (actions.length === 0) continue;
 
-      // 2. Synchroniser les valeurs vers le nouveau fichier Excel
-      await syncIndicatorValuesToExcel(newExcelFileId, collectivity._id.toString());
+    console.log(`\n🏙️ "${collectivity.name}" : ${actions.length} action(s)`);
 
-      // 3. Mettre à jour la collectivité avec le nouvel excelFileId
-      await Collectivity.findByIdAndUpdate(collectivity._id, { excelFileId: newExcelFileId });
-      console.log(`✅ Collectivité "${collectivity.name}" mise à jour avec excelFileId: ${newExcelFileId}`);
-    } catch (error) {
-      console.error(`❌ Erreur pour "${collectivity.name}":`, error.message);
+    for (const action of actions) {
+      // Traiter les fichiers prev
+      for (let idx = 0; idx < (action.exel_files_prev || []).length; idx++) {
+        const prevFile = action.exel_files_prev[idx];
+        if (!prevFile.excel_file_id) continue;
+
+        try {
+          // Dupliquer le master pour remplacer l'Excel
+          const fileName = `${action.name}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
+          const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
+
+          // Sync les valeurs (prev file contient init + ref + prev + expost de l'année principale)
+          const situationYears = [
+            { situation: "init", year: action.year_init },
+            { situation: "ref", year: prevFile.year_ref },
+            { situation: "prev", year: prevFile.year_prev },
+            { situation: "expost", year: action.year_expost },
+          ].filter((sy) => sy.year);
+
+          const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
+
+          // Mettre à jour le excel_file_id dans l'action
+          action.exel_files_prev[idx].excel_file_id = newFileId;
+          totalFiles++;
+          totalValues += updated;
+          console.log(`   ✅ ${fileName} : ${updated} valeurs`);
+        } catch (error) {
+          console.error(`   ❌ Prev ${prevFile.year_prev} pour "${action.name}":`, error.message);
+        }
+      }
+
+      // Traiter les fichiers expost
+      for (let idx = 0; idx < (action.excel_files_expost || []).length; idx++) {
+        const expostFile = action.excel_files_expost[idx];
+        if (!expostFile.excel_file_id) continue;
+
+        try {
+          const fileName = `${action.name}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
+          const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
+
+          const situationYears = [
+            { situation: "init", year: action.year_init },
+            { situation: "ref", year: expostFile.year_ref },
+            { situation: "expost", year: expostFile.year_expost },
+          ].filter((sy) => sy.year);
+
+          const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
+
+          action.excel_files_expost[idx].excel_file_id = newFileId;
+          totalFiles++;
+          totalValues += updated;
+          console.log(`   ✅ ${fileName} : ${updated} valeurs`);
+        } catch (error) {
+          console.error(`   ❌ Expost ${expostFile.year_expost} pour "${action.name}":`, error.message);
+        }
+      }
+
+      // Sauvegarder l'action avec les nouveaux excel_file_id
+      await action.save();
     }
   }
 
-  console.log("\n🎉 Génération terminée pour toutes les collectivités!");
+  console.log(`\n🎉 Régénération terminée : ${totalFiles} fichiers Excel, ${totalValues} valeurs synchronisées`);
 }
 
 if (require.main === module) {
@@ -1232,144 +1215,144 @@ if (require.main === module) {
       await mongoose.connect(config.MONGODB_ENDPOINT);
 
       // Étape 1: Charger toutes les feuilles d'abord (pour les références inter-feuilles)
-      console.log("📥 Chargement de toutes les feuilles Excel...");
-      const allSheetsData = new Map();
+      // console.log("📥 Chargement de toutes les feuilles Excel...");
+      // const allSheetsData = new Map();
 
-      for (const { worksheetName, situation } of worksheetsToProcess) {
-        console.log(`   📄 Chargement de "${worksheetName}"...`);
-        const data = await getWorksheetUsedRange(masterFileId, worksheetName);
-        allSheetsData.set(situation, {
-          worksheetName,
-          data,
-          dataRows: data.values.slice(1),
-          formulaRows: data.formulas ? data.formulas.slice(1) : null,
-          startRow: data.address?.match(/[A-Z]+(\d+):/i) ? parseInt(data.address.match(/[A-Z]+(\d+):/i)[1], 10) : 1,
-        });
-      }
-      console.log("✅ Toutes les feuilles chargées!");
+      // for (const { worksheetName, situation } of worksheetsToProcess) {
+      //   console.log(`   📄 Chargement de "${worksheetName}"...`);
+      //   const data = await getWorksheetUsedRange(masterFileId, worksheetName);
+      //   allSheetsData.set(situation, {
+      //     worksheetName,
+      //     data,
+      //     dataRows: data.values.slice(1),
+      //     formulaRows: data.formulas ? data.formulas.slice(1) : null,
+      //     startRow: data.address?.match(/[A-Z]+(\d+):/i) ? parseInt(data.address.match(/[A-Z]+(\d+):/i)[1], 10) : 1,
+      //   });
+      // }
+      // console.log("✅ Toutes les feuilles chargées!");
 
-      // Étape 2: Traiter chaque feuille avec accès aux données de toutes les feuilles
-      for (const { worksheetName, situation } of worksheetsToProcess) {
-        console.log(`\n🔄 Traitement de la feuille "${worksheetName}" (situation: ${situation})...`);
-        await createIndicatorsFromExcel(situation, worksheetName, allSheetsData);
-        console.log(`✅ Feuille "${worksheetName}" traitée avec succès!`);
-      }
-      // Étape 3: Identifier et supprimer les indicateurs absents de l'Excel
-      console.log("\n🗑️ Vérification des indicateurs supprimés...");
+      // // Étape 2: Traiter chaque feuille avec accès aux données de toutes les feuilles
+      // for (const { worksheetName, situation } of worksheetsToProcess) {
+      //   console.log(`\n🔄 Traitement de la feuille "${worksheetName}" (situation: ${situation})...`);
+      //   await createIndicatorsFromExcel(situation, worksheetName, allSheetsData);
+      //   console.log(`✅ Feuille "${worksheetName}" traitée avec succès!`);
+      // }
+      // // Étape 3: Identifier et supprimer les indicateurs absents de l'Excel
+      // console.log("\n🗑️ Vérification des indicateurs supprimés...");
 
-      // 3a: Collecter tous les excel_indicator_id présents dans chaque feuille
-      const excelIdsBySituation = new Map();
-      const allExcelIds = new Set();
+      // // 3a: Collecter tous les excel_indicator_id présents dans chaque feuille
+      // const excelIdsBySituation = new Map();
+      // const allExcelIds = new Set();
 
-      for (const { situation } of worksheetsToProcess) {
-        const sheetData = allSheetsData.get(situation);
-        const idsInSheet = new Set();
-        for (const row of sheetData.dataRows) {
-          const excelId = row[4];
-          if (excelId && excelId !== "") {
-            const trimmedId = String(excelId).trim();
-            idsInSheet.add(trimmedId);
-            allExcelIds.add(trimmedId);
-          }
-        }
-        excelIdsBySituation.set(situation, idsInSheet);
-      }
+      // for (const { situation } of worksheetsToProcess) {
+      //   const sheetData = allSheetsData.get(situation);
+      //   const idsInSheet = new Set();
+      //   for (const row of sheetData.dataRows) {
+      //     const excelId = row[4];
+      //     if (excelId && excelId !== "") {
+      //       const trimmedId = String(excelId).trim();
+      //       idsInSheet.add(trimmedId);
+      //       allExcelIds.add(trimmedId);
+      //     }
+      //   }
+      //   excelIdsBySituation.set(situation, idsInSheet);
+      // }
 
-      console.log(`📋 IDs trouvés: init=${excelIdsBySituation.get("init").size}, ref=${excelIdsBySituation.get("ref").size}, prev=${excelIdsBySituation.get("prev").size}, expost=${excelIdsBySituation.get("expost").size} (total uniques: ${allExcelIds.size})`);
+      // console.log(`📋 IDs trouvés: init=${excelIdsBySituation.get("init").size}, ref=${excelIdsBySituation.get("ref").size}, prev=${excelIdsBySituation.get("prev").size}, expost=${excelIdsBySituation.get("expost").size} (total uniques: ${allExcelIds.size})`);
 
-      // 3b: Charger tous les indicateurs existants et détecter les suppressions
-      const allDbIndicators = await Indicator.find({});
-      console.log(`📋 ${allDbIndicators.length} indicateurs en base de données`);
+      // // 3b: Charger tous les indicateurs existants et détecter les suppressions
+      // const allDbIndicators = await Indicator.find({});
+      // console.log(`📋 ${allDbIndicators.length} indicateurs en base de données`);
 
-      const indicatorsToDeleteCompletely = [];
-      const indicatorsToUpdatePartially = [];
+      // const indicatorsToDeleteCompletely = [];
+      // const indicatorsToUpdatePartially = [];
 
-      for (const indicator of allDbIndicators) {
-        const excelId = indicator.excel_indicator_id;
-        if (!excelId) continue;
+      // for (const indicator of allDbIndicators) {
+      //   const excelId = indicator.excel_indicator_id;
+      //   if (!excelId) continue;
 
-        if (!allExcelIds.has(excelId)) {
-          // Indicateur complètement absent de toutes les feuilles Excel
-          indicatorsToDeleteCompletely.push(indicator);
-        } else {
-          // Vérifier les suppressions par situation
-          const situationsToRemove = [];
-          for (const sit of ["init", "ref", "prev", "expost"]) {
-            const wasPresent = indicator.presence_in_excel?.[sit] === true;
-            const isNowPresent = excelIdsBySituation.get(sit)?.has(excelId) || false;
-            if (wasPresent && !isNowPresent) {
-              situationsToRemove.push(sit);
-            }
-          }
-          if (situationsToRemove.length > 0) {
-            indicatorsToUpdatePartially.push({ indicator, situationsToRemove });
-          }
-        }
-      }
+      //   if (!allExcelIds.has(excelId)) {
+      //     // Indicateur complètement absent de toutes les feuilles Excel
+      //     indicatorsToDeleteCompletely.push(indicator);
+      //   } else {
+      //     // Vérifier les suppressions par situation
+      //     const situationsToRemove = [];
+      //     for (const sit of ["init", "ref", "prev", "expost"]) {
+      //       const wasPresent = indicator.presence_in_excel?.[sit] === true;
+      //       const isNowPresent = excelIdsBySituation.get(sit)?.has(excelId) || false;
+      //       if (wasPresent && !isNowPresent) {
+      //         situationsToRemove.push(sit);
+      //       }
+      //     }
+      //     if (situationsToRemove.length > 0) {
+      //       indicatorsToUpdatePartially.push({ indicator, situationsToRemove });
+      //     }
+      //   }
+      // }
 
-      // 3c: Exécuter les suppressions complètes
-      if (indicatorsToDeleteCompletely.length > 0) {
-        const idsToDelete = indicatorsToDeleteCompletely.map((ind) => ind._id);
+      // // 3c: Exécuter les suppressions complètes
+      // if (indicatorsToDeleteCompletely.length > 0) {
+      //   const idsToDelete = indicatorsToDeleteCompletely.map((ind) => ind._id);
 
-        const ivDeleteResult = await IndicatorValue.deleteMany({ indicator_id: { $in: idsToDelete.map((id) => id.toString()) } });
-        console.log(`🗑️ ${ivDeleteResult.deletedCount} indicator_values supprimés (suppression complète)`);
+      //   const ivDeleteResult = await IndicatorValue.deleteMany({ indicator_id: { $in: idsToDelete.map((id) => id.toString()) } });
+      //   console.log(`🗑️ ${ivDeleteResult.deletedCount} indicator_values supprimés (suppression complète)`);
 
-        const indDeleteResult = await Indicator.deleteMany({ _id: { $in: idsToDelete } });
-        console.log(`🗑️ ${indDeleteResult.deletedCount} indicateurs supprimés complètement:`);
-        for (const ind of indicatorsToDeleteCompletely) {
-          console.log(`   - ${ind.excel_indicator_id} (${ind.name || "sans nom"})`);
-        }
-      }
+      //   const indDeleteResult = await Indicator.deleteMany({ _id: { $in: idsToDelete } });
+      //   console.log(`🗑️ ${indDeleteResult.deletedCount} indicateurs supprimés complètement:`);
+      //   for (const ind of indicatorsToDeleteCompletely) {
+      //     console.log(`   - ${ind.excel_indicator_id} (${ind.name || "sans nom"})`);
+      //   }
+      // }
 
-      // 3d: Exécuter les suppressions partielles (per-situation)
-      if (indicatorsToUpdatePartially.length > 0) {
-        const partialBulkOps = [];
-        let totalIvDeleted = 0;
+      // // 3d: Exécuter les suppressions partielles (per-situation)
+      // if (indicatorsToUpdatePartially.length > 0) {
+      //   const partialBulkOps = [];
+      //   let totalIvDeleted = 0;
 
-        for (const { indicator, situationsToRemove } of indicatorsToUpdatePartially) {
-          const updateSet = {};
-          const updateUnset = {};
+      //   for (const { indicator, situationsToRemove } of indicatorsToUpdatePartially) {
+      //     const updateSet = {};
+      //     const updateUnset = {};
 
-          for (const sit of situationsToRemove) {
-            updateSet[`presence_in_excel.${sit}`] = false;
-            updateUnset[`excel_line_number.${sit}`] = "";
-            updateUnset[`display_condition.${sit}`] = "";
-            updateUnset[`value_default.${sit}`] = "";
-          }
+      //     for (const sit of situationsToRemove) {
+      //       updateSet[`presence_in_excel.${sit}`] = false;
+      //       updateUnset[`excel_line_number.${sit}`] = "";
+      //       updateUnset[`display_condition.${sit}`] = "";
+      //       updateUnset[`value_default.${sit}`] = "";
+      //     }
 
-          partialBulkOps.push({
-            updateOne: {
-              filter: { _id: indicator._id },
-              update: { $set: updateSet, $unset: updateUnset },
-            },
-          });
+      //     partialBulkOps.push({
+      //       updateOne: {
+      //         filter: { _id: indicator._id },
+      //         update: { $set: updateSet, $unset: updateUnset },
+      //       },
+      //     });
 
-          // Supprimer les IndicatorValues pour les situations retirées
-          for (const sit of situationsToRemove) {
-            const ivResult = await IndicatorValue.deleteMany({ indicator_id: indicator._id.toString(), situation: sit });
-            totalIvDeleted += ivResult.deletedCount;
-          }
+      //     // Supprimer les IndicatorValues pour les situations retirées
+      //     for (const sit of situationsToRemove) {
+      //       const ivResult = await IndicatorValue.deleteMany({ indicator_id: indicator._id.toString(), situation: sit });
+      //       totalIvDeleted += ivResult.deletedCount;
+      //     }
 
-          console.log(`   🔄 ${indicator.excel_indicator_id} (${indicator.name || "sans nom"}): situations retirées [${situationsToRemove.join(", ")}]`);
-        }
+      //     console.log(`   🔄 ${indicator.excel_indicator_id} (${indicator.name || "sans nom"}): situations retirées [${situationsToRemove.join(", ")}]`);
+      //   }
 
-        if (partialBulkOps.length > 0) {
-          await Indicator.bulkWrite(partialBulkOps);
-          console.log(`🔄 ${partialBulkOps.length} indicateurs mis à jour (suppression partielle)`);
-        }
-        if (totalIvDeleted > 0) {
-          console.log(`🗑️ ${totalIvDeleted} indicator_values supprimés (suppression partielle)`);
-        }
-      }
+      //   if (partialBulkOps.length > 0) {
+      //     await Indicator.bulkWrite(partialBulkOps);
+      //     console.log(`🔄 ${partialBulkOps.length} indicateurs mis à jour (suppression partielle)`);
+      //   }
+      //   if (totalIvDeleted > 0) {
+      //     console.log(`🗑️ ${totalIvDeleted} indicator_values supprimés (suppression partielle)`);
+      //   }
+      // }
 
-      if (indicatorsToDeleteCompletely.length === 0 && indicatorsToUpdatePartially.length === 0) {
-        console.log("✅ Aucun indicateur à supprimer");
-      }
+      // if (indicatorsToDeleteCompletely.length === 0 && indicatorsToUpdatePartially.length === 0) {
+      //   console.log("✅ Aucun indicateur à supprimer");
+      // }
 
-      console.log("\n🎉 Toutes les feuilles ont été traitées et nettoyées avec succès!");
+      // console.log("\n🎉 Toutes les feuilles ont été traitées et nettoyées avec succès!");
 
-      // // Étape 2: Générer les fichiers Excel pour toutes les collectivités
-      // await generateExcelForAllCollectivities();
+      // Étape 2: Générer les fichiers Excel pour toutes les collectivités
+      await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
