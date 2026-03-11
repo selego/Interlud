@@ -1148,12 +1148,11 @@ async function generateExcelForAllCollectivities() {
           const fileName = `${action.name}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
-          // Sync les valeurs (prev file contient init + ref + prev + expost de l'année principale)
+          // Sync les valeurs (prev file contient init + ref + prev)
           const situationYears = [
             { situation: "init", year: action.year_init },
             { situation: "ref", year: prevFile.year_ref },
             { situation: "prev", year: prevFile.year_prev },
-            { situation: "expost", year: action.year_expost },
           ].filter((sy) => sy.year);
 
           const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
