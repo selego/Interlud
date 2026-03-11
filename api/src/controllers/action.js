@@ -331,6 +331,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       // Écriture des années dans les 2 fichiers Excel
       const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
 
+      const configActionIds = [configActionBasicDataObj._id, ...(configActionParcTypesObj ? [configActionParcTypesObj._id] : [])];
+
       // Fichier Prev : init→year_init, ref→year_prev, prev→year_prev
       const prevFileYears = [
         { situation: 'init', year: req.body.year_init },
@@ -338,8 +340,11 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         { situation: 'prev', year: req.body.year_prev },
       ];
       for (const { situation, year } of prevFileYears) {
-        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year }, { 'value.number': year }, { new: true });
-        if (excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation);
+        const excelId = anneeExcelIds[situation];
+        for (const configId of configActionIds) {
+          await IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excelId, situation, year }, { 'value.number': year }, { new: true });
+        }
+        if (excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, excelId, year, situation);
       }
 
       // Fichier Expost : init→year_init, ref→year_expost, expost→year_expost
@@ -349,8 +354,11 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         { situation: 'expost', year: req.body.year_expost },
       ];
       for (const { situation, year } of expostFileYears) {
-        await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: anneeExcelIds[situation], situation, year }, { 'value.number': year }, { new: true });
-        if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation);
+        const excelId = anneeExcelIds[situation];
+        for (const configId of configActionIds) {
+          await IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excelId, situation, year }, { 'value.number': year }, { new: true });
+        }
+        if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, excelId, year, situation);
       }
     }
 
