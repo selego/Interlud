@@ -11,6 +11,7 @@ const Schema = new mongoose.Schema(
     basedata_onboarded: { type: Boolean, default: false },
     parc_types_onboarded: { type: Boolean, default: false },
     sharepoint_folder_id: { type: String, trim: true },
+    aggregation_excel_file_id: { type: String, trim: true },
   },
   { timestamps: true },
 );
