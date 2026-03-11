@@ -4,26 +4,15 @@ const router = express.Router();
 const { capture } = require('../services/sentry');
 const { graphFetch, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
 const EconomicActor = require('../models/economic_actor');
+const Collectivity = require('../models/collectivity');
 const ERROR_CODES = require('../utils/errorCodes');
 
-// Ranges for "Agrégation des gains" sheet - gains per action
-// Each action block has 2 header rows + 6 data rows (GES, PM, NOx, HC, CO, Énergie)
-// Blocks are 11 rows apart
+// Old ranges kept for action-contribution endpoint
 const AGGREGATION_WORKSHEET = 'Agrégation';
-const AGGREGATION_RANGES = [
-  { name: 'B2', range: 'B46:H53' },
-  { name: 'B3', range: 'B57:H64' },
-  { name: 'B4', range: 'B68:H75' },
-  { name: 'C1', range: 'B79:H86' },
-  { name: 'C2', range: 'B90:H97' },
-  { name: 'C3', range: 'B101:H108' },
-  { name: 'C4', range: 'B112:H119' },
-  { name: 'C5', range: 'B123:H130' },
-  { name: 'C6', range: 'B134:H141' },
-  { name: 'C7', range: 'B145:H152' },
-  { name: 'C8', range: 'B156:H163' },
-  { name: 'C9', range: 'B167:H174' },
-];
+
+const GAINS_WORKSHEET = '4. Gains par action';
+const ACTION_GAINS_RANGES = { B2: { emissionHeaderRow: 16, dataStartRow: 19 } };
+const EMISSION_TYPES = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Nrj'];
 
 const INDICATORS_CONFIG = [
   { key: 'GES', label: 'GES', unit: 'tCO2e' },
@@ -32,6 +21,7 @@ const INDICATORS_CONFIG = [
   { key: 'NOx', label: 'NOx', unit: 'tNOx' },
   { key: 'CO', label: 'CO', unit: 'tCO' },
   { key: 'Énergie', label: 'Énergie', unit: 'GWh' },
+  { key: 'Nrj', label: 'Énergie', unit: 'GWh' },
 ];
 
 const parseNumber = (val) => {
@@ -59,9 +49,7 @@ router.post('/global-gains', passport.authenticate(['admin', 'user'], { session:
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
-    const result = await graphFetch(
-      `/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`
-    );
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`);
     const allValues = result.values || [];
 
     const yearsData = allValues.slice(0, 3).map((row) => row.slice(0, 2));
@@ -77,12 +65,8 @@ router.post('/global-gains', passport.authenticate(['admin', 'user'], { session:
       const reelRow = gainsReels[indicatorIndex + 1] || [];
       const ecartRow = ecart[indicatorIndex + 1] || [];
 
-      const evolRelIndex = gainsPrevisionnels[0]?.findIndex(
-        (h) => String(h).toLowerCase().includes('evolution relative') || String(h).toLowerCase().includes('évolution relative')
-      );
-      const evolCumIndex = gainsPrevisionnels[0]?.findIndex(
-        (h) => String(h).toLowerCase().includes('evolution cumulée') || String(h).toLowerCase().includes('évolution cumulée') || String(h).toLowerCase().includes('evolution cumul')
-      );
+      const evolRelIndex = gainsPrevisionnels[0]?.findIndex((h) => String(h).toLowerCase().includes('evolution relative') || String(h).toLowerCase().includes('évolution relative'));
+      const evolCumIndex = gainsPrevisionnels[0]?.findIndex((h) => String(h).toLowerCase().includes('evolution cumulée') || String(h).toLowerCase().includes('évolution cumulée') || String(h).toLowerCase().includes('evolution cumul'));
 
       const relIdx = evolRelIndex >= 0 ? evolRelIndex : 2;
       const cumIdx = evolCumIndex >= 0 ? evolCumIndex : 3;
@@ -127,9 +111,7 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-    const result = await graphFetch(
-      `/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`
-    );
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`);
 
     const values = result.values || [];
     const actionGains = [];
@@ -151,7 +133,7 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
               String(gesRow[3] || 0)
                 .replace(/tCO2e/gi, '')
                 .replace(/\s/g, '')
-                .replace(',', '.')
+                .replace(',', '.'),
             ) || 0;
 
           const gesPrev =
@@ -159,7 +141,7 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
               String(gesRow[1] || 0)
                 .replace(/tCO2e/gi, '')
                 .replace(/\s/g, '')
-                .replace(',', '.')
+                .replace(',', '.'),
             ) || 0;
           actionGains.push({ action: potentialActionName, ges: gesValue, ges_prev: gesPrev, type: gesValue <= 0 ? 'gain' : 'degradation' });
         }
@@ -174,7 +156,7 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
   }
 });
 
-// Fetch aggregated gains for a specific action from "Agrégation" sheet
+// Fetch aggregated gains for a specific action from "4. Gains par action" sheet (collectivity aggregation file)
 router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     let { collectivity, action } = req.body;
@@ -188,19 +170,18 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    // Find the range for this action
-    const actionConfig = AGGREGATION_RANGES.find((r) => r.name === action);
-    if (!actionConfig) return res.json({ ok: false, data: { error: `Action '${action}' not found` } });
+    const actionConfig = ACTION_GAINS_RANGES[action];
+    if (!actionConfig) return res.json({ ok: false, data: { error: `Action '${action}' not found in gains configuration` } });
+
+    const collectivityDoc = await Collectivity.findById(collectivity._id || collectivity.id);
+    if (!collectivityDoc?.aggregation_excel_file_id) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured for this collectivity' } });
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-    const result = await graphFetch(
-      `/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='${actionConfig.range}')`
-    );
 
-    const INDICATORS = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Énergie'];
-    const UNITS = ['tCO2e/an', 't/an', 't/an', 't/an', 't/an', 'GWh/an'];
+    const { emissionHeaderRow, dataStartRow } = actionConfig;
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivityDoc?.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${emissionHeaderRow}:BZ${dataStartRow + 50}')`);
 
-    const aggregationData = result.values || [];
+    const allValues = result.values || [];
     let processedData = {
       ges: { value: 0, trend: 0 },
       energy: { value: 0, trend: 0 },
@@ -211,61 +192,89 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
       indicators: [],
     };
 
-    if (aggregationData && aggregationData.length > 2) {
-      const rows = aggregationData.slice(2);
-      if (rows[0]) {
-        processedData.ges.value = Math.abs(rows[0][4] || 0);
-        processedData.ges.trend = rows[0][5];
-      }
+    if (allValues.length === 0) return res.json({ ok: true, data: processedData });
 
-      if (rows[5]) {
-        processedData.energy.value = Math.abs(rows[5][4] || 0);
-        processedData.energy.trend = rows[5][5];
-      }
-
-      [1, 2, 3, 4].forEach((idx) => {
-        if (rows[idx] && typeof rows[idx][4] === 'number') {
-          processedData.pollutants.value += Math.abs(rows[idx][4]);
-          processedData.pollutants.count++;
-        }
-      });
-
-      let totalAchievement = 0;
-      let achievementCount = 0;
-
-      rows.forEach((row, index) => {
-        if (index > 5 || !row) return;
-        const label = row[0] || INDICATORS[index];
-
-        let achievement = 0;
-        let hasData = false;
-
-        if (typeof row[3] === 'number' && typeof row[5] === 'number' && row[3] !== 0) {
-          achievement = Math.min((row[5] / row[3]) * 100, 100);
-          achievement = (row[5] / row[3]) * 100;
-          hasData = true;
-        }
-
-        if (hasData) {
-          totalAchievement += Math.min(achievement, 100);
-          achievementCount++;
-          if (achievement > processedData.bestIndicator.val) processedData.bestIndicator = { label, val: achievement };
-          if (achievement < processedData.worstIndicator.val) processedData.worstIndicator = { label, val: achievement };
-        }
-
-        processedData.indicators.push({
-          label,
-          unit: row[6] || UNITS[index],
-          objective: row[3],
-          real: row[5],
-          objectiveVal: row[2],
-          realVal: row[4],
-          achievement: hasData ? achievement : null,
-        });
-      });
-
-      processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
+    // Row 0 = emission header row — scan for emission type column positions
+    const emissionHeaderValues = allValues[0];
+    const emissionCols = {};
+    for (let col = 0; col < emissionHeaderValues.length; col++) {
+      const header = String(emissionHeaderValues[col] || '').trim();
+      if (EMISSION_TYPES.includes(header)) emissionCols[header] = col;
     }
+
+    const yearRows = [];
+    for (let i = dataStartRow - emissionHeaderRow; i < allValues.length; i++) {
+      const row = allValues[i];
+      const year = parseInt(row[2]);
+      if (!year || year < 2000 || year > 2100) continue;
+      yearRows.push({ year, row });
+    }
+
+    // For each emission: Col+0=Écart Réf-Init, Col+1=Écart Prév-Réf, Col+2=Écart Expost-Réf, Col+3=Écart Expost-Prév
+    let totalAchievement = 0;
+    let achievementCount = 0;
+
+    for (const emissionType of EMISSION_TYPES) {
+      const startCol = emissionCols[emissionType];
+      if (startCol === undefined) continue;
+
+      const config = INDICATORS_CONFIG.find((c) => c.key === emissionType);
+
+      const yearlyData = yearRows.map(({ year, row }) => ({ year, ecartRefInit: parseNumber(row[startCol]), ecartPrevRef: parseNumber(row[startCol + 1]), ecartExpostRef: parseNumber(row[startCol + 2]), ecartExpostPrev: parseNumber(row[startCol + 3]) }));
+
+      const latestWithExpost = [...yearlyData].reverse().find((d) => d.ecartExpostRef !== 0);
+      const objective = latestWithExpost ? Math.abs(latestWithExpost.ecartPrevRef) : 0;
+      const real = latestWithExpost ? Math.abs(latestWithExpost.ecartExpostRef) : 0;
+
+      let achievement = null;
+      if (objective > 0 && real > 0) achievement = (real / objective) * 100;
+
+      if (achievement !== null) {
+        totalAchievement += Math.min(achievement, 100);
+        achievementCount++;
+        if (achievement > processedData.bestIndicator.val) processedData.bestIndicator = { label: emissionType, val: achievement };
+        if (achievement < processedData.worstIndicator.val) processedData.worstIndicator = { label: emissionType, val: achievement };
+      }
+
+      processedData.indicators.push({ label: emissionType, unit: config?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData });
+    }
+
+    // GES summary
+    const gesIndicator = processedData.indicators.find((i) => i.label === 'GES');
+    if (gesIndicator) {
+      processedData.ges.value = gesIndicator.realVal;
+      const dataYears = (gesIndicator.yearlyData || []).filter((d) => d.ecartExpostRef !== 0);
+      if (dataYears.length >= 2) {
+        const latest = dataYears[dataYears.length - 1];
+        const previous = dataYears[dataYears.length - 2];
+        if (previous.ecartExpostRef !== 0) processedData.ges.trend = (latest.ecartExpostRef - previous.ecartExpostRef) / Math.abs(previous.ecartExpostRef);
+      }
+    }
+
+    // Energy summary
+    const energyIndicator = processedData.indicators.find((i) => i.label === 'Énergie');
+    if (energyIndicator) {
+      processedData.energy.value = energyIndicator.realVal;
+      const dataYears = (energyIndicator.yearlyData || []).filter((d) => d.ecartExpostRef !== 0);
+      if (dataYears.length >= 2) {
+        const latest = dataYears[dataYears.length - 1];
+        const previous = dataYears[dataYears.length - 2];
+        if (previous.ecartExpostRef !== 0) {
+          processedData.energy.trend = (latest.ecartExpostRef - previous.ecartExpostRef) / Math.abs(previous.ecartExpostRef);
+        }
+      }
+    }
+
+    // Pollutants summary (PM, NOx, HC, CO)
+    for (const pollutant of ['PM', 'NOx', 'HC', 'CO']) {
+      const ind = processedData.indicators.find((i) => i.label === pollutant);
+      if (ind && ind.realVal > 0) {
+        processedData.pollutants.value += ind.realVal;
+        processedData.pollutants.count++;
+      }
+    }
+
+    processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
 
     res.json({ ok: true, data: processedData });
   } catch (error) {
