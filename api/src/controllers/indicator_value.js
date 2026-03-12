@@ -645,7 +645,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
         { indicator_type: 'number', 'value.number': null },
         { indicator_type: 'text', 'value.text': { $in: [null, ''] } },
         { indicator_type: 'radio', 'value.radio': { $in: [null, ''] } },
-        { indicator_type: 'checkbox', 'value.checkbox': { $size: 0 } },
+        { indicator_type: 'checkbox', $or: [{ 'value.checkbox': { $size: 0 } }, { 'value.checkbox': null }] },
       ];
     }
 
