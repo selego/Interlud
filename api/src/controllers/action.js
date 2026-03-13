@@ -8,7 +8,7 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -360,6 +360,90 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         }
         if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, excelId, year, situation);
       }
+    }
+
+    // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années)
+    const [prevInitDefaults, prevRefDefaults, prevPrevDefaults, expostRefDefaults, expostExpostDefaults] = await Promise.all([
+      readExcelDefaultValues(excelFileIdPrev, 'init').catch(() => new Map()),
+      readExcelDefaultValues(excelFileIdPrev, 'ref').catch(() => new Map()),
+      readExcelDefaultValues(excelFileIdPrev, 'prev').catch(() => new Map()),
+      readExcelDefaultValues(excelFileIdExpost, 'ref').catch(() => new Map()),
+      readExcelDefaultValues(excelFileIdExpost, 'expost').catch(() => new Map()),
+    ]);
+
+    const getDefaultsForSituation = (situation, year) => {
+      if (situation === 'init') return prevInitDefaults;
+      if (situation === 'prev') return prevPrevDefaults;
+      if (situation === 'expost') return expostExpostDefaults;
+      if (situation === 'ref') return year === req.body.year_expost && req.body.year_expost !== req.body.year_prev ? expostRefDefaults : prevRefDefaults;
+      return new Map();
+    };
+
+    const parseDefaultValue = (rawValue, indicatorType) => {
+      if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+      if (typeof rawValue === 'string' && rawValue.startsWith('#')) return null;
+      if (indicatorType === 'number') {
+        const p = parseFloat(rawValue);
+        return !isNaN(p) ? p : null;
+      }
+      if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
+      if (indicatorType === 'checkbox')
+        return String(rawValue)
+          .split(',')
+          .map((v) => v.trim())
+          .filter((v) => v !== '');
+      return null;
+    };
+
+    // Récupérer tous les IVs des actions créées pour mettre à jour leurs valeurs par défaut
+    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionBasicDataObj._id.toString(), configActionParcTypesObj._id.toString()];
+    const allIVsForDefaultUpdate = await IndicatorValue.find({
+      action_id: { $in: allActionIdsForDefaultUpdate },
+      indicator_excel_id: { $exists: true, $ne: null },
+      $or: [
+        { situation: 'init', year: req.body.year_init },
+        { situation: 'ref', year: req.body.year_prev },
+        ...(req.body.year_expost !== req.body.year_prev ? [{ situation: 'ref', year: req.body.year_expost }] : []),
+        { situation: 'prev', year: req.body.year_prev },
+        { situation: 'expost', year: req.body.year_expost },
+      ],
+    });
+
+    const defaultUpdateBulkOps = [];
+    const parcTypesNewValues = { init: [], ref: [], prev: [], expost: [] };
+
+    for (const iv of allIVsForDefaultUpdate) {
+      const defaultsMap = getDefaultsForSituation(iv.situation, iv.year);
+      if (!defaultsMap || !defaultsMap.has(iv.indicator_excel_id)) continue;
+
+      const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type);
+      const currentDefault = iv.value_default?.[iv.indicator_type] ?? null;
+      if (JSON.stringify(newDefault) === JSON.stringify(currentDefault)) continue;
+
+      const updateFields = { [`value_default.${iv.indicator_type}`]: newDefault };
+
+      if (iv.action_name === 'Parc types') {
+        updateFields[`value.${iv.indicator_type}`] = newDefault;
+        if (newDefault !== null && iv.indicator_excel_id) {
+          parcTypesNewValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: newDefault });
+        }
+      }
+
+      defaultUpdateBulkOps.push({ updateOne: { filter: { _id: iv._id }, update: { $set: updateFields } } });
+    }
+
+    if (defaultUpdateBulkOps.length > 0) {
+      await IndicatorValue.bulkWrite(defaultUpdateBulkOps);
+
+      // Réécrire les valeurs Parc types mises à jour dans les fichiers Excel
+      const rewritePromises = [];
+      for (const situation of ['init', 'ref', 'prev']) {
+        if (parcTypesNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileIdPrev, parcTypesNewValues[situation], situation).catch(capture));
+      }
+      for (const situation of ['init', 'ref', 'expost']) {
+        if (parcTypesNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileIdExpost, parcTypesNewValues[situation], situation).catch(capture));
+      }
+      await Promise.all(rewritePromises);
     }
 
     // Recalculer la completion pour l'action créée et les actions config

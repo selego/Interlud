@@ -330,6 +330,23 @@ async function clearWorksheetValues(fileId, situation) {
   });
 }
 
+async function readExcelDefaultValues(fileId, situation) {
+  const worksheetName = WORKSHEETS[situation];
+  if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
+  const rows = usedRange.values || [];
+
+  const defaults = new Map();
+  for (const row of rows) {
+    const excelIndicatorId = row[4] ? String(row[4]).trim() : '';
+    if (!excelIndicatorId) continue;
+    defaults.set(excelIndicatorId, row[7] !== undefined && row[7] !== '' ? row[7] : null);
+  }
+  return defaults;
+}
+
 module.exports = {
   getAccessToken,
   graphFetch,
@@ -342,4 +359,5 @@ module.exports = {
   exportExcelFileWithSpecificSheets,
   importSheetsToExcelFile,
   clearWorksheetValues,
+  readExcelDefaultValues,
 };

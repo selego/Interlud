@@ -37,10 +37,10 @@ const Schema = new mongoose.Schema(
       expost: { type: Boolean, default: false },
     },
     excel_line_number: {
-      init: { type: Number},
-      ref: { type: Number},
-      prev: { type: Number},
-      expost: { type: Number},
+      init: { type: Number },
+      ref: { type: Number },
+      prev: { type: Number },
+      expost: { type: Number },
     },
     display_condition: {
       init: {
@@ -93,7 +93,7 @@ const Schema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const OBJ = mongoose.model(MODELNAME, Schema);
