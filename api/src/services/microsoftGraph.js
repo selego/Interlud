@@ -4,7 +4,7 @@ const tenantId = 'efa89c5e-5599-439d-8f01-b4da9ded0a55';
 const clientId = 'f2924bbc-a975-49fe-a2ca-df4ff711be14';
 const clientSecret = '9aG8Q~chbn5ywMYUtx6zd3Z8zUelSoQjsHuiTdq9';
 const sharePointSiteName = 'selegobv';
-const masterExcelFileId = '01IBL4ADPUPSBSPBZM2ZBKL4VJF55GZYBN';
+const masterExcelFileId = '01IBL4ADNZP32VURAL2ZFZJYXPPUMULGLC';
 
 const WORKSHEETS = {
   init: 'Remplissage - Sit. Init.',
@@ -59,6 +59,7 @@ async function graphFetch(endpoint, options = {}) {
 
     if (response.ok) {
       if (response.status === 202) return response;
+      if (response.status === 204) return null;
       return response.json();
     }
 

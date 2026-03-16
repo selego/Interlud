@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADPUPSBSPBZM2ZBKL4VJF55GZYBN"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADNZP32VURAL2ZFZJYXPPUMULGLC"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -1241,9 +1241,7 @@ async function syncIndicatorsToExistingActions() {
         };
 
         // Pour Parc types, set value = value_default
-        if (configAction.name === "Parc types") {
-          indicatorValue.value = { [indicator.value_type]: defaultValue };
-        }
+        if (configAction.name === "Parc types") indicatorValue.value = { [indicator.value_type]: defaultValue };
 
         const displayCondition = indicator.display_condition?.[situation];
         if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
@@ -1291,7 +1289,7 @@ async function generateExcelForAllCollectivities() {
   const versionMatch = masterFile.name.replace(".xlsx", "").match(/_V(\d+)$/);
   const versionSuffix = versionMatch ? `_V${versionMatch[1]}` : "";
 
-  const collectivities = await Collectivity.find({ name: "Test2" });
+  const collectivities = await Collectivity.find({ name: "Test3" });
   console.log(`📋 ${collectivities.length} collectivités trouvées (master: ${masterFile.name})`);
 
   let totalFiles = 0;

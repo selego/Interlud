@@ -452,13 +452,6 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           }
         }
         if (indicatorValue.situation === 'expost') {
-          // Si c'est l'année expost principale → mettre à jour tous les exel_files_prev (le fichier initial contient toutes les situations)
-          if (indicatorValue.year === currentAction.year_expost) {
-            for (const excelFile of currentAction.exel_files_prev || []) {
-              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
-            }
-          }
-          // Mettre à jour le bon fichier excel_files_expost correspondant à l'année
           for (const excelFile of currentAction.excel_files_expost || []) {
             if (excelFile.year_expost !== indicatorValue.year) continue;
             excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
@@ -477,6 +470,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
         if (fileId) {
           const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+          try {
+            await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/application/calculate`, { method: 'POST', body: JSON.stringify({ calculationType: 'Full' }) });
+          } catch (e) {}
           const result = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange`);
           const rows = result.values || [];
 
@@ -497,10 +493,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
                 const targetRow = year2010Row + (indicatorValue.year - 2010);
                 const wsPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent('2. Mise en forme données entrée')}`;
                 for (const [emission, baseCol] of Object.entries(EMISSION_WRITE_COL)) {
-                  await graphFetch(`${wsPath}/range(address='${`${colToLetter(baseCol + sitOffset)}${targetRow}`}')`, { method: 'PATCH', body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }) });
+                  await graphFetch(`${wsPath}/range(address='${colToLetter(baseCol + sitOffset)}${targetRow}')`, { method: 'PATCH', body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }) });
                 }
-              } else {
-                console.log(`[Agrégation-write] Unknown action "${action.excel_worksheetname}" or no emission values read`);
               }
             }
           }
@@ -526,6 +520,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           const year2010Row = ACTION_YEAR_2010_ROW[targetAction.excel_worksheetname];
           if (agregRow === undefined || !year2010Row) continue;
 
+          try {
+            await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/application/calculate`, { method: 'POST', body: JSON.stringify({ calculationType: 'Full' }) });
+          } catch (e) {}
           const result = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange`);
           const rows = result.values || [];
           if (!rows[agregRow]) continue;
@@ -541,7 +538,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           const targetRow = year2010Row + (indicatorValue.year - 2010);
           const wsPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent('2. Mise en forme données entrée')}`;
           for (const [emission, baseCol] of Object.entries(EMISSION_WRITE_COL)) {
-            await graphFetch(`${wsPath}/range(address='${`${colToLetter(baseCol + sitOffset)}${targetRow}`}')`, { method: 'PATCH', body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }) });
+            await graphFetch(`${wsPath}/range(address='${colToLetter(baseCol + sitOffset)}${targetRow}')`, { method: 'PATCH', body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }) });
           }
         }
       } catch (e) {

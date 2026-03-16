@@ -491,7 +491,7 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       collectivity_name: action.collectivity_name,
     });
 
-    // Delete Excel files from SharePoint (deduplicated car exel_files_prev[0] et excel_files_expost[0] partagent le même fichier à la création)
+    // Delete Excel files from SharePoint
     const allExcelFileIds = [...new Set([...(action.exel_files_prev || []), ...(action.excel_files_expost || [])].map((f) => f.excel_file_id).filter(Boolean))];
 
     if (allExcelFileIds.length > 0) {
