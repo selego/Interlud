@@ -22,8 +22,16 @@ export default defineConfig({
     }
   },
   build: {
-    minify: false,
-    outDir: 'build'
+    minify: true,
+    outDir: 'build',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          dsfr: ['@codegouvfr/react-dsfr']
+        }
+      }
+    }
   },
   esbuild: {
     loader: 'jsx',
