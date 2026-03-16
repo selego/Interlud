@@ -2,12 +2,14 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
- 
+import compression from 'compression';
+
 const app = express();
 console.log("coucou")
- 
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+app.use(compression());
 app.use(express.static(path.resolve(__dirname, '../build'), { index: false }));
  
 app.route('*').all((req, res) => {
