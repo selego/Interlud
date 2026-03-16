@@ -466,7 +466,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     if (action.type !== 'config') {
       try {
         const allFiles = [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])];
-        const fileId = allFiles.find((f) => f.excel_file_id)?.excel_file_id;
+        let fileId = allFiles.find((f) => f.excel_file_id)?.excel_file_id;
+        if (indicatorValue.situation === 'prev') fileId = (action.exel_files_prev || []).find((f) => f.excel_file_id && f.year_prev === indicatorValue.year)?.excel_file_id;
+        if (indicatorValue.situation === 'expost') fileId = (action.excel_files_expost || []).find((f) => f.excel_file_id && f.year_expost === indicatorValue.year)?.excel_file_id;
+        if (indicatorValue.situation === 'ref') fileId = allFiles.find((f) => f.excel_file_id && f.year_ref === indicatorValue.year)?.excel_file_id;
 
         if (fileId) {
           const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
@@ -513,7 +516,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
         for (const targetAction of uniqueActions) {
           const allFiles = [...(targetAction.exel_files_prev || []), ...(targetAction.excel_files_expost || [])];
-          const fileId = allFiles.find((f) => f.excel_file_id)?.excel_file_id;
+          let fileId = allFiles.find((f) => f.excel_file_id)?.excel_file_id;
+          if (indicatorValue.situation === 'prev') fileId = (targetAction.exel_files_prev || []).find((f) => f.excel_file_id && f.year_prev === indicatorValue.year)?.excel_file_id;
+          if (indicatorValue.situation === 'expost') fileId = (targetAction.excel_files_expost || []).find((f) => f.excel_file_id && f.year_expost === indicatorValue.year)?.excel_file_id;
+          if (indicatorValue.situation === 'ref') fileId = allFiles.find((f) => f.excel_file_id && f.year_ref === indicatorValue.year)?.excel_file_id;
           if (!fileId) continue;
 
           const agregRow = ACTION_AGREG_ROW[targetAction.excel_worksheetname];
@@ -525,6 +531,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           } catch (e) {}
           const result = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange`);
           const rows = result.values || [];
+
           if (!rows[agregRow]) continue;
 
           const rawEmissionValues = {};
