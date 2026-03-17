@@ -27,7 +27,6 @@ const TRAJ_SERIES = [
 ]
 
 const ECART_SERIES = [
-  { key: "ecartRefInit", label: "Écart Réf − Init", color: "#888780" },
   { key: "ecartPrevRef", label: "Écart Prév − Réf", color: "#378ADD" },
   { key: "ecartExpostRef", label: "Écart Expost − Réf", color: "#1D9E75" },
   { key: "ecartExpostPrev", label: "Écart Expost − Prév", color: "#EF9F27" },
@@ -50,7 +49,7 @@ export default function Dashboard({ action }) {
   const [isAggregationLoading, setIsAggregationLoading] = useState(false)
   const [selectedIndicator, setSelectedIndicator] = useState("GES")
   const [chartMode, setChartMode] = useState("traj")
-  const [ecartVisible, setEcartVisible] = useState({ ecartRefInit: true, ecartPrevRef: true, ecartExpostRef: true, ecartExpostPrev: true })
+  const [ecartVisible, setEcartVisible] = useState({ ecartPrevRef: true, ecartExpostRef: true, ecartExpostPrev: true })
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
