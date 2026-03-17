@@ -3,48 +3,72 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
-import { FiArrowLeft, FiDownload, FiPlus, FiLayers, FiZap, FiShield, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiTrendingDown, FiTarget, FiEdit } from "react-icons/fi"
+import { FiArrowLeft, FiPlus, FiEdit } from "react-icons/fi"
 import { HiCheckCircle } from "react-icons/hi2"
 import Loader from "@/components/loader"
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 
-const SITUATION_LABELS = {init: "Initiale",ref: "Référence",prev: "Prévisionnel",expost: "Ex-post"}
+const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" }
 
+const INDICATOR_TABS = [
+  { key: "GES", label: "GES" },
+  { key: "Nrj", label: "Énergie" },
+  { key: "PM", label: "PM" },
+  { key: "NOx", label: "NOx" },
+  { key: "HC", label: "HC" },
+  { key: "CO", label: "CO" },
+]
 
-  const formatBigNumber = (val) => {
-    if (!val && val !== 0) return "-"
-    return Math.round(val).toLocaleString("fr-FR").replace(/\s/g, " ")
-  }
+const TRAJ_SERIES = [
+  { key: "initiale", label: "Initiale", color: "#888780", dash: false },
+  { key: "reference", label: "Référence", color: "#378ADD", dash: false },
+  { key: "previsionnelle", label: "Prévisionnelle", color: "#EF9F27", dash: true },
+  { key: "expost", label: "Ex-post", color: "#1D9E75", dash: false },
+]
+
+const ECART_SERIES = [
+  { key: "ecartRefInit", label: "Écart Réf − Init", color: "#888780" },
+  { key: "ecartPrevRef", label: "Écart Prév − Réf", color: "#378ADD" },
+  { key: "ecartExpostRef", label: "Écart Expost − Réf", color: "#1D9E75" },
+  { key: "ecartExpostPrev", label: "Écart Expost − Prév", color: "#EF9F27" },
+]
+
+const formatBigNumber = (val) => {
+  if (!val && val !== 0) return "—"
+  return Math.round(val).toLocaleString("fr-FR").replace(/\s/g, " ")
+}
+
+const scoreColor = (p) => (p >= 80 ? "#1D9E75" : p >= 50 ? "#EF9F27" : "#E24B4A")
+const scoreBg = (p) => (p >= 80 ? { bg: "#E8F8F2", c: "#1D9E75" } : p >= 50 ? { bg: "#FEF5E7", c: "#D48806" } : { bg: "#FEF2F2", c: "#E24B4A" })
+const formatTick = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)
 
 export default function Dashboard({ action }) {
   const { userActionRights, user, collectivity } = useStore()
   const navigate = useNavigate()
-  
-  const [processedData, setProcessedData] = useState({ges: { value: 0, trend: 0 }, energy: { value: 0, trend: 0 }, pollutants: { value: 0, count: 0 }, score: 0, bestIndicator: { label: "-", val: -1 }, worstIndicator: { label: "-", val: 9999 }, indicators: [] })
+
+  const [processedData, setProcessedData] = useState({ ges: { value: 0 }, energy: { value: 0 }, pollutants: { value: 0 }, score: 0, indicators: [], emissions: { indicators: [] } })
   const [isAggregationLoading, setIsAggregationLoading] = useState(false)
+  const [selectedIndicator, setSelectedIndicator] = useState("GES")
+  const [chartMode, setChartMode] = useState("traj")
+  const [ecartVisible, setEcartVisible] = useState({ ecartRefInit: true, ecartPrevRef: true, ecartExpostRef: true, ecartExpostPrev: true })
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
   const isEconomicActorAsRight = user.role === "economic_actor" && action.owner === "economic_actor" && user.economic_actor_id === action.economic_actor_id
   const right = userActionRights.find((right) => right.action_id === action._id)
 
-  const completionBySituation = {
-    init: action.completion_init || 0,
-    ref: action.completion_ref || 0,
-    prev: action.completion_prev || 0,
-    expost: action.completion_expost || 0,
-  }
-  const completeness = Math.round((completionBySituation.init + completionBySituation.ref + completionBySituation.prev + completionBySituation.expost) / 4)
+  const completionBySituation = {init: action.completion_init || 0, prev: action.completion_prev || 0, expost: action.completion_expost || 0}
+  const completeness = Math.round((completionBySituation.init + completionBySituation.prev + completionBySituation.expost) / 3)
 
   const loadAggregation = async () => {
     if (!collectivity || !action?.excel_worksheetname) return
-
     try {
       setIsAggregationLoading(true)
-      const { ok, data } = await api.post(`/excel/action_aggregation`, { collectivity: collectivity, action: action.excel_worksheetname })
-      if (!ok) return toast.error(data.error)
+      const { ok, data, code } = await api.post(`/excel/action_aggregation`, { collectivity, action: action.excel_worksheetname, date_start: action.date_start, date_end: action.date_end })
+      if (!ok) return toast.error(code || "Erreur lors du chargement des données d'agrégation")
       setProcessedData(data)
     } catch (error) {
-      console.error(error)
-      toast.error("Erreur lors du chargement des données d'agrégation")
+      toast.error(error.code || "Erreur lors du chargement des données d'agrégation")
     } finally {
       setIsAggregationLoading(false)
     }
@@ -62,256 +86,408 @@ export default function Dashboard({ action }) {
     )
   }
 
+  if (isAggregationLoading) return <Loader />
 
+  const currentGainsIndicator = processedData.indicators.find((ind) => ind.label === selectedIndicator) || null
+  const currentEmissionsIndicator = (processedData.emissions?.indicators || []).find((ind) => ind.label === selectedIndicator) || null
 
+  const chartData = chartMode === "traj" ? (currentEmissionsIndicator?.yearlyData || []) : (currentGainsIndicator?.yearlyData || [])
+  const yearMin = (currentEmissionsIndicator?.yearlyData || currentGainsIndicator?.yearlyData || [])[0]?.year || 2010
+  const yearMax = (currentEmissionsIndicator?.yearlyData || currentGainsIndicator?.yearlyData || []).at(-1)?.year || 2050
 
-  if (isAggregationLoading) return <Loader /> 
+  const selectedYearTrajData = (currentEmissionsIndicator?.yearlyData || []).find((d) => d.year === selectedYear) || null
+  const selectedYearEcartData = (currentGainsIndicator?.yearlyData || []).find((d) => d.year === selectedYear) || null
+
+  // Achievement pour une année donnée : (ecartExpostRef / ecartPrevRef) * 100
+  const getAchievementForYear = (indicator, year) => {
+    if (!indicator?.yearlyData) return null
+    const d = indicator.yearlyData.find((d) => d.year === year)
+    if (!d || !d.ecartPrevRef || !d.ecartExpostRef) return null
+    return (Math.abs(d.ecartExpostRef) / Math.abs(d.ecartPrevRef)) * 100
+  }
+
+  const gesIndicator = processedData.indicators.find((i) => i.label === "GES")
+  const nrjIndicator = processedData.indicators.find((i) => i.label === "Nrj") || processedData.indicators.find((i) => i.label === "Énergie")
+  const cumulativeGes = (gesIndicator?.yearlyData || []).filter((d) => d.year >= 2015 && d.year <= selectedYear).reduce((sum, d) => sum + (d.ecartExpostRef || 0), 0)
+
+  // Valeurs KPI basées sur l'année sélectionnée
+  const gesYearData = (gesIndicator?.yearlyData || []).find((d) => d.year === selectedYear)
+  const nrjYearData = (nrjIndicator?.yearlyData || []).find((d) => d.year === selectedYear)
+  const gesValue = gesYearData ? Math.abs(gesYearData.ecartExpostRef) : processedData.ges.value
+  const energyValue = nrjYearData ? Math.abs(nrjYearData.ecartExpostRef) : processedData.energy.value
+  const pollutantsValue = ["PM", "NOx", "HC", "CO"].reduce((sum, k) => {
+    const ind = processedData.indicators.find((i) => i.label === k)
+    const d = (ind?.yearlyData || []).find((d) => d.year === selectedYear)
+    return sum + (d ? Math.abs(d.ecartExpostRef) : 0)
+  }, 0) || processedData.pollutants.value
 
   return (
-    <div className="min-h-screen p-8 bg-gray-50/50">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div>
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-            <button onClick={() => navigate("/actions")} className="hover:text-primary-green transition-colors">Actions</button>
-            <span>/</span>
-            <span className="text-gray-900 font-medium truncate max-w-[200px]">{action.name}</span>
-          </div>
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors">
-                        <FiArrowLeft size={20} />
-                    </button>
-                    <h1 className="text-2xl font-bold text-gray-900">{action.name}</h1>
-                </div>
-                <p className="text-sm text-gray-500 pl-9">
-                    Période d'analyse : {action.date_start && action.date_end ? `${new Date(action.date_start).getFullYear()} -> ${new Date(action.date_end).getFullYear()}` : "Non définie"}
-                </p>
+    <div className="">
+      <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8 space-y-5">
+        {/* HEADER */}
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs px-2.5 py-0.5 rounded bg-[#1D9E75] text-white font-medium">{action.sector || "Action"}</span>
+              <span className="text-xs px-2.5 py-0.5 rounded bg-[#e8e8e8] text-[#666] font-medium">{action.territory || ""}</span>
             </div>
-            
-            <div className="flex gap-3">
-                <button 
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                    onClick={() => navigate(`/actions/${action._id}/completion`)}
-                >
-                    <FiEdit size={16} />
-                    Compléter
-                </button>
-                {(isAdmin || right?.can_write || isEconomicActorAsRight) && (
-                    <button 
-                        className="flex items-center gap-2 px-4 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 transition-colors"
-                        onClick={() => navigate(`/actions/${action._id}/settings`)}
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate(-1)} className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors">
+                <FiArrowLeft size={20} />
+              </button>
+              <h1 className="text-lg font-semibold text-[#111]">{action.name}</h1>
+            </div>
+            <p className="text-xs text-[#888] mt-1 pl-9">
+              Données {action.date_start && action.date_end ? `${new Date(action.date_start).getFullYear()}–${new Date(action.date_end).getFullYear()}` : "—"} · Analyse sur{" "}
+              <span className="text-[#1D9E75]">{selectedYear}</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-[#888] mb-0.5">Score global</div>
+            <div className="text-3xl font-extrabold" style={{ color: scoreColor(processedData.score) }}>
+              {processedData.score}%
+            </div>
+            <div className="text-xs text-[#888]">objectif atteint</div>
+          </div>
+          <div className="flex gap-3 ml-6 items-start">
+            <button
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              onClick={() => navigate(`/actions/${action._id}/completion`)}
+            >
+              <FiEdit size={16} />
+              Compléter
+            </button>
+            {(isAdmin || right?.can_write || isEconomicActorAsRight) && (
+              <button
+                className="flex items-center gap-2 px-4 py-2 bg-[#1D9E75] text-white rounded-lg text-sm font-medium hover:opacity-90 transition-colors"
+                onClick={() => navigate(`/actions/${action._id}/settings`)}
+              >
+                <FiPlus size={16} />
+                Modifier
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* KPI ROW */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: "GES évités", value: `−${formatBigNumber(gesValue)}`, unit: "tCO2e / an", badge: getAchievementForYear(gesIndicator, selectedYear) },
+            { label: "Énergie économisée", value: `−${formatBigNumber(energyValue)}`, unit: "GWh / an", badge: getAchievementForYear(processedData.indicators.find((i) => i.label === "Énergie"), selectedYear) },
+            { label: "Polluants réduits", value: `−${formatBigNumber(pollutantsValue)}`, unit: "t / an · PM NOx HC CO", badge: (() => { const vals = ["PM", "NOx", "HC", "CO"].map((k) => getAchievementForYear(processedData.indicators.find((i) => i.label === k), selectedYear)).filter((v) => v !== null); return vals.length > 0 ? Math.round(vals.reduce((s, v) => s + Math.min(v, 100), 0) / vals.length) : null })() },
+          ].map((kpi) => {
+            const s = kpi.badge !== null && kpi.badge !== undefined ? scoreBg(Math.round(kpi.badge)) : null
+            return (
+              <div key={kpi.label} className="card-shadow p-4">
+                <div className="text-xs text-[#888] mb-1.5">{kpi.label}</div>
+                <div className="text-2xl font-bold text-[#111]">{kpi.value}</div>
+                <div className="text-xs text-[#999] mt-0.5">{kpi.unit}</div>
+                {s && <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-[10px] mt-1.5" style={{ background: s.bg, color: s.c }}>{Math.round(kpi.badge)}% obj.</span>}
+              </div>
+            )
+          })}
+          <div className="card-shadow p-4">
+            <div className="text-xs text-[#888] mb-1.5">Impact GES cumulé</div>
+            <div className="text-2xl font-bold text-[#1D9E75]">−{formatBigNumber(Math.abs(cumulativeGes))}</div>
+            <div className="text-xs text-[#999] mt-0.5">tCO2e total 2015–{selectedYear}</div>
+            <span className="inline-block text-xs px-2.5 py-0.5 rounded-[10px] mt-1.5 border border-[#ccc] text-[#888]">Impact total</span>
+          </div>
+        </div>
+
+        {/* CHART + SIDEBAR */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* CHART SECTION */}
+          <div className="lg:col-span-2 card-shadow p-4">
+            {/* Chart header */}
+            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-[#111]">
+                  {chartMode === "traj" ? "Trajectoire temporelle des émissions" : "Écarts et gains par année"}
+                </span>
+                <div className="flex bg-[#f0f0f0] rounded-md overflow-hidden">
+                  <button
+                    className={`px-3.5 py-1 text-xs cursor-pointer border-none transition-all whitespace-nowrap ${chartMode === "traj" ? "bg-white text-[#111] font-medium shadow-sm" : "bg-transparent text-[#888]"}`}
+                    onClick={() => setChartMode("traj")}
+                  >
+                    Trajectoires
+                  </button>
+                  <button
+                    className={`px-3.5 py-1 text-xs cursor-pointer border-none transition-all whitespace-nowrap ${chartMode === "ecart" ? "bg-white text-[#111] font-medium shadow-sm" : "bg-transparent text-[#888]"}`}
+                    onClick={() => setChartMode("ecart")}
+                  >
+                    Écarts & gains
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-1">
+                {INDICATOR_TABS.map((tab) => {
+                  if (!processedData.indicators.some((i) => i.label === tab.key)) return null
+                  return (
+                    <button
+                      key={tab.key}
+                      className={`px-3.5 py-1 rounded-md text-xs cursor-pointer border transition-all ${
+                        selectedIndicator === tab.key
+                          ? "bg-[#1D9E75] text-white border-[#1D9E75] font-medium"
+                          : "bg-transparent text-[#888] border-[#ddd] hover:border-[#1D9E75] hover:text-[#555]"
+                      }`}
+                      onClick={() => setSelectedIndicator(tab.key)}
                     >
-                        <FiPlus size={16} />
-                        Modifier
+                      {tab.label}
                     </button>
-                )}
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Legend */}
+            {chartMode === "traj" ? (
+              <div className="flex gap-4 flex-wrap mb-3">
+                {TRAJ_SERIES.map((s) => (
+                  <div key={s.key} className="flex items-center gap-1.5 text-xs text-[#888]">
+                    {s.dash ? (
+                      <div className="w-5 h-0 border-t-2 border-dashed" style={{ borderColor: s.color }} />
+                    ) : (
+                      <div className="w-5 h-0.5 rounded-sm" style={{ background: s.color }} />
+                    )}
+                    {s.label}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-4 flex-wrap mb-3">
+                {ECART_SERIES.map((s) => (
+                  <label key={s.key} className="flex items-center gap-1.5 text-xs text-[#555] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={ecartVisible[s.key]}
+                      onChange={(e) => setEcartVisible((prev) => ({ ...prev, [s.key]: e.target.checked }))}
+                      className="accent-[#1D9E75] cursor-pointer"
+                    />
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* Chart */}
+            <div className="h-[340px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  {chartMode === "traj" ? (
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} tickFormatter={(v) => (v % 5 === 0 ? v : "")} />
+                      <YAxis tick={{ fontSize: 10, fill: "#999" }} tickFormatter={formatTick} />
+                      <Tooltip
+                        formatter={(value, name) => [
+                          `${formatBigNumber(value)} ${currentEmissionsIndicator?.unit || ""}`,
+                          TRAJ_SERIES.find((s) => s.key === name)?.label || name,
+                        ]}
+                        labelFormatter={(label) => `Année ${label}`}
+                      />
+                      <ReferenceLine x={selectedYear} stroke="#1D9E75" strokeDasharray="3 3" strokeOpacity={0.5} />
+                      <Line type="monotone" dataKey="initiale" stroke="#888780" strokeWidth={1.5} dot={false} />
+                      <Line type="monotone" dataKey="reference" stroke="#378ADD" strokeWidth={1.5} dot={false} />
+                      <Line type="monotone" dataKey="previsionnelle" stroke="#EF9F27" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                      <Line type="monotone" dataKey="expost" stroke="#1D9E75" strokeWidth={2.5} dot={false} />
+                    </LineChart>
+                  ) : (
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} tickFormatter={(v) => (v % 5 === 0 ? v : "")} />
+                      <YAxis tick={{ fontSize: 10, fill: "#999" }} tickFormatter={formatTick} />
+                      <Tooltip
+                        formatter={(value, name) => [
+                          `${formatBigNumber(value)} ${currentGainsIndicator?.unit || ""}`,
+                          ECART_SERIES.find((s) => s.key === name)?.label || name,
+                        ]}
+                        labelFormatter={(label) => `Année ${label}`}
+                      />
+                      {ECART_SERIES.filter((s) => ecartVisible[s.key]).map((s) => (
+                        <Bar key={s.key} dataKey={s.key} fill={s.color} />
+                      ))}
+                    </BarChart>
+                  )}
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-gray-500">Aucune donnée disponible</div>
+              )}
+            </div>
+
+            {/* Year slider */}
+            <div className="flex items-center gap-3.5 mt-3.5 pt-3.5 border-t border-[#eee]">
+              <span className="text-xs text-[#888] whitespace-nowrap">Année analysée</span>
+              <input
+                type="range"
+                min={yearMin}
+                max={yearMax}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="flex-1 accent-[#1D9E75]"
+              />
+              <span className="text-base font-bold text-[#1D9E75] min-w-[40px] text-right">{selectedYear}</span>
+            </div>
+          </div>
+
+          {/* SIDEBAR */}
+          <div className="space-y-4">
+            {/* Values table */}
+            <div className="card-shadow p-4">
+              <div className="text-sm font-semibold text-[#111] mb-3">
+                Valeurs {selectedYear} · {selectedIndicator}
+              </div>
+              {chartMode === "traj" ? (
+                <>
+                  <table className="w-full text-[13px]">
+                    <tbody>
+                      {TRAJ_SERIES.map((row) => (
+                        <tr key={row.key} className="border-b border-[#f0f0f0] last:border-b-0">
+                          <td className="py-2.5 text-[#555]">
+                            <span className="inline-block w-2 h-2 rounded-full mr-2 align-middle" style={{ background: row.color }} />
+                            {row.label}
+                          </td>
+                          <td className="py-2.5 font-semibold text-[#111] text-right pr-2.5">{selectedYearTrajData ? formatBigNumber(selectedYearTrajData[row.key]) : "—"}</td>
+                          <td className="py-2.5 text-[#999] text-right text-xs">{currentEmissionsIndicator?.unit || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {selectedYearTrajData && (() => {
+                    const gap = selectedYearTrajData.expost - selectedYearTrajData.previsionnelle
+                    const isPositive = gap > 0
+                    const bgColor = isPositive ? "#FEF2F2" : "#E8F8F2"
+                    const textColor = isPositive ? "#E24B4A" : "#1D9E75"
+                    return (
+                      <div className="rounded-lg p-3.5 mt-3.5" style={{ background: bgColor }}>
+                        <div className="text-xs font-medium mb-0.5" style={{ color: textColor }}>
+                          {isPositive ? "Écart à l'objectif" : gap < 0 ? "Objectif dépassé" : "Objectif atteint"}
+                        </div>
+                        <div className="text-xl font-bold" style={{ color: textColor }}>
+                          {isPositive ? "+" : ""}{formatBigNumber(gap)} {currentEmissionsIndicator?.unit || ""}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: textColor }}>
+                          {isPositive ? "encore à réduire" : gap < 0 ? "en avance sur l'objectif" : "objectif exactement atteint"}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </>
+              ) : (
+                <>
+                  <table className="w-full text-[13px]">
+                    <tbody>
+                      {ECART_SERIES.map((row) => (
+                        <tr key={row.key} className="border-b border-[#f0f0f0] last:border-b-0">
+                          <td className="py-2.5 text-[#555]">
+                            <span className="inline-block w-2 h-2 rounded-full mr-2 align-middle" style={{ background: row.color }} />
+                            {row.label}
+                          </td>
+                          <td className="py-2.5 font-semibold text-[#111] text-right pr-2.5">{selectedYearEcartData ? formatBigNumber(selectedYearEcartData[row.key]) : "—"}</td>
+                          <td className="py-2.5 text-[#999] text-right text-xs">{currentGainsIndicator?.unit || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {selectedYearEcartData && (() => {
+                    const gap = selectedYearEcartData.ecartExpostPrev
+                    const isPositive = gap > 0
+                    const bgColor = isPositive ? "#FEF2F2" : "#E8F8F2"
+                    const textColor = isPositive ? "#E24B4A" : "#1D9E75"
+                    return (
+                      <div className="rounded-lg p-3.5 mt-3.5" style={{ background: bgColor }}>
+                        <div className="text-xs font-medium mb-0.5" style={{ color: textColor }}>
+                          {isPositive ? "Écart à l'objectif" : gap < 0 ? "Objectif dépassé" : "Objectif atteint"}
+                        </div>
+                        <div className="text-xl font-bold" style={{ color: textColor }}>
+                          {isPositive ? "+" : ""}{formatBigNumber(gap)} {currentGainsIndicator?.unit || ""}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: textColor }}>
+                          {isPositive ? "encore à réduire" : gap < 0 ? "en avance sur l'objectif" : "objectif exactement atteint"}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
+
+            {/* Saisie des données */}
+            <div className="card-shadow p-4">
+              <h3 className="text-sm font-semibold text-[#111] mb-4">Saisie des données</h3>
+              <div className="flex items-center justify-center mb-6">
+                <div className="relative w-20 h-20 flex items-center justify-center">
+                  <svg className="w-full h-full" viewBox="0 0 36 36">
+                    <path
+                      className="text-gray-100"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                    />
+                    <path
+                      className="text-[#1D9E75] transition-all duration-1000 ease-out"
+                      strokeDasharray={`${completeness}, 100`}
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                    />
+                  </svg>
+                  <span className="absolute text-lg font-bold text-gray-900">{completeness}%</span>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {["init", "ref", "prev", "expost"].map((key) => {
+                  const pct = completionBySituation[key]
+                  const isComplete = pct === 100
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/actions/${action._id}/completion`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${isComplete ? "bg-[#1D9E75]" : "bg-orange-400"}`} />
+                        <span className="text-sm font-medium text-gray-700">{SITUATION_LABELS[key]}</span>
+                      </div>
+                      {isComplete ? <HiCheckCircle className="text-[#1D9E75]" size={20} /> : <span className="text-xs text-gray-400">{pct}%</span>}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            <TopCard 
-                label="GES Évités" 
-                value={formatBigNumber(processedData.ges.value)} 
-                unit="tCO2e/an"
-                trend={processedData.ges.trend}
-            />
-            <TopCard 
-                label="Énergie Économisée" 
-                value={formatBigNumber(processedData.energy.value)} 
-                unit="GWh/an"
-                trend={processedData.energy.trend}
-            />
-            <TopCard 
-                label="Polluants Réduits" 
-                value={formatBigNumber(processedData.pollutants.value)} 
-                unit="tonnes/an"
-                subLabel="PM, NOx, HC, CO"
-            />
-            <ScoreCard score={processedData.score} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-2xl p-8 card-shadow border border-gray-100 h-full">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-lg font-bold text-gray-900">Progression vers les objectifs</h3>
-                        <span className="text-xs text-gray-400">La barre représente l'atteinte de l'objectif prévisionnel</span>
-                    </div>
-
-                    <div className="space-y-8">
-                      {processedData.indicators.length > 0 && (
-                        processedData.indicators.map((indicator, index) => (
-                            <ProgressBar key={index} indicator={indicator} />
-                        ))
-                      )}
-                      {!processedData.indicators.length > 0 && (
-                        <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
-                          <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
-                        </div>
-                      )}
-                    </div>
+        {/* BOTTOM: Atteinte des objectifs */}
+        <div className="card-shadow p-4">
+          <div className="text-sm font-semibold text-[#111] mb-3">Atteinte des objectifs · {selectedYear}</div>
+          <div className="space-y-3">
+            {processedData.indicators.map((indicator) => {
+              const achievement = getAchievementForYear(indicator, selectedYear)
+              if (achievement === null) return null
+              const yearData = indicator.yearlyData.find((d) => d.year === selectedYear)
+              const pct = Math.round(Math.min(achievement, 100))
+              const color = scoreColor(pct)
+              return (
+                <div key={indicator.label} className="flex items-center gap-2.5">
+                  <span className="text-[13px] text-[#555] min-w-[60px]">{indicator.label}</span>
+                  <div className="flex-1 h-1.5 bg-[#eee] rounded-sm overflow-hidden">
+                    <div className="h-full rounded-sm" style={{ width: `${pct}%`, background: color }} />
+                  </div>
+                  <span className="text-xs text-[#999] whitespace-nowrap text-right min-w-[110px]">
+                    −{formatBigNumber(Math.abs(yearData?.ecartExpostRef || 0))} / −{formatBigNumber(Math.abs(yearData?.ecartPrevRef || 0))} {indicator.unit}
+                  </span>
+                  <span className="text-[13px] font-semibold min-w-[36px] text-right" style={{ color }}>
+                    {pct}%
+                  </span>
                 </div>
-            </div>
-
-            <div className="space-y-6">
-                <div className="bg-white rounded-2xl p-8 card-shadow border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Saisie des données</h3>
-                    
-                    <div className="flex items-center justify-center mb-8">
-                        <div className="relative w-24 h-24 flex items-center justify-center">
-                           <svg className="w-full h-full" viewBox="0 0 36 36">
-                                <path
-                                    className="text-gray-100"
-                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                />
-                                <path
-                                    className="text-primary-green transition-all duration-1000 ease-out"
-                                    strokeDasharray={`${completeness}, 100`}
-                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                />
-                            </svg>
-                            <span className="absolute text-xl font-bold text-gray-900">{completeness}%</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        {["init", "ref", "prev", "expost"].map((key) => {
-                            const pct = completionBySituation[key];
-                            const isComplete = pct === 100;
-                            return (
-                                <div key={key} className="flex items-center justify-between rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/actions/${action._id}/completion`)}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-2 h-2 rounded-full ${isComplete ? "bg-primary-green" : "bg-orange-400"}`} />
-                                        <span className="text-sm font-medium text-gray-700">{SITUATION_LABELS[key]}</span>
-                                    </div>
-                                    {isComplete ? (
-                                        <HiCheckCircle className="text-primary-green" size={20} />
-                                    ) : (
-                                        <span className="text-xs text-gray-400">{pct}%</span>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>
   )
-}
-
-const COLORS = { primary: { base: "text-primary-green",bg: "bg-primary-green",light: "bg-[#D9EFE3]",border: "border-primary-green"},gradient: {start: "#2DAC6A",end: "#D9EFE3"}}
-
-function TopCard({ label, value, unit, trend, subLabel }) {
-    const trendIsPositive = trend > 0;
-
-    return (
-        <div className="bg-white p-6 rounded-2xl card-shadow border border-gray-100 flex flex-col justify-between h-full relative overflow-hidden group hover:border-primary-green/30 transition-all duration-300">
-            <div className="flex justify-between items-start mb-2">
-                <p className="text-sm font-medium text-gray-500">{label}</p>
-                {trend !== undefined && trend !== null && (
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${COLORS.primary.light} ${COLORS.primary.base}`}>
-                        {trendIsPositive ? <FiTrendingUp /> : <FiTrendingDown />}
-                        {(Math.abs(trend) * 100).toFixed(1)}%
-                    </div>
-                )}
-            </div>
-            
-            <div>
-                <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold text-gray-900">{value}</h3>
-                    <span className="text-xs font-medium text-gray-400">{unit}</span>
-                </div>
-                {subLabel && (
-                     <p className="text-xs text-gray-400 mt-1">
-                        {subLabel}
-                    </p>
-                )}
-            </div>
-        </div>
-    )
-}
-
-function ScoreCard({ score }) {
-    let text = "Excellent";
-    if (score < 80) { text = "Bon"; }
-    if (score < 60) { text = "Moyen"; }
-    if (score < 40) { text = "Faible"; }
-
-    return (
-        <div className="bg-white p-6 rounded-2xl card-shadow border border-gray-100 flex flex-col justify-between h-full group hover:border-primary-green/30 transition-all duration-300">
-            <div className="flex justify-between items-start mb-2">
-                 <p className="text-sm font-medium text-gray-500">Score Performance</p>
-                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${COLORS.primary.light} ${COLORS.primary.base}`}>
-                    {text}
-                </span>
-            </div>
-             <div>
-                 <div className="flex items-baseline gap-2">
-                    <h3 className={`text-3xl font-bold ${COLORS.primary.base}`}>{score}%</h3>
-                    <span className={`text-xs font-medium ${COLORS.primary.base} opacity-60`}>réel vs objectif</span>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-function ProgressBar({ indicator }) {
-    const { label, achievement, objective, real, objectiveVal, realVal } = indicator;
-    
-    const config = { icon: label.substring(0, 2), bg: "bg-[#D9EFE3]", color: "bg-primary-green" };
-
-    const icons = { GES: "GES", PM: "PM", NOx: "NOx", HC: "HC", CO: "CO", Énergie: "Énergie" };
-
-    let status = "En retard";
-    let statusClass = "text-primary-green/60"
-
-    if (achievement >= 95) status = "Excellent"
-    if (achievement >= 80) status = "En bonne voie"
-    if (achievement >= 60) { status = "À surveiller"; statusClass = "text-primary-green/80"; }
-
-    if (!objective && objective !== 0) return null
-
-    return (
-        <div className="flex items-center gap-6">
-            
-            <div className="flex-1 space-y-2">
-                <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-gray-900">{label} <span className="text-xs font-normal text-gray-400 ml-2">{indicator.unit}</span></span>
-                </div>
-                
-                <div className="relative h-3 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                        className={`absolute top-0 left-0 h-full rounded-full ${config.color} transition-all duration-1000`} 
-                        style={{ width: `${Math.min(achievement || 0, 100)}%`, opacity: Math.max(0.4, Math.min((achievement || 0) / 100, 1)) }}
-                    />
-                </div>
-
-                <div className="flex justify-between text-xs font-medium mt-1">
-                    <span className="text-gray-400">Réel: {formatBigNumber(realVal)} {indicator.unit}</span>
-                    <div className="text-right">
-                        <span className="text-gray-400 mr-4">Objectif: {formatBigNumber(objectiveVal)} {indicator.unit}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="w-32 text-right">
-                 <div className={`text-xl font-bold ${statusClass}`}>
-                     {Math.round(achievement)}%
-                 </div>
-            </div>
-        </div>
-    )
 }
