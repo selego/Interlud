@@ -188,12 +188,9 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
         .values || [];
 
     let processedData = {
-      ges: { value: 0 },
-      energy: { value: 0 },
-      pollutants: { value: 0 },
       score: 0,
-      indicators: [],
-      emissions: { indicators: [] },
+      indicators: {},
+      emissions: { indicators: {} },
     };
 
     if (gainsValues.length === 0) return res.json({ ok: true, data: processedData });
@@ -236,21 +233,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
         achievementCount++;
       }
 
-      processedData.indicators.push({ label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData });
-    }
-
-    // GES summary
-    const gesInd = processedData.indicators.find((i) => i.label === 'GES');
-    if (gesInd) processedData.ges.value = gesInd.realVal;
-
-    // Energy summary
-    const nrjInd = processedData.indicators.find((i) => i.label === 'Énergie') || processedData.indicators.find((i) => i.label === 'Nrj');
-    if (nrjInd) processedData.energy.value = nrjInd.realVal;
-
-    // Pollutants summary
-    for (const pollutant of ['PM', 'NOx', 'HC', 'CO']) {
-      const ind = processedData.indicators.find((i) => i.label === pollutant);
-      if (ind && ind.realVal > 0) processedData.pollutants.value += ind.realVal;
+      processedData.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData };
     }
 
     processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
@@ -286,7 +269,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
         expost: parseNumber(d.row[EMISSION_COL[emissionType] + 3]),
       }));
 
-      processedData.emissions.indicators.push({ label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, yearlyData });
+      processedData.emissions.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, yearlyData };
     }
 
     res.json({ ok: true, data: processedData });
