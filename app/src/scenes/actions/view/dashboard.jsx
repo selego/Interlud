@@ -6,7 +6,7 @@ import useStore from "@/services/store"
 import { FiArrowLeft, FiPlus, FiEdit } from "react-icons/fi"
 import { HiCheckCircle } from "react-icons/hi2"
 import Loader from "@/components/loader"
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Customized } from "recharts"
 
 const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" }
 
@@ -148,9 +148,9 @@ export default function Dashboard({ action }) {
         {/* KPI ROW */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "GES évités", value: `−${formatBigNumber(Math.abs(getYearData(ind.GES, selectedYear)?.ecartExpostRef))}`, unit: "tCO2e / an", badge: getAchievementForYear(ind.GES, selectedYear) },
-            { label: "Énergie économisée", value: `−${formatBigNumber(Math.abs(getYearData(ind.Nrj || ind["Énergie"], selectedYear)?.ecartExpostRef))}`, unit: "GWh / an", badge: getAchievementForYear(ind["Énergie"], selectedYear) },
-            { label: "Polluants réduits", value: `−${formatBigNumber(["PM", "NOx", "HC", "CO"].reduce((sum, k) => sum + Math.abs(getYearData(ind[k], selectedYear)?.ecartExpostRef), 0))}`, unit: "t / an · PM NOx HC CO", badge: (() => { const vals = ["PM", "NOx", "HC", "CO"].map((k) => getAchievementForYear(ind[k], selectedYear)).filter((v) => v !== null); return vals.length > 0 ? Math.round(vals.reduce((s, v) => s + Math.min(v, 100), 0) / vals.length) : null })() },
+            { label: "GES évités", value: formatBigNumber(getYearData(ind.GES, selectedYear)?.ecartExpostRef), unit: "tCO2e / an", badge: getAchievementForYear(ind.GES, selectedYear) },
+            { label: "Énergie économisée", value: formatBigNumber(getYearData(ind.Nrj || ind["Énergie"], selectedYear)?.ecartExpostRef), unit: "GWh / an", badge: getAchievementForYear(ind["Énergie"], selectedYear) },
+            { label: "Polluants réduits", value: formatBigNumber(["PM", "NOx", "HC", "CO"].reduce((sum, k) => sum + (getYearData(ind[k], selectedYear)?.ecartExpostRef || 0), 0)), unit: "t / an · PM NOx HC CO", badge: (() => { const vals = ["PM", "NOx", "HC", "CO"].map((k) => getAchievementForYear(ind[k], selectedYear)).filter((v) => v !== null); return vals.length > 0 ? Math.round(vals.reduce((s, v) => s + Math.min(v, 100), 0) / vals.length) : null })() },
           ].map((kpi) => {
             const s = kpi.badge !== null && kpi.badge !== undefined ? scoreBg(Math.round(kpi.badge)) : null
             return (
@@ -164,7 +164,7 @@ export default function Dashboard({ action }) {
           })}
           <div className="card-shadow p-4">
             <div className="text-xs text-[#888] mb-1.5">Impact GES cumulé</div>
-            <div className="text-2xl font-bold text-[#1D9E75]">−{formatBigNumber(Math.abs((ind.GES?.yearlyData ?? []).filter((d) => d.year >= 2015 && d.year <= selectedYear).reduce((sum, d) => sum + d.ecartExpostRef, 0)))}</div>
+            <div className="text-2xl font-bold text-[#1D9E75]">{formatBigNumber((ind.GES?.yearlyData ?? []).filter((d) => d.year >= 2015 && d.year <= selectedYear).reduce((sum, d) => sum + d.ecartExpostRef, 0))}</div>
             <div className="text-xs text-[#999] mt-0.5">tCO2e total 2015–{selectedYear}</div>
             <span className="inline-block text-xs px-2.5 py-0.5 rounded-[10px] mt-1.5 border border-[#ccc] text-[#888]">Impact total</span>
           </div>
@@ -253,7 +253,7 @@ export default function Dashboard({ action }) {
                   {chartMode === "traj" ? (
                     <LineChart data={emis.yearlyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-                      <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} tickFormatter={(v) => (v % 5 === 0 ? v : "")} />
+                      <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} interval={0} />
                       <YAxis tick={{ fontSize: 10, fill: "#999" }} tickFormatter={formatTick} />
                       <Tooltip
                         formatter={(value, name) => [
@@ -269,21 +269,81 @@ export default function Dashboard({ action }) {
                       <Line type="monotone" dataKey="expost" stroke="#1D9E75" strokeWidth={2.5} dot={false} />
                     </LineChart>
                   ) : (
-                    <BarChart data={gains.yearlyData}>
+                    <AreaChart data={gains.yearlyData}>
+                      <defs>
+                        {ECART_SERIES.map((s) => (
+                          <linearGradient key={s.key} id={`gradient-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={s.color} stopOpacity={0.4} />
+                            <stop offset="100%" stopColor={s.color} stopOpacity={0.08} />
+                          </linearGradient>
+                        ))}
+                        <linearGradient id="gradient-ecartPrevRef-neg" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#E24B4A" stopOpacity={0.3} />
+                          <stop offset="100%" stopColor="#E24B4A" stopOpacity={0.06} />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-                      <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} tickFormatter={(v) => (v % 5 === 0 ? v : "")} />
+                      <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} interval={0} />
                       <YAxis tick={{ fontSize: 10, fill: "#999" }} tickFormatter={formatTick} />
                       <Tooltip
-                        formatter={(value, name) => [
-                          `${formatBigNumber(value)} ${gains?.unit || ""}`,
-                          ECART_SERIES.find((s) => s.key === name)?.label || name,
-                        ]}
-                        labelFormatter={(label) => `Année ${label}`}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null
+                          const unit = gains?.unit || ""
+                          return (
+                            <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs">
+                              <div className="font-semibold text-[#111] mb-2">Année {label}</div>
+                              {ECART_SERIES.map((s) => {
+                                const entry = payload.find((p) => p.dataKey === s.key)
+                                if (!entry) return null
+                                const val = entry.value
+                                return (
+                                  <div key={s.key} className="flex items-center gap-2 mb-1">
+                                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                                    <span className="text-[#555]">{s.label} :</span>
+                                    <span className="font-semibold" style={{ color: val > 0 ? "#1D9E75" : val < 0 ? "#E24B4A" : "#888" }}>
+                                      {val > 0 ? "+" : ""}{formatBigNumber(val)} {unit}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        }}
                       />
-                      {ECART_SERIES.filter((s) => ecartVisible[s.key]).map((s) => (
-                        <Bar key={s.key} dataKey={s.key} fill={s.color} />
+                      <ReferenceLine y={0} stroke="#999" strokeWidth={0.5} />
+                      <ReferenceLine x={selectedYear} stroke="#1D9E75" strokeDasharray="3 3" strokeOpacity={0.5} />
+{ECART_SERIES.filter((s) => ecartVisible[s.key]).map((s) => (
+                        <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} strokeWidth={1.5}
+                          fill={`url(#gradient-${s.key})`}
+                        />
                       ))}
-                    </BarChart>
+                      {/* Inline labels on each zone */}
+                      <Customized component={({ xAxisMap, yAxisMap }) => {
+                        const xAxis = xAxisMap && Object.values(xAxisMap)[0]
+                        const yAxis = yAxisMap && Object.values(yAxisMap)[0]
+                        if (!xAxis || !yAxis || !gains?.yearlyData?.length) return null
+                        const data = gains.yearlyData
+                        const midIdx = Math.floor(data.length * 0.35)
+                        const midYear = data[midIdx]?.year
+                        const xPos = xAxis.scale(midYear)
+                        if (!xPos || isNaN(xPos)) return null
+                        const labels = ECART_SERIES.filter((s) => ecartVisible[s.key]).map((s) => {
+                          const val = data[midIdx]?.[s.key]
+                          if (val === undefined || val === null) return null
+                          const yPos = yAxis.scale(val / 2)
+                          return { ...s, yPos: isNaN(yPos) ? null : yPos }
+                        }).filter(Boolean).filter(l => l.yPos !== null)
+                        return (
+                          <g>
+                            {labels.map((l) => (
+                              <text key={l.key} x={xPos} y={l.yPos} textAnchor="middle" fontSize={9} fontWeight={600} fill={l.color} opacity={0.85}>
+                                {l.label}
+                              </text>
+                            ))}
+                          </g>
+                        )
+                      }} />
+                    </AreaChart>
                   )}
                 </ResponsiveContainer>
               ) : (
@@ -318,20 +378,20 @@ export default function Dashboard({ action }) {
                 return (
                   <div className="space-y-3">
                     {[
-                      { label: "Réf → Prév", key: "ecartPrevRef", color: "#378ADD", tooltip: "Gain prévu par rapport à la situation de référence (objectif visé)" },
-                      { label: "Réf → Ex-post", key: "ecartExpostRef", color: "#1D9E75", tooltip: "Gain réellement constaté par rapport à la situation de référence" },
+                      { label: "Prév → Réf", key: "ecartPrevRef", color: "#378ADD", tooltip: "Gain prévu par rapport à la situation de référence (objectif visé)" },
+                      { label: "Ex-post → Réf", key: "ecartExpostRef", color: "#1D9E75", tooltip: "Gain réellement constaté par rapport à la situation de référence" },
                       { label: "Ex-post → Prév", key: "ecartExpostPrev", color: "#EF9F27", tooltip: "Écart entre le gain constaté et le gain prévu (sur ou sous-performance)" },
                     ].map((g) => {
                       const val = yearEcart ? yearEcart[g.key] : null
                       const isNeg = val !== null && val < 0
                       return (
-                        <div key={g.key} className="rounded-lg p-3" style={{ background: isNeg ? "#E8F8F2" : val > 0 ? "#FEF2F2" : "#f5f5f5" }} title={g.tooltip}>
+                        <div key={g.key} className="rounded-lg p-3" style={{ background: val > 0 ? "#E8F8F2" : isNeg ? "#FEF2F2" : "#f5f5f5" }} title={g.tooltip}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: g.color }} />
                             <span className="text-xs font-medium text-[#555]">{g.label}</span>
                           </div>
                           <div className="text-[10px] text-[#999] pl-[18px] mb-1">{g.tooltip}</div>
-                          <div className="text-lg font-bold pl-[18px]" style={{ color: isNeg ? "#1D9E75" : val > 0 ? "#E24B4A" : "#888" }}>
+                          <div className="text-lg font-bold pl-[18px]" style={{ color: val > 0 ? "#1D9E75" : isNeg ? "#E24B4A" : "#888" }}>
                             {val !== null ? `${val > 0 ? "+" : ""}${formatBigNumber(val)}` : "—"} <span className="text-xs font-normal text-[#999]">{gains?.unit || emis?.unit || ""}</span>
                           </div>
                         </div>
