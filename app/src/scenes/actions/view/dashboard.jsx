@@ -6,7 +6,7 @@ import useStore from "@/services/store"
 import { FiArrowLeft, FiPlus, FiEdit } from "react-icons/fi"
 import { HiCheckCircle } from "react-icons/hi2"
 import Loader from "@/components/loader"
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Customized } from "recharts"
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 
 const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" }
 
@@ -317,32 +317,6 @@ export default function Dashboard({ action }) {
                           fill={`url(#gradient-${s.key})`}
                         />
                       ))}
-                      {/* Inline labels on each zone */}
-                      <Customized component={({ xAxisMap, yAxisMap }) => {
-                        const xAxis = xAxisMap && Object.values(xAxisMap)[0]
-                        const yAxis = yAxisMap && Object.values(yAxisMap)[0]
-                        if (!xAxis || !yAxis || !gains?.yearlyData?.length) return null
-                        const data = gains.yearlyData
-                        const midIdx = Math.floor(data.length * 0.35)
-                        const midYear = data[midIdx]?.year
-                        const xPos = xAxis.scale(midYear)
-                        if (!xPos || isNaN(xPos)) return null
-                        const labels = ECART_SERIES.filter((s) => ecartVisible[s.key]).map((s) => {
-                          const val = data[midIdx]?.[s.key]
-                          if (val === undefined || val === null) return null
-                          const yPos = yAxis.scale(val / 2)
-                          return { ...s, yPos: isNaN(yPos) ? null : yPos }
-                        }).filter(Boolean).filter(l => l.yPos !== null)
-                        return (
-                          <g>
-                            {labels.map((l) => (
-                              <text key={l.key} x={xPos} y={l.yPos} textAnchor="middle" fontSize={9} fontWeight={600} fill={l.color} opacity={0.85}>
-                                {l.label}
-                              </text>
-                            ))}
-                          </g>
-                        )
-                      }} />
                     </AreaChart>
                   )}
                 </ResponsiveContainer>
