@@ -56,8 +56,6 @@ export default function Dashboard({ action }) {
   const isEconomicActorAsRight = user.role === "economic_actor" && action.owner === "economic_actor" && user.economic_actor_id === action.economic_actor_id
   const right = userActionRights.find((right) => right.action_id === action._id)
 
-  const completionBySituation = {init: action.completion_init, prev: action.completion_prev, expost: action.completion_expost}
-
   const loadAggregation = async () => {
     if (!collectivity || !action?.excel_worksheetname) return
     try {
@@ -385,19 +383,19 @@ export default function Dashboard({ action }) {
                     />
                     <path
                       className="text-[#1D9E75] transition-all duration-1000 ease-out"
-                      strokeDasharray={`${Math.round((completionBySituation.init + completionBySituation.prev + completionBySituation.expost) / 3)}, 100`}
+                      strokeDasharray={`${Math.round((action.completion_init + action.completion_prev + action.completion_expost) / 3)}, 100`}
                       d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="3"
                     />
                   </svg>
-                  <span className="absolute text-lg font-bold text-gray-900">{Math.round((completionBySituation.init + completionBySituation.prev + completionBySituation.expost) / 3)}%</span>
+                  <span className="absolute text-lg font-bold text-gray-900">{Math.round((action.completion_init + action.completion_prev + action.completion_expost) / 3)}%</span>
                 </div>
               </div>
               <div className="space-y-3">
                 {["init", "ref", "prev", "expost"].map((key) => {
-                  const pct = completionBySituation[key]
+                  const pct = action[`completion_${key}`]
                   const isComplete = pct === 100
                   return (
                     <div
