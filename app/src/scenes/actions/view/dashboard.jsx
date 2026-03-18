@@ -57,7 +57,6 @@ export default function Dashboard({ action }) {
   const right = userActionRights.find((right) => right.action_id === action._id)
 
   const completionBySituation = {init: action.completion_init, prev: action.completion_prev, expost: action.completion_expost}
-  const completeness = Math.round((completionBySituation.init + completionBySituation.prev + completionBySituation.expost) / 3)
 
   const loadAggregation = async () => {
     if (!collectivity || !action?.excel_worksheetname) return
@@ -89,7 +88,7 @@ export default function Dashboard({ action }) {
 
   const ind = processedData.indicators
   const gains = ind[selectedIndicator]
-  const emis = (processedData.emissions?.indicators || {})[selectedIndicator]
+  const emis = (processedData.emissions?.indicators)[selectedIndicator]
 
   const getYearData = (indicator, year) => indicator?.yearlyData?.find((d) => d.year === year)
   const getAchievementForYear = (indicator, year) => {
@@ -390,14 +389,14 @@ export default function Dashboard({ action }) {
                     />
                     <path
                       className="text-[#1D9E75] transition-all duration-1000 ease-out"
-                      strokeDasharray={`${completeness}, 100`}
+                      strokeDasharray={`${Math.round((completionBySituation.init + completionBySituation.prev + completionBySituation.expost) / 3)}, 100`}
                       d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="3"
                     />
                   </svg>
-                  <span className="absolute text-lg font-bold text-gray-900">{completeness}%</span>
+                  <span className="absolute text-lg font-bold text-gray-900">{Math.round((completionBySituation.init + completionBySituation.prev + completionBySituation.expost) / 3)}%</span>
                 </div>
               </div>
               <div className="space-y-3">
