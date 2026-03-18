@@ -187,11 +187,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
       (await graphFetch(`/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[action].dataStartRow}:AG${ACTION_GAINS_RANGES[action].dataStartRow + 50}')`))
         .values || [];
 
-    let processedData = {
-      score: 0,
-      indicators: {},
-      emissions: { indicators: {} },
-    };
+    let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
 
     if (gainsValues.length === 0) return res.json({ ok: true, data: processedData });
 

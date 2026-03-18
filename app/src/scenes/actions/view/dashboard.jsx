@@ -86,10 +86,6 @@ export default function Dashboard({ action }) {
 
   if (isAggregationLoading) return <Loader />
 
-  const ind = processedData.indicators
-  const gains = ind[selectedIndicator]
-  const emis = (processedData.emissions?.indicators)[selectedIndicator]
-
   const getYearData = (indicator, year) => indicator?.yearlyData?.find((d) => d.year === year)
   const getAchievementForYear = (indicator, year) => {
     const d = getYearData(indicator, year)
@@ -147,9 +143,9 @@ export default function Dashboard({ action }) {
         {/* KPI ROW */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "GES évités", value: formatBigNumber(getYearData(ind.GES, selectedYear)?.ecartExpostRef), unit: "tCO2e / an", badge: getAchievementForYear(ind.GES, selectedYear) },
-            { label: "Énergie économisée", value: formatBigNumber(getYearData(ind.Nrj || ind["Énergie"], selectedYear)?.ecartExpostRef), unit: "GWh / an", badge: getAchievementForYear(ind["Énergie"], selectedYear) },
-            { label: "Polluants réduits", value: formatBigNumber(["PM", "NOx", "HC", "CO"].reduce((sum, k) => sum + (getYearData(ind[k], selectedYear)?.ecartExpostRef || 0), 0)), unit: "t / an · PM NOx HC CO", badge: (() => { const vals = ["PM", "NOx", "HC", "CO"].map((k) => getAchievementForYear(ind[k], selectedYear)).filter((v) => v !== null); return vals.length > 0 ? Math.round(vals.reduce((s, v) => s + Math.min(v, 100), 0) / vals.length) : null })() },
+            { label: "GES évités", value: formatBigNumber(getYearData(processedData.indicators.GES, selectedYear)?.ecartExpostRef), unit: "tCO2e / an", badge: getAchievementForYear(processedData.indicators.GES, selectedYear) },
+            { label: "Énergie économisée", value: formatBigNumber(getYearData(processedData.indicators.Nrj || processedData.indicators["Énergie"], selectedYear)?.ecartExpostRef), unit: "GWh / an", badge: getAchievementForYear(processedData.indicators["Énergie"], selectedYear) },
+            { label: "Polluants réduits", value: formatBigNumber(["PM", "NOx", "HC", "CO"].reduce((sum, k) => sum + (getYearData(processedData.indicators[k], selectedYear)?.ecartExpostRef || 0), 0)), unit: "t / an · PM NOx HC CO", badge: (() => { const vals = ["PM", "NOx", "HC", "CO"].map((k) => getAchievementForYear(processedData.indicators[k], selectedYear)).filter((v) => v !== null); return vals.length > 0 ? Math.round(vals.reduce((s, v) => s + Math.min(v, 100), 0) / vals.length) : null })() },
           ].map((kpi) => {
             const s = kpi.badge !== null && kpi.badge !== undefined ? scoreBg(Math.round(kpi.badge)) : null
             return (
@@ -163,7 +159,7 @@ export default function Dashboard({ action }) {
           })}
           <div className="card-shadow p-4">
             <div className="text-xs text-[#888] mb-1.5">Impact GES cumulé</div>
-            <div className="text-2xl font-bold text-[#1D9E75]">{formatBigNumber((ind.GES?.yearlyData ?? []).filter((d) => d.year >= 2015 && d.year <= selectedYear).reduce((sum, d) => sum + d.ecartExpostRef, 0))}</div>
+            <div className="text-2xl font-bold text-[#1D9E75]">{formatBigNumber((processedData.indicators.GES?.yearlyData ?? []).filter((d) => d.year >= 2015 && d.year <= selectedYear).reduce((sum, d) => sum + d.ecartExpostRef, 0))}</div>
             <div className="text-xs text-[#999] mt-0.5">tCO2e total 2015–{selectedYear}</div>
             <span className="inline-block text-xs px-2.5 py-0.5 rounded-[10px] mt-1.5 border border-[#ccc] text-[#888]">Impact total</span>
           </div>
@@ -196,7 +192,7 @@ export default function Dashboard({ action }) {
               </div>
               <div className="flex gap-1">
                 {INDICATOR_TABS.map((tab) => {
-                  if (!ind[tab.key]) return null
+                  if (!processedData.indicators[tab.key]) return null
                   return (
                     <button
                       key={tab.key}
@@ -247,16 +243,16 @@ export default function Dashboard({ action }) {
 
             {/* Chart */}
             <div className="h-[340px]">
-              {(chartMode === "traj" ? emis?.yearlyData : gains?.yearlyData)?.length > 0 ? (
+              {(chartMode === "traj" ? processedData.emissions?.indicators?.[selectedIndicator]?.yearlyData : processedData.indicators[selectedIndicator]?.yearlyData)?.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   {chartMode === "traj" ? (
-                    <LineChart data={emis.yearlyData}>
+                    <LineChart data={processedData.emissions?.indicators?.[selectedIndicator].yearlyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
                       <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#999" }} interval={0} />
                       <YAxis tick={{ fontSize: 10, fill: "#999" }} tickFormatter={formatTick} />
                       <Tooltip
                         formatter={(value, name) => [
-                          `${formatBigNumber(value)} ${emis?.unit || ""}`,
+                          `${formatBigNumber(value)} ${processedData.emissions?.indicators?.[selectedIndicator]?.unit || ""}`,
                           TRAJ_SERIES.find((s) => s.key === name)?.label || name,
                         ]}
                         labelFormatter={(label) => `Année ${label}`}
@@ -268,7 +264,7 @@ export default function Dashboard({ action }) {
                       <Line type="monotone" dataKey="expost" stroke="#1D9E75" strokeWidth={2.5} dot={false} />
                     </LineChart>
                   ) : (
-                    <AreaChart data={gains.yearlyData}>
+                    <AreaChart data={processedData.indicators[selectedIndicator].yearlyData}>
                       <defs>
                         {ECART_SERIES.map((s) => (
                           <linearGradient key={s.key} id={`gradient-${s.key}`} x1="0" y1="0" x2="0" y2="1">
@@ -287,7 +283,7 @@ export default function Dashboard({ action }) {
                       <Tooltip
                         content={({ active, payload, label }) => {
                           if (!active || !payload?.length) return null
-                          const unit = gains?.unit || ""
+                          const unit = processedData.indicators[selectedIndicator]?.unit || ""
                           return (
                             <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs">
                               <div className="font-semibold text-[#111] mb-2">Année {label}</div>
@@ -329,8 +325,8 @@ export default function Dashboard({ action }) {
               <span className="text-xs text-[#888] whitespace-nowrap">Année analysée</span>
               <input
                 type="range"
-                min={(emis?.yearlyData ?? gains?.yearlyData)?.[0]?.year ?? 2010}
-                max={(emis?.yearlyData ?? gains?.yearlyData)?.at(-1)?.year ?? 2050}
+                min={(processedData.emissions?.indicators?.[selectedIndicator]?.yearlyData ?? processedData.indicators[selectedIndicator]?.yearlyData)?.[0]?.year ?? 2010}
+                max={(processedData.emissions?.indicators?.[selectedIndicator]?.yearlyData ?? processedData.indicators[selectedIndicator]?.yearlyData)?.at(-1)?.year ?? 2050}
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 className="flex-1 accent-[#1D9E75]"
@@ -347,7 +343,7 @@ export default function Dashboard({ action }) {
                 Gains {selectedYear} · {selectedIndicator}
               </div>
               {(() => {
-                const yearEcart = gains?.yearlyData?.find((d) => d.year === selectedYear)
+                const yearEcart = processedData.indicators[selectedIndicator]?.yearlyData?.find((d) => d.year === selectedYear)
                 return (
                   <div className="space-y-3">
                     {[
@@ -364,7 +360,7 @@ export default function Dashboard({ action }) {
                           </div>
                           <div className="text-[10px] text-[#999] pl-[18px] mb-1">{g.tooltip}</div>
                           <div className="text-lg font-bold pl-[18px]" style={{ color: val < 0 ? "#1D9E75" : val > 0 ? "#E24B4A" : "#888" }}>
-                            {val !== null ? `${val > 0 ? "+" : ""}${formatBigNumber(val)}` : "—"} <span className="text-xs font-normal text-[#999]">{gains?.unit || emis?.unit || ""}</span>
+                            {val !== null ? `${val > 0 ? "+" : ""}${formatBigNumber(val)}` : "—"} <span className="text-xs font-normal text-[#999]">{processedData.indicators[selectedIndicator]?.unit || processedData.emissions?.indicators?.[selectedIndicator]?.unit || ""}</span>
                           </div>
                         </div>
                       )
@@ -422,12 +418,12 @@ export default function Dashboard({ action }) {
           </div>
         </div>
 
-        {/* BOTTOM: Atteinte des objectifs */}
+        {/* Atteinte des objectifs */}
         <div className="card-shadow p-4">
           <div className="text-sm font-semibold text-[#111] mb-1">Atteinte des objectifs · {selectedYear}</div>
           <div className="text-[10px] text-[#999] mb-3">Pourcentage du gain constaté (ex-post) par rapport au gain prévu (prévisionnel), relativement à la situation de référence. 100% = objectif atteint.</div>
           <div className="space-y-3">
-            {Object.values(ind).map((indicator) => {
+            {Object.values(processedData.indicators).map((indicator) => {
               const pct = Math.round(Math.min(getAchievementForYear(indicator, selectedYear), 100))
               const d = getYearData(indicator, selectedYear)
               return (
