@@ -300,7 +300,7 @@ export default function Dashboard({ action }) {
                                   <div key={s.key} className="flex items-center gap-2 mb-1">
                                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
                                     <span className="text-[#555]">{s.label} :</span>
-                                    <span className="font-semibold" style={{ color: val > 0 ? "#1D9E75" : val < 0 ? "#E24B4A" : "#888" }}>
+                                    <span className="font-semibold" style={{ color: val < 0 ? "#1D9E75" : val > 0 ? "#E24B4A" : "#888" }}>
                                       {val > 0 ? "+" : ""}{formatBigNumber(val)} {unit}
                                     </span>
                                   </div>
@@ -313,7 +313,7 @@ export default function Dashboard({ action }) {
                       <ReferenceLine y={0} stroke="#999" strokeWidth={0.5} />
                       <ReferenceLine x={selectedYear} stroke="#1D9E75" strokeDasharray="3 3" strokeOpacity={0.5} />
 {ECART_SERIES.filter((s) => ecartVisible[s.key]).map((s) => (
-                        <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} strokeWidth={1.5}
+                        <Area key={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={1.5}
                           fill={`url(#gradient-${s.key})`}
                         />
                       ))}
@@ -357,15 +357,14 @@ export default function Dashboard({ action }) {
                       { label: "Ex-post → Prév", key: "ecartExpostPrev", color: "#EF9F27", tooltip: "Écart entre le gain constaté et le gain prévu (sur ou sous-performance)" },
                     ].map((g) => {
                       const val = yearEcart ? yearEcart[g.key] : null
-                      const isNeg = val !== null && val < 0
                       return (
-                        <div key={g.key} className="rounded-lg p-3" style={{ background: val > 0 ? "#E8F8F2" : isNeg ? "#FEF2F2" : "#f5f5f5" }} title={g.tooltip}>
+                        <div key={g.key} className="rounded-lg p-3" style={{ background: val < 0 ? "#E8F8F2" : val > 0 ? "#FEF2F2" : "#f5f5f5" }} title={g.tooltip}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: g.color }} />
                             <span className="text-xs font-medium text-[#555]">{g.label}</span>
                           </div>
                           <div className="text-[10px] text-[#999] pl-[18px] mb-1">{g.tooltip}</div>
-                          <div className="text-lg font-bold pl-[18px]" style={{ color: val > 0 ? "#1D9E75" : isNeg ? "#E24B4A" : "#888" }}>
+                          <div className="text-lg font-bold pl-[18px]" style={{ color: val < 0 ? "#1D9E75" : val > 0 ? "#E24B4A" : "#888" }}>
                             {val !== null ? `${val > 0 ? "+" : ""}${formatBigNumber(val)}` : "—"} <span className="text-xs font-normal text-[#999]">{gains?.unit || emis?.unit || ""}</span>
                           </div>
                         </div>
