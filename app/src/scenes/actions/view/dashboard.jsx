@@ -345,7 +345,7 @@ export default function Dashboard({ action }) {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-14">
+    <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header>
         <div className="flex items-center gap-2 mb-4">
@@ -378,6 +378,28 @@ export default function Dashboard({ action }) {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Completion des 4 situations */}
+        <div className="flex items-center gap-2 mt-3">
+          {[
+            { key: "init", label: "Init." },
+            { key: "ref", label: "Réf." },
+            { key: "prev", label: "Prév." },
+            { key: "expost", label: "Ex-post" }
+          ].map((s) => {
+            const pct = action[`completion_${s.key}`] || 0
+            const color = pct >= 80 ? "#2DAC6A" : pct >= 50 ? "#F59600" : pct > 0 ? "#E24B4A" : "#D8D8D8"
+            return (
+              <div key={s.key} className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-50 border border-gray-100">
+                <span className="text-[11px] text-gray-400">{s.label}</span>
+                <div className="w-10 h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                </div>
+                <span className="text-[11px] font-semibold tabular-nums" style={{ color }}>{pct}%</span>
+              </div>
+            )
+          })}
         </div>
       </header>
 
