@@ -23,16 +23,7 @@ const SITUATION_SHEETS = [
 const ACTION_AGREG_ROW = { B2: 12, B3: 13, B4: 14, C1: 15, C2: 16, C3: 17, C4: 18, C6: 19, C7: 20, C9: 21 };
 const EMISSION_READ_COL = { GES: 3, PM: 8, NOx: 13, HC: 18, CO: 23, 'Énergie': 28 };
 const SIT_OFFSET = { init: 0, ref: 1, prev: 2, expost: 3 };
-const ACTION_YEAR_2010_ROW = { B2: 53, B3: 104, B4: 155, C1: 206, C2: 257, C3: 308, C4: 359, C6: 410, C7: 461, C9: 512 };
-const EMISSION_WRITE_COL = { GES: 4, PM: 9, NOx: 14, HC: 19, CO: 24, 'Énergie': 29 };
-const colToLetter = (c) => {
-  let l = '';
-  while (c >= 0) {
-    l = String.fromCharCode((c % 26) + 65) + l;
-    c = Math.floor(c / 26) - 1;
-  }
-  return l;
-};
+const SIT_LABEL = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' };
 
 const updateOnboardingStatus = async (action) => {
   if (action.type !== 'config' || (action.name !== 'Données de base' && action.name !== 'Parc types')) return;
@@ -40,7 +31,7 @@ const updateOnboardingStatus = async (action) => {
     const ownerFilter = { owner: action.owner };
     if (action.owner === 'economic_actor' && action.economic_actor_id) ownerFilter.economic_actor_id = action.economic_actor_id;
 
-    const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, ...ownerFilter });
+    const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, ...ownerFilter }).lean();
 
     const condExcelIds = new Set();
     for (const iv of allIVs) {
@@ -104,9 +95,8 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     const situationYears = {};
     const condExcelIds = new Set();
     for (const iv of indicatorValues) {
-      const { situation, year } = iv;
-      if (!situationYears[situation]) situationYears[situation] = [];
-      if (year != null && !situationYears[situation].includes(year)) situationYears[situation].push(year);
+      if (!situationYears[iv.situation]) situationYears[iv.situation] = [];
+      if (iv.year != null && !situationYears[iv.situation].includes(iv.year)) situationYears[iv.situation].push(iv.year);
       if (iv.display_condition?.conditions) {
         for (const cond of iv.display_condition.conditions) {
           if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
@@ -160,8 +150,7 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
 
     for (const iv of indicatorValues) {
       const key = `${iv.situation}_${iv.year}`;
-      const yearMappings = yearMappingsBySituationYear[key];
-      if (!shouldDisplayIndicator(iv, yearMappings, conditionValuesMap)) continue;
+      if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[key], conditionValuesMap)) continue;
 
       if (!completion[key]) completion[key] = { total: 0, filled: 0 };
       completion[key].total++;
@@ -190,8 +179,7 @@ router.post('/check-general-data-completion', passport.authenticate(['admin', 'u
 
     if (configActions.length === 0) return res.status(200).send({ ok: true, data: [] });
 
-    const configActionIds = configActions.map((a) => a._id.toString());
-    const indicatorValues = await IndicatorValue.find({ action_id: { $in: configActionIds }, indicator_excel_id: { $nin: HIDDEN_IDS } });
+    const indicatorValues = await IndicatorValue.find({ action_id: { $in: configActions.map((a) => a._id.toString()) }, indicator_excel_id: { $nin: HIDDEN_IDS } });
 
     const yearMappingsBySituationYear = buildYearMappings(regularActions);
 
@@ -213,9 +201,7 @@ router.post('/check-general-data-completion', passport.authenticate(['admin', 'u
     // Group by configAction name + situation + year, compute completion (only for displayed indicators)
     const groups = {};
     for (const iv of indicatorValues) {
-      const situationYearKey = `${iv.situation}_${iv.year}`;
-      const yearMappings = yearMappingsBySituationYear[situationYearKey];
-      if (!shouldDisplayIndicator(iv, yearMappings, conditionValuesMap)) continue;
+      if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[`${iv.situation}_${iv.year}`], conditionValuesMap)) continue;
 
       const key = `${iv.action_name}__${iv.situation}__${iv.year}`;
       if (!groups[key]) groups[key] = { configActionName: iv.action_name, situation: iv.situation, year: iv.year, total: 0, filled: 0 };
@@ -243,9 +229,8 @@ router.post('/check-general-data-completion', passport.authenticate(['admin', 'u
     const groupedMap = {};
     for (const group of Object.values(groups)) {
       if (group.filled >= group.total) continue;
-      const actions = situationYearActions[`${group.situation}_${group.year}`] || [];
-      const item = { configActionName: group.configActionName, situation: group.situation, year: group.year, completion: group.total > 0 ? Math.round((group.filled / group.total) * 100) : 0 };
-      for (const actionName of actions) (groupedMap[actionName] ||= []).push(item);
+      for (const actionName of situationYearActions[`${group.situation}_${group.year}`] || [])
+        (groupedMap[actionName] ||= []).push({ configActionName: group.configActionName, situation: group.situation, year: group.year, completion: group.total > 0 ? Math.round((group.filled / group.total) * 100) : 0 });
     }
 
     return res.status(200).send({ ok: true, data: Object.entries(groupedMap).map(([actionName, items]) => ({ actionName, items })) });
@@ -270,8 +255,7 @@ router.post('/condition_values', passport.authenticate(['admin', 'user'], { sess
       query.owner = 'economic_actor';
     }
 
-    const data = await IndicatorValue.find(query).lean();
-    return res.status(200).send({ ok: true, data });
+    return res.status(200).send({ ok: true, data: await IndicatorValue.find(query) });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -462,7 +446,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     await Promise.all(excelUpdatePromises);
 
-    // Read Agrégation sheet & write emission values to collectivity aggregation Excel
+    // Read Agrégation sheet & write emission values to collectivity aggregation Excel ("1. Données d'entrée")
     if (action.type !== 'config') {
       try {
         const allFiles = [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])];
@@ -490,14 +474,24 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
             const collectivityDoc = await Collectivity.findById(action.collectivity_id);
             if (collectivityDoc?.aggregation_excel_file_id) {
-              const year2010Row = ACTION_YEAR_2010_ROW[action.excel_worksheetname];
+              const inputSheetPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+              const inputResult = await graphFetch(`${inputSheetPath}/usedRange`);
+              const inputRows = inputResult.values || [];
 
-              if (year2010Row && Object.keys(rawEmissionValues).length > 0) {
-                const targetRow = year2010Row + (indicatorValue.year - 2010);
-                const wsPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent('2. Mise en forme données entrée')}`;
-                for (const [emission, baseCol] of Object.entries(EMISSION_WRITE_COL)) {
-                  await graphFetch(`${wsPath}/range(address='${colToLetter(baseCol + sitOffset)}${targetRow}')`, { method: 'PATCH', body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }) });
-                }
+              const idRowMap = new Map();
+              for (let i = 0; i < inputRows.length; i++) {
+                const id = inputRows[i][1]; // Column D (index 1 dans usedRange qui commence à C)
+                if (id) idRowMap.set(String(id).trim(), i + 1);
+              }
+
+              const sitLabel = SIT_LABEL[indicatorValue.situation];
+              for (const [emission] of Object.entries(EMISSION_READ_COL)) {
+                const rowNum = idRowMap.get(`${action.excel_worksheetname}-${emission}-${sitLabel}-${indicatorValue.year}`);
+                if (rowNum === undefined) continue;
+                await graphFetch(`${inputSheetPath}/range(address='I${rowNum}')`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }),
+                });
               }
             }
           }
@@ -507,11 +501,12 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       }
     }
 
-    // Config: read Agrégation sheet from each affected regular action & write to collectivity aggregation Excel
+    // Config: read Agrégation sheet from each affected regular action & write to collectivity aggregation Excel ("1. Données d'entrée")
     if (action.type === 'config' && actionsWithSameYear.length > 0) {
       try {
         const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
         const sitOffset = SIT_OFFSET[indicatorValue.situation];
+        const sitLabel = SIT_LABEL[indicatorValue.situation];
         const uniqueActions = [...new Map(actionsWithSameYear.map((a) => [a._id.toString(), a])).values()];
 
         for (const targetAction of uniqueActions) {
@@ -523,8 +518,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           if (!fileId) continue;
 
           const agregRow = ACTION_AGREG_ROW[targetAction.excel_worksheetname];
-          const year2010Row = ACTION_YEAR_2010_ROW[targetAction.excel_worksheetname];
-          if (agregRow === undefined || !year2010Row) continue;
+          if (agregRow === undefined) continue;
 
           try {
             await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/application/calculate`, { method: 'POST', body: JSON.stringify({ calculationType: 'Full' }) });
@@ -542,10 +536,23 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           const collectivityDoc = await Collectivity.findById(targetAction.collectivity_id);
           if (!collectivityDoc?.aggregation_excel_file_id) continue;
 
-          const targetRow = year2010Row + (indicatorValue.year - 2010);
-          const wsPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent('2. Mise en forme données entrée')}`;
-          for (const [emission, baseCol] of Object.entries(EMISSION_WRITE_COL)) {
-            await graphFetch(`${wsPath}/range(address='${colToLetter(baseCol + sitOffset)}${targetRow}')`, { method: 'PATCH', body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }) });
+          const inputSheetPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+          const inputResult2 = await graphFetch(`${inputSheetPath}/usedRange`);
+          const inputRows2 = inputResult2.values || [];
+
+          const idRowMap = new Map();
+          for (let i = 0; i < inputRows2.length; i++) {
+            const id = inputRows2[i][1]; // Column D (index 1 dans usedRange qui commence à C)
+            if (id) idRowMap.set(String(id).trim(), i + 1);
+          }
+
+          for (const [emission] of Object.entries(EMISSION_READ_COL)) {
+            const rowNum = idRowMap.get(`${targetAction.excel_worksheetname}-${emission}-${sitLabel}-${indicatorValue.year}`);
+            if (rowNum === undefined) continue;
+            await graphFetch(`${inputSheetPath}/range(address='I${rowNum}')`, {
+              method: 'PATCH',
+              body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }),
+            });
           }
         }
       } catch (e) {
@@ -653,13 +660,11 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       ];
     }
 
-    const limit = req.body.limit || 50;
-    const skip = req.body.offset || 0;
-
-    const data = await IndicatorValue.find(query).sort({ excel_line_number: 1 }).skip(skip).limit(limit);
-    const total = await IndicatorValue.countDocuments(query);
-
-    return res.status(200).send({ ok: true, data, total });
+    const data = await IndicatorValue.find(query)
+      .sort({ excel_line_number: 1 })
+      .skip(req.body.offset || 0)
+      .limit(req.body.limit || 50);
+    return res.status(200).send({ ok: true, data, total: await IndicatorValue.countDocuments(query) });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -744,8 +749,7 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
       const situationValues = indicatorValues.filter((iv) => iv.situation === situation.key);
 
       for (const indicatorValue of situationValues) {
-        const yearMappings = yearMappingsBySituationYear[`${indicatorValue.situation}_${indicatorValue.year}`];
-        if (!shouldDisplayIndicator(indicatorValue, yearMappings, conditionValuesMap)) continue;
+        if (!shouldDisplayIndicator(indicatorValue, yearMappingsBySituationYear[`${indicatorValue.situation}_${indicatorValue.year}`], conditionValuesMap)) continue;
 
         const indicator = indicatorMap.get(indicatorValue.indicator_id);
         if (!indicator) continue;
