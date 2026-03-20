@@ -116,7 +116,6 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_init) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    if (!req.body.year_ref) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
@@ -138,12 +137,16 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     const sourceExcelId = existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null;
     const excelFileNamePrev = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
     const excelFileNameExpost = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Expost${req.body.year_expost}.xlsx` : `${req.body.name}_Expost${req.body.year_expost}.xlsx`;
-    const excelFileIdPrev = await duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelId);
-    const excelFileIdExpost = await duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelId);
+    const [excelFileIdPrev, excelFileIdExpost] = await Promise.all([
+      duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelId),
+      duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelId),
+    ]);
 
     // Nettoyer les sheets inutiles dans chaque fichier
-    await clearWorksheetValues(excelFileIdPrev, 'expost');
-    await clearWorksheetValues(excelFileIdExpost, 'prev');
+    await Promise.all([
+      clearWorksheetValues(excelFileIdPrev, 'expost'),
+      clearWorksheetValues(excelFileIdExpost, 'prev'),
+    ]);
 
     // Créer l'action
     const action = await Action.create({
@@ -160,8 +163,10 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     // Vérifier si les actions config existent déjà
     const configQuery = { collectivity_id: collectivity._id, type: 'config', owner: isEconomicActor ? 'economic_actor' : 'collectivity', ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}) };
-    let configActionBasicDataObj = await Action.findOne({ ...configQuery, name: 'Données de base' });
-    let configActionParcTypesObj = await Action.findOne({ ...configQuery, name: 'Parc types' });
+    let [configActionBasicDataObj, configActionParcTypesObj] = await Promise.all([
+      Action.findOne({ ...configQuery, name: 'Données de base' }),
+      Action.findOne({ ...configQuery, name: 'Parc types' }),
+    ]);
 
     // Créer les actions config si elles n'existent pas
     const configBase = {
@@ -317,16 +322,20 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (configActionBasicDataObj) {
       const targetExcelId = req.body.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
 
-      // init : écrire dans les 2 fichiers
-      const ivInit = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'init', year: req.body.year_init }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
-      if (ivInit) {
-        if (excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, targetExcelId, ivInit.value?.checkbox, 'init');
-        if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivInit.value?.checkbox, 'init');
-      }
+      // init + expost : récupérer les 2 IVs en parallèle
+      const [ivInit, ivExpost] = await Promise.all([
+        IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'init', year: req.body.year_init }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true }),
+        IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'expost', year: req.body.year_expost }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true }),
+      ]);
 
-      // expost : écrire seulement dans le fichier expost
-      const ivExpost = await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'expost', year: req.body.year_expost }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true });
-      if (ivExpost && excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivExpost.value?.checkbox, 'expost');
+      // Écrire dans les fichiers Excel en parallèle
+      const excelWritePromises = [];
+      if (ivInit) {
+        if (excelFileIdPrev) excelWritePromises.push(updateExcelCellByIndicatorId(excelFileIdPrev, targetExcelId, ivInit.value?.checkbox, 'init'));
+        if (excelFileIdExpost) excelWritePromises.push(updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivInit.value?.checkbox, 'init'));
+      }
+      if (ivExpost && excelFileIdExpost) excelWritePromises.push(updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivExpost.value?.checkbox, 'expost'));
+      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
 
       // Écriture des années dans les 2 fichiers Excel
       const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
@@ -339,27 +348,37 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         { situation: 'ref', year: req.body.year_prev },
         { situation: 'prev', year: req.body.year_prev },
       ];
-      for (const { situation, year } of prevFileYears) {
-        const excelId = anneeExcelIds[situation];
-        for (const configId of configActionIds) {
-          await IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excelId, situation, year }, { 'value.number': year }, { new: true });
-        }
-        if (excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, excelId, year, situation);
-      }
-
       // Fichier Expost : init→year_init, ref→year_expost, expost→year_expost
       const expostFileYears = [
         { situation: 'init', year: req.body.year_init },
         { situation: 'ref', year: req.body.year_expost },
         { situation: 'expost', year: req.body.year_expost },
       ];
-      for (const { situation, year } of expostFileYears) {
+
+      // Toutes les mises à jour DB des années en parallèle
+      const allYearEntries = [...new Set([...prevFileYears, ...expostFileYears].map((e) => JSON.stringify(e)))].map((e) => JSON.parse(e));
+      const yearDbUpdates = [];
+      for (const { situation, year } of allYearEntries) {
         const excelId = anneeExcelIds[situation];
         for (const configId of configActionIds) {
-          await IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excelId, situation, year }, { 'value.number': year }, { new: true });
+          yearDbUpdates.push(IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excelId, situation, year }, { 'value.number': year }, { new: true }));
         }
-        if (excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, excelId, year, situation);
       }
+      await Promise.all(yearDbUpdates);
+
+      // Toutes les écritures Excel des années en parallèle
+      const yearExcelWrites = [];
+      if (excelFileIdPrev) {
+        for (const { situation, year } of prevFileYears) {
+          yearExcelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation));
+        }
+      }
+      if (excelFileIdExpost) {
+        for (const { situation, year } of expostFileYears) {
+          yearExcelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation));
+        }
+      }
+      if (yearExcelWrites.length > 0) await Promise.all(yearExcelWrites);
     }
 
     // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années)
@@ -447,9 +466,11 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     }
 
     // Recalculer la completion pour l'action créée et les actions config
-    await computeActionCompletion(action._id);
-    if (configActionBasicDataObj) await computeActionCompletion(configActionBasicDataObj._id);
-    if (configActionParcTypesObj) await computeActionCompletion(configActionParcTypesObj._id);
+    await Promise.all([
+      computeActionCompletion(action._id),
+      configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null,
+      configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null,
+    ].filter(Boolean));
 
     await Log.create({
       model_name: 'action',
