@@ -57,7 +57,6 @@ router.post('/global-gains', passport.authenticate(['admin', 'user'], { session:
     const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`);
     const allValues = result.values || [];
 
-    const yearsData = allValues.slice(0, 3).map((row) => row.slice(0, 2));
     const gainsPrevisionnels = allValues.slice(6, 13).map((row) => row.slice(0, 9));
     const gainsReels = allValues.slice(16, 23).map((row) => row.slice(0, 10));
     const ecart = allValues.slice(26, 33).map((row) => row.slice(1, 4));

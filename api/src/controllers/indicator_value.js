@@ -22,6 +22,7 @@ const SITUATION_SHEETS = [
 
 const ACTION_AGREG_ROW = { B2: 12, B3: 13, B4: 14, C1: 15, C2: 16, C3: 17, C4: 18, C6: 19, C7: 20, C9: 21 };
 const EMISSION_READ_COL = { GES: 3, PM: 8, NOx: 13, HC: 18, CO: 23, 'Énergie': 28 };
+const EMISSION_WRITE_KEY = { 'Énergie': 'Nrj' };
 const SIT_OFFSET = { init: 0, ref: 1, prev: 2, expost: 3 };
 const SIT_LABEL = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' };
 
@@ -490,7 +491,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
               const sitLabel = SIT_LABEL[indicatorValue.situation];
               const agregCol = getAggregationCol(action.instance_number);
               for (const [emission] of Object.entries(EMISSION_READ_COL)) {
-                const rowNum = idRowMap.get(`${action.excel_worksheetname}-${emission}-${sitLabel}-${indicatorValue.year}`);
+                const writeKey = EMISSION_WRITE_KEY[emission] || emission;
+                const rowNum = idRowMap.get(`${action.excel_worksheetname}-${writeKey}-${sitLabel}-${indicatorValue.year}`);
                 if (rowNum === undefined) continue;
                 await graphFetch(`${inputSheetPath}/range(address='${agregCol}${rowNum}')`, {
                   method: 'PATCH',
@@ -552,7 +554,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
           const targetAgregCol = getAggregationCol(targetAction.instance_number);
           for (const [emission] of Object.entries(EMISSION_READ_COL)) {
-            const rowNum = idRowMap.get(`${targetAction.excel_worksheetname}-${emission}-${sitLabel}-${indicatorValue.year}`);
+            const writeKey = EMISSION_WRITE_KEY[emission] || emission;
+            const rowNum = idRowMap.get(`${targetAction.excel_worksheetname}-${writeKey}-${sitLabel}-${indicatorValue.year}`);
             if (rowNum === undefined) continue;
             await graphFetch(`${inputSheetPath}/range(address='${targetAgregCol}${rowNum}')`, {
               method: 'PATCH',
