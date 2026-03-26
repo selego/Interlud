@@ -125,32 +125,50 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const isEconomicActor = req.body.owner === 'economic_actor' && req.body.economic_actor_id;
-    const existingActionSameYear = await Action.findOne({
+
+    // Compute instance_number for this action
+    const instanceQuery = {
+      action_parent_id: req.body.action_parent_id,
+      collectivity_id: collectivity._id.toString(),
+      owner: isEconomicActor ? 'economic_actor' : 'collectivity',
+      type: { $ne: 'config' },
+      ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
+    };
+    const existingInstances = await Action.find(instanceQuery);
+    const instance_number = existingInstances.length > 0 ? Math.max(...existingInstances.map((a) => a.instance_number || 1)) + 1 : 1;
+
+    const existingActionSameYearQuery = {
       collectivity_id: collectivity._id,
       year_init: req.body.year_init,
       owner: isEconomicActor ? 'economic_actor' : 'collectivity',
       ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
-      'exel_files_prev.0.excel_file_id': { $exists: true },
-    });
+    };
+    const [existingActionPrev, existingActionExpost] = await Promise.all([
+      Action.findOne({ ...existingActionSameYearQuery, 'exel_files_prev.0.excel_file_id': { $exists: true } }),
+      Action.findOne({ ...existingActionSameYearQuery, 'excel_files_expost.0.excel_file_id': { $exists: true } }),
+    ]);
 
     // Créer 2 fichiers Excel : un pour prev, un pour expost
-    const sourceExcelId = existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null;
-    const excelFileNamePrev = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
-    const excelFileNameExpost = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Expost${req.body.year_expost}.xlsx` : `${req.body.name}_Expost${req.body.year_expost}.xlsx`;
-    const [excelFileIdPrev, excelFileIdExpost] = await Promise.all([
-      duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelId),
-      duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelId),
-    ]);
+    const sourceExcelIdPrev = existingActionPrev?.exel_files_prev?.[0]?.excel_file_id || null;
+    const sourceExcelIdExpost = existingActionExpost?.excel_files_expost?.[0]?.excel_file_id || null;
+    const instanceSuffix = instance_number > 1 ? `_${instance_number}` : '';
+    const excelFileNamePrev = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}${instanceSuffix}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}${instanceSuffix}_Prev${req.body.year_prev}.xlsx`;
+    const excelFileNameExpost = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}${instanceSuffix}_Expost${req.body.year_expost}.xlsx` : `${req.body.name}${instanceSuffix}_Expost${req.body.year_expost}.xlsx`;
+    const [excelFileIdPrev, excelFileIdExpost] = await Promise.all([duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelIdPrev), duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelIdExpost)]);
 
     // Nettoyer les sheets inutiles dans chaque fichier
-    await Promise.all([
-      clearWorksheetValues(excelFileIdPrev, 'expost'),
-      clearWorksheetValues(excelFileIdExpost, 'prev'),
-    ]);
+    await Promise.all([clearWorksheetValues(excelFileIdPrev, 'expost'), clearWorksheetValues(excelFileIdExpost, 'prev')]);
+
+    // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne action)
+    const clearUpdates = (await Indicator.find({ linked_action_id: parentAction._id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
+    if (clearUpdates.length > 0) {
+      await Promise.all([...['init', 'ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileIdPrev, clearUpdates, s).catch(capture)), ...['init', 'ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileIdExpost, clearUpdates, s).catch(capture))]);
+    }
 
     // Créer l'action
     const action = await Action.create({
       ...req.body,
+      instance_number,
       excel_worksheetname: parentAction.excel_worksheetname,
       exel_files_prev: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileIdPrev }],
       excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_expost, excel_file_id: excelFileIdExpost }],
@@ -163,10 +181,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     // Vérifier si les actions config existent déjà
     const configQuery = { collectivity_id: collectivity._id, type: 'config', owner: isEconomicActor ? 'economic_actor' : 'collectivity', ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}) };
-    let [configActionBasicDataObj, configActionParcTypesObj] = await Promise.all([
-      Action.findOne({ ...configQuery, name: 'Données de base' }),
-      Action.findOne({ ...configQuery, name: 'Parc types' }),
-    ]);
+    let [configActionBasicDataObj, configActionParcTypesObj] = await Promise.all([Action.findOne({ ...configQuery, name: 'Données de base' }), Action.findOne({ ...configQuery, name: 'Parc types' })]);
 
     // Créer les actions config si elles n'existent pas
     const configBase = {
@@ -466,11 +481,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     }
 
     // Recalculer la completion pour l'action créée et les actions config
-    await Promise.all([
-      computeActionCompletion(action._id),
-      configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null,
-      configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null,
-    ].filter(Boolean));
+    await Promise.all([computeActionCompletion(action._id), configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null, configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null].filter(Boolean));
 
     await Log.create({
       model_name: 'action',
@@ -611,6 +622,12 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     // Vider les feuilles init et expost du nouveau fichier Excel
     await clearWorksheetValues(excelFileId, 'expost');
+
+    // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
+    const clearUpdatesPrev = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
+    if (clearUpdatesPrev.length > 0) {
+      await Promise.all(['init', 'ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesPrev, s).catch(capture)));
+    }
 
     // Ajouter le nouveau fichier Excel à l'action
     action.exel_files_prev.push({ year_prev, year_ref: year_prev, excel_file_id: excelFileId });
@@ -828,12 +845,18 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     let excelFileName = `${action.name}_Expost${year_expost}.xlsx`;
     if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Expost${year_expost}.xlsx`;
 
-    // Dupliquer l'Excel depuis le premier fichier existant de cette action
-    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.exel_files_prev?.[0]?.excel_file_id || null;
+    // Dupliquer l'Excel depuis le premier fichier expost existant de cette action
+    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
     // Vider les feuilles init et prev du nouveau fichier Excel
     await clearWorksheetValues(excelFileId, 'prev');
+
+    // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
+    const clearUpdatesExpost = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
+    if (clearUpdatesExpost.length > 0) {
+      await Promise.all(['init', 'ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesExpost, s).catch(capture)));
+    }
 
     // Ajouter le nouveau fichier Excel à l'action
     action.excel_files_expost = action.excel_files_expost || [];

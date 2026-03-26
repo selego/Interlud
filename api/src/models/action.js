@@ -14,6 +14,8 @@ const Schema = new mongoose.Schema(
     year_prev: { type: Number, trim: true },
     year_expost: { type: Number, trim: true },
 
+    instance_number: { type: Number, default: 1 },
+
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },
     name: { type: String, trim: true },
