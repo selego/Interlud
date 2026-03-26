@@ -626,7 +626,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
     const clearUpdatesPrev = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
     if (clearUpdatesPrev.length > 0) {
-      await Promise.all(['init', 'ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesPrev, s).catch(capture)));
+      await Promise.all(['ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesPrev, s).catch(capture)));
     }
 
     // Ajouter le nouveau fichier Excel à l'action
@@ -855,7 +855,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
     const clearUpdatesExpost = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
     if (clearUpdatesExpost.length > 0) {
-      await Promise.all(['init', 'ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesExpost, s).catch(capture)));
+      await Promise.all(['ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesExpost, s).catch(capture)));
     }
 
     // Ajouter le nouveau fichier Excel à l'action
