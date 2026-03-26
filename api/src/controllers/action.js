@@ -796,6 +796,36 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
       }
     }
 
+    // Écrire les valeurs config existantes (Données de base + Parc types) dans le nouveau fichier Excel
+    {
+      const parcTypesValues = { ref: [], prev: [] };
+      const basicDataValues = { ref: [], prev: [] };
+
+      if (configActionParcTypes) {
+        const existingParcIVs = await IndicatorValue.find({ action_id: configActionParcTypes._id, situation: { $in: ['ref', 'prev'] }, year: year_prev });
+        for (const iv of existingParcIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            parcTypesValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+      if (configActionBasicData) {
+        const existingBasicIVs = await IndicatorValue.find({ action_id: configActionBasicData._id, situation: { $in: ['ref', 'prev'] }, year: year_prev });
+        for (const iv of existingBasicIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            basicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+
+      const excelWritePromises = [];
+      for (const situation of ['ref', 'prev']) {
+        if (parcTypesValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation).catch(capture));
+        if (basicDataValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation).catch(capture));
+      }
+      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
+    }
+
     // Créer les indicator values pour les situations prev et ref (year_ref = year_prev)
     const parentAction = await Action.findById(action.action_parent_id);
     const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
@@ -1044,6 +1074,36 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost }, { 'value.number': year_expost }, { new: true });
         }
       }
+    }
+
+    // Écrire les valeurs config existantes (Données de base + Parc types) dans le nouveau fichier Excel
+    {
+      const parcTypesValues = { ref: [], expost: [] };
+      const basicDataValues = { ref: [], expost: [] };
+
+      if (configActionParcTypes) {
+        const existingParcIVs = await IndicatorValue.find({ action_id: configActionParcTypes._id, situation: { $in: ['ref', 'expost'] }, year: year_expost });
+        for (const iv of existingParcIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            parcTypesValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+      if (configActionBasicData) {
+        const existingBasicIVs = await IndicatorValue.find({ action_id: configActionBasicData._id, situation: { $in: ['ref', 'expost'] }, year: year_expost });
+        for (const iv of existingBasicIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            basicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+
+      const excelWritePromises = [];
+      for (const situation of ['ref', 'expost']) {
+        if (parcTypesValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation).catch(capture));
+        if (basicDataValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation).catch(capture));
+      }
+      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
     }
 
     // Créer les indicator values pour les situations expost et ref (year_ref = year_expost)
