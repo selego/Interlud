@@ -135,7 +135,9 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
     };
     const existingInstances = await Action.find(instanceQuery);
-    const instance_number = existingInstances.length > 0 ? Math.max(...existingInstances.map((a) => a.instance_number || 1)) + 1 : 1;
+    const usedNumbers = existingInstances.map((a) => a.instance_number || 1);
+    let instance_number = 1;
+    while (usedNumbers.includes(instance_number)) instance_number++;
 
     const existingActionSameYearQuery = {
       collectivity_id: collectivity._id,
@@ -275,13 +277,24 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         }
       }
 
-      // Update Excel with Parc types default values in batch — écrire dans les 2 fichiers
+      // Collecter les valeurs des IVs Données de base déjà existantes pour les écrire dans le nouvel Excel
+      const existingBasicDataValues = { init: [], ref: [], prev: [], expost: [] };
+      const existingBasicDataIVs = existingConfigIVs.filter((iv) => iv.action_id.toString() === configActionBasicDataObj._id.toString());
+      for (const iv of existingBasicDataIVs) {
+        if (iv.indicator_excel_id && iv.value) {
+          if (iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) existingBasicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+        }
+      }
+
+      // Update Excel with Parc types + Données de base values in batch — écrire dans les 2 fichiers
       const excelBatchPromises = [];
       for (const situation of ['init', 'ref', 'prev']) {
         if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, parcTypesDefaultValues[situation], situation).catch(capture));
+        if (existingBasicDataValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, existingBasicDataValues[situation], situation).catch(capture));
       }
       for (const situation of ['init', 'ref', 'expost']) {
         if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, parcTypesDefaultValues[situation], situation).catch(capture));
+        if (existingBasicDataValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, existingBasicDataValues[situation], situation).catch(capture));
       }
       await Promise.all(excelBatchPromises);
     }
@@ -584,6 +597,61 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       for (const configAction of configActions) {
         const remainingIVs = await IndicatorValue.countDocuments({ action_id: configAction._id.toString() });
         if (remainingIVs === 0) await Action.deleteOne({ _id: configAction._id });
+      }
+    }
+
+    // Clear aggregation Excel values for this action in "1. Données d'entrée"
+    if (action.excel_worksheetname && action.type !== 'config') {
+      try {
+        const collectivityDoc = await Collectivity.findById(action.collectivity_id);
+        if (collectivityDoc?.aggregation_excel_file_id) {
+          const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+          const inputSheetPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+          const inputResult = await graphFetch(`${inputSheetPath}/usedRange`);
+          const inputRows = inputResult.values || [];
+
+          const idRowMap = new Map();
+          for (let i = 0; i < inputRows.length; i++) {
+            const id = inputRows[i][1]; // Column D (index 1 dans usedRange qui commence à C)
+            if (id) idRowMap.set(String(id).trim(), i + 1);
+          }
+
+          const agregCol = String.fromCharCode(72 + (action.instance_number || 1)); // 72 = 'H', so +1 = 'I'
+          const emissions = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Énergie'];
+          const sitLabels = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' };
+
+          // Collect all situation/year pairs from the action
+          const situationYearPairs = [{ situation: 'init', year: action.year_init }];
+          for (const f of action.exel_files_prev || []) {
+            situationYearPairs.push({ situation: 'ref', year: f.year_ref });
+            situationYearPairs.push({ situation: 'prev', year: f.year_prev });
+          }
+          for (const f of action.excel_files_expost || []) {
+            situationYearPairs.push({ situation: 'ref', year: f.year_ref });
+            situationYearPairs.push({ situation: 'expost', year: f.year_expost });
+          }
+
+          // Deduplicate
+          const uniquePairs = [...new Set(situationYearPairs.map((p) => `${p.situation}_${p.year}`))].map((key) => {
+            const [situation, year] = key.split('_');
+            return { situation, year: parseInt(year) };
+          });
+
+          for (const { situation, year } of uniquePairs) {
+            const sitLabel = sitLabels[situation];
+            if (!sitLabel) continue;
+            for (const emission of emissions) {
+              const rowNum = idRowMap.get(`${action.excel_worksheetname}-${emission}-${sitLabel}-${year}`);
+              if (rowNum === undefined) continue;
+              await graphFetch(`${inputSheetPath}/range(address='${agregCol}${rowNum}')`, {
+                method: 'PATCH',
+                body: JSON.stringify({ values: [['']] }),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[Agrégation cleanup] Error:', e.message);
       }
     }
 
