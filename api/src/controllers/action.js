@@ -613,8 +613,9 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     // Construire le nom du fichier Excel selon le owner
-    let excelFileName = `${action.name}_Prev${year_prev}.xlsx`;
-    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Prev${year_prev}.xlsx`;
+    const instanceSuffixPrev = action.instance_number > 1 ? `_${action.instance_number}` : '';
+    let excelFileName = `${action.name}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier existant de cette action
     const sourceExcelId = action.exel_files_prev?.[0]?.excel_file_id || null;
@@ -842,8 +843,9 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     // Construire le nom du fichier Excel selon le owner
-    let excelFileName = `${action.name}_Expost${year_expost}.xlsx`;
-    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Expost${year_expost}.xlsx`;
+    const instanceSuffixExpost = action.instance_number > 1 ? `_${action.instance_number}` : '';
+    let excelFileName = `${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier expost existant de cette action
     const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || null;
