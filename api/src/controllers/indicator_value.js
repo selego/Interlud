@@ -25,6 +25,9 @@ const EMISSION_READ_COL = { GES: 3, PM: 8, NOx: 13, HC: 18, CO: 23, 'Énergie': 
 const SIT_OFFSET = { init: 0, ref: 1, prev: 2, expost: 3 };
 const SIT_LABEL = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' };
 
+// Column letter for aggregation: instance 1 → I, instance 2 → J, instance 3 → K, etc.
+const getAggregationCol = (instanceNumber) => String.fromCharCode(72 + (instanceNumber || 1)); // 72 = 'H', so +1 = 'I'
+
 const updateOnboardingStatus = async (action) => {
   if (action.type !== 'config' || (action.name !== 'Données de base' && action.name !== 'Parc types')) return;
   try {
@@ -485,10 +488,11 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
               }
 
               const sitLabel = SIT_LABEL[indicatorValue.situation];
+              const agregCol = getAggregationCol(action.instance_number);
               for (const [emission] of Object.entries(EMISSION_READ_COL)) {
                 const rowNum = idRowMap.get(`${action.excel_worksheetname}-${emission}-${sitLabel}-${indicatorValue.year}`);
                 if (rowNum === undefined) continue;
-                await graphFetch(`${inputSheetPath}/range(address='I${rowNum}')`, {
+                await graphFetch(`${inputSheetPath}/range(address='${agregCol}${rowNum}')`, {
                   method: 'PATCH',
                   body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }),
                 });
@@ -546,10 +550,11 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
             if (id) idRowMap.set(String(id).trim(), i + 1);
           }
 
+          const targetAgregCol = getAggregationCol(targetAction.instance_number);
           for (const [emission] of Object.entries(EMISSION_READ_COL)) {
             const rowNum = idRowMap.get(`${targetAction.excel_worksheetname}-${emission}-${sitLabel}-${indicatorValue.year}`);
             if (rowNum === undefined) continue;
-            await graphFetch(`${inputSheetPath}/range(address='I${rowNum}')`, {
+            await graphFetch(`${inputSheetPath}/range(address='${targetAgregCol}${rowNum}')`, {
               method: 'PATCH',
               body: JSON.stringify({ values: [[String(rawEmissionValues[emission]).includes('#N/A') ? '' : rawEmissionValues[emission]]] }),
             });
@@ -564,6 +569,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
     const payload = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, source_type: indicatorValue.source_type, owner: indicatorValue.owner, _id: { $ne: indicatorValue._id } };
+
+    // For non-config actions, scope sync to the same action only (each instance has independent values)
+    if (action.type !== 'config') payload.action_id = indicatorValue.action_id;
 
     if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
       payload.economic_actor_id = indicatorValue.economic_actor_id;
@@ -609,6 +617,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     }
 
     const updateQuery = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, owner: indicatorValue.owner };
+    // For non-config actions, scope sync to the same action only
+    if (action.type !== 'config') {
+      updateQuery.action_id = indicatorValue.action_id;
+    }
     if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
       updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
     } else {
@@ -941,6 +953,10 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
 
         // Sync to other indicator values with same indicator/situation/year
         const syncQuery = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, source_type: indicatorValue.source_type, owner: indicatorValue.owner, _id: { $ne: indicatorValue._id } };
+        // For non-config actions, scope sync to the same action only (each instance has independent values)
+        if (action.type !== 'config') {
+          syncQuery.action_id = indicatorValue.action_id;
+        }
         if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
           syncQuery.economic_actor_id = indicatorValue.economic_actor_id;
         } else {
@@ -981,6 +997,10 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
         }
 
         const updateQuery = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, owner: indicatorValue.owner };
+        // For non-config actions, scope sync to the same action only
+        if (action.type !== 'config') {
+          updateQuery.action_id = indicatorValue.action_id;
+        }
         if (indicatorValue.owner === 'economic_actor' && indicatorValue.economic_actor_id) {
           updateQuery.economic_actor_id = indicatorValue.economic_actor_id;
         } else {

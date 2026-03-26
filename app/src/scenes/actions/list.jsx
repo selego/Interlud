@@ -79,7 +79,7 @@ export default function List() {
         <tbody className="divide-y divide-gray-200">
           {actions.map((action) => (
             <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
-              <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
+              <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{ action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>

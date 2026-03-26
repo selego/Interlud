@@ -15,7 +15,10 @@ const EMISSIONS_WORKSHEET = '3. Émissions par action';
 const ACTION_GAINS_RANGES = { B2: { dataStartRow: 19 } };
 const ACTION_EMISSIONS_RANGES = { B2: { dataStartRow: 21 } };
 const EMISSION_TYPES = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Nrj'];
-const EMISSION_COL = { GES: 4, PM: 9, NOx: 14, HC: 19, CO: 24, Nrj: 29 };
+// Instance-specific column offsets (0-indexed): instance 1 = AK(36), instance 2 = BQ(68), instance 3 = CW(100)
+const INSTANCE_COL_OFFSET = { 1: 36, 2: 68, 3: 100 };
+const INSTANCE_EMISSION_COL = { GES: 0, PM: 5, NOx: 10, HC: 15, CO: 20, Nrj: 25 };
+const INSTANCE_END_COL = { 1: 'BM', 2: 'CS', 3: 'DY' };
 
 const INDICATORS_CONFIG = [
   { key: 'GES', label: 'GES', unit: 'tCO2e' },
@@ -164,6 +167,9 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     let { collectivity, action, date_start, date_end } = req.body;
     if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+    const instanceOffset = INSTANCE_COL_OFFSET[action.instance_number || 1] || INSTANCE_COL_OFFSET[1];
+    const endCol = INSTANCE_END_COL[action.instance_number || 1] || INSTANCE_END_COL[1];
+    const wsName = action.excel_worksheetname;
 
     const yearStart = date_start ? new Date(date_start).getFullYear() : null;
     const yearEnd = date_end ? new Date(date_end).getFullYear() : null;
@@ -175,7 +181,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    if (!ACTION_GAINS_RANGES[action]) return res.json({ ok: false, data: { error: `Action '${action}' not found in gains configuration` } });
+    if (!ACTION_GAINS_RANGES[wsName]) return res.json({ ok: false, data: { error: `Action '${wsName}' not found in gains configuration` } });
 
     const collectivityDoc = await Collectivity.findById(collectivity._id || collectivity.id);
     if (!collectivityDoc?.aggregation_excel_file_id) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured for this collectivity' } });
@@ -184,7 +190,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     // --- GAINS ("4. Gains par action") ---
     const gainsValues =
-      (await graphFetch(`/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[action].dataStartRow}:AG${ACTION_GAINS_RANGES[action].dataStartRow + 50}')`))
+      (await graphFetch(`/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[wsName].dataStartRow + 50}')`))
         .values || [];
 
     let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
@@ -207,14 +213,15 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     let achievementCount = 0;
 
     for (const emissionType of EMISSION_TYPES) {
-      if (EMISSION_COL[emissionType] === undefined) continue;
+      if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
+      const col = instanceOffset + INSTANCE_EMISSION_COL[emissionType];
 
       const yearlyData = gainsYearRows.map((d) => ({
         year: d.year,
-        ecartRefInit: parseNumber(d.row[EMISSION_COL[emissionType]]),
-        ecartPrevRef: parseNumber(d.row[EMISSION_COL[emissionType] + 1]),
-        ecartExpostRef: parseNumber(d.row[EMISSION_COL[emissionType] + 2]),
-        ecartExpostPrev: parseNumber(d.row[EMISSION_COL[emissionType] + 3]),
+        ecartRefInit: parseNumber(d.row[col]),
+        ecartPrevRef: parseNumber(d.row[col + 1]),
+        ecartExpostRef: parseNumber(d.row[col + 2]),
+        ecartExpostPrev: parseNumber(d.row[col + 3]),
       }));
 
       const latestWithExpost = [...yearlyData].reverse().find((d) => d.ecartExpostRef !== 0);
@@ -238,7 +245,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     const emValues =
       (
         await graphFetch(
-          `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[action].dataStartRow}:AG${ACTION_EMISSIONS_RANGES[action].dataStartRow + 50}')`,
+          `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[wsName].dataStartRow + 50}')`,
         )
       ).values || [];
 
@@ -255,14 +262,15 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     }
 
     for (const emissionType of EMISSION_TYPES) {
-      if (EMISSION_COL[emissionType] === undefined) continue;
+      if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
+      const emCol = instanceOffset + INSTANCE_EMISSION_COL[emissionType];
 
       const yearlyData = emYearRows.map((d) => ({
         year: d.year,
-        initiale: parseNumber(d.row[EMISSION_COL[emissionType]]),
-        reference: parseNumber(d.row[EMISSION_COL[emissionType] + 1]),
-        previsionnelle: parseNumber(d.row[EMISSION_COL[emissionType] + 2]),
-        expost: parseNumber(d.row[EMISSION_COL[emissionType] + 3]),
+        initiale: parseNumber(d.row[emCol]),
+        reference: parseNumber(d.row[emCol + 1]),
+        previsionnelle: parseNumber(d.row[emCol + 2]),
+        expost: parseNumber(d.row[emCol + 3]),
       }));
 
       processedData.emissions.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, yearlyData };

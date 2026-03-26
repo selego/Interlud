@@ -204,7 +204,7 @@ export default function Dashboard({ action }) {
       setLoading(true)
       const { ok, data, code } = await api.post("/excel/action_aggregation", {
         collectivity,
-        action: action.excel_worksheetname
+        action
       })
       if (!ok) return toast.error(code || "Erreur de chargement")
       setProcessedData(data)
@@ -357,7 +357,9 @@ export default function Dashboard({ action }) {
         </div>
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-[#111] tracking-tight">{action.name}</h1>
+            <h1 className="text-3xl font-bold text-[#111] tracking-tight">
+              {action.name}{action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}
+            </h1>
             <p className="text-sm text-gray-500 mt-2">
               Période d'observation :{" "}
               <span className="font-medium text-gray-700">
