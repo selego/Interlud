@@ -1046,26 +1046,8 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
         if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
 
-        // Mettre à jour ActionsCharte/ActionsAutres pour la nouvelle année expost
+        // Mettre à jour l'indicateur AnneeRempl pour la nouvelle année expost dans les config
         if (configActionBasicData && !existingConfigExpostIV) {
-          const parentAction = await Action.findById(action.action_parent_id);
-          if (parentAction) {
-            // Copier les valeurs ActionsCharte/ActionsAutres depuis la situation expost existante
-            for (const targetExcelId of ['ActionsCharte', 'ActionsAutres']) {
-              const existingIV = await IndicatorValue.findOne({
-                action_id: configActionBasicData._id,
-                indicator_excel_id: targetExcelId,
-                situation: 'expost',
-                year: { $ne: year_expost },
-                owner: action.owner,
-              });
-              if (existingIV?.value?.checkbox?.length > 0) {
-                await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: targetExcelId, situation: 'expost', year: year_expost }, { 'value.checkbox': existingIV.value.checkbox }, { new: true });
-              }
-            }
-          }
-
-          // Mettre à jour l'indicateur AnneeRempl pour la nouvelle année expost dans les config
           await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnneeRempl', situation: 'expost', year: year_expost }, { 'value.number': year_expost }, { new: true });
         }
 
