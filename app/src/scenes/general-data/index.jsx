@@ -264,9 +264,9 @@ export default function Index() {
               {activeYear && stats?.actionsBySituationYear?.[`${activeSituation}_${activeYear}`]?.length > 0 && (
                 <div className="flex items-center gap-2 mb-6 flex-wrap text-sm text-gray-500">
                   <span className="font-medium text-gray-600">Actions concernées :</span>
-                  {stats?.actionsBySituationYear?.[`${activeSituation}_${activeYear}`].map((name) => (
-                    <span key={name} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      {name}
+                  {stats?.actionsBySituationYear?.[`${activeSituation}_${activeYear}`].map((action, i) => (
+                    <span key={`${action.name}_${action.instance_number}_${i}`} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                      {action.name || action}{action.instance_number ? ` #${action.instance_number}` : ''}
                     </span>
                   ))}
                 </div>
