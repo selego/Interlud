@@ -172,25 +172,31 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     const yearStart = date_start ? new Date(date_start).getFullYear() : null;
     const yearEnd = date_end ? new Date(date_end).getFullYear() : null;
-    if (req.user?.role === 'economic_actor') {
-      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
+    const isEconomicActor = req.user?.role === 'economic_actor' || action.owner === 'economic_actor';
+    let aggregationFileId = null;
+
+    if (isEconomicActor) {
+      const economicActorId = req.user?.role === 'economic_actor' ? req.user.economic_actor_id : action.economic_actor_id;
+      const economicActor = await EconomicActor.findById(economicActorId);
       if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      collectivity = economicActor.collectivities.find((c) => c.id === collectivity._id);
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
+    } else {
+      if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      const collectivityDoc = await Collectivity.findById(collectivity._id || collectivity.id);
+      aggregationFileId = collectivityDoc?.aggregation_excel_file_id;
     }
 
-    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
 
     if (!ACTION_GAINS_RANGES[wsName]) return res.json({ ok: false, data: { error: `Action '${wsName}' not found in gains configuration` } });
-
-    const collectivityDoc = await Collectivity.findById(collectivity._id || collectivity.id);
-    if (!collectivityDoc?.aggregation_excel_file_id) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured for this collectivity' } });
 
     const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
     // --- GAINS ("4. Gains par action") ---
     const gainsValues =
-      (await graphFetch(`/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[wsName].dataStartRow + 50}')`))
-        .values || [];
+      (await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[wsName].dataStartRow + 50}')`)).values || [];
 
     let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
 
@@ -242,11 +248,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     // --- EMISSIONS ("3. Émissions par action") ---
     const emValues =
-      (
-        await graphFetch(
-          `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[wsName].dataStartRow + 50}')`,
-        )
-      ).values || [];
+      (await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[wsName].dataStartRow + 50}')`)).values ||
+      [];
 
     const emYearRows = [];
     let emLastYear = 0;
