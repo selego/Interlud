@@ -29,6 +29,16 @@ const SIT_LABEL = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' }
 // Column letter for aggregation: instance 1 → I, instance 2 → J, instance 3 → K, etc.
 const getAggregationCol = (instanceNumber) => String.fromCharCode(72 + (instanceNumber || 1)); // 72 = 'H', so +1 = 'I'
 
+const getAggregationFileId = async (action) => {
+  if (action.owner === 'economic_actor' && action.economic_actor_id) {
+    const actor = await EconomicActor.findById(action.economic_actor_id);
+    const coll = actor?.collectivities?.find((c) => c.id === action.collectivity_id);
+    return coll?.aggregation_excel_file_id || null;
+  }
+  const collectivityDoc = await Collectivity.findById(action.collectivity_id);
+  return collectivityDoc?.aggregation_excel_file_id || null;
+};
+
 const updateOnboardingStatus = async (action) => {
   if (action.type !== 'config' || (action.name !== 'Données de base' && action.name !== 'Parc types')) return;
   try {
@@ -176,10 +186,11 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
 // Check general data completion for all config actions of a collectivity, grouped by related action
 router.post('/check-general-data-completion', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const { collectivity_id } = req.body;
+    const { collectivity_id, economic_actor_id } = req.body;
     if (!collectivity_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    const [configActions, regularActions] = await Promise.all([Action.find({ collectivity_id, type: 'config', owner: 'collectivity' }), Action.find({ collectivity_id, type: { $ne: 'config' }, owner: 'collectivity' })]);
+    const ownerFilter = economic_actor_id ? { owner: 'economic_actor', economic_actor_id } : { owner: 'collectivity' };
+    const [configActions, regularActions] = await Promise.all([Action.find({ collectivity_id, type: 'config', ...ownerFilter }), Action.find({ collectivity_id, type: { $ne: 'config' }, ...ownerFilter })]);
 
     if (configActions.length === 0) return res.status(200).send({ ok: true, data: [] });
 
@@ -198,7 +209,7 @@ router.post('/check-general-data-completion', passport.authenticate(['admin', 'u
     }
     const conditionValuesMap = new Map();
     if (condExcelIds.size > 0) {
-      const condValues = await IndicatorValue.find({ collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, owner: 'collectivity' });
+      const condValues = await IndicatorValue.find({ collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, ...ownerFilter });
       for (const cv of condValues) conditionValuesMap.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv);
     }
 
@@ -406,44 +417,32 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       }
     }
     if (action.type !== 'config') {
-      // Pour les acteurs économiques, propager aussi aux actions similaires dans les autres collectivités
-      let actionsToUpdate = [action];
-      if (action.owner === 'economic_actor' && action.economic_actor_id) {
-        const siblingActions = await Action.find({ owner: 'economic_actor', economic_actor_id: action.economic_actor_id, collectivity_id: { $ne: action.collectivity_id }, action_parent_id: action.action_parent_id });
-        actionsToUpdate = [action, ...siblingActions];
+      if (indicatorValue.situation === 'init') {
+        const AllExcelFiles = [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])];
+        for (const excelFile of AllExcelFiles) {
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+        }
       }
-
-      for (const currentAction of actionsToUpdate) {
-        if (indicatorValue.situation === 'init') {
-          // Situation init : mettre à jour tous les exel_files_prev (le fichier initial contient toutes les situations)
-          const AllExcelFiles = [...(currentAction.exel_files_prev || []), ...(currentAction.excel_files_expost || [])];
-          for (const excelFile of AllExcelFiles) {
-            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
-          }
+      if (indicatorValue.situation === 'prev') {
+        for (const excelFile of action.exel_files_prev || []) {
+          if (excelFile.year_prev !== indicatorValue.year) continue;
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
         }
-        if (indicatorValue.situation === 'prev') {
-          // Situation prev : mettre à jour le fichier exel_files_prev correspondant à l'année prev
-          for (const excelFile of currentAction.exel_files_prev || []) {
-            if (excelFile.year_prev !== indicatorValue.year) continue;
-            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
-          }
+      }
+      if (indicatorValue.situation === 'ref') {
+        for (const excelFile of action.exel_files_prev || []) {
+          if (excelFile.year_ref !== indicatorValue.year) continue;
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
         }
-        if (indicatorValue.situation === 'ref') {
-          // Situation ref : mettre à jour tous les fichiers dont year_ref === indicatorValue.year
-          for (const excelFile of currentAction.exel_files_prev || []) {
-            if (excelFile.year_ref !== indicatorValue.year) continue;
-            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
-          }
-          for (const excelFile of currentAction.excel_files_expost || []) {
-            if (excelFile.year_ref !== indicatorValue.year) continue;
-            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
-          }
+        for (const excelFile of action.excel_files_expost || []) {
+          if (excelFile.year_ref !== indicatorValue.year) continue;
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
         }
-        if (indicatorValue.situation === 'expost') {
-          for (const excelFile of currentAction.excel_files_expost || []) {
-            if (excelFile.year_expost !== indicatorValue.year) continue;
-            excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
-          }
+      }
+      if (indicatorValue.situation === 'expost') {
+        for (const excelFile of action.excel_files_expost || []) {
+          if (excelFile.year_expost !== indicatorValue.year) continue;
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
         }
       }
     }
@@ -476,9 +475,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
               rawEmissionValues[emission] = rows[agregRow][col + sitOffset];
             }
 
-            const collectivityDoc = await Collectivity.findById(action.collectivity_id);
-            if (collectivityDoc?.aggregation_excel_file_id) {
-              const inputSheetPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+            const aggregationFileId = await getAggregationFileId(action);
+            if (aggregationFileId) {
+              const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
               const inputResult = await graphFetch(`${inputSheetPath}/usedRange`);
               const inputRows = inputResult.values || [];
 
@@ -539,10 +538,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
             rawEmissionValues[emission] = rows[agregRow][col + sitOffset];
           }
 
-          const collectivityDoc = await Collectivity.findById(targetAction.collectivity_id);
-          if (!collectivityDoc?.aggregation_excel_file_id) continue;
+          const aggregationFileId = await getAggregationFileId(targetAction);
+          if (!aggregationFileId) continue;
 
-          const inputSheetPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+          const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
           const inputResult2 = await graphFetch(`${inputSheetPath}/usedRange`);
           const inputRows2 = inputResult2.values || [];
 

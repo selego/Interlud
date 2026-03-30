@@ -8,6 +8,7 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
+const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
@@ -603,10 +604,18 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
     // Clear aggregation Excel values for this action in "1. Données d'entrée"
     if (action.excel_worksheetname && action.type !== 'config') {
       try {
-        const collectivityDoc = await Collectivity.findById(action.collectivity_id);
-        if (collectivityDoc?.aggregation_excel_file_id) {
+        let aggregationFileId;
+        if (action.owner === 'economic_actor' && action.economic_actor_id) {
+          const actor = await EconomicActor.findById(action.economic_actor_id);
+          const coll = actor?.collectivities?.find((c) => c.id === action.collectivity_id);
+          aggregationFileId = coll?.aggregation_excel_file_id;
+        } else {
+          const collectivityDoc = await Collectivity.findById(action.collectivity_id);
+          aggregationFileId = collectivityDoc?.aggregation_excel_file_id;
+        }
+        if (aggregationFileId) {
           const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-          const inputSheetPath = `/sites/${siteId}/drive/items/${collectivityDoc.aggregation_excel_file_id}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+          const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
           const inputResult = await graphFetch(`${inputSheetPath}/usedRange`);
           const inputRows = inputResult.values || [];
 
