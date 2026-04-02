@@ -146,13 +146,14 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
 
     if (configAction) {
       for (const a of regularActions) {
-        if (a.year_init != null) (actionsBySituationYear[`init_${a.year_init}`] ||= []).push(a.name);
+        const actionInfo = { name: a.name, instance_number: a.instance_number };
+        if (a.year_init != null) (actionsBySituationYear[`init_${a.year_init}`] ||= []).push(actionInfo);
         const refYears = new Set();
         for (const f of a.exel_files_prev || []) if (f.year_ref != null) refYears.add(f.year_ref);
         for (const f of a.excel_files_expost || []) if (f.year_ref != null) refYears.add(f.year_ref);
-        for (const y of refYears) (actionsBySituationYear[`ref_${y}`] ||= []).push(a.name);
-        for (const f of a.exel_files_prev || []) if (f.year_prev != null) (actionsBySituationYear[`prev_${f.year_prev}`] ||= []).push(a.name);
-        for (const f of a.excel_files_expost || []) if (f.year_expost != null) (actionsBySituationYear[`expost_${f.year_expost}`] ||= []).push(a.name);
+        for (const y of refYears) (actionsBySituationYear[`ref_${y}`] ||= []).push(actionInfo);
+        for (const f of a.exel_files_prev || []) if (f.year_prev != null) (actionsBySituationYear[`prev_${f.year_prev}`] ||= []).push(actionInfo);
+        for (const f of a.excel_files_expost || []) if (f.year_expost != null) (actionsBySituationYear[`expost_${f.year_expost}`] ||= []).push(actionInfo);
       }
       yearMappingsBySituationYear = buildYearMappings(regularActions);
     }

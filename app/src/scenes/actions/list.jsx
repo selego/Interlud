@@ -104,6 +104,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
     const [year,setYear] = useState( { init: null, prev: null, expost: null })
     const [isLoading, setIsLoading] = useState(false)
+    const [loadingSeconds, setLoadingSeconds] = useState(0)
     const [createdActionId, setCreatedActionId] = useState(null)
     const fetchActions = async () => {
       try {
@@ -119,9 +120,16 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         fetchActions()
     }, [isOpen])
 
+    useEffect(() => {
+      if (!isLoading) { setLoadingSeconds(0); return }
+      const interval = setInterval(() => setLoadingSeconds((s) => s + 1), 1000)
+      return () => clearInterval(interval)
+    }, [isLoading])
+
     const createAction = async () => {
       try {
         setIsLoading(true)
+        setLoadingSeconds(0)
         if (!collectivity?._id) return toast.error("Collectivité non trouvée")
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
@@ -149,7 +157,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (!ok) return toast.error(code || "Une erreur est survenue")
         setCreatedActionId(data._id)
       } catch (error) {
-        toast.error(error.message || "Une erreur est survenue")
+        toast.error(error.code || "Une erreur est survenue")
       } finally {
         setIsLoading(false)
       }
@@ -193,8 +201,24 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         </div>
 
         {isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+          <div className="flex flex-col items-center justify-center py-10 gap-5">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-primary-green border-t-transparent animate-spin"></div>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-gray-800 mb-1">Création en cours...</p>
+              <p className="text-sm text-gray-500 mb-3">
+                {loadingSeconds < 10
+                  ? "Préparation des fichiers Excel et des indicateurs"
+                  : loadingSeconds < 25
+                  ? "Écriture des données dans les fichiers Excel"
+                  : "Finalisation et vérification des données"}
+              </p>
+              <p className="text-xs text-gray-400">
+                Cette opération peut prendre 1 à 2 minutes
+              </p>
+            </div>
           </div>
         )}
         {!isLoading && (

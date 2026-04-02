@@ -139,6 +139,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     const usedNumbers = existingInstances.map((a) => a.instance_number || 1);
     let instance_number = 1;
     while (usedNumbers.includes(instance_number)) instance_number++;
+    if (instance_number > 3) return res.status(400).send({ ok: false, code: ERROR_CODES.MAX_INSTANCES_REACHED });
 
     const existingActionSameYearQuery = {
       collectivity_id: collectivity._id,
