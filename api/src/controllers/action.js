@@ -616,48 +616,27 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
         }
         if (aggregationFileId) {
           const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-          const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
-          const inputResult = await graphFetch(`${inputSheetPath}/usedRange`);
-          const inputRows = inputResult.values || [];
+          const sheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+          const usedRange = await graphFetch(`${sheetPath}/usedRange`);
+          const rows = usedRange.values || [];
+          const startRow = parseInt(usedRange.address?.match(/\d+/)?.[0] || 1);
+          const col = String.fromCharCode(72 + (action.instance_number || 1));
+          const colIdx = col.charCodeAt(0) - (usedRange.address?.match(/([A-Z]+)/)?.[1] || 'A').charCodeAt(0);
 
-          const idRowMap = new Map();
-          for (let i = 0; i < inputRows.length; i++) {
-            const id = inputRows[i][1]; // Column D (index 1 dans usedRange qui commence à C)
-            if (id) idRowMap.set(String(id).trim(), i + 1);
+          const matched = new Set();
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i][1] && String(rows[i][1]).trim().startsWith(`${action.excel_worksheetname}-`)) matched.add(i);
           }
 
-          const agregCol = String.fromCharCode(72 + (action.instance_number || 1)); // 72 = 'H', so +1 = 'I'
-          const emissions = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Énergie'];
-          const sitLabels = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' };
+          if (matched.size > 0) {
+            const min = Math.min(...matched);
+            const max = Math.max(...matched);
+            const values = Array.from({ length: max - min + 1 }, (_, i) => [matched.has(min + i) ? '' : (rows[min + i]?.[colIdx] ?? '')]);
 
-          // Collect all situation/year pairs from the action
-          const situationYearPairs = [{ situation: 'init', year: action.year_init }];
-          for (const f of action.exel_files_prev || []) {
-            situationYearPairs.push({ situation: 'ref', year: f.year_ref });
-            situationYearPairs.push({ situation: 'prev', year: f.year_prev });
-          }
-          for (const f of action.excel_files_expost || []) {
-            situationYearPairs.push({ situation: 'ref', year: f.year_ref });
-            situationYearPairs.push({ situation: 'expost', year: f.year_expost });
-          }
-
-          // Deduplicate
-          const uniquePairs = [...new Set(situationYearPairs.map((p) => `${p.situation}_${p.year}`))].map((key) => {
-            const [situation, year] = key.split('_');
-            return { situation, year: parseInt(year) };
-          });
-
-          for (const { situation, year } of uniquePairs) {
-            const sitLabel = sitLabels[situation];
-            if (!sitLabel) continue;
-            for (const emission of emissions) {
-              const rowNum = idRowMap.get(`${action.excel_worksheetname}-${emission}-${sitLabel}-${year}`);
-              if (rowNum === undefined) continue;
-              await graphFetch(`${inputSheetPath}/range(address='${agregCol}${rowNum}')`, {
-                method: 'PATCH',
-                body: JSON.stringify({ values: [['']] }),
-              });
-            }
+            await graphFetch(`${sheetPath}/range(address='${col}${startRow + min}:${col}${startRow + max}')`, {
+              method: 'PATCH',
+              body: JSON.stringify({ values }),
+            });
           }
         }
       } catch (e) {

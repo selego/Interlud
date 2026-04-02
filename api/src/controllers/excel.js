@@ -2,7 +2,7 @@ const express = require('express');
 const passport = require('passport');
 const router = express.Router();
 const { capture } = require('../services/sentry');
-const { graphFetch, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
+const { graphFetch, getSiteId, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
 const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
 const ERROR_CODES = require('../utils/errorCodes');
@@ -52,7 +52,7 @@ router.post('/global-gains', passport.authenticate(['admin', 'user'], { session:
 
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+    const siteId = await getSiteId();
 
     const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`);
     const allValues = result.values || [];
@@ -114,7 +114,7 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
 
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+    const siteId = await getSiteId();
     const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`);
 
     const values = result.values || [];
@@ -192,16 +192,25 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     if (!ACTION_GAINS_RANGES[wsName]) return res.json({ ok: false, data: { error: `Action '${wsName}' not found in gains configuration` } });
 
-    const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+    const siteId = await getSiteId();
 
-    // --- GAINS ("4. Gains par action") ---
-    const gainsValues =
-      (await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[wsName].dataStartRow + 50}')`)).values || [];
+    // Fetch both worksheets in parallel
+    const gainsRange = `A${ACTION_GAINS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[wsName].dataStartRow + 50}`;
+    const emRange = `A${ACTION_EMISSIONS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[wsName].dataStartRow + 50}`;
+
+    const [gainsResult, emResult] = await Promise.all([
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='${gainsRange}')`),
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='${emRange}')`),
+    ]);
+
+    const gainsValues = gainsResult?.values || [];
+    const emValues = emResult?.values || [];
 
     let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
 
-    if (gainsValues.length === 0) return res.json({ ok: true, data: processedData });
+    if (gainsValues.length === 0 && emValues.length === 0) return res.json({ ok: true, data: processedData });
 
+    // --- GAINS processing ---
     const gainsYearRows = [];
     let gainsLastYear = 0;
     for (let i = 0; i < gainsValues.length; i++) {
@@ -245,11 +254,6 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     }
 
     processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
-
-    // --- EMISSIONS ("3. Émissions par action") ---
-    const emValues =
-      (await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[wsName].dataStartRow + 50}')`)).values ||
-      [];
 
     const emYearRows = [];
     let emLastYear = 0;
