@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADPUPSBSPBZM2ZBKL4VJF55GZYBN"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADNZP32VURAL2ZFZJYXPPUMULGLC"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -1088,6 +1088,175 @@ async function syncIndicatorValuesToExcel(excelFileId, collectivityId, situation
   return totalUpdated;
 }
 
+// Crée les IndicatorValue manquants pour les actions déjà créées
+async function syncIndicatorsToExistingActions() {
+  console.log("\n🔄 Synchronisation des indicateurs avec les actions existantes...");
+
+  // 4 requêtes DB pour tout charger en mémoire
+  const [allIndicators, allActions, allIndicatorValues] = await Promise.all([Indicator.find({}), Action.find({}), IndicatorValue.find({}, { indicator_id: 1, action_id: 1, situation: 1, year: 1 })]);
+
+  const linkedIndicators = allIndicators.filter((ind) => ind.linked_action_id);
+  const configIndicators = allIndicators.filter((ind) => !ind.linked_action_id);
+  const userActions = allActions.filter((a) => a.type !== "config" && a.type !== "global");
+  const configActions = allActions.filter((a) => a.type === "config");
+
+  // Index des IVs existants : Set de "actionId_indicatorId_situation_year"
+  const existingIVKeys = new Set(allIndicatorValues.map((iv) => `${iv.action_id}_${iv.indicator_id}_${iv.situation}_${iv.year}`));
+
+  console.log(`📋 ${allIndicators.length} indicateurs, ${userActions.length} actions utilisateur, ${configActions.length} actions config, ${allIndicatorValues.length} indicator_values existants`);
+
+  // Index des indicateurs liés par linked_action_id
+  const linkedByParent = new Map();
+  for (const ind of linkedIndicators) {
+    const parentId = ind.linked_action_id?.toString();
+    if (!parentId) continue;
+    if (!linkedByParent.has(parentId)) linkedByParent.set(parentId, []);
+    linkedByParent.get(parentId).push(ind);
+  }
+
+  const allNewIVs = [];
+
+  // --- Indicateurs liés à une action (linked_action_id) ---
+  for (const action of userActions) {
+    if (!action.action_parent_id || !action.year_init || !action.year_prev || !action.year_expost) continue;
+
+    const actionIndicators = linkedByParent.get(action.action_parent_id?.toString());
+    if (!actionIndicators || actionIndicators.length === 0) continue;
+
+    const situationYearPairs = [
+      { situation: "init", year: action.year_init },
+      { situation: "ref", year: action.year_prev },
+      { situation: "prev", year: action.year_prev },
+      { situation: "expost", year: action.year_expost },
+    ];
+    if (action.year_expost !== action.year_prev) situationYearPairs.push({ situation: "ref", year: action.year_expost });
+
+    const actionId = action._id.toString();
+
+    for (const indicator of actionIndicators) {
+      const pairs = situationYearPairs.filter((p) => indicator.presence_in_excel?.[p.situation] === true);
+
+      for (const { situation, year } of pairs) {
+        if (existingIVKeys.has(`${actionId}_${indicator._id.toString()}_${situation}_${year}`)) continue;
+
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = {
+          action_id: action._id,
+          action_name: action.name,
+          collectivity_id: action.collectivity_id,
+          collectivity_name: action.collectivity_name,
+          owner: action.owner || "collectivity",
+          ...(action.economic_actor_id ? { economic_actor_id: action.economic_actor_id, economic_actor_name: action.economic_actor_name } : {}),
+          indicator_id: indicator._id,
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
+          year,
+          excel_line_number: indicator.excel_line_number?.[situation],
+          indicator_value_unit: indicator.value_unit,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_category_id: indicator.indicator_category_id,
+          indicator_category_name: indicator.indicator_category_name,
+          indicator_sub_category_id: indicator.indicator_sub_category_id,
+          indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+        };
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+        allNewIVs.push(indicatorValue);
+      }
+    }
+  }
+
+  // --- Indicateurs config (sans linked_action_id) ---
+  const userActionsByGroup = new Map();
+  for (const ua of userActions) {
+    const key = `${ua.collectivity_id}_${ua.owner || "collectivity"}_${ua.economic_actor_id || ""}`;
+    if (!userActionsByGroup.has(key)) userActionsByGroup.set(key, []);
+    userActionsByGroup.get(key).push(ua);
+  }
+
+  for (const configAction of configActions) {
+    const groupKey = `${configAction.collectivity_id}_${configAction.owner || "collectivity"}_${configAction.economic_actor_id || ""}`;
+    const relatedActions = userActionsByGroup.get(groupKey);
+    if (!relatedActions || relatedActions.length === 0) continue;
+
+    // Collecter toutes les paires situation/année uniques
+    const allSituationYearPairs = new Set();
+    for (const ra of relatedActions) {
+      if (ra.year_init) allSituationYearPairs.add(`init_${ra.year_init}`);
+      if (ra.year_prev) {
+        allSituationYearPairs.add(`ref_${ra.year_prev}`);
+        allSituationYearPairs.add(`prev_${ra.year_prev}`);
+      }
+      if (ra.year_expost) {
+        allSituationYearPairs.add(`expost_${ra.year_expost}`);
+        if (ra.year_expost !== ra.year_prev) allSituationYearPairs.add(`ref_${ra.year_expost}`);
+      }
+    }
+
+    const situationYearPairs = Array.from(allSituationYearPairs).map((k) => {
+      const [situation, year] = k.split("_");
+      return { situation, year: parseInt(year) };
+    });
+
+    // Filtrer les indicateurs config par catégorie
+    const relevantIndicators = configIndicators.filter((ind) => {
+      if (configAction.name === "Données de base") return ind.indicator_category_name === "Données de base";
+      if (configAction.name === "Parc types") return ind.indicator_category_name === "Parc types";
+      return false;
+    });
+
+    const configActionId = configAction._id.toString();
+
+    for (const indicator of relevantIndicators) {
+      const pairs = situationYearPairs.filter((p) => indicator.presence_in_excel?.[p.situation] === true);
+
+      for (const { situation, year } of pairs) {
+        if (existingIVKeys.has(`${configActionId}_${indicator._id.toString()}_${situation}_${year}`)) continue;
+
+        const defaultValue = indicator.value_default?.[situation]?.[indicator.value_type] ?? null;
+        const indicatorValue = {
+          action_id: configAction._id,
+          action_name: configAction.name,
+          collectivity_id: configAction.collectivity_id,
+          collectivity_name: configAction.collectivity_name,
+          owner: configAction.owner || "collectivity",
+          ...(configAction.economic_actor_id ? { economic_actor_id: configAction.economic_actor_id, economic_actor_name: configAction.economic_actor_name } : {}),
+          indicator_id: indicator._id,
+          indicator_name: indicator.name,
+          indicator_type: indicator.value_type,
+          situation,
+          year,
+          indicator_value_unit: indicator.value_unit,
+          value_default: { [indicator.value_type]: defaultValue },
+          indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_category_id: indicator.indicator_category_id,
+          indicator_category_name: indicator.indicator_category_name,
+          indicator_sub_category_id: indicator.indicator_sub_category_id,
+          indicator_sub_category_name: indicator.indicator_sub_category_name,
+          indicator_excel_id: indicator.excel_indicator_id,
+          excel_line_number: indicator.excel_line_number?.[situation],
+        };
+
+        // Pour Parc types, set value = value_default
+        if (configAction.name === "Parc types") indicatorValue.value = { [indicator.value_type]: defaultValue };
+
+        const displayCondition = indicator.display_condition?.[situation];
+        if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
+        allNewIVs.push(indicatorValue);
+      }
+    }
+  }
+
+  // Un seul insertMany pour tout
+  if (allNewIVs.length > 0) await IndicatorValue.insertMany(allNewIVs);
+
+  console.log(`✅ Synchronisation terminée: ${allNewIVs.length} indicator_values créés`);
+  return allNewIVs.length;
+}
+
 async function duplicateMasterExcel(collectivityName) {
   console.log(`\n📋 Duplication du fichier master pour "${collectivityName}"...`);
 
@@ -1120,7 +1289,7 @@ async function generateExcelForAllCollectivities() {
   const versionMatch = masterFile.name.replace(".xlsx", "").match(/_V(\d+)$/);
   const versionSuffix = versionMatch ? `_V${versionMatch[1]}` : "";
 
-  const collectivities = await Collectivity.find({ name: "Test2" });
+  const collectivities = await Collectivity.find({ name: "Test3" });
   console.log(`📋 ${collectivities.length} collectivités trouvées (master: ${masterFile.name})`);
 
   let totalFiles = 0;
@@ -1148,12 +1317,11 @@ async function generateExcelForAllCollectivities() {
           const fileName = `${action.name}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
-          // Sync les valeurs (prev file contient init + ref + prev + expost de l'année principale)
+          // Sync les valeurs (prev file contient init + ref + prev)
           const situationYears = [
             { situation: "init", year: action.year_init },
             { situation: "ref", year: prevFile.year_ref },
             { situation: "prev", year: prevFile.year_prev },
-            { situation: "expost", year: action.year_expost },
           ].filter((sy) => sy.year);
 
           const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
@@ -1351,7 +1519,10 @@ if (require.main === module) {
 
       console.log("\n🎉 Toutes les feuilles ont été traitées et nettoyées avec succès!");
 
-      // Étape 2: Générer les fichiers Excel pour toutes les collectivités
+      // Étape 4: Synchroniser les indicateurs avec les actions existantes
+      await syncIndicatorsToExistingActions();
+
+      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
       await generateExcelForAllCollectivities();
 
       process.exit(0);
@@ -1362,4 +1533,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, syncIndicatorValuesToExcel, duplicateMasterExcel, generateExcelForAllCollectivities };
+module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities };

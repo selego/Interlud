@@ -102,7 +102,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
-    const [year,setYear] = useState( { init: null, ref: null, prev: null, expost: null })
+    const [year,setYear] = useState( { init: null, prev: null, expost: null })
     const [isLoading, setIsLoading] = useState(false)
     const [createdActionId, setCreatedActionId] = useState(null)
     const fetchActions = async () => {
@@ -126,7 +126,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
         if (!year.init) return toast.error("Veuillez sélectionner une année initiale")
-        if (!year.ref) return toast.error("Veuillez sélectionner une année de référence")
         if (!year.prev) return toast.error("Veuillez sélectionner une année prévisionnelle")
         if (!year.expost) return toast.error("Veuillez sélectionner une année ex-post")
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
@@ -140,7 +139,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           collectivity_id: collectivity._id,
           collectivity_name: collectivity.name,
           year_init: parseInt(year.init),
-          year_ref: parseInt(year.ref),
           year_prev: parseInt(year.prev),
           year_expost: parseInt(year.expost),
           started_before_interlud: startedBeforeInterlud,
@@ -234,25 +232,12 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Année référence
-                </label>
-                <input
-                  type="number"
-                  value={year.prev || ""}
-                  disabled
-                  className="input-primary bg-gray-100 cursor-not-allowed"
-                  placeholder="= Année prévisionnelle"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Année prévisionnelle <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   value={year.prev}
-                  onChange={(e) => setYear({ ...year, prev: e.target.value, ref: e.target.value })}
+                  onChange={(e) => setYear({ ...year, prev: e.target.value })}
                   className="input-primary"
                   placeholder="Année"
                 />

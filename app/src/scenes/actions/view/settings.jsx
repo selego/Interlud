@@ -362,8 +362,22 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             <div className="w-full input-primary bg-gray-50">{action.year_init || "-"}</div>
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-2">Année référence</label>
-            <div className="w-full input-primary bg-gray-50">{action.year_ref || "-"}</div>
+            <label className="block text-sm font-semibold mb-2">Années référence</label>
+            {(() => {
+              const refYears = [...new Set([
+                ...(action.exel_files_prev || []).map(f => f.year_ref),
+                ...(action.excel_files_expost || []).map(f => f.year_ref),
+              ].filter(Boolean))].sort((a, b) => a - b);
+              return refYears.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {refYears.map((year) => (
+                    <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">{year}</span>
+                  ))}
+                </div>
+              ) : (
+                <div className="w-full input-primary bg-gray-50">{action.year_ref || "-"}</div>
+              );
+            })()}
           </div>
         </div>
         <div className="mb-4">

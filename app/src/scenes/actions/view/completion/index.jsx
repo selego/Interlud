@@ -40,9 +40,15 @@ export default function Completion({ action }) {
       return tabs.length > 0 ? tabs : [{ key: 'init', label: 'Initiale', situation: 'init' }]
     }
 
+    // Dériver les années de référence depuis les tableaux de fichiers
+    const refYears = [...new Set([
+      ...(action.exel_files_prev || []).map(f => f.year_ref),
+      ...(action.excel_files_expost || []).map(f => f.year_ref),
+    ].filter(Boolean))].sort((a, b) => a - b);
+
     return [
       { key: 'init', label: `Initiale${action.year_init ? ` ${action.year_init}` : ""}`, situation: 'init', year: action.year_init },
-      { key: 'ref', label: `Référence${action.year_ref ? ` ${action.year_ref}` : ""}`, situation: 'ref', year: action.year_ref },
+      ...refYears.map(year => ({ key: `ref_${year}`, label: `Réf. ${year}`, situation: 'ref', year })),
       ...(action.exel_files_prev || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: 'prev' })),
       ...(action.excel_files_expost || []).map((file) => ({ key: `expost_${file.year_expost}`, label: `Expost ${file.year_expost}`, year: file.year_expost, situation: 'expost' })),
     ]

@@ -3,315 +3,627 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
-import { FiArrowLeft, FiDownload, FiPlus, FiLayers, FiZap, FiShield, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiTrendingDown, FiTarget, FiEdit } from "react-icons/fi"
-import { HiCheckCircle } from "react-icons/hi2"
+import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus } from "react-icons/fi"
 import Loader from "@/components/loader"
+import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from "recharts"
 
-const SITUATION_LABELS = {init: "Initiale",ref: "Référence",prev: "Prévisionnel",expost: "Ex-post"}
+// ── Constants ────────────────────────────────────────────────────────────────
 
+const INDICATORS = [
+  { key: "GES", label: "Gaz à effet de serre", unit: "tCO₂e" },
+  { key: "PM", label: "Particules (PM)", unit: "tPart" },
+  { key: "NOx", label: "Oxydes d'azote (NOₓ)", unit: "tNOx" },
+  { key: "HC", label: "Hydrocarbures (HC)", unit: "tHC" },
+  { key: "CO", label: "Monoxyde de carbone (CO)", unit: "tCO" },
+  { key: "Nrj", label: "Énergie", unit: "GWh" }
+]
 
-  const formatBigNumber = (val) => {
-    if (!val && val !== 0) return "-"
-    return Math.round(val).toLocaleString("fr-FR").replace(/\s/g, " ")
-  }
+const TRAJ_SERIES = [
+  { key: "initiale", label: "Initiale", color: "#C8C8C8" },
+  { key: "reference", label: "Référence", color: "#4A86C8" },
+  { key: "previsionnelle", label: "Prévisionnelle", color: "#F59600", dash: true },
+  { key: "expost", label: "Ex-post", color: "#2DAC6A" }
+]
 
-export default function Dashboard({ action }) {
-  const { userActionRights, user, collectivity } = useStore()
-  const navigate = useNavigate()
-  
-  const [processedData, setProcessedData] = useState({ges: { value: 0, trend: 0 }, energy: { value: 0, trend: 0 }, pollutants: { value: 0, count: 0 }, score: 0, bestIndicator: { label: "-", val: -1 }, worstIndicator: { label: "-", val: 9999 }, indicators: [] })
-  const [isAggregationLoading, setIsAggregationLoading] = useState(false)
+// ── Formatters ───────────────────────────────────────────────────────────────
 
-  const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
-  const isEconomicActorAsRight = user.role === "economic_actor" && action.owner === "economic_actor" && user.economic_actor_id === action.economic_actor_id
-  const right = userActionRights.find((right) => right.action_id === action._id)
+const fmtNum = (v) => {
+  if (v == null) return "—"
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return `${(abs / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
+  if (abs >= 1_000) return `${(abs / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
+  return Math.round(abs).toLocaleString("fr-FR")
+}
 
-  const completionBySituation = {
-    init: action.completion_init || 0,
-    ref: action.completion_ref || 0,
-    prev: action.completion_prev || 0,
-    expost: action.completion_expost || 0,
-  }
-  const completeness = Math.round((completionBySituation.init + completionBySituation.ref + completionBySituation.prev + completionBySituation.expost) / 4)
+const fmtSigned = (v) => {
+  if (v == null) return "—"
+  const r = Math.round(v)
+  if (r === 0) return "0"
+  return (r > 0 ? "+" : "−") + fmtNum(Math.abs(r))
+}
 
-  const loadAggregation = async () => {
-    if (!collectivity || !action?.excel_worksheetname) return
+const fmtAxis = (v) => {
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}k`
+  return String(v)
+}
 
-    try {
-      setIsAggregationLoading(true)
-      const { ok, data } = await api.post(`/excel/action_aggregation`, { collectivity: collectivity, action: action.excel_worksheetname })
-      if (!ok) return toast.error(data.error)
-      setProcessedData(data)
-    } catch (error) {
-      console.error(error)
-      toast.error("Erreur lors du chargement des données d'agrégation")
-    } finally {
-      setIsAggregationLoading(false)
-    }
-  }
+// ── Score & display helpers ───────────────────────────────────────────────────
 
-  // useEffect(() => {
-  //   loadAggregation()
-  // }, [collectivity, action])
+const scoreStyle = (pct) => {
+  if (pct == null) return { color: "#999", bg: "#F7F7F7", badgeCls: "bg-gray-100 text-gray-500", label: "Non évalué" }
+  if (pct >= 80) return { color: "#2DAC6A", bg: "#EBF8F3", badgeCls: "bg-[#2DAC6A]/10 text-[#2DAC6A]", label: "Objectif atteint" }
+  if (pct >= 50) return { color: "#F59600", bg: "#FDF5E6", badgeCls: "bg-[#F59600]/10 text-[#F59600]", label: "Résultats partiels" }
+  return { color: "#E24B4A", bg: "#FEF0EF", badgeCls: "bg-red-50 text-red-600", label: "Objectif manqué" }
+}
 
-  if (!isAdmin && !isEconomicActorAsRight && !right?.can_read) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Vous n'avez pas les droits pour accéder à cette action</div>
-      </div>
-    )
-  }
+const barFill = (pct) => {
+  if (pct == null) return "#D8D8D8"
+  if (pct >= 80) return "#2DAC6A"
+  if (pct >= 50) return "#F59600"
+  return "#E24B4A"
+}
 
+const capPct = (pct) => (pct != null ? Math.min(pct, 100) : null)
+const tendanceColor = (v) => (v == null ? "#ccc" : v >= 0 ? "#2DAC6A" : "#E24B4A")
 
+const tendanceLabel = (v, prevYear) => {
+  if (v == null) return "Données insuffisantes pour la comparaison annuelle"
+  if (v > 0) return "Progression favorable d'une année sur l'autre"
+  if (v < 0) return `Régression par rapport à ${prevYear}`
+  return "Stagnation — gains stables"
+}
 
+const verdictIntro = (pct) => {
+  if (pct >= 80) return "l'action a pleinement atteint ses objectifs avec "
+  if (pct >= 50) return "l'action a partiellement atteint ses objectifs avec "
+  return "l'action n'a pas atteint ses objectifs — seulement "
+}
 
-  if (isAggregationLoading) return <Loader /> 
+// ── Sub-components ────────────────────────────────────────────────────────────
 
+function ChartEmpty() {
+  return <div className="flex items-center justify-center h-full text-sm text-gray-300">Aucune donnée disponible</div>
+}
+
+function TrendIcon({ value }) {
+  if (value == null) return null
   return (
-    <div className="min-h-screen p-8 bg-gray-50/50">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div>
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-            <button onClick={() => navigate("/actions")} className="hover:text-primary-green transition-colors">Actions</button>
-            <span>/</span>
-            <span className="text-gray-900 font-medium truncate max-w-[200px]">{action.name}</span>
+    <div className="mb-1.5 text-xl" style={{ color: tendanceColor(value) }}>
+      {value > 0 ? <FiTrendingUp /> : value < 0 ? <FiTrendingDown /> : <FiMinus />}
+    </div>
+  )
+}
+
+function KpiCard({ label, value, unit, pct = null, ctx1, icon = null, valueColor = "#111" }) {
+  const style = scoreStyle(pct)
+  return (
+    <div className="card-shadow p-6 flex items-start justify-between gap-6 w-full">
+      {/* Left: title + description */}
+      <div className="flex-1 min-w-0 max-w-1/2">
+        <div className="mb-2">
+          <span className="text-base font-semibold text-[#111]">{label}</span>
+        </div>
+        <div className="text-sm text-gray-600 leading-snug">
+          {ctx1}
+          {pct != null && <span className="font-semibold ml-1" style={{ color: style.color }}> · {capPct(pct)}% de l'objectif</span>}
+        </div>
+      </div>
+      {/* Right: hero number */}
+      <div className="text-right shrink-0">
+        <div className="flex items-center justify-end gap-1.5">
+          <div className="text-4xl font-extrabold leading-none tabular-nums" style={{ color: valueColor }}>
+            {value}
           </div>
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors">
-                        <FiArrowLeft size={20} />
-                    </button>
-                    <h1 className="text-2xl font-bold text-gray-900">{action.name}</h1>
-                </div>
-                <p className="text-sm text-gray-500 pl-9">
-                    Période d'analyse : {action.date_start && action.date_end ? `${new Date(action.date_start).getFullYear()} -> ${new Date(action.date_end).getFullYear()}` : "Non définie"}
-                </p>
-            </div>
-            
-            <div className="flex gap-3">
-                <button 
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                    onClick={() => navigate(`/actions/${action._id}/completion`)}
-                >
-                    <FiEdit size={16} />
-                    Compléter
-                </button>
-                {(isAdmin || right?.can_write || isEconomicActorAsRight) && (
-                    <button 
-                        className="flex items-center gap-2 px-4 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 transition-colors"
-                        onClick={() => navigate(`/actions/${action._id}/settings`)}
-                    >
-                        <FiPlus size={16} />
-                        Modifier
-                    </button>
-                )}
-            </div>
-          </div>
+          {icon}
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            <TopCard 
-                label="GES Évités" 
-                value={formatBigNumber(processedData.ges.value)} 
-                unit="tCO2e/an"
-                trend={processedData.ges.trend}
-            />
-            <TopCard 
-                label="Énergie Économisée" 
-                value={formatBigNumber(processedData.energy.value)} 
-                unit="GWh/an"
-                trend={processedData.energy.trend}
-            />
-            <TopCard 
-                label="Polluants Réduits" 
-                value={formatBigNumber(processedData.pollutants.value)} 
-                unit="tonnes/an"
-                subLabel="PM, NOx, HC, CO"
-            />
-            <ScoreCard score={processedData.score} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-2xl p-8 card-shadow border border-gray-100 h-full">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-lg font-bold text-gray-900">Progression vers les objectifs</h3>
-                        <span className="text-xs text-gray-400">La barre représente l'atteinte de l'objectif prévisionnel</span>
-                    </div>
-
-                    <div className="space-y-8">
-                      {processedData.indicators.length > 0 && (
-                        processedData.indicators.map((indicator, index) => (
-                            <ProgressBar key={index} indicator={indicator} />
-                        ))
-                      )}
-                      {!processedData.indicators.length > 0 && (
-                        <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
-                          <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
-                        </div>
-                      )}
-                    </div>
-                </div>
-            </div>
-
-            <div className="space-y-6">
-                <div className="bg-white rounded-2xl p-8 card-shadow border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Saisie des données</h3>
-                    
-                    <div className="flex items-center justify-center mb-8">
-                        <div className="relative w-24 h-24 flex items-center justify-center">
-                           <svg className="w-full h-full" viewBox="0 0 36 36">
-                                <path
-                                    className="text-gray-100"
-                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                />
-                                <path
-                                    className="text-primary-green transition-all duration-1000 ease-out"
-                                    strokeDasharray={`${completeness}, 100`}
-                                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                />
-                            </svg>
-                            <span className="absolute text-xl font-bold text-gray-900">{completeness}%</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        {["init", "ref", "prev", "expost"].map((key) => {
-                            const pct = completionBySituation[key];
-                            const isComplete = pct === 100;
-                            return (
-                                <div key={key} className="flex items-center justify-between rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => navigate(`/actions/${action._id}/completion`)}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-2 h-2 rounded-full ${isComplete ? "bg-primary-green" : "bg-orange-400"}`} />
-                                        <span className="text-sm font-medium text-gray-700">{SITUATION_LABELS[key]}</span>
-                                    </div>
-                                    {isComplete ? (
-                                        <HiCheckCircle className="text-primary-green" size={20} />
-                                    ) : (
-                                        <span className="text-xs text-gray-400">{pct}%</span>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div className="text-sm text-gray-500 mt-1.5 whitespace-nowrap">{unit}</div>
       </div>
     </div>
   )
 }
 
-const COLORS = { primary: { base: "text-primary-green",bg: "bg-primary-green",light: "bg-[#D9EFE3]",border: "border-primary-green"},gradient: {start: "#2DAC6A",end: "#D9EFE3"}}
 
-function TopCard({ label, value, unit, trend, subLabel }) {
-    const trendIsPositive = trend > 0;
+function EmissionCard({ item }) {
+  const isDown = item.totalChange != null && item.totalChange < 0
+  const isUp = item.totalChange != null && item.totalChange > 0
+  const changeColor = isDown ? "#2DAC6A" : isUp ? "#E24B4A" : "#999"
 
+  if (!item.initiale && !item.currentLevel)
     return (
-        <div className="bg-white p-6 rounded-2xl card-shadow border border-gray-100 flex flex-col justify-between h-full relative overflow-hidden group hover:border-primary-green/30 transition-all duration-300">
-            <div className="flex justify-between items-start mb-2">
-                <p className="text-sm font-medium text-gray-500">{label}</p>
-                {trend !== undefined && trend !== null && (
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${COLORS.primary.light} ${COLORS.primary.base}`}>
-                        {trendIsPositive ? <FiTrendingUp /> : <FiTrendingDown />}
-                        {(Math.abs(trend) * 100).toFixed(1)}%
+      <div className="card-shadow p-5 opacity-40">
+        <div className="text-sm font-semibold text-[#111]">{item.name}</div>
+        <div className="text-xs text-gray-400 mt-2">Données insuffisantes</div>
+      </div>
+    )
+
+  return (
+    <div className="card-shadow p-5">
+      <div className="text-sm font-semibold text-[#111] mb-4">{item.name}</div>
+
+      {/* Before → After */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1">
+          <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">{item.startYear ?? "Départ"}</div>
+          <div className="text-lg font-semibold tabular-nums text-gray-400">{item.initiale != null ? fmtNum(item.initiale) : "—"}</div>
+          <div className="text-xs text-gray-400">{item.unit}</div>
+        </div>
+        <div className="text-gray-200 text-base shrink-0">→</div>
+        <div className="flex-1 text-right">
+          <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">{item.currentYear ?? "Actuel"}</div>
+          <div className="text-2xl font-extrabold tabular-nums leading-none text-[#111]">{item.currentLevel != null ? fmtNum(item.currentLevel) : "—"}</div>
+          <div className="text-xs text-gray-400">{item.unit}</div>
+        </div>
+      </div>
+
+      {/* Change pill */}
+      {item.totalChange != null && (
+        <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+          <div className="text-sm font-bold tabular-nums" style={{ color: changeColor }}>
+            {isDown ? "−" : isUp ? "+" : ""}{fmtNum(Math.abs(item.totalChange))} {item.unit}
+          </div>
+          <div className="text-xs text-gray-400">
+            {isDown ? "réduit depuis le départ" : isUp ? "augmenté depuis le départ" : "stable"}
+          </div>
+        </div>
+      )}
+
+      {/* Counterfactual */}
+      {item.actionImpact != null && item.actionImpact !== 0 && (
+        <div className="mt-2 text-xs text-gray-400">
+          Sans action : {fmtNum(item.currentRef)} {item.unit} · évité : <span className="font-semibold text-[#2DAC6A]">{fmtNum(Math.abs(item.actionImpact))} {item.unit}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function Dashboard({ action }) {
+  const { userActionRights, user, collectivity } = useStore()
+  const navigate = useNavigate()
+
+  const [processedData, setProcessedData] = useState({ score: 0, indicators: {}, emissions: { indicators: {} } })
+  const [loading, setLoading] = useState(false)
+  const [tab, setTab] = useState("gains")
+  const [activePill, setActivePill] = useState("GES")
+  const [yearFrom, setYearFrom] = useState(action.date_start ? new Date(action.date_start).getFullYear() : null)
+  const [yearTo, setYearTo] = useState(action.date_end ? new Date(action.date_end).getFullYear() : null)
+
+  const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
+  const isEco = user.role === "economic_actor" && action.owner === "economic_actor" && user.economic_actor_id === action.economic_actor_id
+  const right = userActionRights.find((r) => r.action_id === action._id)
+  const canRead = isAdmin || isEco || right?.can_read
+  const canWrite = isAdmin || isEco || right?.can_write
+
+  const load = async () => {
+    if (!collectivity || !action?.excel_worksheetname) return
+    try {
+      setLoading(true)
+      const { ok, data, code } = await api.post("/excel/action_aggregation", {
+        collectivity,
+        action: action.excel_worksheetname
+      })
+      if (!ok) return toast.error(code || "Erreur de chargement")
+      setProcessedData(data)
+
+      const allYrs = [...new Set(Object.values(data.indicators || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
+
+      if (!allYrs.length) return
+
+      const availK = Object.keys(data.indicators || {}).filter((k) => data.indicators[k]?.yearlyData?.length > 0)
+      if (availK.length && !availK.includes(activePill)) setActivePill(availK[0])
+    } catch (e) {
+      toast.error(e.code || "Erreur de chargement")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [collectivity, action])
+
+  // Guard clauses
+  if (!canRead)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-sm text-gray-500">Vous n'avez pas les droits pour accéder à cette action.</p>
+      </div>
+    )
+  if (loading) return <Loader />
+
+  // ── Derived: shared ───────────────────────────────────────────────────────
+
+  const availKeys = Object.keys(processedData.indicators || {}).filter((k) => processedData.indicators[k]?.yearlyData?.length > 0)
+  const active = availKeys.includes(activePill) ? activePill : (availKeys[0] ?? "GES")
+  const activeLabel = INDICATORS.find((i) => i.key === active)?.label || active
+  const activeUnit = processedData.indicators[active]?.unit || INDICATORS.find((i) => i.key === active)?.unit || ""
+
+  const allYears = [...new Set(Object.values(processedData.indicators || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
+
+  const periodMin = allYears[0] ?? new Date().getFullYear()
+  const periodMax = allYears.at(-1) ?? new Date().getFullYear()
+  const periodYears = Array.from({ length: periodMax - periodMin + 1 }, (_, i) => periodMin + i)
+
+  // ── Derived: section 01 gains ─────────────────────────────────────────────
+
+  const indData = processedData.indicators[active]
+
+  // Full year range spanning the selected period (includes years with no data → null entries in charts)
+  const periodStart = yearFrom ?? allYears[0]
+  const periodEnd = yearTo ?? allYears.at(-1)
+  const periodRange = periodStart && periodEnd ? Array.from({ length: periodEnd - periodStart + 1 }, (_, i) => periodStart + i) : allYears
+
+  // filteredYearlyData: only actual data rows within the period (used for KPI calculations)
+  const filteredYearlyData = (indData?.yearlyData ?? []).filter((d) => d.year >= periodStart && d.year <= periodEnd)
+
+  // heroData: covers every year in the period; null for years with no data (keeps x-axis continuous)
+  const gainsByYear = new Map((indData?.yearlyData ?? []).map((d) => [d.year, d]))
+  const heroData = periodRange.map((year) => {
+    const d = gainsByYear.get(year)
+    if (!d) return { year, gainPrevu: null, gainRealise: null, pct: null }
+    const prev = d.ecartPrevRef !== 0 ? Math.abs(d.ecartPrevRef) : null
+    const real = d.ecartExpostRef !== 0 ? Math.abs(d.ecartExpostRef) : null
+    return { year, gainPrevu: prev, gainRealise: real, pct: prev && real ? Math.round((real / prev) * 100) : null }
+  })
+
+  const latestD = [...filteredYearlyData].reverse().find((d) => d.ecartExpostRef !== 0)
+  const latestGain = latestD ? Math.abs(latestD.ecartExpostRef) : null
+  const latestPct = latestD && latestD.ecartPrevRef !== 0 ? Math.round((Math.abs(latestD.ecartExpostRef) / Math.abs(latestD.ecartPrevRef)) * 100) : null
+  const latestYear = latestD?.year ?? null
+
+  const cumulGain = filteredYearlyData.reduce((s, d) => s + (d.ecartExpostRef !== 0 ? Math.abs(d.ecartExpostRef) : 0), 0)
+
+  const latestIdx = filteredYearlyData.findIndex((d) => d.year === latestYear)
+  const prevD = latestIdx > 0 ? filteredYearlyData[latestIdx - 1] : null
+  const prevGainAbs = prevD?.ecartExpostRef !== 0 ? Math.abs(prevD?.ecartExpostRef ?? 0) : null
+  const gainTendance = latestGain != null && prevGainAbs != null ? latestGain - prevGainAbs : null
+
+  // ── Derived: section 01 trajectories ─────────────────────────────────────
+
+  // trajData: covers every year in the period; null for years with no data
+  const trajRaw = processedData.emissions?.indicators?.[active]?.yearlyData ?? []
+  const trajByYear = new Map(trajRaw.map((d) => [d.year, d]))
+  const trajData = periodRange.map((year) => trajByYear.get(year) ?? { year, initiale: null, reference: null, previsionnelle: null, expost: null })
+  const trajUnit = processedData.emissions?.indicators?.[active]?.unit || ""
+
+  // ── Derived: section 02 (niveaux d'émissions absolus) ───────────────────
+
+  // selYear: last year with ex-post data — used only for trajectory reference line
+  const selYear = allYears.filter((y) => Object.values(processedData.indicators || {}).some((ind) => ind.yearlyData?.find((d) => d.year === y)?.ecartExpostRef !== 0)).at(-1) ?? allYears.at(-1)
+
+  const emissionProfile = availKeys.map((key) => {
+    const emData = processedData.emissions?.indicators?.[key]?.yearlyData ?? []
+    const unit = processedData.emissions?.indicators?.[key]?.unit || INDICATORS.find((i) => i.key === key)?.unit || ""
+    const ind = INDICATORS.find((i) => i.key === key)
+
+    const firstRow = emData.find((d) => d.initiale > 0)
+    const latestRow = [...emData].reverse().find((d) => d.expost > 0)
+
+    const initiale = firstRow?.initiale ?? null
+    const startYear = firstRow?.year ?? null
+    const currentLevel = latestRow?.expost ?? null
+    const currentRef = latestRow?.reference ?? null
+    const currentYear = latestRow?.year ?? null
+    const totalChange = initiale != null && currentLevel != null ? currentLevel - initiale : null
+    const actionImpact = currentRef != null && currentLevel != null ? currentRef - currentLevel : null
+
+    return { key, name: ind?.label || key, unit, initiale, startYear, currentLevel, currentRef, currentYear, totalChange, actionImpact }
+  })
+
+  const gesProfile = emissionProfile.find((p) => p.key === "GES") ?? emissionProfile[0]
+
+  // ── Tooltip renderers (closures) ──────────────────────────────────────────
+
+  const gainsTooltip = ({ active: a, payload, label }) => {
+    if (!a || !payload?.length) return null
+    const entry = heroData.find((d) => d.year === label)
+    return (
+      <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2">
+        <div className="font-bold text-[#111] text-sm">Année {label}</div>
+        {payload.map((p) => (
+          <div key={p.dataKey} className="flex items-center justify-between gap-6">
+            <span className="text-gray-500">{p.name}</span>
+            <span className="font-semibold text-[#333] tabular-nums">{p.value != null ? `${fmtNum(p.value)} ${activeUnit}` : "—"}</span>
+          </div>
+        ))}
+        {entry?.pct != null && (
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-6">
+            <span className="text-gray-400">Atteinte objectif</span>
+            <span className="font-bold tabular-nums" style={{ color: barFill(entry.pct) }}>
+              {capPct(entry.pct)}%
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+      <header>
+        <div className="flex items-center gap-2 mb-4">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
+            <FiArrowLeft size={17} />
+          </button>
+          <span className="text-xs px-2.5 py-1 rounded-full bg-primary-green/10 text-primary-green font-semibold">{action.sector || "Action"}</span>
+          {action.territory && <span className="text-xs text-gray-400">{action.territory}</span>}
+        </div>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <h1 className="text-3xl font-bold text-[#111] tracking-tight">{action.name}</h1>
+            <p className="text-sm text-gray-500 mt-2">
+              Période d'observation :{" "}
+              <span className="font-medium text-gray-700">
+                {action.date_start ? new Date(action.date_start).getFullYear() : "—"} – {action.date_end ? new Date(action.date_end).getFullYear() : "—"}
+              </span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 mt-1">
+            <button
+              onClick={() => navigate(`/actions/${action._id}/completion`)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors font-medium"
+            >
+              <FiEdit size={14} /> Compléter
+            </button>
+            {canWrite && (
+              <button onClick={() => navigate(`/actions/${action._id}/settings`)} className="button-primary flex items-center gap-2">
+                <FiPlus size={14} /> Modifier
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Completion des 4 situations */}
+        <div className="flex items-center gap-2 mt-3">
+          {[
+            { key: "init", label: "Init." },
+            { key: "ref", label: "Réf." },
+            { key: "prev", label: "Prév." },
+            { key: "expost", label: "Ex-post" }
+          ].map((s) => {
+            const pct = action[`completion_${s.key}`] || 0
+            const color = pct >= 80 ? "#2DAC6A" : pct >= 50 ? "#F59600" : pct > 0 ? "#E24B4A" : "#D8D8D8"
+            return (
+              <div key={s.key} className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-50 border border-gray-100">
+                <span className="text-[11px] text-gray-400">{s.label}</span>
+                <div className="w-10 h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                </div>
+                <span className="text-[11px] font-semibold tabular-nums" style={{ color }}>{pct}%</span>
+              </div>
+            )
+          })}
+        </div>
+      </header>
+
+      {/* ── SECTION 01 — VUE GLOBALE ─────────────────────────────────────── */}
+      <section>
+        {/* Filter bar */}
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-white shadow-sm mb-7 flex-wrap">
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            {[
+              { k: "gains", l: "Gains réalisés" },
+              { k: "traj", l: "Trajectoires" }
+            ].map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setTab(t.k)}
+                className={`px-4 py-2 text-sm rounded-md font-medium transition-all whitespace-nowrap ${t.k === tab ? "bg-white shadow-sm text-[#111]" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                {t.l}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-5 w-px bg-gray-200 mx-1" />
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500 whitespace-nowrap">Polluant</span>
+            <select value={active} onChange={(e) => setActivePill(e.target.value)} className="input-primary !py-2 !pl-3 text-sm cursor-pointer font-medium">
+              {availKeys.map((k) => (
+                <option key={k} value={k}>
+                  {INDICATORS.find((i) => i.key === k)?.label || k}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-5 w-px bg-gray-200 mx-1" />
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500 whitespace-nowrap">Période</span>
+            <select value={yearFrom ?? ""} onChange={(e) => setYearFrom(parseInt(e.target.value))} className="input-primary !py-2 !pl-3 text-sm cursor-pointer">
+              {periodYears
+                .filter((y) => !yearTo || y <= yearTo - 1)
+                .map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+            </select>
+            <span className="text-gray-300">→</span>
+            <select value={yearTo ?? ""} onChange={(e) => setYearTo(parseInt(e.target.value))} className="input-primary !py-2 !pl-3 text-sm cursor-pointer">
+              {periodYears
+                .filter((y) => !yearFrom || y >= yearFrom + 1)
+                .map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Tab: Gains */}
+        {tab === "gains" && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <KpiCard
+                label={`Gain réalisé en ${latestYear ?? "—"}`}
+                value={fmtNum(latestGain)}
+                unit={`${activeUnit} / an`}
+                pct={latestPct}
+                ctx1={latestD ? `Réduction ex-post vs. référence — objectif : ${fmtNum(Math.abs(latestD.ecartPrevRef))} ${activeUnit}` : "Aucune donnée ex-post disponible"}
+              />
+              <KpiCard
+                label="Gain cumulé"
+                value={fmtNum(cumulGain)}
+                unit={`${activeUnit} total`}
+                ctx1={`Cumul des réductions sur ${filteredYearlyData.length} an${filteredYearlyData.length > 1 ? "s" : ""}, de ${yearFrom ?? allYears[0] ?? "—"} à ${yearTo ?? allYears.at(-1) ?? "—"}.`}
+              />
+            </div>
+
+            <div className="card-shadow p-6">
+              <div className="flex items-start justify-between mb-6 gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-[#111]">Gains annuels réalisés vs. objectif</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Chaque barre représente la réduction effective. La ligne pointillée indique l'objectif prévisionnel.</p>
+                </div>
+                <div className="flex gap-5 flex-wrap justify-end shrink-0">
+                  {[
+                    { color: "#2DAC6A", label: "≥ 80% objectif" },
+                    { color: "#F59600", label: "50–80%" },
+                    { color: "#E24B4A", label: "< 50%" },
+                    { color: "#C8C8C8", label: "Objectif prévu", dash: true }
+                  ].map((l) => (
+                    <div key={l.label} className="flex items-center gap-1.5 text-xs text-gray-500">
+                      {l.dash ? (
+                        <div className="w-5 flex-shrink-0 border-t-2 border-dashed" style={{ borderColor: l.color }} />
+                      ) : (
+                        <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: l.color }} />
+                      )}
+                      {l.label}
                     </div>
+                  ))}
+                </div>
+              </div>
+              <div className="h-[280px]">
+                {heroData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={heroData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#C0C0C0" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
+                      <Tooltip content={gainsTooltip} />
+                      <Bar dataKey="gainRealise" name="Gain réalisé" radius={[3, 3, 0, 0]} maxBarSize={40}>
+                        {heroData.map((entry, i) => (
+                          <Cell key={i} fill={barFill(entry.pct)} />
+                        ))}
+                      </Bar>
+                      <Line type="monotone" dataKey="gainPrevu" name="Objectif prévu" stroke="#C8C8C8" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ChartEmpty />
                 )}
+              </div>
             </div>
-            
-            <div>
-                <div className="flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold text-gray-900">{value}</h3>
-                    <span className="text-xs font-medium text-gray-400">{unit}</span>
-                </div>
-                {subLabel && (
-                     <p className="text-xs text-gray-400 mt-1">
-                        {subLabel}
-                    </p>
-                )}
+          </div>
+        )}
+
+        {/* Tab: Trajectoires */}
+        {tab === "traj" && (
+          <div className="card-shadow p-6">
+            <div className="flex items-center gap-5 mb-6 flex-wrap">
+              <h3 className="text-base font-semibold text-[#111]">Trajectoires d'émissions</h3>
+              <div className="flex gap-5 ml-auto">
+                {TRAJ_SERIES.map((s) => (
+                  <div key={s.key} className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="w-5 flex-shrink-0" style={{ borderTop: `2px ${s.dash ? "dashed" : "solid"} ${s.color}` }} />
+                    {s.label}
+                  </div>
+                ))}
+              </div>
             </div>
-        </div>
-    )
-}
-
-function ScoreCard({ score }) {
-    let text = "Excellent";
-    if (score < 80) { text = "Bon"; }
-    if (score < 60) { text = "Moyen"; }
-    if (score < 40) { text = "Faible"; }
-
-    return (
-        <div className="bg-white p-6 rounded-2xl card-shadow border border-gray-100 flex flex-col justify-between h-full group hover:border-primary-green/30 transition-all duration-300">
-            <div className="flex justify-between items-start mb-2">
-                 <p className="text-sm font-medium text-gray-500">Score Performance</p>
-                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${COLORS.primary.light} ${COLORS.primary.base}`}>
-                    {text}
-                </span>
-            </div>
-             <div>
-                 <div className="flex items-baseline gap-2">
-                    <h3 className={`text-3xl font-bold ${COLORS.primary.base}`}>{score}%</h3>
-                    <span className={`text-xs font-medium ${COLORS.primary.base} opacity-60`}>réel vs objectif</span>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-function ProgressBar({ indicator }) {
-    const { label, achievement, objective, real, objectiveVal, realVal } = indicator;
-    
-    const config = { icon: label.substring(0, 2), bg: "bg-[#D9EFE3]", color: "bg-primary-green" };
-
-    const icons = { GES: "GES", PM: "PM", NOx: "NOx", HC: "HC", CO: "CO", Énergie: "Énergie" };
-
-    let status = "En retard";
-    let statusClass = "text-primary-green/60"
-
-    if (achievement >= 95) status = "Excellent"
-    if (achievement >= 80) status = "En bonne voie"
-    if (achievement >= 60) { status = "À surveiller"; statusClass = "text-primary-green/80"; }
-
-    if (!objective && objective !== 0) return null
-
-    return (
-        <div className="flex items-center gap-6">
-            
-            <div className="flex-1 space-y-2">
-                <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-gray-900">{label} <span className="text-xs font-normal text-gray-400 ml-2">{indicator.unit}</span></span>
-                </div>
-                
-                <div className="relative h-3 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                        className={`absolute top-0 left-0 h-full rounded-full ${config.color} transition-all duration-1000`} 
-                        style={{ width: `${Math.min(achievement || 0, 100)}%`, opacity: Math.max(0.4, Math.min((achievement || 0) / 100, 1)) }}
+            <div className="h-[320px]">
+              {trajData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={trajData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#C0C0C0" }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
+                    <Tooltip
+                      formatter={(v, name) => [`${fmtNum(v)} ${trajUnit}`, TRAJ_SERIES.find((s) => s.key === name)?.label || name]}
+                      labelFormatter={(l) => `Année ${l}`}
+                      contentStyle={{ fontSize: 12, border: "1px solid #f0f0f0", borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
                     />
-                </div>
-
-                <div className="flex justify-between text-xs font-medium mt-1">
-                    <span className="text-gray-400">Réel: {formatBigNumber(realVal)} {indicator.unit}</span>
-                    <div className="text-right">
-                        <span className="text-gray-400 mr-4">Objectif: {formatBigNumber(objectiveVal)} {indicator.unit}</span>
-                    </div>
-                </div>
+                    <ReferenceLine
+                      x={selYear}
+                      stroke="#2DAC6A"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      label={{ value: String(selYear), position: "insideTopRight", fontSize: 10, fill: "#2DAC6A" }}
+                    />
+                    <Line type="monotone" dataKey="initiale" stroke="#C8C8C8" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="reference" stroke="#4A86C8" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="previsionnelle" stroke="#F59600" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                    <Line type="monotone" dataKey="expost" stroke="#2DAC6A" strokeWidth={2.5} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartEmpty />
+              )}
             </div>
+          </div>
+        )}
+      </section>
 
-            <div className="w-32 text-right">
-                 <div className={`text-xl font-bold ${statusClass}`}>
-                     {Math.round(achievement)}%
-                 </div>
-            </div>
+      {/* ── SECTION 02 — NIVEAUX D'ÉMISSIONS ───────────────────────────── */}
+      <section>
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-[#111] tracking-tight">Niveaux d'émissions</h2>
+          <p className="text-sm text-gray-500 mt-1">Évolution réelle des émissions depuis le lancement — niveaux absolus mesurés</p>
         </div>
-    )
+
+        {/* GES headline */}
+        {gesProfile?.currentLevel != null && (
+          <div className="card-shadow p-6 mb-6">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">{gesProfile.name}</div>
+            <div className="flex items-center gap-8">
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Niveau de départ ({gesProfile.startYear})</div>
+                <div className="text-3xl font-bold tabular-nums text-gray-400">{fmtNum(gesProfile.initiale)}</div>
+                <div className="text-sm text-gray-400">{gesProfile.unit}</div>
+              </div>
+              <div className="text-2xl text-gray-200">→</div>
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Niveau mesuré ({gesProfile.currentYear})</div>
+                <div className="text-5xl font-extrabold tabular-nums leading-none text-[#111]">{fmtNum(gesProfile.currentLevel)}</div>
+                <div className="text-sm text-gray-500 mt-1">{gesProfile.unit}</div>
+              </div>
+              {gesProfile.totalChange != null && (
+                <div className="ml-auto text-right">
+                  <div className="text-xs text-gray-400 mb-1">Variation totale</div>
+                  <div className="text-3xl font-extrabold tabular-nums" style={{ color: gesProfile.totalChange < 0 ? "#2DAC6A" : "#E24B4A" }}>
+                    {gesProfile.totalChange < 0 ? "−" : "+"}{fmtNum(Math.abs(gesProfile.totalChange))}
+                  </div>
+                  <div className="text-sm text-gray-400">{gesProfile.unit}</div>
+                  {gesProfile.actionImpact != null && gesProfile.actionImpact !== 0 && (
+                    <div className="mt-2 text-xs text-gray-400">
+                      Sans action : {fmtNum(gesProfile.currentRef)} {gesProfile.unit}
+                      <br />
+                      <span className="font-semibold text-[#2DAC6A]">{fmtNum(Math.abs(gesProfile.actionImpact))} {gesProfile.unit} évités</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Other pollutants */}
+        <div className="grid grid-cols-3 gap-4">
+          {emissionProfile.filter((p) => p.key !== "GES").map((item) => (
+            <EmissionCard key={item.key} item={item} />
+          ))}
+        </div>
+      </section>
+    </div>
+  )
 }

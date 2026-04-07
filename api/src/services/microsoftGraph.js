@@ -4,7 +4,7 @@ const tenantId = 'efa89c5e-5599-439d-8f01-b4da9ded0a55';
 const clientId = 'f2924bbc-a975-49fe-a2ca-df4ff711be14';
 const clientSecret = '9aG8Q~chbn5ywMYUtx6zd3Z8zUelSoQjsHuiTdq9';
 const sharePointSiteName = 'selegobv';
-const masterExcelFileId = '01IBL4ADPAL7ZE5OYO3FHL7HPW7KR6J7YJ';
+const masterExcelFileId = '01IBL4ADNZP32VURAL2ZFZJYXPPUMULGLC';
 
 const WORKSHEETS = {
   init: 'Remplissage - Sit. Init.',
@@ -59,6 +59,7 @@ async function graphFetch(endpoint, options = {}) {
 
     if (response.ok) {
       if (response.status === 202) return response;
+      if (response.status === 204) return null;
       return response.json();
     }
 
@@ -330,6 +331,23 @@ async function clearWorksheetValues(fileId, situation) {
   });
 }
 
+async function readExcelDefaultValues(fileId, situation) {
+  const worksheetName = WORKSHEETS[situation];
+  if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
+  const rows = usedRange.values || [];
+
+  const defaults = new Map();
+  for (const row of rows) {
+    const excelIndicatorId = row[4] ? String(row[4]).trim() : '';
+    if (!excelIndicatorId) continue;
+    defaults.set(excelIndicatorId, row[7] !== undefined && row[7] !== '' ? row[7] : null);
+  }
+  return defaults;
+}
+
 module.exports = {
   getAccessToken,
   graphFetch,
@@ -342,4 +360,5 @@ module.exports = {
   exportExcelFileWithSpecificSheets,
   importSheetsToExcelFile,
   clearWorksheetValues,
+  readExcelDefaultValues,
 };
