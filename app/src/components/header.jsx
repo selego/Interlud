@@ -3,30 +3,101 @@ import { Link, useNavigate, useLocation } from "react-router-dom"
 import api from "@/services/api"
 import useStore from "@/services/store"
 import toast from "react-hot-toast"
-import { FiChevronDown } from "react-icons/fi"
+import { FiChevronDown, FiCheck } from "react-icons/fi"
 import Logo from "@/assets/primary_logo.png"
 import Select from "@/components/Select"
+import DebounceInput from "@/components/debounceInput"
+
+function SelectSearch({ value, label, onChange }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [search, setSearch] = useState("")
+  const [options, setOptions] = useState([])
+  const [loading, setLoading] = useState(false)
+  const selectRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+
+  const fetchCollectivities = async () => {
+      try {
+      setLoading(true)
+      const { ok, data, code } = await api.post("/collectivity/search", { search, limit: 20 })
+        if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités")
+        setOptions(data)
+      } catch (error) {
+        toast.error(error.message || "Erreur lors de la récupération des collectivités")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+  useEffect(() => {
+    fetchCollectivities()
+  }, [search])
+
+  return (
+    <div ref={selectRef} className="relative">
+      <button type="button" onClick={() => setIsOpen(!isOpen)} className="input-primary w-full text-left pr-10 truncate">
+        <span className="block truncate">{label || "Sélectionner"}</span>
+      </button>
+      <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+        <FiChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+      </div>
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <div className="sticky top-0 bg-white p-2 border-b border-gray-200">
+            <DebounceInput
+              debounce={300}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher..."
+              className="!w-full !px-3 !py-2 !text-xs !border !border-gray-200 !rounded-md focus:!outline-none focus:!border-primary"
+            />
+          </div>
+          {loading ? (
+            <div className="px-4 py-3 text-gray-500 text-sm text-center">Chargement...</div>
+          ) : options.length > 0 ? (
+            options.map((option) => (
+              <div
+                key={option._id}
+                onClick={() => {
+                  onChange?.(option._id)
+                  setIsOpen(false)
+                  setSearch("")
+                }}
+                className={`px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${value === option._id ? "bg-primary/10 text-primary" : "text-gray-900"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs truncate">{option.name}</span>
+                  {value === option._id && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
+                </div>
+              </div>
+            ))
+          ) : search ? (
+            <div className="px-4 py-3 text-gray-500 text-sm text-center">Aucun résultat</div>
+          ) : (
+            <div className="px-4 py-3 text-gray-500 text-sm text-center">Tapez pour rechercher</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Header() {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [openQuickAccessDropdown, setOpenQuickAccessDropdown] = useState(null)
   const quickAccessRef = useRef(null)
   const { user, collectivity, setCollectivity, setUser, setActionRights, setEconomicActor } = useStore()
-  const [collectivities, setCollectivities] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const navigate = useNavigate()
   const location = useLocation()
-
-  const fetchCollectivities = async () => {
-    if (!user) return
-    try {
-      const { ok, data, code } = await api.post("/collectivity/search")
-      if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités")
-      setCollectivities(data)
-    } catch (error) {
-      console.error("Error fetching collectivities:", error)
-    }
-  }
 
   const fetchUnreadNotifications = async () => {
     if (!user) return toast.error("Utilisateur non connecté")
@@ -40,7 +111,6 @@ export default function Header() {
   }
 
   useEffect(() => {
-    fetchCollectivities()
     fetchUnreadNotifications()
   }, [user])
 
@@ -326,25 +396,19 @@ export default function Header() {
             {(user?.role === "admin" || (user?.collectivities && user.collectivities.filter((c) => c.status === "approved").length > 0)) && (
               <div className="flex items-center gap-3">
                 <div className="w-52">
-                  <Select
-                    value={collectivity?._id || ""}
-                    onChange={handleCollectivityChange}
-                    constrained={true}
-                    options={[
-                      ...(user.role === "admin"
-                        ? collectivities.map((collectivity) => ({
-                            value: collectivity._id,
-                            label: collectivity.name
-                          }))
-                        : user.collectivities
-                            .filter((c) => c.status === "approved")
-                            .map((collectivity) => ({
-                              value: collectivity.id,
-                              label: collectivity.name
-                            })))
-                    ]}
-                    className="truncate"
-                  />
+                  {user.role === "admin" ? (
+                    <SelectSearch value={collectivity?._id || ""} label={collectivity?.name || ""} onChange={handleCollectivityChange} />
+                  ) : (
+                    <Select
+                      value={collectivity?._id || ""}
+                      onChange={handleCollectivityChange}
+                      constrained={true}
+                      options={user.collectivities
+                        .filter((c) => c.status === "approved")
+                        .map((c) => ({ value: c.id, label: c.name }))}
+                      className="truncate"
+                    />
+                  )}
                 </div>
               </div>
             )}

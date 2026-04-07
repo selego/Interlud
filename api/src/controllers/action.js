@@ -9,7 +9,7 @@ const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues, createFolder } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -125,6 +125,14 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    if (!collectivity.sharepoint_folder_id) {
+      collectivity.sharepoint_folder_id = await createFolder(collectivity.name);
+      const AGGREGATION_TEMPLATE_FILE_ID = '01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV';
+      collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, AGGREGATION_TEMPLATE_FILE_ID);
+      await collectivity.save();
+    }
+
     const isEconomicActor = req.body.owner === 'economic_actor' && req.body.economic_actor_id;
 
     // Compute instance_number for this action
