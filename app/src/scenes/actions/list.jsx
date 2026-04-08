@@ -210,13 +210,23 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
               <p className="text-lg font-semibold text-gray-800 mb-1">Création en cours...</p>
               <p className="text-sm text-gray-500 mb-3">
                 {loadingSeconds < 10
-                  ? "Préparation des fichiers Excel et des indicateurs"
+                  ? "Préparation des fichiers des indicateurs"
                   : loadingSeconds < 25
-                  ? "Écriture des données dans les fichiers Excel"
-                  : "Finalisation et vérification des données"}
+                  ? "Préparation des moteurs de calcul"
+                  : loadingSeconds < 40
+                  ? "Génerations des valeurs par défaut"
+                  : loadingSeconds < 60
+                  ? "Application des valeurs par défaut"
+                  : loadingSeconds < 80
+                  ? "Création du dashboard"
+                  : loadingSeconds < 100
+                  ? "Finalisation de la création"
+                  : loadingSeconds < 120
+                  ? "Finalisation et vérification des résultats"
+                  : "Finalisation de la création"}
               </p>
               <p className="text-xs text-gray-400">
-                Cette opération peut prendre 1 à 2 minutes
+                Cette opération peut prendre plusieurs minutes
               </p>
             </div>
           </div>

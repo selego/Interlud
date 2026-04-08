@@ -404,22 +404,52 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       }
       await Promise.all(yearDbUpdates);
 
-      // Toutes les écritures Excel des années en parallèle
-      const yearExcelWrites = [];
+      // Écriture des infos collectivité dans les 2 fichiers Excel
+      const collectivityFieldsMapping = [
+        { excel_indicator_id: 'NomTerr', value: collectivity.name, value_type: 'text' },
+        { excel_indicator_id: 'SIRENTerr', value: collectivity.siren, value_type: 'number' },
+        { excel_indicator_id: 'SupTerr', value: collectivity.area, value_type: 'number' },
+      ].filter((f) => f.value !== null && f.value !== undefined);
+
+      if (collectivityFieldsMapping.length > 0) {
+        // Situations collectivité : init et expost uniquement
+        const collectivitySituations = allYearEntries.filter(({ situation }) => situation === 'init' || situation === 'expost');
+
+        // Mises à jour DB des infos collectivité en parallèle
+        const collectivityDbUpdates = [];
+        for (const { situation, year } of collectivitySituations) {
+          for (const configId of configActionIds) {
+            for (const { excel_indicator_id, value, value_type } of collectivityFieldsMapping) {
+              collectivityDbUpdates.push(IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excel_indicator_id, situation, year }, { [`value.${value_type}`]: value }, { new: true }));
+            }
+          }
+        }
+        await Promise.all(collectivityDbUpdates);
+      }
+
+      // Toutes les écritures Excel (années + collectivité) en parallèle
+      const excelWrites = [];
       if (excelFileIdPrev) {
         for (const { situation, year } of prevFileYears) {
-          yearExcelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation));
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation));
+        }
+        for (const { excel_indicator_id, value } of collectivityFieldsMapping) {
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, excel_indicator_id, value, 'init'));
         }
       }
       if (excelFileIdExpost) {
         for (const { situation, year } of expostFileYears) {
-          yearExcelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation));
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation));
+        }
+        for (const { excel_indicator_id, value } of collectivityFieldsMapping) {
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'init'));
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'expost'));
         }
       }
-      if (yearExcelWrites.length > 0) await Promise.all(yearExcelWrites);
+      if (excelWrites.length > 0) await Promise.all(excelWrites);
     }
 
-    // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années)
+    // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années et infos collectivité)
     const [prevInitDefaults, prevRefDefaults, prevPrevDefaults, expostRefDefaults, expostExpostDefaults] = await Promise.all([
       readExcelDefaultValues(excelFileIdPrev, 'init').catch(() => new Map()),
       readExcelDefaultValues(excelFileIdPrev, 'ref').catch(() => new Map()),
