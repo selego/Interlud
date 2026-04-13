@@ -1,337 +1,585 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { FiArrowLeft } from "react-icons/fi";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import React, { useState, useEffect, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
+import { FiArrowLeft } from "react-icons/fi"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import api from "@/services/api"
+import toast from "react-hot-toast"
+import useStore from "@/services/store"
+import Loader from "@/components/loader"
 
-const YEARS = [2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+// ── Constants ──────────────────────────────────────────────────────────────
 
-const ECART_SERIES = [
-  { key: "ecartPrevRef", label: "Objectif vs. sans action", color: "#378ADD" },
-  { key: "ecartExpostRef", label: "Résultat réel vs. sans action", color: "#1D9E75" },
-  { key: "ecartExpostPrev", label: "Résultat réel vs. objectif", color: "#EF9F27" },
-];
+const INDICATORS = [
+  { key: "GES", label: "Gaz à effet de serre", unit: "tCO₂e" },
+  { key: "PM", label: "Particules (PM)", unit: "tPart" },
+  { key: "NOx", label: "Oxydes d'azote (NOₓ)", unit: "tNOx" },
+  { key: "HC", label: "Hydrocarbures (HC)", unit: "tHC" },
+  { key: "CO", label: "Monoxyde de carbone (CO)", unit: "tCO" },
+  { key: "Nrj", label: "Énergie", unit: "GWh" },
+]
 
-const formatBigNumber = (val) => {
-  if (!val && val !== 0) return "—";
-  return Math.round(val).toLocaleString("fr-FR").replace(/\s/g, " ");
-};
+const ACTION_COLORS = [
+  "#3B82F6", "#D97706", "#8B5CF6", "#EF4444", "#10B981", "#F472B6",
+  "#06B6D4", "#84CC16", "#F97316", "#6366F1",
+]
 
-// Comparaisons concrètes pour rendre les chiffres parlants
-const COMPARAISONS = {
-  ges: (abs) => {
-    const voitures = Math.round(abs / 2.4);
-    return `≈ ${voitures.toLocaleString("fr-FR")} voitures retirées de la route pendant 1 an`;
-  },
-  energie: (abs) => {
-    const foyers = Math.round((abs * 1000) / 4.7);
-    return `≈ la consommation de ${foyers.toLocaleString("fr-FR")} foyers pendant 1 an`;
-  },
-  pm: (abs) => {
-    const diesels = Math.round(abs / 0.005);
-    return `≈ les particules émises par ${diesels.toLocaleString("fr-FR")} véhicules diesel/an`;
-  },
-  nox: (abs) => `≈ ${Math.round(abs / 0.04).toLocaleString("fr-FR")} camions en moins sur les routes`,
-  hc: () => null,
-  co: () => null,
-};
+const INTERPOLATED_OPACITY = 0.35
 
-const getComparaison = (indicator, value) => {
-  const abs = Math.abs(typeof value === "string" ? parseInt(value.replace(/\s/g, "").replace("−", "-")) : value);
-  if (!abs) return null;
-  return COMPARAISONS[indicator]?.(abs) || null;
-};
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-const DATA = {
-  ges: {
-    label: "GES", unit: "tCO₂e",
-    objA: 80, objB: 55,
-    lastA: "−4 200", lastB: "−2 600", cumA: "−28 500", cumB: "−18 200",
-    barA: [-800,-1100,-1500,-1900,-2300,-2700,-3100,-3500,-3800,-4000,-4200],
-    barB: [-400,-600,-800,-1000,-1300,-1600,-1900,-2100,-2300,-2450,-2600],
-    trajApost: [120,118,115,112,108,104,100,96,92,88,84],
-    trajAprev: [120,117,114,110,106,102,98,94,90,86,82],
-    trajBpost: [95,94,93,92,90,88,87,86,85,83,82],
-    trajBprev: [95,93,91,89,87,85,83,81,79,77,75],
-    ecartA: [-1200,-2800,-4900,-7300,-10100,-13200,-16600,-20400,-24500,-26600,-28500],
-    ecartB: [-600,-1500,-2600,-3900,-5500,-7400,-9500,-11800,-14200,-16100,-18200],
-  },
-  energie: {
-    label: "Énergie", unit: "GWh",
-    objA: 72, objB: 68,
-    lastA: "−14", lastB: "−20", cumA: "−92", cumB: "−122",
-    barA: [-1.5,-2,-2.8,-3.5,-4.5,-6,-7.5,-9,-11,-12.5,-14],
-    barB: [-2,-3,-4,-5.5,-7,-9,-11,-13.5,-16,-18,-20],
-    trajApost: [80,78,76,74,71,68,65,62,59,57,55],
-    trajAprev: [80,77,74,71,68,65,62,59,56,53,50],
-    trajBpost: [70,69,68,67,66,65,64,63,62,61,60],
-    trajBprev: [70,68,66,64,62,60,58,56,54,52,50],
-    ecartA: [-2,-5,-9,-14,-20,-27,-35,-44,-55,-68,-80],
-    ecartB: [-3,-7,-12,-19,-27,-38,-50,-65,-82,-102,-122],
-  },
-  pm: {
-    label: "PM", unit: "t PM",
-    objA: 65, objB: 48,
-    lastA: "−110", lastB: "−42", cumA: "−680", cumB: "−290",
-    barA: [-10,-15,-22,-30,-40,-52,-65,-78,-90,-100,-110],
-    barB: [-4,-6,-8,-11,-15,-20,-25,-30,-35,-39,-42],
-    trajApost: [500,490,478,464,448,430,410,388,364,342,320],
-    trajAprev: [500,488,475,461,446,430,413,395,376,356,335],
-    trajBpost: [300,297,293,288,282,275,267,258,248,237,225],
-    trajBprev: [300,295,289,283,276,269,261,252,242,231,219],
-    ecartA: [-10,-28,-55,-92,-143,-208,-288,-382,-490,-612,-680],
-    ecartB: [-4,-11,-20,-33,-50,-72,-99,-132,-172,-218,-290],
-  },
-  nox: {
-    label: "NOx", unit: "t NOx",
-    objA: 70, objB: 52,
-    lastA: "−95", lastB: "−38", cumA: "−590", cumB: "−250",
-    barA: [-8,-12,-18,-26,-35,-46,-58,-70,-80,-88,-95],
-    barB: [-3,-5,-7,-9,-13,-17,-22,-27,-32,-35,-38],
-    trajApost: [400,392,382,370,357,342,326,308,288,268,248],
-    trajAprev: [400,390,379,368,356,343,329,314,298,281,263],
-    trajBpost: [250,247,244,240,235,229,222,214,205,195,184],
-    trajBprev: [250,246,241,236,230,223,215,206,196,185,173],
-    ecartA: [-8,-22,-44,-74,-114,-165,-228,-305,-398,-502,-590],
-    ecartB: [-3,-9,-17,-28,-43,-62,-85,-114,-148,-188,-250],
-  },
-  hc: {
-    label: "HC", unit: "t HC",
-    objA: 60, objB: 45,
-    lastA: "−55", lastB: "−22", cumA: "−330", cumB: "−140",
-    barA: [-5,-7,-10,-14,-19,-25,-32,-39,-45,-50,-55],
-    barB: [-2,-3,-4,-6,-8,-11,-14,-17,-19,-21,-22],
-    trajApost: [200,196,191,185,178,170,161,151,140,129,118],
-    trajAprev: [200,195,189,183,176,168,159,149,138,126,113],
-    trajBpost: [150,148,146,143,140,136,132,127,121,115,108],
-    trajBprev: [150,147,144,140,136,131,126,120,113,106,98],
-    ecartA: [-5,-13,-25,-41,-62,-89,-122,-162,-208,-260,-330],
-    ecartB: [-2,-6,-11,-18,-27,-40,-55,-73,-93,-115,-140],
-  },
-  co: {
-    label: "CO", unit: "t CO",
-    objA: 75, objB: 60,
-    lastA: "−180", lastB: "−75", cumA: "−1 100", cumB: "−480",
-    barA: [-15,-22,-32,-44,-58,-74,-92,-112,-130,-155,-180],
-    barB: [-6,-9,-13,-17,-23,-30,-38,-47,-57,-65,-75],
-    trajApost: [700,685,668,648,625,600,572,541,507,470,430],
-    trajAprev: [700,682,663,642,619,594,566,535,501,464,424],
-    trajBpost: [450,445,439,432,424,415,404,391,376,360,342],
-    trajBprev: [450,443,435,426,416,405,393,379,363,346,327],
-    ecartA: [-15,-39,-76,-127,-196,-284,-392,-522,-674,-852,-1100],
-    ecartB: [-6,-16,-30,-49,-74,-107,-147,-196,-255,-322,-480],
-  },
-};
-
-const INDICATORS = ["ges","energie","pm","nox","hc","co"];
-const IND_LABELS = { ges:"Gaz à effet de serre", energie:"Énergie", pm:"Particules fines", nox:"Oxydes d'azote", hc:"Hydrocarbures", co:"Monoxyde de carbone" };
-
-const COLOR_A = "#3B82F6";
-const COLOR_B = "#D97706";
-
-const formatTick = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : v);
-
-function GaugeBar({ pct, color, label }) {
-  return (
-    <div className="card-shadow p-6 text-center">
-      <div className="text-xs font-medium mb-3 text-[#6b7280] flex items-center gap-1.5 justify-center">
-        <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: color }} />
-        {label}
-      </div>
-      <div className="relative w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-3">
-        <div className="absolute top-0 left-0 h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: color }} />
-      </div>
-      <div className="text-2xl font-semibold" style={{ color }}>{pct}%</div>
-      <div className="text-xs text-[#9ca3af] mt-1">de l'objectif atteint</div>
-    </div>
-  );
+const fmtNum = (v) => {
+  if (v == null) return "—"
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
+  if (abs >= 1_000) return `${(v / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
+  return Math.round(v).toLocaleString("fr-FR")
 }
 
-export default function ComparaisonActions() {
-  const navigate = useNavigate();
-  const [ind, setInd] = useState("ges");
-  const [selectedEcart, setSelectedEcart] = useState("ecartExpostRef");
-  const d = DATA[ind];
+const fmtAxis = (v) => {
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}k`
+  return String(v)
+}
 
-  // Derive 3 écarts from barA/barB (= expostRef) and objA/objB (achievement %)
-  const buildGainsData = (bar, obj) => {
-    const ach = obj / 100;
-    return YEARS.map((y, i) => {
-      const expostRef = bar[i];
-      const prevRef = Math.round(expostRef / ach);
-      const expostPrev = expostRef - prevRef;
-      return { year: y, ecartPrevRef: prevRef, ecartExpostRef: expostRef, ecartExpostPrev: expostPrev };
-    });
-  };
-  const gainsA = buildGainsData(d.barA, d.objA);
-  const gainsB = buildGainsData(d.barB, d.objB);
+/**
+ * Build the list of situation bars from the action's year configuration.
+ * Replicates the exact same logic as dashboard.jsx — only includes
+ * horizons actually filled by the user (init, ref, expost, prev).
+ * Returns bars sorted chronologically, each with { year, type, dataKey, label }.
+ */
+function buildSituationBars(action) {
+  const bars = []
 
-  const trajData = YEARS.map((y, i) => ({ year: y, A_expost: d.trajApost[i], A_prev: d.trajAprev[i], B_expost: d.trajBpost[i], B_prev: d.trajBprev[i] }));
-  const ecartData = YEARS.map((y, i) => ({ year: y, A: d.ecartA[i], B: d.ecartB[i] }));
+  // 1. Situation initiale
+  if (action.year_init) {
+    bars.push({ year: action.year_init, type: "init", dataKey: "initiale", label: `Init. ${action.year_init}` })
+  }
 
-  const green = "#1D9E75";
+  // 2. Collect all ref/expost pairs
+  const expostEntries = action.excel_files_expost?.length
+    ? action.excel_files_expost.filter((e) => e.year_expost)
+    : action.year_expost ? [{ year_expost: action.year_expost, year_ref: action.year_ref }] : []
+
+  // 3. Collect all ref/prev pairs
+  const prevEntries = action.exel_files_prev?.length
+    ? action.exel_files_prev.filter((e) => e.year_prev)
+    : action.year_prev ? [{ year_prev: action.year_prev, year_ref: action.year_ref }] : []
+
+  const addedRefYears = new Map()
+
+  for (const entry of expostEntries) {
+    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
+      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}` })
+      addedRefYears.set(entry.year_ref, "expost")
+    }
+    bars.push({ year: entry.year_expost, type: "expost", dataKey: "expost", label: `Ex-post ${entry.year_expost}` })
+  }
+
+  for (const entry of prevEntries) {
+    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
+      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}` })
+      addedRefYears.set(entry.year_ref, "prev")
+    }
+    bars.push({ year: entry.year_prev, type: "prev", dataKey: "previsionnelle", label: `Prév. ${entry.year_prev}` })
+  }
+
+  if (!addedRefYears.size && action.year_ref) {
+    bars.push({ year: action.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${action.year_ref}` })
+  }
+
+  const typeOrder = { init: 0, ref: 1, expost: 2, prev: 3 }
+  bars.sort((a, b) => a.year - b.year || typeOrder[a.type] - typeOrder[b.type])
+
+  return bars
+}
+
+/**
+ * For a given action's emission yearlyData, extract the known values
+ * at the years/situations actually filled (using buildSituationBars).
+ * Returns Map<year, value> with only real (user-filled) data points.
+ */
+function getKnownEmissionPoints(action, yearlyData) {
+  const bars = buildSituationBars(action)
+  const byYear = new Map(yearlyData.map((d) => [d.year, d]))
+  const known = new Map()
+
+  for (const bar of bars) {
+    const row = byYear.get(bar.year)
+    const val = row ? row[bar.dataKey] : null
+    if (val != null && val > 0) {
+      // If multiple situations at the same year, keep the latest (expost > prev > ref > init)
+      known.set(bar.year, val)
+    }
+  }
+
+  return known
+}
+
+/**
+ * Linear interpolation: given known data points Map<year, value>,
+ * fill missing years with interpolated values.
+ * Returns Map<year, { value, interpolated: boolean }>
+ */
+function interpolateValues(knownPoints, allYears) {
+  const result = new Map()
+  const sorted = [...knownPoints.entries()].sort(([a], [b]) => a - b)
+
+  for (const year of allYears) {
+    const known = knownPoints.get(year)
+    if (known != null) {
+      result.set(year, { value: known, interpolated: false })
+      continue
+    }
+
+    // Find surrounding known points for interpolation
+    let before = null, after = null
+    for (const [y, v] of sorted) {
+      if (y < year && v != null) before = { year: y, value: v }
+      if (y > year && v != null && !after) after = { year: y, value: v }
+    }
+
+    if (before && after) {
+      const ratio = (year - before.year) / (after.year - before.year)
+      const interpolated = before.value + ratio * (after.value - before.value)
+      result.set(year, { value: Math.round(interpolated * 100) / 100, interpolated: true })
+    }
+  }
+
+  return result
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────
+
+export default function CompareActions() {
+  const navigate = useNavigate()
+  const { collectivity } = useStore()
+
+  const [actions, setActions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadingData, setLoadingData] = useState(false)
+  const [selectedType, setSelectedType] = useState(null)
+  const [selectedActionIds, setSelectedActionIds] = useState([])
+  const [actionData, setActionData] = useState({}) // { actionId: processedData }
+  const [activeIndicator, setActiveIndicator] = useState("GES")
+  const [selectedYears, setSelectedYears] = useState([])
+
+  // ── Fetch all actions for the collectivity ─────────────────────────────
+
+  useEffect(() => {
+    const fetchActions = async () => {
+      if (!collectivity?._id) return
+      try {
+        setLoading(true)
+        const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id })
+        if (!ok) return toast.error("Erreur lors du chargement des actions")
+        // Only keep actions with an excel_worksheetname (those that can be aggregated)
+        setActions(data.filter((a) => a.excel_worksheetname))
+      } catch (e) {
+        toast.error("Erreur lors du chargement des actions")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchActions()
+  }, [collectivity])
+
+  // ── Group actions by type (excel_worksheetname) ────────────────────────
+
+  const actionsByType = useMemo(() => {
+    const groups = {}
+    for (const action of actions) {
+      const type = action.excel_worksheetname
+      if (!groups[type]) groups[type] = []
+      groups[type].push(action)
+    }
+    // Only keep types with 2+ actions (comparison needs at least 2)
+    return Object.fromEntries(Object.entries(groups).filter(([, v]) => v.length >= 2))
+  }, [actions])
+
+  const availableTypes = Object.keys(actionsByType).sort()
+
+  // Auto-select first type if none selected
+  useEffect(() => {
+    if (!selectedType && availableTypes.length > 0) {
+      setSelectedType(availableTypes[0])
+    }
+  }, [availableTypes])
+
+  // Auto-select all actions when type changes
+  useEffect(() => {
+    if (selectedType && actionsByType[selectedType]) {
+      setSelectedActionIds(actionsByType[selectedType].map((a) => a._id))
+    }
+  }, [selectedType])
+
+  // ── Fetch aggregation data for selected actions ────────────────────────
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!selectedActionIds.length || !collectivity) return
+      setLoadingData(true)
+      const newData = {}
+      await Promise.all(
+        selectedActionIds.map(async (id) => {
+          const action = actions.find((a) => a._id === id)
+          if (!action) return
+          try {
+            const { ok, data } = await api.post("/excel/action_aggregation", { collectivity, action })
+            if (ok) newData[id] = data
+          } catch (e) {
+            // silently skip failed actions
+          }
+        })
+      )
+      setActionData(newData)
+      setLoadingData(false)
+    }
+    fetchData()
+  }, [selectedActionIds, collectivity])
+
+  // ── Compute all unique years across selected actions ───────────────────
+
+  const selectedActions = useMemo(
+    () => selectedActionIds.map((id) => actions.find((a) => a._id === id)).filter(Boolean),
+    [selectedActionIds, actions]
+  )
+
+  const allAvailableYears = useMemo(() => {
+    const years = new Set()
+    // Only include years from situations actually filled by the user (buildSituationBars logic)
+    for (const action of selectedActions) {
+      for (const bar of buildSituationBars(action)) {
+        years.add(bar.year)
+      }
+    }
+    return [...years].sort((a, b) => a - b)
+  }, [selectedActions])
+
+  // Auto-select all years when they change
+  useEffect(() => {
+    setSelectedYears(allAvailableYears)
+  }, [allAvailableYears])
+
+  // ── Build chart data with interpolation ────────────────────────────────
+
+  const chartData = useMemo(() => {
+    if (!selectedYears.length || !selectedActions.length) return []
+
+    // For each action, extract only user-filled situation values (same logic as dashboard.jsx)
+    // then interpolate for years this action doesn't have
+    const actionInterpolated = {} // { actionId: Map<year, { value, interpolated }> }
+
+    for (const action of selectedActions) {
+      const emData = actionData[action._id]?.emissions?.indicators?.[activeIndicator]?.yearlyData ?? []
+      const knownPoints = getKnownEmissionPoints(action, emData)
+      actionInterpolated[action._id] = interpolateValues(knownPoints, selectedYears)
+    }
+
+    // Build chart rows
+    return selectedYears.map((year) => {
+      const row = { year }
+      for (const action of selectedActions) {
+        const entry = actionInterpolated[action._id]?.get(year)
+        row[`val_${action._id}`] = entry?.value ?? null
+        row[`interp_${action._id}`] = entry?.interpolated ?? false
+      }
+      return row
+    })
+  }, [selectedYears, selectedActions, actionData, activeIndicator, allAvailableYears])
+
+  // ── Indicator info ─────────────────────────────────────────────────────
+
+  const activeInd = INDICATORS.find((i) => i.key === activeIndicator)
+  const availableIndicators = useMemo(() => {
+    const keys = new Set()
+    for (const [, data] of Object.entries(actionData)) {
+      for (const key of Object.keys(data?.emissions?.indicators ?? {})) {
+        if (data.emissions.indicators[key]?.yearlyData?.length > 0) keys.add(key)
+      }
+    }
+    return INDICATORS.filter((i) => keys.has(i.key))
+  }, [actionData])
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
+  if (loading) return <Loader />
+
+  if (availableTypes.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 transition-colors">
+            <FiArrowLeft size={20} />
+          </button>
+          <h1 className="text-2xl font-semibold text-[#111]">Comparaison d'actions</h1>
+        </div>
+        <div className="card-shadow p-8 text-center text-gray-500">
+          <p className="text-lg mb-2">Aucune comparaison possible</p>
+          <p className="text-sm">Il faut au moins 2 actions du même type (même fiche) pour pouvoir les comparer.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-10 py-8 space-y-6">
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 transition-colors">
           <FiArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-2xl font-semibold text-[#111]">Face à face : 2 actions comparées</h1>
-          <p className="text-sm text-[#888] flex items-center gap-1.5 flex-wrap mt-1">
-            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: COLOR_A }} /> Développement réseau cyclable
-            <span className="mx-2 text-[#ccc]">vs</span>
-            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: COLOR_B }} /> Rénovation bâtiments publics
+          <h1 className="text-2xl font-semibold text-[#111]">Comparaison d'actions</h1>
+          <p className="text-sm text-[#888] mt-1">
+            Comparez les émissions en valeur absolue entre des actions de même type
           </p>
         </div>
       </div>
 
-      {/* Indicator tabs */}
-      <div className="card-shadow p-4 flex gap-2 flex-wrap">
-        {INDICATORS.map((key) => (
-          <button
-            key={key}
-            onClick={() => setInd(key)}
-            className={`px-4 py-1.5 rounded-md text-xs cursor-pointer border transition-all ${
-              ind === key
-                ? "bg-[#1D9E75] text-white border-[#1D9E75] font-medium"
-                : "bg-transparent text-[#888] border-[#ddd] hover:border-[#1D9E75] hover:text-[#555]"
-            }`}
-          >
-            {IND_LABELS[key]}
-          </button>
-        ))}
-      </div>
-
-      {/* Gauges */}
-      <div>
-        <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">
-          Où en est-on ? · {d.label}
-        </div>
-        <div className="grid grid-cols-2 gap-6">
-          <GaugeBar pct={d.objA} color={COLOR_A} label="Action A" />
-          <GaugeBar pct={d.objB} color={COLOR_B} label="Action B" />
-        </div>
-      </div>
-
-      {/* Metric cards */}
-      <div>
-        <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">
-          Résultats concrets · {d.label}
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Réduction cette année", a: d.lastA, b: d.lastB, unit: d.unit, comparaison: true },
-            { label: "Total économisé depuis le début", a: d.cumA, b: d.cumB, unit: d.unit, comparaison: true },
-            { label: "Progression Action A", a: `${d.objA}%`, b: null, unit: "de l'objectif atteint" },
-            { label: "Progression Action B", a: null, b: `${d.objB}%`, unit: "de l'objectif atteint" },
-          ].map(({ label, a, b, unit, comparaison }) => (
-            <div key={label} className="card-shadow p-4">
-              <div className="text-xs text-[#9ca3af] font-medium mb-2">{label}</div>
-              <div className="flex items-baseline gap-3 flex-wrap">
-                {a && <span className="text-xl font-semibold" style={{ color: COLOR_A }}>{a}</span>}
-                {b && <span className="text-xl font-semibold" style={{ color: COLOR_B }}>{b}</span>}
-              </div>
-              <div className="text-[11px] text-[#9ca3af] mt-1">{unit}</div>
-              {comparaison && a && getComparaison(ind, a) && (
-                <div className="text-[10px] text-[#6b7280] mt-2 italic">{getComparaison(ind, a)}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Chart: écarts & gains par année */}
-      <ChartCard
-        title={`${d.label} · Réductions année par année`}
-        sub={`Ce qui a été évité chaque année par rapport à un scénario sans action · ${d.unit}`}
-      >
-        <div className="flex gap-1 mb-4">
-          {ECART_SERIES.map((s) => (
+      {/* ── Type selector ──────────────────────────────────────────────────── */}
+      <div className="card-shadow p-4">
+        <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Type d'action</div>
+        <div className="flex gap-2 flex-wrap">
+          {availableTypes.map((type) => (
             <button
-              key={s.key}
-              onClick={() => setSelectedEcart(s.key)}
-              className={`px-3.5 py-1 rounded-md text-xs cursor-pointer border transition-all ${
-                selectedEcart === s.key
-                  ? "text-white font-medium"
-                  : "bg-transparent text-[#888] border-[#ddd] hover:text-[#555]"
+              key={type}
+              onClick={() => setSelectedType(type)}
+              className={`px-4 py-1.5 rounded-md text-xs cursor-pointer border transition-all ${
+                selectedType === type
+                  ? "bg-[#1D9E75] text-white border-[#1D9E75] font-medium"
+                  : "bg-transparent text-[#888] border-[#ddd] hover:border-[#1D9E75] hover:text-[#555]"
               }`}
-              style={selectedEcart === s.key ? { background: s.color, borderColor: s.color } : undefined}
             >
-              {s.label}
+              {type} ({actionsByType[type].length} actions)
             </button>
           ))}
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={YEARS.map((y, i) => ({ year: y, A: gainsA[i][selectedEcart], B: gainsB[i][selectedEcart] }))} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-            <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#999" }} />
-            <YAxis tick={{ fontSize: 11, fill: "#999" }} tickFormatter={formatTick} />
-            <Tooltip
-              formatter={(value, name) => [
-                `${formatBigNumber(value)} ${d.unit}`,
-                name === "A" ? "Action A" : "Action B",
-              ]}
-              labelFormatter={(label) => `Année ${label}`}
-            />
-            <Bar dataKey="A" name="A" fill={COLOR_A} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="B" name="B" fill={COLOR_B} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      </div>
 
-      {/* Chart: trajectoires */}
-      <ChartCard
-        title={`Évolution ${d.label} · Ce qu'on visait vs. ce qu'on a obtenu`}
-        sub="Comparaison entre les objectifs fixés au départ et les résultats réels"
-      >
-        <div className="flex flex-wrap gap-4 mb-3 text-xs text-[#6b7280]">
-          <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 inline-block" style={{ background: COLOR_A }} /> A · Résultat réel</span>
-          <span className="flex items-center gap-1.5"><span className="w-4 h-0 border-t-2 border-dashed inline-block" style={{ borderColor: COLOR_A }} /> A · Objectif visé</span>
-          <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 inline-block" style={{ background: COLOR_B }} /> B · Résultat réel</span>
-          <span className="flex items-center gap-1.5"><span className="w-4 h-0 border-t-2 border-dashed inline-block" style={{ borderColor: COLOR_B }} /> B · Objectif visé</span>
+      {/* ── Action selection ───────────────────────────────────────────────── */}
+      {selectedType && actionsByType[selectedType] && (
+        <div className="card-shadow p-4">
+          <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Actions à comparer</div>
+          <div className="flex gap-3 flex-wrap">
+            {actionsByType[selectedType].map((action, idx) => {
+              const selected = selectedActionIds.includes(action._id)
+              const color = ACTION_COLORS[idx % ACTION_COLORS.length]
+              return (
+                <button
+                  key={action._id}
+                  onClick={() => {
+                    if (selected) {
+                      setSelectedActionIds((prev) => prev.filter((id) => id !== action._id))
+                    } else {
+                      setSelectedActionIds((prev) => [...prev, action._id])
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm cursor-pointer border-2 transition-all flex items-center gap-2 ${
+                    selected ? "font-medium text-white" : "bg-transparent text-[#666] border-[#ddd] hover:border-[#aaa]"
+                  }`}
+                  style={selected ? { backgroundColor: color, borderColor: color } : undefined}
+                >
+                  {!selected && <span className="w-3 h-3 rounded-full border-2" style={{ borderColor: color }} />}
+                  {selected && <span className="w-3 h-3 rounded-full bg-white/40" />}
+                  {action.name}{action.instance_number > 1 ? ` #${action.instance_number}` : ""}
+                </button>
+              )
+            })}
+          </div>
+          {selectedActionIds.length < 2 && (
+            <p className="text-xs text-orange-500 mt-2">Sélectionnez au moins 2 actions pour comparer.</p>
+          )}
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={trajData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-            <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#999" }} />
-            <YAxis tick={{ fontSize: 11, fill: "#999" }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="A_expost" name="A · Résultat réel" stroke={COLOR_A} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="A_prev" name="A · Objectif visé" stroke={COLOR_A} strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
-            <Line type="monotone" dataKey="B_expost" name="B · Résultat réel" stroke={COLOR_B} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="B_prev" name="B · Objectif visé" stroke={COLOR_B} strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      )}
 
-      {/* Chart: écarts cumulés */}
-      <ChartCard
-        title={`Total des réductions depuis le lancement · ${d.label}`}
-        sub="Tout ce qui a été évité au fil des années, cumulé"
-      >
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={ecartData} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-            <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#999" }} />
-            <YAxis tick={{ fontSize: 11, fill: "#999" }} tickFormatter={formatTick} />
-            <Tooltip formatter={(value) => [`${value.toLocaleString()} ${d.unit}`]} />
-            <Bar dataKey="A" name="Action A" fill={COLOR_A} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="B" name="Action B" fill={COLOR_B} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      {/* ── Indicator tabs ─────────────────────────────────────────────────── */}
+      {selectedActionIds.length >= 2 && (
+        <div className="card-shadow p-4">
+          <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Indicateur</div>
+          <div className="flex gap-2 flex-wrap">
+            {(availableIndicators.length > 0 ? availableIndicators : INDICATORS).map((ind) => (
+              <button
+                key={ind.key}
+                onClick={() => setActiveIndicator(ind.key)}
+                className={`px-4 py-1.5 rounded-md text-xs cursor-pointer border transition-all ${
+                  activeIndicator === ind.key
+                    ? "bg-[#1D9E75] text-white border-[#1D9E75] font-medium"
+                    : "bg-transparent text-[#888] border-[#ddd] hover:border-[#1D9E75] hover:text-[#555]"
+                }`}
+              >
+                {ind.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Year selection ─────────────────────────────────────────────────── */}
+      {selectedActionIds.length >= 2 && allAvailableYears.length > 0 && (
+        <div className="card-shadow p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium">
+              Années à afficher
+              <span className="text-[#bbb] font-normal ml-2">— uniquement les horizons remplis par les utilisateurs</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedYears(allAvailableYears)}
+                className="text-xs text-[#1D9E75] hover:underline cursor-pointer"
+              >
+                Toutes
+              </button>
+              <button
+                onClick={() => setSelectedYears([])}
+                className="text-xs text-[#888] hover:underline cursor-pointer"
+              >
+                Aucune
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {allAvailableYears.map((year) => {
+              const selected = selectedYears.includes(year)
+              // Determine which situation types exist at this year across all selected actions
+              const situationTypes = new Set()
+              for (const action of selectedActions) {
+                for (const bar of buildSituationBars(action)) {
+                  if (bar.year === year) situationTypes.add(bar.type)
+                }
+              }
+              const typeLabels = { init: "Init.", ref: "Réf.", expost: "Ex-post", prev: "Prév." }
+              const hint = [...situationTypes].map((t) => typeLabels[t] || t).join(", ")
+              return (
+                <button
+                  key={year}
+                  onClick={() => {
+                    if (selected) {
+                      setSelectedYears((prev) => prev.filter((y) => y !== year))
+                    } else {
+                      setSelectedYears((prev) => [...prev, year].sort((a, b) => a - b))
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs cursor-pointer border transition-all ${
+                    selected
+                      ? "bg-[#111] text-white border-[#111] font-medium"
+                      : "bg-transparent text-[#888] border-[#ddd] hover:border-[#555]"
+                  }`}
+                  title={hint}
+                >
+                  {year}
+                  {hint && <span className={`ml-1 text-[10px] ${selected ? "text-white/60" : "text-[#bbb]"}`}>({hint})</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading indicator ──────────────────────────────────────────────── */}
+      {loadingData && (
+        <div className="card-shadow p-6 text-center">
+          <Loader />
+          <p className="text-sm text-gray-500 mt-2">Chargement des données d'émissions...</p>
+        </div>
+      )}
+
+      {/* ── Main chart ─────────────────────────────────────────────────────── */}
+      {selectedActionIds.length >= 2 && !loadingData && chartData.length > 0 && (
+        <div className="card-shadow p-6">
+          <div className="flex items-start justify-between mb-6 gap-4">
+            <div>
+              <h3 className="text-base font-semibold text-[#111]">
+                Émissions {activeInd?.label || activeIndicator} — Comparaison par année
+              </h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Valeurs absolues d'émissions pour chaque action, par année. Les barres semi-transparentes indiquent des valeurs interpolées.
+              </p>
+            </div>
+            <div className="text-xs text-gray-400 shrink-0">{activeInd?.unit || ""}</div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 mb-4">
+            {selectedActions.map((action, idx) => {
+              const color = ACTION_COLORS[idx % ACTION_COLORS.length]
+              return (
+                <div key={action._id} className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className="w-3 h-3 rounded-sm" style={{ background: color }} />
+                  {action.name}{action.instance_number > 1 ? ` #${action.instance_number}` : ""}
+                </div>
+              )
+            })}
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 ml-2">
+              <span className="w-3 h-3 rounded-sm bg-gray-300 opacity-40" />
+              Valeur interpolée
+            </div>
+          </div>
+
+          <div className="h-[380px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#999" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#999" }} tickFormatter={fmtAxis} width={52} />
+                <Tooltip content={<CompareTooltip actions={selectedActions} unit={activeInd?.unit || ""} />} />
+                {selectedActions.map((action, idx) => {
+                  const color = ACTION_COLORS[idx % ACTION_COLORS.length]
+                  const dataKey = `val_${action._id}`
+                  const interpKey = `interp_${action._id}`
+                  return (
+                    <Bar key={action._id} dataKey={dataKey} name={action.name + (action.instance_number > 1 ? ` #${action.instance_number}` : "")} fill={color} radius={[3, 3, 0, 0]} maxBarSize={50}>
+                      {chartData.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={color}
+                          fillOpacity={entry[interpKey] ? INTERPOLATED_OPACITY : 1}
+                        />
+                      ))}
+                    </Bar>
+                  )
+                })}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty state ────────────────────────────────────────────────────── */}
+      {selectedActionIds.length >= 2 && !loadingData && chartData.length === 0 && Object.keys(actionData).length > 0 && (
+        <div className="card-shadow p-8 text-center text-gray-400">
+          <p>Aucune donnée d'émission disponible pour cet indicateur.</p>
+        </div>
+      )}
     </div>
-  );
+  )
 }
 
-function ChartCard({ title, sub, children }) {
+// ── Custom Tooltip ───────────────────────────────────────────────────────
+
+function CompareTooltip({ active, payload, label, actions, unit }) {
+  if (!active || !payload?.length) return null
   return (
-    <div className="card-shadow p-6">
-      <div className="text-sm font-semibold text-[#111] mb-1">{title}</div>
-      <div className="text-xs text-[#9ca3af] mb-4">{sub}</div>
-      {children}
+    <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2 max-w-xs">
+      <div className="font-bold text-[#111] text-sm">Année {label}</div>
+      {payload.map((p, i) => {
+        const actionId = p.dataKey?.replace("val_", "")
+        const action = actions?.find((a) => a._id === actionId)
+        const entry = p.payload
+        const isInterpolated = entry?.[`interp_${actionId}`]
+        return (
+          <div key={i} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.fill, opacity: isInterpolated ? INTERPOLATED_OPACITY : 1 }} />
+              <span className="text-gray-600 truncate max-w-[140px]">{action?.name || p.name}</span>
+              {isInterpolated && <span className="text-[10px] text-orange-400 font-medium">(interpolée)</span>}
+            </div>
+            <span className="font-semibold text-[#333] tabular-nums whitespace-nowrap">
+              {p.value != null ? `${fmtNum(p.value)} ${unit}` : "—"}
+            </span>
+          </div>
+        )
+      })}
     </div>
-  );
+  )
 }

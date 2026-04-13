@@ -25,6 +25,168 @@ const TRAJ_SERIES = [
   { key: "expost", label: "Ex-post", color: "#2DAC6A" }
 ]
 
+const SITUATION_COLORS = {
+  init: "#C8C8C8",
+  ref: "#4A86C8",
+  prev: "#F59600",
+  expost: "#2DAC6A"
+}
+
+const SITUATION_LABELS = {
+  init: "Initiale",
+  ref: "Référence",
+  prev: "Prévisionnelle",
+  expost: "Ex-post"
+}
+
+/**
+ * Build the list of situation bars from the action's year configuration.
+ * Returns bars sorted chronologically, each with { label, year, type, dataKey }.
+ * Only includes non-interpolated horizons defined by the user.
+ */
+function buildSituationBars(action) {
+  const bars = []
+
+  // 1. Situation initiale
+  if (action.year_init) {
+    bars.push({ year: action.year_init, type: "init", dataKey: "initiale", label: `Init. ${action.year_init}` })
+  }
+
+  // 2. Collect all ref/expost pairs from excel_files_expost array, or fallback to single year_expost
+  const expostEntries = action.excel_files_expost?.length
+    ? action.excel_files_expost.filter((e) => e.year_expost)
+    : action.year_expost
+      ? [{ year_expost: action.year_expost, year_ref: action.year_ref }]
+      : []
+
+  // 3. Collect all ref/prev pairs from exel_files_prev array, or fallback to single year_prev
+  const prevEntries = action.exel_files_prev?.length
+    ? action.exel_files_prev.filter((e) => e.year_prev)
+    : action.year_prev
+      ? [{ year_prev: action.year_prev, year_ref: action.year_ref }]
+      : []
+
+  // Track which ref years we've already added (to avoid duplicate ref bars)
+  const addedRefYears = new Map() // year -> associated type for label disambiguation
+
+  // Add expost entries (and their refs)
+  for (const entry of expostEntries) {
+    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
+      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}`, forType: "expost", forYear: entry.year_expost })
+      addedRefYears.set(entry.year_ref, "expost")
+    }
+    bars.push({ year: entry.year_expost, type: "expost", dataKey: "expost", label: `Ex-post ${entry.year_expost}` })
+  }
+
+  // Add prev entries (and their refs)
+  for (const entry of prevEntries) {
+    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
+      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}`, forType: "prev", forYear: entry.year_prev })
+      addedRefYears.set(entry.year_ref, "prev")
+    }
+    bars.push({ year: entry.year_prev, type: "prev", dataKey: "previsionnelle", label: `Prév. ${entry.year_prev}` })
+  }
+
+  // If no specific entries but we have year_ref alone, add it
+  if (!addedRefYears.size && action.year_ref) {
+    bars.push({ year: action.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${action.year_ref}` })
+  }
+
+  // Sort chronologically, with type ordering as tiebreaker: init < ref < expost < prev
+  const typeOrder = { init: 0, ref: 1, expost: 2, prev: 3 }
+  bars.sort((a, b) => a.year - b.year || typeOrder[a.type] - typeOrder[b.type])
+
+  return bars
+}
+
+const GAIN_COLORS = {
+  refInit: "#4A86C8",
+  expostRef: "#2DAC6A",
+  prevRef: "#F59600",
+  expostPrev: "#7C3AED"
+}
+
+const GAIN_LABELS = {
+  refInit: "Réf. vs Init.",
+  expostRef: "Ex-post vs Réf.",
+  prevRef: "Prév. vs Réf.",
+  expostPrev: "Ex-post vs Prév."
+}
+
+/**
+ * Build gain (écart) bars between pairs of situations.
+ * Each bar = difference between two situation emissions at user-defined horizons.
+ * Returns { label, value, pct, compType, year, fill }.
+ */
+function buildGainBars(action, situationChartData) {
+  const gains = []
+  const getVal = (type, year) => situationChartData.find((b) => b.type === type && b.year === year)?.value
+
+  const initVal = action.year_init != null ? getVal("init", action.year_init) : null
+
+  const expostEntries = action.excel_files_expost?.length
+    ? action.excel_files_expost.filter((e) => e.year_expost)
+    : action.year_expost
+      ? [{ year_expost: action.year_expost, year_ref: action.year_ref }]
+      : []
+
+  const prevEntries = action.exel_files_prev?.length
+    ? action.exel_files_prev.filter((e) => e.year_prev)
+    : action.year_prev
+      ? [{ year_prev: action.year_prev, year_ref: action.year_ref }]
+      : []
+
+  // Ref vs Init — convention Excel : ref - init
+  const refYears = [...new Set([...expostEntries.map((e) => e.year_ref), ...prevEntries.map((e) => e.year_ref)].filter(Boolean))].sort((a, b) => a - b)
+  if (refYears.length && initVal != null) {
+    const refVal = getVal("ref", refYears[0])
+    if (refVal != null) {
+      const gain = refVal - initVal
+      const pct = initVal !== 0 ? (gain / initVal) * 100 : null
+      gains.push({ label: `Réf. vs Init.\n${refYears[0]}`, value: gain, pct, compType: "refInit", year: refYears[0], fill: GAIN_COLORS.refInit })
+    }
+  }
+
+  // Expost vs Ref — convention Excel : expost - ref
+  for (const entry of expostEntries) {
+    const refVal = entry.year_ref ? getVal("ref", entry.year_ref) : null
+    const expostVal = getVal("expost", entry.year_expost)
+    if (refVal != null && expostVal != null) {
+      const gain = expostVal - refVal
+      const pct = refVal !== 0 ? (gain / refVal) * 100 : null
+      gains.push({ label: `Ex-post vs Réf.\n${entry.year_expost}`, value: gain, pct, compType: "expostRef", year: entry.year_expost, fill: GAIN_COLORS.expostRef })
+    }
+  }
+
+  // Prev vs Ref — convention Excel : prev - ref
+  for (const entry of prevEntries) {
+    const refVal = entry.year_ref ? getVal("ref", entry.year_ref) : null
+    const prevVal = getVal("prev", entry.year_prev)
+    if (refVal != null && prevVal != null) {
+      const gain = prevVal - refVal
+      const pct = refVal !== 0 ? (gain / refVal) * 100 : null
+      gains.push({ label: `Prév. vs Réf.\n${entry.year_prev}`, value: gain, pct, compType: "prevRef", year: entry.year_prev, fill: GAIN_COLORS.prevRef })
+    }
+  }
+
+  // Expost vs Prev — convention Excel : expost - prev
+  for (const exEntry of expostEntries) {
+    const expostVal = getVal("expost", exEntry.year_expost)
+    const matchingPrev = prevEntries.find((p) => p.year_prev === exEntry.year_expost) || prevEntries[0]
+    if (matchingPrev) {
+      const prevVal = getVal("prev", matchingPrev.year_prev)
+      if (expostVal != null && prevVal != null) {
+        const gain = expostVal - prevVal
+        const pct = prevVal !== 0 ? (gain / prevVal) * 100 : null
+        gains.push({ label: `Ex-post vs Prév.\n${exEntry.year_expost}`, value: gain, pct, compType: "expostPrev", year: exEntry.year_expost, fill: GAIN_COLORS.expostPrev })
+      }
+    }
+  }
+
+  gains.sort((a, b) => a.year - b.year)
+  return gains
+}
+
 // ── Formatters ───────────────────────────────────────────────────────────────
 
 const fmtNum = (v) => {
@@ -290,6 +452,19 @@ export default function Dashboard({ action }) {
   const trajData = periodRange.map((year) => trajByYear.get(year) ?? { year, initiale: null, reference: null, previsionnelle: null, expost: null })
   const trajUnit = processedData.emissions?.indicators?.[active]?.unit || ""
 
+  // ── Derived: section 01 émissions par situation ──────────────────────────
+
+  const situationBars = buildSituationBars(action)
+  const situationChartData = situationBars.map((bar) => {
+    const yearRow = trajByYear.get(bar.year)
+    const value = yearRow ? yearRow[bar.dataKey] : null
+    return { ...bar, value, fill: SITUATION_COLORS[bar.type] }
+  })
+
+  // ── Derived: section 01 gains par situation ────────────────────────────────
+
+  const gainChartData = buildGainBars(action, situationChartData)
+
   // ── Derived: section 02 (niveaux d'émissions absolus) ───────────────────
 
   // selYear: last year with ex-post data — used only for trajectory reference line
@@ -412,7 +587,8 @@ export default function Dashboard({ action }) {
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             {[
               { k: "gains", l: "Gains réalisés" },
-              { k: "traj", l: "Trajectoires" }
+              { k: "traj", l: "Trajectoires" },
+              { k: "situations", l: "Émissions par situation" }
             ].map((t) => (
               <button
                 key={t.k}
@@ -572,6 +748,168 @@ export default function Dashboard({ action }) {
                 <ChartEmpty />
               )}
             </div>
+          </div>
+        )}
+
+        {/* Tab: Émissions par situation */}
+        {tab === "situations" && (
+          <div className="space-y-6">
+          <div className="card-shadow p-6">
+            <div className="flex items-center gap-5 mb-6 flex-wrap">
+              <h3 className="text-base font-semibold text-[#111]">Émissions par situation</h3>
+              <div className="flex gap-5 ml-auto">
+                {Object.entries(SITUATION_COLORS).map(([type, color]) => (
+                  <div key={type} className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
+                    {SITUATION_LABELS[type]}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="h-[360px]">
+              {situationChartData.length > 0 && situationChartData.some((d) => d.value != null && d.value !== 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={situationChartData} margin={{ top: 4, right: 8, bottom: 40, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                    <XAxis
+                      dataKey="label"
+                      tick={({ x, y, payload }) => {
+                        const item = situationChartData.find((d) => d.label === payload.value)
+                        return (
+                          <g transform={`translate(${x},${y})`}>
+                            <text x={0} y={0} dy={12} textAnchor="middle" fill={item ? SITUATION_COLORS[item.type] : "#C0C0C0"} fontSize={11} fontWeight={600}>
+                              {SITUATION_LABELS[item?.type] || ""}
+                            </text>
+                            <text x={0} y={0} dy={26} textAnchor="middle" fill="#C0C0C0" fontSize={10}>
+                              {item?.year || ""}
+                            </text>
+                          </g>
+                        )
+                      }}
+                      interval={0}
+                    />
+                    <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
+                    <Tooltip
+                      content={({ active: a, payload }) => {
+                        if (!a || !payload?.length) return null
+                        const d = payload[0]?.payload
+                        if (!d) return null
+                        return (
+                          <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2">
+                            <div className="font-bold text-sm" style={{ color: SITUATION_COLORS[d.type] }}>
+                              {SITUATION_LABELS[d.type]} — {d.year}
+                            </div>
+                            <div className="flex items-center justify-between gap-6">
+                              <span className="text-gray-500">{activeLabel}</span>
+                              <span className="font-semibold text-[#333] tabular-nums">{d.value != null ? `${fmtNum(d.value)} ${trajUnit}` : "—"}</span>
+                            </div>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="value" name={activeLabel} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                      {situationChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartEmpty />
+              )}
+            </div>
+          </div>
+
+          {/* Gains entre situations */}
+          <div className="card-shadow p-6 mt-6">
+            <div className="flex items-center gap-5 mb-6 flex-wrap">
+              <h3 className="text-base font-semibold text-[#111]">Gains entre situations</h3>
+              <p className="text-sm text-gray-500">Écart d'émissions entre chaque situation et sa référence — valeurs positives = réduction</p>
+              <div className="flex gap-5 ml-auto">
+                {Object.entries(GAIN_COLORS).map(([type, color]) => (
+                  <div key={type} className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
+                    {GAIN_LABELS[type]}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="h-[360px]">
+              {gainChartData.length > 0 && gainChartData.some((d) => d.value != null) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={gainChartData} margin={{ top: 24, right: 8, bottom: 40, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
+                    <XAxis
+                      dataKey="label"
+                      tick={({ x, y, payload }) => {
+                        const item = gainChartData.find((d) => d.label === payload.value)
+                        const lines = (payload.value || "").split("\n")
+                        return (
+                          <g transform={`translate(${x},${y})`}>
+                            <text x={0} y={0} dy={12} textAnchor="middle" fill={item ? item.fill : "#C0C0C0"} fontSize={11} fontWeight={600}>
+                              {lines[0] || ""}
+                            </text>
+                            <text x={0} y={0} dy={26} textAnchor="middle" fill="#C0C0C0" fontSize={10}>
+                              {lines[1] || ""}
+                            </text>
+                          </g>
+                        )
+                      }}
+                      interval={0}
+                    />
+                    <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
+                    <ReferenceLine y={0} stroke="#E0E0E0" strokeWidth={1} />
+                    <Tooltip
+                      content={({ active: a, payload }) => {
+                        if (!a || !payload?.length) return null
+                        const d = payload[0]?.payload
+                        if (!d) return null
+                        return (
+                          <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2">
+                            <div className="font-bold text-sm" style={{ color: d.fill }}>
+                              {GAIN_LABELS[d.compType]} — {d.year}
+                            </div>
+                            <div className="flex items-center justify-between gap-6">
+                              <span className="text-gray-500">Gain ({activeLabel})</span>
+                              <span className="font-semibold text-[#333] tabular-nums">{fmtSigned(d.value)} {trajUnit}</span>
+                            </div>
+                            {d.pct != null && (
+                              <div className="flex items-center justify-between gap-6 pt-1 border-t border-gray-100">
+                                <span className="text-gray-400">Variation</span>
+                                <span className="font-bold tabular-nums" style={{ color: d.fill }}>{d.pct >= 0 ? "+" : ""}{d.pct.toFixed(1)}%</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      name="Gain"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={60}
+                      label={({ x, y, width, value, index }) => {
+                        const d = gainChartData[index]
+                        if (d?.pct == null) return null
+                        const pctText = `${d.pct >= 0 ? "+" : ""}${d.pct.toFixed(1)}%`
+                        return (
+                          <text x={x + width / 2} y={value >= 0 ? y - 6 : y + 18} textAnchor="middle" fill={d.fill} fontSize={11} fontWeight={700}>
+                            {pctText}
+                          </text>
+                        )
+                      }}
+                    >
+                      {gainChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartEmpty />
+              )}
+            </div>
+          </div>
           </div>
         )}
       </section>
