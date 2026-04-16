@@ -5,7 +5,7 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus } from "react-icons/fi"
 import Loader from "@/components/loader"
-import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from "recharts"
+import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,64 +39,59 @@ const SITUATION_LABELS = {
   expost: "Ex-post"
 }
 
-/**
- * Build the list of situation bars from the action's year configuration.
- * Returns bars sorted chronologically, each with { label, year, type, dataKey }.
- * Only includes non-interpolated horizons defined by the user.
- */
-function buildSituationBars(action) {
-  const bars = []
+const SITUATION_LABELS_SHORT = {
+  init: "Init.",
+  ref: "Réf.",
+  prev: "Prév.",
+  expost: "Ex-post"
+}
 
-  // 1. Situation initiale
+/**
+ * Build situation groups. Each group = [ref?, main] where `main` is init / ex-post / prév.
+ * Ref bars linked to an ex-post or prév. inherit the linked bar's color.
+ * Groups are sorted chronologically on their main bar's year.
+ */
+function buildSituationGroups(action) {
+  const groups = []
+
   if (action.year_init) {
-    bars.push({ year: action.year_init, type: "init", dataKey: "initiale", label: `Init. ${action.year_init}` })
+    groups.push([{ year: action.year_init, type: "init", dataKey: "initiale" }])
   }
 
-  // 2. Collect all ref/expost pairs from excel_files_expost array, or fallback to single year_expost
   const expostEntries = action.excel_files_expost?.length
     ? action.excel_files_expost.filter((e) => e.year_expost)
     : action.year_expost
       ? [{ year_expost: action.year_expost, year_ref: action.year_ref }]
       : []
 
-  // 3. Collect all ref/prev pairs from exel_files_prev array, or fallback to single year_prev
   const prevEntries = action.exel_files_prev?.length
     ? action.exel_files_prev.filter((e) => e.year_prev)
     : action.year_prev
       ? [{ year_prev: action.year_prev, year_ref: action.year_ref }]
       : []
 
-  // Track which ref years we've already added (to avoid duplicate ref bars)
-  const addedRefYears = new Map() // year -> associated type for label disambiguation
+  expostEntries.forEach((entry) => {
+    const group = []
+    if (entry.year_ref) group.push({ year: entry.year_ref, type: "ref", dataKey: "reference", linkedType: "expost" })
+    group.push({ year: entry.year_expost, type: "expost", dataKey: "expost" })
+    groups.push(group)
+  })
 
-  // Add expost entries (and their refs)
-  for (const entry of expostEntries) {
-    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
-      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}`, forType: "expost", forYear: entry.year_expost })
-      addedRefYears.set(entry.year_ref, "expost")
-    }
-    bars.push({ year: entry.year_expost, type: "expost", dataKey: "expost", label: `Ex-post ${entry.year_expost}` })
+  prevEntries.forEach((entry) => {
+    const group = []
+    if (entry.year_ref) group.push({ year: entry.year_ref, type: "ref", dataKey: "reference", linkedType: "prev" })
+    group.push({ year: entry.year_prev, type: "prev", dataKey: "previsionnelle" })
+    groups.push(group)
+  })
+
+  // Fallback: lone year_ref with no expost/prev entries
+  const hasRef = groups.some((g) => g.some((b) => b.type === "ref"))
+  if (!hasRef && action.year_ref) {
+    groups.push([{ year: action.year_ref, type: "ref", dataKey: "reference" }])
   }
 
-  // Add prev entries (and their refs)
-  for (const entry of prevEntries) {
-    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
-      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}`, forType: "prev", forYear: entry.year_prev })
-      addedRefYears.set(entry.year_ref, "prev")
-    }
-    bars.push({ year: entry.year_prev, type: "prev", dataKey: "previsionnelle", label: `Prév. ${entry.year_prev}` })
-  }
-
-  // If no specific entries but we have year_ref alone, add it
-  if (!addedRefYears.size && action.year_ref) {
-    bars.push({ year: action.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${action.year_ref}` })
-  }
-
-  // Sort chronologically, with type ordering as tiebreaker: init < ref < expost < prev
-  const typeOrder = { init: 0, ref: 1, expost: 2, prev: 3 }
-  bars.sort((a, b) => a.year - b.year || typeOrder[a.type] - typeOrder[b.type])
-
-  return bars
+  groups.sort((a, b) => a[a.length - 1].year - b[b.length - 1].year)
+  return groups
 }
 
 const GAIN_COLORS = {
@@ -454,16 +449,31 @@ export default function Dashboard({ action }) {
 
   // ── Derived: section 01 émissions par situation ──────────────────────────
 
-  const situationBars = buildSituationBars(action)
-  const situationChartData = situationBars.map((bar) => {
+  const situationGroups = buildSituationGroups(action)
+  const hydrateBar = (bar) => {
     const yearRow = trajByYear.get(bar.year)
     const value = yearRow ? yearRow[bar.dataKey] : null
-    return { ...bar, value, fill: SITUATION_COLORS[bar.type] }
+    const fill = bar.type === "ref" && bar.linkedType ? SITUATION_COLORS[bar.linkedType] : SITUATION_COLORS[bar.type]
+    return { ...bar, value, fill }
+  }
+  // Each chart row = one group (a category with up to 2 bars that touch via barGap=0)
+  const situationChartData = situationGroups.map((group, gi) => {
+    const hydrated = group.map(hydrateBar)
+    const [b0, b1] = hydrated
+    return {
+      groupId: `g${gi}`,
+      leftBar: b1 ? b0 : null,
+      rightBar: b1 || b0,
+      leftValue: b1 ? b0?.value ?? null : null,
+      rightValue: (b1 || b0)?.value ?? null
+    }
   })
+  const situationBarsFlat = situationGroups.flat().map(hydrateBar)
+  const hasSituationValues = situationBarsFlat.some((d) => d.value != null && d.value !== 0)
 
   // ── Derived: section 01 gains par situation ────────────────────────────────
 
-  const gainChartData = buildGainBars(action, situationChartData)
+  const gainChartData = buildGainBars(action, situationBarsFlat)
 
   // ── Derived: section 02 (niveaux d'émissions absolus) ───────────────────
 
@@ -767,21 +777,42 @@ export default function Dashboard({ action }) {
               </div>
             </div>
             <div className="h-[360px]">
-              {situationChartData.length > 0 && situationChartData.some((d) => d.value != null && d.value !== 0) ? (
+              {hasSituationValues ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={situationChartData} margin={{ top: 4, right: 8, bottom: 40, left: 0 }}>
+                  <ComposedChart data={situationChartData} margin={{ top: 4, right: 8, bottom: 48, left: 0 }} barCategoryGap="30%" barGap={1.5}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
                     <XAxis
-                      dataKey="label"
+                      dataKey="groupId"
                       tick={({ x, y, payload }) => {
-                        const item = situationChartData.find((d) => d.label === payload.value)
+                        const item = situationChartData.find((d) => d.groupId === payload.value)
+                        if (!item) return <g />
+                        const hasPair = !!item.leftBar
+                        if (hasPair) {
+                          const leftLabel = SITUATION_LABELS_SHORT[item.leftBar.type] || ""
+                          const rightLabel = SITUATION_LABELS_SHORT[item.rightBar.type] || ""
+                          const year = item.rightBar.year || item.leftBar.year || ""
+                          return (
+                            <g transform={`translate(${x},${y})`}>
+                              <text x={0} y={0} dy={14} textAnchor="middle" fontSize={13} fontWeight={500}>
+                                <tspan fill={item.leftBar.fill || SITUATION_COLORS[item.leftBar.type]}>{leftLabel}</tspan>
+                                <tspan fill="#999"> / </tspan>
+                                <tspan fill={item.rightBar.fill || SITUATION_COLORS[item.rightBar.type]}>{rightLabel}</tspan>
+                              </text>
+                              <text x={0} y={0} dy={32} textAnchor="middle" fill="#333" fontSize={14} fontWeight={600}>
+                                {year}
+                              </text>
+                            </g>
+                          )
+                        }
+                        const bar = item.rightBar
+                        const labelColor = bar.fill || SITUATION_COLORS[bar.type] || "#C0C0C0"
                         return (
                           <g transform={`translate(${x},${y})`}>
-                            <text x={0} y={0} dy={12} textAnchor="middle" fill={item ? SITUATION_COLORS[item.type] : "#C0C0C0"} fontSize={11} fontWeight={600}>
-                              {SITUATION_LABELS[item?.type] || ""}
+                            <text x={0} y={0} dy={14} textAnchor="middle" fill={labelColor} fontSize={13} fontWeight={500}>
+                              {SITUATION_LABELS[bar.type] || ""}
                             </text>
-                            <text x={0} y={0} dy={26} textAnchor="middle" fill="#C0C0C0" fontSize={10}>
-                              {item?.year || ""}
+                            <text x={0} y={0} dy={32} textAnchor="middle" fill="#333" fontSize={14} fontWeight={600}>
+                              {bar.year || ""}
                             </text>
                           </g>
                         )
@@ -790,26 +821,38 @@ export default function Dashboard({ action }) {
                     />
                     <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
                     <Tooltip
+                      cursor={{ fill: "rgba(0,0,0,0.02)" }}
                       content={({ active: a, payload }) => {
                         if (!a || !payload?.length) return null
-                        const d = payload[0]?.payload
-                        if (!d) return null
+                        const row = payload[0]?.payload
+                        if (!row) return null
+                        const bars = [row.leftBar, row.rightBar].filter(Boolean)
+                        if (!bars.length) return null
                         return (
-                          <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2">
-                            <div className="font-bold text-sm" style={{ color: SITUATION_COLORS[d.type] }}>
-                              {SITUATION_LABELS[d.type]} — {d.year}
-                            </div>
-                            <div className="flex items-center justify-between gap-6">
-                              <span className="text-gray-500">{activeLabel}</span>
-                              <span className="font-semibold text-[#333] tabular-nums">{d.value != null ? `${fmtNum(d.value)} ${trajUnit}` : "—"}</span>
-                            </div>
+                          <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-3">
+                            {bars.map((b, i) => (
+                              <div key={i} className="space-y-1">
+                                <div className="font-bold text-sm" style={{ color: b.fill || SITUATION_COLORS[b.type] }}>
+                                  {SITUATION_LABELS[b.type]} — {b.year}
+                                </div>
+                                <div className="flex items-center justify-between gap-6">
+                                  <span className="text-gray-500">{activeLabel}</span>
+                                  <span className="font-semibold text-[#333] tabular-nums">{b.value != null ? `${fmtNum(b.value)} ${trajUnit}` : "—"}</span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )
                       }}
                     />
-                    <Bar dataKey="value" name={activeLabel} radius={[4, 4, 0, 0]} maxBarSize={60}>
+                    <Bar dataKey="leftValue" name={activeLabel} radius={[4, 4, 0, 0]} maxBarSize={36}>
                       {situationChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
+                        <Cell key={i} fill={entry.leftBar?.fill || "transparent"} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="rightValue" name={activeLabel} radius={[4, 4, 0, 0]} maxBarSize={36}>
+                      {situationChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.rightBar?.fill || "transparent"} />
                       ))}
                     </Bar>
                   </ComposedChart>
@@ -846,10 +889,10 @@ export default function Dashboard({ action }) {
                         const lines = (payload.value || "").split("\n")
                         return (
                           <g transform={`translate(${x},${y})`}>
-                            <text x={0} y={0} dy={12} textAnchor="middle" fill={item ? item.fill : "#C0C0C0"} fontSize={11} fontWeight={600}>
+                            <text x={0} y={0} dy={14} textAnchor="middle" fill={item ? item.fill : "#C0C0C0"} fontSize={13} fontWeight={500}>
                               {lines[0] || ""}
                             </text>
-                            <text x={0} y={0} dy={26} textAnchor="middle" fill="#C0C0C0" fontSize={10}>
+                            <text x={0} y={0} dy={32} textAnchor="middle" fill="#333" fontSize={14} fontWeight={600}>
                               {lines[1] || ""}
                             </text>
                           </g>

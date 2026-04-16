@@ -4,6 +4,7 @@ import api from "@/services/api";
 import toast from "react-hot-toast";
 
 import Dashboard from "./dashboard";
+import ParentDashboard from "./parent-dashboard";
 import Completion from "./completion/index";
 import Settings from "./settings";
 
@@ -32,6 +33,7 @@ export default function Index() {
   return (
     <Routes>
       <Route path="/dashboard" element={<Dashboard action={action} />} />
+      <Route path="/parent-dashboard" element={<ParentDashboard action={action} />} />
       <Route path="/completion" element={<Completion action={action} />} />
       <Route path="/settings" element={<Settings action={action}  onSave={fetchAction}/>} />
     </Routes>

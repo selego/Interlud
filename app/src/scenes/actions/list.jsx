@@ -85,7 +85,7 @@ export default function List() {
               return groups;
             }, {})
           ).flatMap(([parentName, children]) => [
-            <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/dashboard`)}>
+            <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}>
               <td colSpan={5} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
             </tr>,
             ...children.map((action) => (
