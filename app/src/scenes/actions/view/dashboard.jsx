@@ -138,7 +138,7 @@ function buildGainBars(action, situationChartData) {
     if (refVal != null) {
       const gain = refVal - initVal
       const pct = initVal !== 0 ? (gain / initVal) * 100 : null
-      gains.push({ label: `Réf. vs Init.\n${refYears[0]}`, value: gain, pct, compType: "refInit", year: refYears[0], fill: GAIN_COLORS.refInit })
+      gains.push({ label: `Réf. vs Init.\n${refYears[0]}`, value: gain, displayValue: -gain, pct, compType: "refInit", year: refYears[0], fill: GAIN_COLORS.refInit })
     }
   }
 
@@ -149,7 +149,7 @@ function buildGainBars(action, situationChartData) {
     if (refVal != null && expostVal != null) {
       const gain = expostVal - refVal
       const pct = refVal !== 0 ? (gain / refVal) * 100 : null
-      gains.push({ label: `Ex-post vs Réf.\n${entry.year_expost}`, value: gain, pct, compType: "expostRef", year: entry.year_expost, fill: GAIN_COLORS.expostRef })
+      gains.push({ label: `Ex-post vs Réf.\n${entry.year_expost}`, value: gain, displayValue: -gain, pct, compType: "expostRef", year: entry.year_expost, fill: GAIN_COLORS.expostRef })
     }
   }
 
@@ -160,20 +160,20 @@ function buildGainBars(action, situationChartData) {
     if (refVal != null && prevVal != null) {
       const gain = prevVal - refVal
       const pct = refVal !== 0 ? (gain / refVal) * 100 : null
-      gains.push({ label: `Prév. vs Réf.\n${entry.year_prev}`, value: gain, pct, compType: "prevRef", year: entry.year_prev, fill: GAIN_COLORS.prevRef })
+      gains.push({ label: `Prév. vs Réf.\n${entry.year_prev}`, value: gain, displayValue: -gain, pct, compType: "prevRef", year: entry.year_prev, fill: GAIN_COLORS.prevRef })
     }
   }
 
   // Expost vs Prev — convention Excel : expost - prev
   for (const exEntry of expostEntries) {
     const expostVal = getVal("expost", exEntry.year_expost)
-    const matchingPrev = prevEntries.find((p) => p.year_prev === exEntry.year_expost) || prevEntries[0]
+    const matchingPrev = prevEntries.find((p) => p.year_prev === exEntry.year_expost)
     if (matchingPrev) {
       const prevVal = getVal("prev", matchingPrev.year_prev)
       if (expostVal != null && prevVal != null) {
         const gain = expostVal - prevVal
         const pct = prevVal !== 0 ? (gain / prevVal) * 100 : null
-        gains.push({ label: `Ex-post vs Prév.\n${exEntry.year_expost}`, value: gain, pct, compType: "expostPrev", year: exEntry.year_expost, fill: GAIN_COLORS.expostPrev })
+        gains.push({ label: `Ex-post vs Prév.\n${exEntry.year_expost}`, value: gain, displayValue: -gain, pct, compType: "expostPrev", year: exEntry.year_expost, fill: GAIN_COLORS.expostPrev })
       }
     }
   }
@@ -893,7 +893,7 @@ export default function Dashboard({ action }) {
                               <>
                                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#6B7280" strokeWidth={1.5} strokeDasharray="5 4" />
                                 <rect x={badgeX - 36} y={badgeY - 12} width={72} height={22} rx={6} fill="white" stroke="#E5E7EB" strokeWidth={1} filter="url(#gainShadow)" />
-                                <text x={badgeX} y={badgeY + 2} textAnchor="middle" fontSize={11} fontWeight={700} fill={gain < 0 ? "#059669" : "#EF4444"}>
+                                <text x={badgeX} y={badgeY + 2} textAnchor="middle" fontSize={11} fontWeight={700} fill={gain > 0 ? "#2DAC6A" : "#E24B4A"}>
                                   {gain > 0 ? "+" : "-"}{fmtNum(Math.abs(gain))}
                                 </text>
                               </>
@@ -929,7 +929,7 @@ export default function Dashboard({ action }) {
               </div>
             </div>
             <div className="h-[360px]">
-              {gainChartData.length > 0 && gainChartData.some((d) => d.value != null) ? (
+              {gainChartData.length > 0 && gainChartData.some((d) => d.displayValue != null) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={gainChartData} margin={{ top: 24, right: 8, bottom: 40, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
@@ -978,7 +978,7 @@ export default function Dashboard({ action }) {
                       }}
                     />
                     <Bar
-                      dataKey="value"
+                      dataKey="displayValue"
                       name="Gain"
                       radius={[4, 4, 0, 0]}
                       maxBarSize={60}
@@ -987,7 +987,7 @@ export default function Dashboard({ action }) {
                         if (d?.pct == null) return null
                         const pctText = `${d.pct >= 0 ? "+" : ""}${d.pct.toFixed(1)}%`
                         return (
-                          <text x={x + width / 2} y={value >= 0 ? y - 6 : y + 18} textAnchor="middle" fill={d.fill} fontSize={11} fontWeight={700}>
+                          <text x={x + width / 2} y={value >= 0 ? y - 6 : y + 18} textAnchor="middle" fill={d.pct >= 0 ? "#2DAC6A" : "#E24B4A"} fontSize={11} fontWeight={700}>
                             {pctText}
                           </text>
                         )

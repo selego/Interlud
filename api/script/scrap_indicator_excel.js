@@ -814,6 +814,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             indicator_sub_category_name: subCategory?.name,
             name: row[2] || undefined,
             description: row[3] || undefined,
+            is_primordial: row[14] === true || row[14] === "VRAI",
             value_possibilities:
               row[6] !== undefined && row[6] !== ""
                 ? String(row[6])
@@ -843,6 +844,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             "value_type",
             "linked_action_id",
             "linked_action_name",
+            "is_primordial",
             "presence_in_excel",
             "display_condition",
           ];
@@ -904,6 +906,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               indicator_sub_category_id: newData.indicator_sub_category_id?.toString(),
               indicator_sub_category_name: newData.indicator_sub_category_name,
               indicator_value_unit: newData.value_unit,
+              is_primordial: newData.is_primordial,
               excel_line_number: excelRowNumber,
               display_condition: display_condition_for_situation,
             },
@@ -922,6 +925,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             indicator_sub_category_name: subCategory?.name,
             name: row[2] || undefined,
             description: row[3] || undefined,
+            is_primordial: row[14] === true || row[14] === "VRAI",
             excel_indicator_id: row[4] || undefined,
             value_possibilities:
               row[6] !== undefined && row[6] !== ""
@@ -1154,6 +1158,7 @@ async function syncIndicatorsToExistingActions() {
           year,
           excel_line_number: indicator.excel_line_number?.[situation],
           indicator_value_unit: indicator.value_unit,
+          is_primordial: indicator.is_primordial || false,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_category_id: indicator.indicator_category_id,
@@ -1230,6 +1235,7 @@ async function syncIndicatorsToExistingActions() {
           situation,
           year,
           indicator_value_unit: indicator.value_unit,
+          is_primordial: indicator.is_primordial || false,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_category_id: indicator.indicator_category_id,
@@ -1289,7 +1295,7 @@ async function generateExcelForAllCollectivities() {
   const versionMatch = masterFile.name.replace(".xlsx", "").match(/_V(\d+)$/);
   const versionSuffix = versionMatch ? `_V${versionMatch[1]}` : "";
 
-  const collectivities = await Collectivity.find({ name: "Test3" });
+  const collectivities = await Collectivity.find({ name: "Test Aggregation" });
   console.log(`📋 ${collectivities.length} collectivités trouvées (master: ${masterFile.name})`);
 
   let totalFiles = 0;
