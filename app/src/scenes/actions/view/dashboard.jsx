@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
@@ -382,6 +382,8 @@ export default function Dashboard({ action }) {
   useEffect(() => {
     load()
   }, [collectivity, action])
+
+  const leftBarPositions = useRef({})
 
   // Guard clauses
   if (!canRead)
@@ -779,7 +781,12 @@ export default function Dashboard({ action }) {
             <div className="h-[360px]">
               {hasSituationValues ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={situationChartData} margin={{ top: 4, right: 8, bottom: 48, left: 0 }} barCategoryGap="30%" barGap={1.5}>
+                  <ComposedChart data={situationChartData} margin={{ top: 36, right: 8, bottom: 48, left: 0 }} barCategoryGap="30%" barGap={1.5}>
+                    <defs>
+                      <filter id="gainShadow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.08" />
+                      </filter>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
                     <XAxis
                       dataKey="groupId"
@@ -845,12 +852,56 @@ export default function Dashboard({ action }) {
                         )
                       }}
                     />
-                    <Bar dataKey="leftValue" name={activeLabel} radius={[4, 4, 0, 0]} maxBarSize={36}>
+                    <Bar
+                      dataKey="leftValue"
+                      name={activeLabel}
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={36}
+                      shape={(props) => {
+                        const { x, y, width, height, index, fill } = props
+                        leftBarPositions.current[index] = { x: x + width / 2, y }
+                        return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />
+                      }}
+                    >
                       {situationChartData.map((entry, i) => (
                         <Cell key={i} fill={entry.leftBar?.fill || "transparent"} />
                       ))}
                     </Bar>
-                    <Bar dataKey="rightValue" name={activeLabel} radius={[4, 4, 0, 0]} maxBarSize={36}>
+                    <Bar
+                      dataKey="rightValue"
+                      name={activeLabel}
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={36}
+                      shape={(props) => {
+                        const { x, y, width, height, index, fill } = props
+                        const entry = situationChartData[index]
+                        const left = leftBarPositions.current[index]
+                        const hasGain = left && entry?.leftValue != null && entry?.rightValue != null
+                        const gain = hasGain ? entry.rightValue - entry.leftValue : 0
+                        const x1 = left?.x ?? 0
+                        const y1 = left?.y ?? 0
+                        const x2 = x + width / 2
+                        const y2 = y
+                        const lineMidX = (x1 + x2) / 2
+                        const lineMidY = (y1 + y2) / 2
+                        const badgeX = lineMidX - 20
+                        const badgeY = lineMidY - 24
+                        return (
+                          <g>
+                            <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />
+                            {hasGain && Math.abs(gain) > 0 && (
+                              <>
+                                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#6B7280" strokeWidth={1.5} strokeDasharray="5 4" />
+                                <rect x={badgeX - 36} y={badgeY - 12} width={72} height={22} rx={6} fill="white" stroke="#E5E7EB" strokeWidth={1} filter="url(#gainShadow)" />
+                                <text x={badgeX} y={badgeY + 2} textAnchor="middle" fontSize={11} fontWeight={700} fill={gain < 0 ? "#059669" : "#EF4444"}>
+                                  {gain > 0 ? "+" : "-"}{fmtNum(Math.abs(gain))}
+                                </text>
+                              </>
+                            )}
+                          </g>
+                        )
+                      }}
+                    >
                       {situationChartData.map((entry, i) => (
                         <Cell key={i} fill={entry.rightBar?.fill || "transparent"} />
                       ))}
