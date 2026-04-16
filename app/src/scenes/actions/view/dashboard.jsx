@@ -770,7 +770,7 @@ export default function Dashboard({ action }) {
             <div className="flex items-center gap-5 mb-6 flex-wrap">
               <h3 className="text-base font-semibold text-[#111]">Émissions par situation</h3>
               <div className="flex gap-5 ml-auto">
-                {Object.entries(SITUATION_COLORS).map(([type, color]) => (
+                {Object.entries(SITUATION_COLORS).filter(([type]) => type !== "ref").map(([type, color]) => (
                   <div key={type} className="flex items-center gap-1.5 text-xs text-gray-500">
                     <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
                     {SITUATION_LABELS[type]}
