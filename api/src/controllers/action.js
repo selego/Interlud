@@ -839,7 +839,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
       if (configActionBasicData) {
         const existingBasicIVs = await IndicatorValue.find({ action_id: configActionBasicData._id, situation: { $in: ['ref', 'prev'] }, year: year_prev });
         for (const iv of existingBasicIVs) {
-          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+          if (iv.indicator_excel_id && !['ActionsCharte', 'ActionsAutres'].includes(iv.indicator_excel_id) && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
             basicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
           }
         }
@@ -1101,7 +1101,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
       if (configActionBasicData) {
         const existingBasicIVs = await IndicatorValue.find({ action_id: configActionBasicData._id, situation: { $in: ['ref', 'expost'] }, year: year_expost });
         for (const iv of existingBasicIVs) {
-          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+          if (iv.indicator_excel_id && !['ActionsCharte', 'ActionsAutres'].includes(iv.indicator_excel_id) && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
             basicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
           }
         }
