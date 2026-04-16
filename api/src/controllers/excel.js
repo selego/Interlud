@@ -166,13 +166,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     let { collectivity, action, date_start, date_end } = req.body;
     if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
-    const instanceOffset = INSTANCE_COL_OFFSET[action.instance_number || 1] || INSTANCE_COL_OFFSET[1];
-    const endCol = INSTANCE_END_COL[action.instance_number || 1] || INSTANCE_END_COL[1];
-    const wsName = action.excel_worksheetname;
-
-    const yearStart = date_start ? new Date(date_start).getFullYear() : null;
-    const yearEnd = date_end ? new Date(date_end).getFullYear() : null;
-    const isEconomicActor = req.user?.role === 'economic_actor' || action.owner === 'economic_actor';
+    const instanceOffset = action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number || 1] || INSTANCE_COL_OFFSET[1];
+    const isEconomicActor = action.type !== 'global' && (req.user?.role === 'economic_actor' || action.owner === 'economic_actor');
     let aggregationFileId = null;
 
     if (isEconomicActor) {
@@ -190,17 +185,18 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 
     if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
 
-    if (!ACTION_GAINS_RANGES[wsName]) return res.json({ ok: false, data: { error: `Action '${wsName}' not found in gains configuration` } });
+    if (!ACTION_GAINS_RANGES[action.excel_worksheetname]) return res.json({ ok: false, data: { error: `Action '${action.excel_worksheetname}' not found in gains configuration` } });
 
     const siteId = await getSiteId();
-
-    // Fetch both worksheets in parallel
-    const gainsRange = `A${ACTION_GAINS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[wsName].dataStartRow + 50}`;
-    const emRange = `A${ACTION_EMISSIONS_RANGES[wsName].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[wsName].dataStartRow + 50}`;
+    const endCol = action.type === 'global' ? 'AH' : INSTANCE_END_COL[action.instance_number || 1] || INSTANCE_END_COL[1];
 
     const [gainsResult, emResult] = await Promise.all([
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='${gainsRange}')`),
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='${emRange}')`),
+      graphFetch(
+        `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[action.excel_worksheetname].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[action.excel_worksheetname].dataStartRow + 50}')`,
+      ),
+      graphFetch(
+        `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[action.excel_worksheetname].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[action.excel_worksheetname].dataStartRow + 50}')`,
+      ),
     ]);
 
     const gainsValues = gainsResult?.values || [];
@@ -218,8 +214,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
       if (!year || year < 2000 || year > 2100) continue;
       if (year < gainsLastYear) break;
       gainsLastYear = year;
-      if (yearStart && year < yearStart) continue;
-      if (yearEnd && year > yearEnd) continue;
+      if (date_start && year < new Date(date_start).getFullYear()) continue;
+      if (date_end && year > new Date(date_end).getFullYear()) continue;
       gainsYearRows.push({ year, row: gainsValues[i] });
     }
 
@@ -262,8 +258,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
       if (!year || year < 2000 || year > 2100) continue;
       if (year < emLastYear) break;
       emLastYear = year;
-      if (yearStart && year < yearStart) continue;
-      if (yearEnd && year > yearEnd) continue;
+      if (date_start && year < new Date(date_start).getFullYear()) continue;
+      if (date_end && year > new Date(date_end).getFullYear()) continue;
       emYearRows.push({ year, row: emValues[i] });
     }
 

@@ -77,15 +77,27 @@ export default function List() {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {actions.map((action) => (
-            <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
-              <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{ action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{ action.date_end ? new Date(action.date_end).toLocaleDateString() : "-"}</td>
-            </tr>
-          ))}
+          {Object.entries(
+            actions.reduce((groups, action) => {
+              const parent = action.action_parent_name || "Autre";
+              if (!groups[parent]) groups[parent] = [];
+              groups[parent].push(action);
+              return groups;
+            }, {})
+          ).flatMap(([parentName, children]) => [
+            <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}>
+              <td colSpan={5} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
+            </tr>,
+            ...children.map((action) => (
+              <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
+                <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.date_end ? new Date(action.date_end).toLocaleDateString() : "-"}</td>
+              </tr>
+            )),
+          ])}
         </tbody>
       </table>
       <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
