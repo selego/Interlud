@@ -8,54 +8,78 @@ import toast from "react-hot-toast"
 export default function List() {
   const navigate = useNavigate()
   const [collectivities, setCollectivities] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [search, setSearch] = useState("")
 
   const fetchCollectivities = async () => {
     try {
-      const { ok, data } = await api.post("/collectivity/search")
-      if (!ok) return toast.error(data.code || "Une erreur est survenue")
+      const { ok, data, code, total } = await api.post("/collectivity/search", {search: search || undefined,limit: 50, offset: page * 50, sortBy: "action_count", sortOrder: "desc"})
+      if (!ok) return toast.error(code || "Une erreur est survenue")
       setCollectivities(data)
+      setTotal(total)
     } catch (error) {
-      toast.error(error || "Une erreur est survenue")
+      toast.error(error.code || "Une erreur est survenue")
     }
-  };
+  }
 
   useEffect(() => {
     fetchCollectivities()
-  }, [])
+  }, [page, search])
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="button-primary"
-        >
-          Ajouter
-        </button>
+        <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
+        <div className="flex items-center gap-4">
+          <input
+            type="text"
+            placeholder="Rechercher..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent"
+          />
+          <button onClick={() => setIsModalOpen(true)} className="button-primary">
+            Ajouter
+          </button>
+        </div>
       </div>
-      
+
       <table className="w-full overflow-hidden card-shadow">
         <thead className="bg-gray-100">
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Population</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Department</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Département</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nombre d'actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {collectivities.map((collectivity) => (
             <tr key={collectivity._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/collectivity/${collectivity._id}`)}>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{collectivity.name}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.description}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.population}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{collectivity.department}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{collectivity.action_count || 0}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {Math.ceil(total / 50) > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-sm text-gray-600">{total} collectivités</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage(page - 1)} disabled={page === 0} className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+              Précédent
+            </button>
+            <span className="text-sm text-gray-600">{page + 1} / {Math.ceil(total / 50)}</span>
+            <button onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(total / 50) - 1} className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
+
       <AddCollectivityModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )

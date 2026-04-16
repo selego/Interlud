@@ -77,15 +77,27 @@ export default function List() {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {actions.map((action) => (
-            <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
-              <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{ action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>
-              <td className="px-6 py-4 text-sm text-gray-600">{ action.date_end ? new Date(action.date_end).toLocaleDateString() : "-"}</td>
-            </tr>
-          ))}
+          {Object.entries(
+            actions.reduce((groups, action) => {
+              const parent = action.action_parent_name || "Autre";
+              if (!groups[parent]) groups[parent] = [];
+              groups[parent].push(action);
+              return groups;
+            }, {})
+          ).flatMap(([parentName, children]) => [
+            <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}>
+              <td colSpan={5} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
+            </tr>,
+            ...children.map((action) => (
+              <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
+                <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.date_end ? new Date(action.date_end).toLocaleDateString() : "-"}</td>
+              </tr>
+            )),
+          ])}
         </tbody>
       </table>
       <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
@@ -104,6 +116,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
     const [year,setYear] = useState( { init: null, prev: null, expost: null })
     const [isLoading, setIsLoading] = useState(false)
+    const [loadingSeconds, setLoadingSeconds] = useState(0)
     const [createdActionId, setCreatedActionId] = useState(null)
     const fetchActions = async () => {
       try {
@@ -119,9 +132,16 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         fetchActions()
     }, [isOpen])
 
+    useEffect(() => {
+      if (!isLoading) { setLoadingSeconds(0); return }
+      const interval = setInterval(() => setLoadingSeconds((s) => s + 1), 1000)
+      return () => clearInterval(interval)
+    }, [isLoading])
+
     const createAction = async () => {
       try {
         setIsLoading(true)
+        setLoadingSeconds(0)
         if (!collectivity?._id) return toast.error("Collectivité non trouvée")
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
@@ -149,7 +169,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (!ok) return toast.error(code || "Une erreur est survenue")
         setCreatedActionId(data._id)
       } catch (error) {
-        toast.error(error.message || "Une erreur est survenue")
+        toast.error(error.code || "Une erreur est survenue")
       } finally {
         setIsLoading(false)
       }
@@ -193,8 +213,34 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         </div>
 
         {isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+          <div className="flex flex-col items-center justify-center py-10 gap-5">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-primary-green border-t-transparent animate-spin"></div>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-gray-800 mb-1">Création en cours...</p>
+              <p className="text-sm text-gray-500 mb-3">
+                {loadingSeconds < 10
+                  ? "Préparation des fichiers des indicateurs"
+                  : loadingSeconds < 25
+                  ? "Préparation des moteurs de calcul"
+                  : loadingSeconds < 40
+                  ? "Génerations des valeurs par défaut"
+                  : loadingSeconds < 60
+                  ? "Application des valeurs par défaut"
+                  : loadingSeconds < 80
+                  ? "Création du dashboard"
+                  : loadingSeconds < 100
+                  ? "Finalisation de la création"
+                  : loadingSeconds < 120
+                  ? "Finalisation et vérification des résultats"
+                  : "Finalisation de la création"}
+              </p>
+              <p className="text-xs text-gray-400">
+                Cette opération peut prendre plusieurs minutes
+              </p>
+            </div>
           </div>
         )}
         {!isLoading && (

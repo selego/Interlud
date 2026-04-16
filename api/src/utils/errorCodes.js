@@ -19,6 +19,7 @@ const ERROR_CODES = {
   INDICATOR_ALREADY_EXISTS: 'Indicateur déjà existant',
   FORBIDDEN: 'Accès refusé',
   COLLECTIVITY_ALREADY_EXISTS: 'Collectivité déjà existante',
+  MAX_INSTANCES_REACHED: "Nombre maximum d'instances atteint",
 };
 
 module.exports = ERROR_CODES;

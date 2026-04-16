@@ -26,7 +26,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const query = {};
-    if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
+    if (req.body.collectivity_id) query['collectivities.id'] = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) {
       query.$or = [{ name: { $regex: req.body.search, $options: 'i' } }, { description: { $regex: req.body.search, $options: 'i' } }];
@@ -73,7 +73,10 @@ router.put('/:id/add_collectivity', passport.authenticate(['admin', 'user'], { s
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const newCollectivity = { id: req.body.collectivity_id, name: req.body.collectivity_name, joined_at: new Date() };
+    const AGGREGATION_TEMPLATE_FILE_ID = '01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV';
+    const aggregation_excel_file_id = await duplicateExcelFile(`${actor.name} - ${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, AGGREGATION_TEMPLATE_FILE_ID);
+
+    const newCollectivity = { id: req.body.collectivity_id, name: req.body.collectivity_name, joined_at: new Date(), aggregation_excel_file_id };
     actor.collectivities = [...(actor.collectivities || []), newCollectivity];
     await actor.save();
 

@@ -8,7 +8,8 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues } = require('../services/microsoftGraph');
+const EconomicActor = require('../models/economic_actor');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues, createFolder } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -124,33 +125,62 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    if (!collectivity.sharepoint_folder_id) {
+      collectivity.sharepoint_folder_id = await createFolder(collectivity.name);
+      const AGGREGATION_TEMPLATE_FILE_ID = '01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV';
+      collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, AGGREGATION_TEMPLATE_FILE_ID);
+      await collectivity.save();
+    }
+
     const isEconomicActor = req.body.owner === 'economic_actor' && req.body.economic_actor_id;
-    const existingActionSameYear = await Action.findOne({
+
+    // Compute instance_number for this action
+    const instanceQuery = {
+      action_parent_id: req.body.action_parent_id,
+      collectivity_id: collectivity._id.toString(),
+      owner: isEconomicActor ? 'economic_actor' : 'collectivity',
+      type: { $ne: 'config' },
+      ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
+    };
+    const existingInstances = await Action.find(instanceQuery);
+    const usedNumbers = existingInstances.map((a) => a.instance_number || 1);
+    let instance_number = 1;
+    while (usedNumbers.includes(instance_number)) instance_number++;
+    if (instance_number > 3) return res.status(400).send({ ok: false, code: ERROR_CODES.MAX_INSTANCES_REACHED });
+
+    const existingActionSameYearQuery = {
       collectivity_id: collectivity._id,
       year_init: req.body.year_init,
       owner: isEconomicActor ? 'economic_actor' : 'collectivity',
       ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}),
-      'exel_files_prev.0.excel_file_id': { $exists: true },
-    });
+    };
+    const [existingActionPrev, existingActionExpost] = await Promise.all([
+      Action.findOne({ ...existingActionSameYearQuery, 'exel_files_prev.0.excel_file_id': { $exists: true } }),
+      Action.findOne({ ...existingActionSameYearQuery, 'excel_files_expost.0.excel_file_id': { $exists: true } }),
+    ]);
 
     // Créer 2 fichiers Excel : un pour prev, un pour expost
-    const sourceExcelId = existingActionSameYear?.exel_files_prev?.[0]?.excel_file_id || null;
-    const excelFileNamePrev = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}_Prev${req.body.year_prev}.xlsx`;
-    const excelFileNameExpost = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}_Expost${req.body.year_expost}.xlsx` : `${req.body.name}_Expost${req.body.year_expost}.xlsx`;
-    const [excelFileIdPrev, excelFileIdExpost] = await Promise.all([
-      duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelId),
-      duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelId),
-    ]);
+    const sourceExcelIdPrev = existingActionPrev?.exel_files_prev?.[0]?.excel_file_id || null;
+    const sourceExcelIdExpost = existingActionExpost?.excel_files_expost?.[0]?.excel_file_id || null;
+    const instanceSuffix = instance_number > 1 ? `_${instance_number}` : '';
+    const excelFileNamePrev = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}${instanceSuffix}_Prev${req.body.year_prev}.xlsx` : `${req.body.name}${instanceSuffix}_Prev${req.body.year_prev}.xlsx`;
+    const excelFileNameExpost = isEconomicActor ? `${req.body.economic_actor_name}_${req.body.name}${instanceSuffix}_Expost${req.body.year_expost}.xlsx` : `${req.body.name}${instanceSuffix}_Expost${req.body.year_expost}.xlsx`;
+    const [excelFileIdPrev, excelFileIdExpost] = await Promise.all([duplicateExcelFile(excelFileNamePrev, collectivity.sharepoint_folder_id, sourceExcelIdPrev), duplicateExcelFile(excelFileNameExpost, collectivity.sharepoint_folder_id, sourceExcelIdExpost)]);
 
     // Nettoyer les sheets inutiles dans chaque fichier
-    await Promise.all([
-      clearWorksheetValues(excelFileIdPrev, 'expost'),
-      clearWorksheetValues(excelFileIdExpost, 'prev'),
-    ]);
+    await Promise.all([clearWorksheetValues(excelFileIdPrev, 'expost'), clearWorksheetValues(excelFileIdExpost, 'prev')]);
+
+    // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne action)
+    const clearUpdates = (await Indicator.find({ linked_action_id: parentAction._id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
+    if (clearUpdates.length > 0) {
+      await Promise.all([...['init', 'ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileIdPrev, clearUpdates, s).catch(capture)), ...['init', 'ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileIdExpost, clearUpdates, s).catch(capture))]);
+    }
 
     // Créer l'action
     const action = await Action.create({
       ...req.body,
+      instance_number,
       excel_worksheetname: parentAction.excel_worksheetname,
       exel_files_prev: [{ year_prev: req.body.year_prev, year_ref: req.body.year_prev, excel_file_id: excelFileIdPrev }],
       excel_files_expost: [{ year_expost: req.body.year_expost, year_ref: req.body.year_expost, excel_file_id: excelFileIdExpost }],
@@ -163,10 +193,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     // Vérifier si les actions config existent déjà
     const configQuery = { collectivity_id: collectivity._id, type: 'config', owner: isEconomicActor ? 'economic_actor' : 'collectivity', ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id } : {}) };
-    let [configActionBasicDataObj, configActionParcTypesObj] = await Promise.all([
-      Action.findOne({ ...configQuery, name: 'Données de base' }),
-      Action.findOne({ ...configQuery, name: 'Parc types' }),
-    ]);
+    let [configActionBasicDataObj, configActionParcTypesObj] = await Promise.all([Action.findOne({ ...configQuery, name: 'Données de base' }), Action.findOne({ ...configQuery, name: 'Parc types' })]);
 
     // Créer les actions config si elles n'existent pas
     const configBase = {
@@ -260,13 +287,24 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         }
       }
 
-      // Update Excel with Parc types default values in batch — écrire dans les 2 fichiers
+      // Collecter les valeurs des IVs Données de base déjà existantes pour les écrire dans le nouvel Excel
+      const existingBasicDataValues = { init: [], ref: [], prev: [], expost: [] };
+      const existingBasicDataIVs = existingConfigIVs.filter((iv) => iv.action_id.toString() === configActionBasicDataObj._id.toString());
+      for (const iv of existingBasicDataIVs) {
+        if (iv.indicator_excel_id && iv.value) {
+          if (iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) existingBasicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+        }
+      }
+
+      // Update Excel with Parc types + Données de base values in batch — écrire dans les 2 fichiers
       const excelBatchPromises = [];
       for (const situation of ['init', 'ref', 'prev']) {
         if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, parcTypesDefaultValues[situation], situation).catch(capture));
+        if (existingBasicDataValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, existingBasicDataValues[situation], situation).catch(capture));
       }
       for (const situation of ['init', 'ref', 'expost']) {
         if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, parcTypesDefaultValues[situation], situation).catch(capture));
+        if (existingBasicDataValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, existingBasicDataValues[situation], situation).catch(capture));
       }
       await Promise.all(excelBatchPromises);
     }
@@ -366,22 +404,52 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       }
       await Promise.all(yearDbUpdates);
 
-      // Toutes les écritures Excel des années en parallèle
-      const yearExcelWrites = [];
+      // Écriture des infos collectivité dans les 2 fichiers Excel
+      const collectivityFieldsMapping = [
+        { excel_indicator_id: 'NomTerr', value: collectivity.name, value_type: 'text' },
+        { excel_indicator_id: 'SIRENTerr', value: collectivity.siren, value_type: 'number' },
+        { excel_indicator_id: 'SupTerr', value: collectivity.area, value_type: 'number' },
+      ].filter((f) => f.value !== null && f.value !== undefined);
+
+      if (collectivityFieldsMapping.length > 0) {
+        // Situations collectivité : init et expost uniquement
+        const collectivitySituations = allYearEntries.filter(({ situation }) => situation === 'init' || situation === 'expost');
+
+        // Mises à jour DB des infos collectivité en parallèle
+        const collectivityDbUpdates = [];
+        for (const { situation, year } of collectivitySituations) {
+          for (const configId of configActionIds) {
+            for (const { excel_indicator_id, value, value_type } of collectivityFieldsMapping) {
+              collectivityDbUpdates.push(IndicatorValue.findOneAndUpdate({ action_id: configId, indicator_excel_id: excel_indicator_id, situation, year }, { [`value.${value_type}`]: value }, { new: true }));
+            }
+          }
+        }
+        await Promise.all(collectivityDbUpdates);
+      }
+
+      // Toutes les écritures Excel (années + collectivité) en parallèle
+      const excelWrites = [];
       if (excelFileIdPrev) {
         for (const { situation, year } of prevFileYears) {
-          yearExcelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation));
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation));
+        }
+        for (const { excel_indicator_id, value } of collectivityFieldsMapping) {
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, excel_indicator_id, value, 'init'));
         }
       }
       if (excelFileIdExpost) {
         for (const { situation, year } of expostFileYears) {
-          yearExcelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation));
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation));
+        }
+        for (const { excel_indicator_id, value } of collectivityFieldsMapping) {
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'init'));
+          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'expost'));
         }
       }
-      if (yearExcelWrites.length > 0) await Promise.all(yearExcelWrites);
+      if (excelWrites.length > 0) await Promise.all(excelWrites);
     }
 
-    // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années)
+    // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années et infos collectivité)
     const [prevInitDefaults, prevRefDefaults, prevPrevDefaults, expostRefDefaults, expostExpostDefaults] = await Promise.all([
       readExcelDefaultValues(excelFileIdPrev, 'init').catch(() => new Map()),
       readExcelDefaultValues(excelFileIdPrev, 'ref').catch(() => new Map()),
@@ -466,11 +534,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     }
 
     // Recalculer la completion pour l'action créée et les actions config
-    await Promise.all([
-      computeActionCompletion(action._id),
-      configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null,
-      configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null,
-    ].filter(Boolean));
+    await Promise.all([computeActionCompletion(action._id), configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null, configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null].filter(Boolean));
 
     await Log.create({
       model_name: 'action',
@@ -576,6 +640,48 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       }
     }
 
+    // Clear aggregation Excel values for this action in "1. Données d'entrée"
+    if (action.excel_worksheetname && action.type !== 'config') {
+      try {
+        let aggregationFileId;
+        if (action.owner === 'economic_actor' && action.economic_actor_id) {
+          const actor = await EconomicActor.findById(action.economic_actor_id);
+          const coll = actor?.collectivities?.find((c) => c.id === action.collectivity_id);
+          aggregationFileId = coll?.aggregation_excel_file_id;
+        } else {
+          const collectivityDoc = await Collectivity.findById(action.collectivity_id);
+          aggregationFileId = collectivityDoc?.aggregation_excel_file_id;
+        }
+        if (aggregationFileId) {
+          const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+          const sheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+          const usedRange = await graphFetch(`${sheetPath}/usedRange`);
+          const rows = usedRange.values || [];
+          const startRow = parseInt(usedRange.address?.match(/\d+/)?.[0] || 1);
+          const col = String.fromCharCode(72 + (action.instance_number || 1));
+          const colIdx = col.charCodeAt(0) - (usedRange.address?.match(/([A-Z]+)/)?.[1] || 'A').charCodeAt(0);
+
+          const matched = new Set();
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i][1] && String(rows[i][1]).trim().startsWith(`${action.excel_worksheetname}-`)) matched.add(i);
+          }
+
+          if (matched.size > 0) {
+            const min = Math.min(...matched);
+            const max = Math.max(...matched);
+            const values = Array.from({ length: max - min + 1 }, (_, i) => [matched.has(min + i) ? '' : (rows[min + i]?.[colIdx] ?? '')]);
+
+            await graphFetch(`${sheetPath}/range(address='${col}${startRow + min}:${col}${startRow + max}')`, {
+              method: 'PATCH',
+              body: JSON.stringify({ values }),
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[Agrégation cleanup] Error:', e.message);
+      }
+    }
+
     await Action.deleteOne({ _id: req.params.id });
 
     return res.status(200).send({ ok: true });
@@ -602,8 +708,9 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     // Construire le nom du fichier Excel selon le owner
-    let excelFileName = `${action.name}_Prev${year_prev}.xlsx`;
-    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Prev${year_prev}.xlsx`;
+    const instanceSuffixPrev = action.instance_number > 1 ? `_${action.instance_number}` : '';
+    let excelFileName = `${action.name}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier existant de cette action
     const sourceExcelId = action.exel_files_prev?.[0]?.excel_file_id || null;
@@ -611,6 +718,12 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     // Vider les feuilles init et expost du nouveau fichier Excel
     await clearWorksheetValues(excelFileId, 'expost');
+
+    // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
+    const clearUpdatesPrev = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
+    if (clearUpdatesPrev.length > 0) {
+      await Promise.all(['ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesPrev, s).catch(capture)));
+    }
 
     // Ajouter le nouveau fichier Excel à l'action
     action.exel_files_prev.push({ year_prev, year_ref: year_prev, excel_file_id: excelFileId });
@@ -708,6 +821,36 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           }
         }
       }
+    }
+
+    // Écrire les valeurs config existantes (Données de base + Parc types) dans le nouveau fichier Excel
+    {
+      const parcTypesValues = { ref: [], prev: [] };
+      const basicDataValues = { ref: [], prev: [] };
+
+      if (configActionParcTypes) {
+        const existingParcIVs = await IndicatorValue.find({ action_id: configActionParcTypes._id, situation: { $in: ['ref', 'prev'] }, year: year_prev });
+        for (const iv of existingParcIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            parcTypesValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+      if (configActionBasicData) {
+        const existingBasicIVs = await IndicatorValue.find({ action_id: configActionBasicData._id, situation: { $in: ['ref', 'prev'] }, year: year_prev });
+        for (const iv of existingBasicIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            basicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+
+      const excelWritePromises = [];
+      for (const situation of ['ref', 'prev']) {
+        if (parcTypesValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation).catch(capture));
+        if (basicDataValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation).catch(capture));
+      }
+      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
     }
 
     // Créer les indicator values pour les situations prev et ref (year_ref = year_prev)
@@ -825,15 +968,22 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     // Construire le nom du fichier Excel selon le owner
-    let excelFileName = `${action.name}_Expost${year_expost}.xlsx`;
-    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}_Expost${year_expost}.xlsx`;
+    const instanceSuffixExpost = action.instance_number > 1 ? `_${action.instance_number}` : '';
+    let excelFileName = `${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
 
-    // Dupliquer l'Excel depuis le premier fichier existant de cette action
-    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.exel_files_prev?.[0]?.excel_file_id || null;
+    // Dupliquer l'Excel depuis le premier fichier expost existant de cette action
+    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
     // Vider les feuilles init et prev du nouveau fichier Excel
     await clearWorksheetValues(excelFileId, 'prev');
+
+    // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
+    const clearUpdatesExpost = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
+    if (clearUpdatesExpost.length > 0) {
+      await Promise.all(['ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesExpost, s).catch(capture)));
+    }
 
     // Ajouter le nouveau fichier Excel à l'action
     action.excel_files_expost = action.excel_files_expost || [];
@@ -923,26 +1073,8 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
         if (configIndicatorValues.length > 0) await IndicatorValue.insertMany(configIndicatorValues);
 
-        // Mettre à jour ActionsCharte/ActionsAutres pour la nouvelle année expost
+        // Mettre à jour l'indicateur AnneeRempl pour la nouvelle année expost dans les config
         if (configActionBasicData && !existingConfigExpostIV) {
-          const parentAction = await Action.findById(action.action_parent_id);
-          if (parentAction) {
-            // Copier les valeurs ActionsCharte/ActionsAutres depuis la situation expost existante
-            for (const targetExcelId of ['ActionsCharte', 'ActionsAutres']) {
-              const existingIV = await IndicatorValue.findOne({
-                action_id: configActionBasicData._id,
-                indicator_excel_id: targetExcelId,
-                situation: 'expost',
-                year: { $ne: year_expost },
-                owner: action.owner,
-              });
-              if (existingIV?.value?.checkbox?.length > 0) {
-                await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: targetExcelId, situation: 'expost', year: year_expost }, { 'value.checkbox': existingIV.value.checkbox }, { new: true });
-              }
-            }
-          }
-
-          // Mettre à jour l'indicateur AnneeRempl pour la nouvelle année expost dans les config
           await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnneeRempl', situation: 'expost', year: year_expost }, { 'value.number': year_expost }, { new: true });
         }
 
@@ -951,6 +1083,36 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost }, { 'value.number': year_expost }, { new: true });
         }
       }
+    }
+
+    // Écrire les valeurs config existantes (Données de base + Parc types) dans le nouveau fichier Excel
+    {
+      const parcTypesValues = { ref: [], expost: [] };
+      const basicDataValues = { ref: [], expost: [] };
+
+      if (configActionParcTypes) {
+        const existingParcIVs = await IndicatorValue.find({ action_id: configActionParcTypes._id, situation: { $in: ['ref', 'expost'] }, year: year_expost });
+        for (const iv of existingParcIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            parcTypesValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+      if (configActionBasicData) {
+        const existingBasicIVs = await IndicatorValue.find({ action_id: configActionBasicData._id, situation: { $in: ['ref', 'expost'] }, year: year_expost });
+        for (const iv of existingBasicIVs) {
+          if (iv.indicator_excel_id && iv.value && iv.value[iv.indicator_type] !== null && iv.value[iv.indicator_type] !== undefined) {
+            basicDataValues[iv.situation].push({ excel_indicator_id: iv.indicator_excel_id, value: iv.value[iv.indicator_type] });
+          }
+        }
+      }
+
+      const excelWritePromises = [];
+      for (const situation of ['ref', 'expost']) {
+        if (parcTypesValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation).catch(capture));
+        if (basicDataValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation).catch(capture));
+      }
+      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
     }
 
     // Créer les indicator values pour les situations expost et ref (year_ref = year_expost)

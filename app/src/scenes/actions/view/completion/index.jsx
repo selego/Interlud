@@ -151,7 +151,7 @@ export default function Completion({ action }) {
           </button>
           <span>/</span>
           <button onClick={() => navigate(`/actions/${action._id}/dashboard`)} className="hover:text-primary-green transition-colors truncate max-w-[150px]">
-            {action.name}
+            {action.name}{action.instance_number > 1 ? ` #${action.instance_number}` : ''}
           </button>
           <span>/</span>
           <span className="text-gray-900 font-medium">Complétion</span>
@@ -167,7 +167,7 @@ export default function Completion({ action }) {
               >
                 <FiArrowLeft size={18} />
               </button>
-              <h1 className="text-3xl font-bold text-gray-900">{action.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{action.name}{action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}</h1>
             </div>
           </div>
 

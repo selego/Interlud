@@ -13,7 +13,12 @@ const WORKSHEETS = {
   expost: 'Remplissage - Sit. Expost',
 };
 
+let _cachedToken = null;
+let _tokenExpiresAt = 0;
+
 async function getAccessToken() {
+  if (_cachedToken && Date.now() < _tokenExpiresAt) return _cachedToken;
+
   const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -30,7 +35,19 @@ async function getAccessToken() {
 
   const res = await response.json();
   if (!response.ok) throw new Error(res.error_description || 'Failed to get access token');
-  return res.access_token;
+
+  _cachedToken = res.access_token;
+  _tokenExpiresAt = Date.now() + (res.expires_in ? (res.expires_in - 120) * 1000 : 50 * 60 * 1000);
+  return _cachedToken;
+}
+
+let _cachedSiteId = null;
+
+async function getSiteId() {
+  if (_cachedSiteId) return _cachedSiteId;
+  const site = await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`);
+  _cachedSiteId = site.id;
+  return _cachedSiteId;
 }
 
 const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
@@ -83,7 +100,7 @@ async function graphFetch(endpoint, options = {}) {
 async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
 
   const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
   const rows = usedRange.values || [];
@@ -107,7 +124,7 @@ async function updateExcelCellsBatch(fileId, updates, situation) {
 
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
 
   const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
   const rows = usedRange.values || [];
@@ -152,7 +169,7 @@ async function updateExcelCellsBatch(fileId, updates, situation) {
 }
 
 async function createFolder(folderName, parentFolderId = null) {
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
 
   let endpoint;
   if (parentFolderId) {
@@ -174,7 +191,7 @@ async function createFolder(folderName, parentFolderId = null) {
 }
 
 async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFileId = null) {
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
   const fileIdToCopy = sourceFileId || masterExcelFileId;
   const sourceFile = await graphFetch(`/sites/${siteId}/drive/items/${fileIdToCopy}`);
   const parentReference = targetFolderId ? { driveId: sourceFile.parentReference.driveId, id: targetFolderId } : { driveId: sourceFile.parentReference.driveId, id: sourceFile.parentReference.id };
@@ -205,7 +222,7 @@ async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFile
 }
 
 async function exportExcelFile(fileId) {
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
   const fileData = await graphFetch(`/sites/${siteId}/drive/items/${fileId}?select=@microsoft.graph.downloadUrl,name`);
   return { downloadUrl: fileData['@microsoft.graph.downloadUrl'], fileName: fileData.name };
 }
@@ -229,7 +246,7 @@ async function exportExcelFileWithSpecificSheets(fileId, sheetsToKeep) {
 }
 
 async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets) {
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
 
   const importedWorkbook = new ExcelJS.Workbook();
   await importedWorkbook.xlsx.load(importedFileBuffer);
@@ -300,7 +317,7 @@ async function clearWorksheetValues(fileId, situation) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
 
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
 
   const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
   const rows = usedRange.values || [];
@@ -334,7 +351,7 @@ async function clearWorksheetValues(fileId, situation) {
 async function readExcelDefaultValues(fileId, situation) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
-  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const siteId = await getSiteId();
 
   const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
   const rows = usedRange.values || [];
@@ -351,6 +368,7 @@ async function readExcelDefaultValues(fileId, situation) {
 module.exports = {
   getAccessToken,
   graphFetch,
+  getSiteId,
   sharePointSiteName,
   createFolder,
   updateExcelCellByIndicatorId,
