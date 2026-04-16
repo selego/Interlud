@@ -56,14 +56,22 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
-        { (isAdmin || user.role === 'economic_actor') && (
+        <div className="flex gap-3">
           <button
-          onClick={() => setIsModalOpen(true)}
-          className="button-primary"
-        >
-            Ajouter
+            onClick={() => navigate("/actions/compare")}
+            className="px-4 py-2 rounded-lg border-2 border-primary-green text-primary-green text-sm font-semibold hover:bg-green-50 transition-colors"
+          >
+            Comparer
           </button>
-        )}
+          { (isAdmin || user.role === 'economic_actor') && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="button-primary"
+            >
+              Ajouter
+            </button>
+          )}
+        </div>
       </div>
       
       <table className="w-full overflow-hidden card-shadow">

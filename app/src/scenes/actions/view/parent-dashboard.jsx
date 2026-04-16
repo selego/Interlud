@@ -99,17 +99,18 @@ export default function ParentDashboard({ action }) {
   }, [actionData])
 
   const allYears = useMemo(() => {
-    const years = new Set()
-    for (const d of Object.values(actionData)) {
-      const yd = d?.indicators?.[activeIndicator]?.yearlyData ?? []
-      for (const row of yd) {
-        if (row.ecartExpostRef !== 0 || row.ecartPrevRef !== 0) {
-          years.add(row.year)
-        }
-      }
+    let minYear = Infinity
+    let maxYear = -Infinity
+    for (const a of actions) {
+      if (a.year_init && a.year_init < minYear) minYear = a.year_init
     }
-    return [...years].sort((a, b) => a - b)
-  }, [actionData, activeIndicator])
+    for (const a of actions) {
+      if (a.year_prev && a.year_prev > maxYear) maxYear = a.year_prev
+      if (a.year_expost && a.year_expost > maxYear) maxYear = a.year_expost
+    }
+    if (minYear === Infinity || maxYear === -Infinity) return []
+    return Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i)
+  }, [actions, actionData])
 
   useEffect(() => {
     if (allYears.length && yearFrom == null) setYearFrom(allYears[0])
@@ -254,7 +255,7 @@ export default function ParentDashboard({ action }) {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-                  <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#999" }} />
+                  <XAxis dataKey="year" tick={{ fontSize: 13, fill: "#999", fontWeight: 500 }} />
                   <YAxis tick={{ fontSize: 11, fill: "#999" }} tickFormatter={fmtAxis} width={60} />
                   <Tooltip content={<StackedTooltip actions={actionsWithData} unit={unit} />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
                   <ReferenceLine x={currentYear} stroke="#2DAC6A" strokeWidth={1.5} strokeDasharray="5 3" />

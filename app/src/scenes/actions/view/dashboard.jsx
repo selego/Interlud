@@ -95,7 +95,7 @@ function buildSituationGroups(action) {
 }
 
 const GAIN_COLORS = {
-  refInit: "#C4903A",
+  refInit: "#8B5E3C",
   expostRef: "#2DAC6A",
   prevRef: "#A3B84B",
   expostPrev: "#8B5E3C"
