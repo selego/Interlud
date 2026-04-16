@@ -28,10 +28,10 @@ const INTERPOLATED_OPACITY = 0.35
 const SITUATION_LABELS = { init: "Init.", ref: "Réf.", expost: "Ex-post", prev: "Prév." }
 
 const GAIN_TYPES = [
-  { key: "ecartRefInit", label: "Réf. vs Init.", color: "#4A86C8" },
+  { key: "ecartRefInit", label: "Réf. vs Init.", color: "#C4903A" },
   { key: "ecartExpostRef", label: "Ex-post vs Réf.", color: "#2DAC6A" },
-  { key: "ecartPrevRef", label: "Prév. vs Réf.", color: "#F59600" },
-  { key: "ecartExpostPrev", label: "Ex-post vs Prév.", color: "#7C3AED" },
+  { key: "ecartPrevRef", label: "Prév. vs Réf.", color: "#A3B84B" },
+  { key: "ecartExpostPrev", label: "Ex-post vs Prév.", color: "#8B5E3C" },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -19,16 +19,16 @@ const INDICATORS = [
 ]
 
 const TRAJ_SERIES = [
-  { key: "initiale", label: "Initiale", color: "#C8C8C8" },
-  { key: "reference", label: "Référence", color: "#4A86C8" },
-  { key: "previsionnelle", label: "Prévisionnelle", color: "#F59600", dash: true },
+  { key: "initiale", label: "Initiale", color: "#8B5E3C" },
+  { key: "reference", label: "Référence", color: "#C4903A" },
+  { key: "previsionnelle", label: "Prévisionnelle", color: "#A3B84B", dash: true },
   { key: "expost", label: "Ex-post", color: "#2DAC6A" }
 ]
 
 const SITUATION_COLORS = {
-  init: "#C8C8C8",
-  ref: "#4A86C8",
-  prev: "#F59600",
+  init: "#8B5E3C",
+  ref: "#C4903A",
+  prev: "#A3B84B",
   expost: "#2DAC6A"
 }
 
@@ -95,10 +95,10 @@ function buildSituationGroups(action) {
 }
 
 const GAIN_COLORS = {
-  refInit: "#4A86C8",
+  refInit: "#C4903A",
   expostRef: "#2DAC6A",
-  prevRef: "#F59600",
-  expostPrev: "#7C3AED"
+  prevRef: "#A3B84B",
+  expostPrev: "#8B5E3C"
 }
 
 const GAIN_LABELS = {
@@ -750,9 +750,9 @@ export default function Dashboard({ action }) {
                       strokeDasharray="5 3"
                       label={{ value: String(selYear), position: "insideTopRight", fontSize: 10, fill: "#2DAC6A" }}
                     />
-                    <Line type="monotone" dataKey="initiale" stroke="#C8C8C8" strokeWidth={1.5} dot={false} />
-                    <Line type="monotone" dataKey="reference" stroke="#4A86C8" strokeWidth={1.5} dot={false} />
-                    <Line type="monotone" dataKey="previsionnelle" stroke="#F59600" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                    <Line type="monotone" dataKey="initiale" stroke="#8B5E3C" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="reference" stroke="#C4903A" strokeWidth={1.5} dot={false} />
+                    <Line type="monotone" dataKey="previsionnelle" stroke="#A3B84B" strokeWidth={2} strokeDasharray="5 3" dot={false} />
                     <Line type="monotone" dataKey="expost" stroke="#2DAC6A" strokeWidth={2.5} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
