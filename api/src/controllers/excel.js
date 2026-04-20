@@ -5,6 +5,7 @@ const { capture } = require('../services/sentry');
 const { graphFetch, getSiteId, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
 const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
+const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
 
 // Old ranges kept for action-contribution endpoint
@@ -160,125 +161,143 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
   }
 });
 
-// Fetch aggregated gains for a specific action from "4. Gains par action" sheet (collectivity aggregation file)
-router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    let { collectivity, action, date_start, date_end } = req.body;
-    if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
-    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
-    const instanceOffset = action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number || 1] || INSTANCE_COL_OFFSET[1];
-    const isEconomicActor = action.type !== 'global' && (req.user?.role === 'economic_actor' || action.owner === 'economic_actor');
-    let aggregationFileId = null;
+const extractAggregation = (action, gainsYearRows, emYearRows) => {
+  let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
 
-    if (isEconomicActor) {
-      const economicActorId = req.user?.role === 'economic_actor' ? req.user.economic_actor_id : action.economic_actor_id;
-      const economicActor = await EconomicActor.findById(economicActorId);
-      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
-      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
-    } else {
-      if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      const collectivityDoc = await Collectivity.findById(collectivity._id || collectivity.id);
-      aggregationFileId = collectivityDoc?.aggregation_excel_file_id;
+  let totalAchievement = 0;
+  let achievementCount = 0;
+
+  for (const emissionType of EMISSION_TYPES) {
+    if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
+    const col = (action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number]) + INSTANCE_EMISSION_COL[emissionType];
+
+    const yearlyData = gainsYearRows.map((d) => ({
+      year: d.year,
+      ecartRefInit: parseNumber(d.row[col]),
+      ecartPrevRef: parseNumber(d.row[col + 1]),
+      ecartExpostRef: parseNumber(d.row[col + 2]),
+      ecartExpostPrev: parseNumber(d.row[col + 3]),
+    }));
+
+    const latestWithExpost = [...yearlyData].reverse().find((d) => d.ecartExpostRef !== 0);
+    const objective = latestWithExpost ? Math.abs(latestWithExpost.ecartPrevRef) : 0;
+    const real = latestWithExpost ? Math.abs(latestWithExpost.ecartExpostRef) : 0;
+
+    let achievement = null;
+    if (objective > 0 && real > 0) achievement = (real / objective) * 100;
+
+    if (achievement !== null) {
+      totalAchievement += Math.min(achievement, 100);
+      achievementCount++;
     }
 
-    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
+    processedData.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData };
+  }
 
-    if (!ACTION_GAINS_RANGES[action.excel_worksheetname]) return res.json({ ok: false, data: { error: `Action '${action.excel_worksheetname}' not found in gains configuration` } });
+  processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
 
-    const siteId = await getSiteId();
-    const endCol = action.type === 'global' ? 'AH' : INSTANCE_END_COL[action.instance_number || 1] || INSTANCE_END_COL[1];
-
-    const [gainsResult, emResult] = await Promise.all([
-      graphFetch(
-        `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[action.excel_worksheetname].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[action.excel_worksheetname].dataStartRow + 50}')`,
-      ),
-      graphFetch(
-        `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[action.excel_worksheetname].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[action.excel_worksheetname].dataStartRow + 50}')`,
-      ),
-    ]);
-
-    const gainsValues = gainsResult?.values || [];
-    const emValues = emResult?.values || [];
-
-    let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
-
-    if (gainsValues.length === 0 && emValues.length === 0) return res.json({ ok: true, data: processedData });
-
-    // --- GAINS processing ---
-    const gainsYearRows = [];
-    let gainsLastYear = 0;
-    for (let i = 0; i < gainsValues.length; i++) {
-      const year = parseInt(gainsValues[i][2]);
-      if (!year || year < 2000 || year > 2100) continue;
-      if (year < gainsLastYear) break;
-      gainsLastYear = year;
-      if (date_start && year < new Date(date_start).getFullYear()) continue;
-      if (date_end && year > new Date(date_end).getFullYear()) continue;
-      gainsYearRows.push({ year, row: gainsValues[i] });
-    }
-
-    let totalAchievement = 0;
-    let achievementCount = 0;
-
-    for (const emissionType of EMISSION_TYPES) {
-      if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
-      const col = instanceOffset + INSTANCE_EMISSION_COL[emissionType];
-
-      const yearlyData = gainsYearRows.map((d) => ({
-        year: d.year,
-        ecartRefInit: parseNumber(d.row[col]),
-        ecartPrevRef: parseNumber(d.row[col + 1]),
-        ecartExpostRef: parseNumber(d.row[col + 2]),
-        ecartExpostPrev: parseNumber(d.row[col + 3]),
-      }));
-
-      const latestWithExpost = [...yearlyData].reverse().find((d) => d.ecartExpostRef !== 0);
-      const objective = latestWithExpost ? Math.abs(latestWithExpost.ecartPrevRef) : 0;
-      const real = latestWithExpost ? Math.abs(latestWithExpost.ecartExpostRef) : 0;
-
-      let achievement = null;
-      if (objective > 0 && real > 0) achievement = (real / objective) * 100;
-
-      if (achievement !== null) {
-        totalAchievement += Math.min(achievement, 100);
-        achievementCount++;
-      }
-
-      processedData.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData };
-    }
-
-    processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
-
-    const emYearRows = [];
-    let emLastYear = 0;
-    for (let i = 0; i < emValues.length; i++) {
-      const year = parseInt(emValues[i][2]);
-      if (!year || year < 2000 || year > 2100) continue;
-      if (year < emLastYear) break;
-      emLastYear = year;
-      if (date_start && year < new Date(date_start).getFullYear()) continue;
-      if (date_end && year > new Date(date_end).getFullYear()) continue;
-      emYearRows.push({ year, row: emValues[i] });
-    }
-
-    for (const emissionType of EMISSION_TYPES) {
-      if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
-      const emCol = instanceOffset + INSTANCE_EMISSION_COL[emissionType];
-
-      const yearlyData = emYearRows.map((d) => ({
+  for (const emissionType of EMISSION_TYPES) {
+    if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
+    const emCol = (action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number]) + INSTANCE_EMISSION_COL[emissionType];
+    processedData.emissions.indicators[emissionType] = {
+      label: emissionType,
+      unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit,
+      yearlyData: emYearRows.map((d) => ({
         year: d.year,
         initiale: parseNumber(d.row[emCol]),
         reference: parseNumber(d.row[emCol + 1]),
         previsionnelle: parseNumber(d.row[emCol + 2]),
         expost: parseNumber(d.row[emCol + 3]),
-      }));
+      })),
+    };
+  }
 
-      processedData.emissions.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, yearlyData };
+  return processedData;
+};
+
+router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity, action, date_start, date_end } = req.body;
+    if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
+    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+
+    const worksheetKey = action.excel_worksheetname || 'B2';
+    if (!ACTION_GAINS_RANGES[worksheetKey]) return res.json({ ok: false, data: { error: `Action '${worksheetKey}' not found in gains configuration` } });
+
+    let aggregationFileId = null;
+    if (req.user?.role === 'economic_actor' || (action.type !== 'global' && action.owner === 'economic_actor')) {
+      const economicActor = await EconomicActor.findById(req.user?.role === 'economic_actor' ? req.user.economic_actor_id : action.economic_actor_id);
+      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
     }
+    if (!aggregationFileId && req.user?.role !== 'economic_actor' && !(action.type !== 'global' && action.owner === 'economic_actor')) {
+      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
 
-    res.json({ ok: true, data: processedData });
+    const siteId = await getSiteId();
+    const endCol = action.type === 'global' ? 'AH' : INSTANCE_END_COL[action.instance_number];
+
+    const [gainsResult, emResult] = await Promise.all([
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
+    ]);
+
+    const toYearRows = (r) => (r?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050 && (!date_start || year >= new Date(date_start).getFullYear()) && (!date_end || year <= new Date(date_end).getFullYear()));
+    res.json({ ok: true, data: extractAggregation(action, toYearRows(gainsResult), toYearRows(emResult)) });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
+router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity, action, date_start, date_end } = req.body;
+    if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
+    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+
+    const worksheetKey = action.excel_worksheetname || 'B2';
+    if (!ACTION_GAINS_RANGES[worksheetKey]) return res.json({ ok: false, data: { error: `Action '${worksheetKey}' not found in gains configuration` } });
+
+    let aggregationFileId = null;
+    if (req.user?.role === 'economic_actor') {
+      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
+      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
+
+    const siteId = await getSiteId();
+
+    const [gainsResult, emResult] = await Promise.all([
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:DY${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:DY${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
+    ]);
+
+    const toYearRows = (r) => (r?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050 && (!date_start || year >= new Date(date_start).getFullYear()) && (!date_end || year <= new Date(date_end).getFullYear()));
+    const gainsYearRows = toYearRows(gainsResult);
+    const emYearRows = toYearRows(emResult);
+
+    let query = { owner: 'collectivity', type: { $ne: 'config' }, collectivity_id: collectivity._id, action_parent_id: action._id };
+    if (req.user.role === 'economic_actor') {
+      query.economic_actor_id = req.user.economic_actor_id;
+      query.owner = 'economic_actor';
+    }
+    const actions = await Action.find(query).sort({ name: 1 });
+    const aggregations = {};
+    for (const a of actions) {
+      const d = extractAggregation(a, gainsYearRows, emYearRows);
+      aggregations[a._id] = { score: d.score, gains: d.indicators, emissions: d.emissions.indicators };
+    }
+    res.json({ ok: true, data: { actions, aggregations } });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });

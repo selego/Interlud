@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { FiArrowLeft } from "react-icons/fi"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
@@ -41,126 +41,78 @@ const getChartLabel = (action) => action.name || action.excel_worksheetname
 export default function ParentDashboard({ action }) {
   const navigate = useNavigate()
   const { collectivity } = useStore()
-
-  const [actions, setActions] = useState([])
-  const [actionData, setActionData] = useState({})
-  const [loading, setLoading] = useState(true)
+  const [result, setResult] = useState({ actions: [], aggregations: {} })
   const [loadingData, setLoadingData] = useState(false)
   const [activeIndicator, setActiveIndicator] = useState("GES")
   const [yearFrom, setYearFrom] = useState(null)
   const [yearTo, setYearTo] = useState(null)
 
-  useEffect(() => {
-    const fetchActions = async () => {
-      if (!collectivity?._id) return
-      try {
-        setLoading(true)
-        const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id })
-        if (!ok) return toast.error("Erreur lors du chargement des actions")
-        setActions(data.filter((a) => a.excel_worksheetname))
-      } catch (e) {
-        toast.error("Erreur lors du chargement des actions")
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchActions()
-  }, [collectivity])
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!actions.length || !collectivity) return
+  const fetchData = async () => {
+    if (!action || !collectivity) return
+    try {
       setLoadingData(true)
-      const newData = {}
-      await Promise.all(
-        actions.map(async (a) => {
-          try {
-            const { ok, data } = await api.post("/excel/action_aggregation", { collectivity, action: a })
-            if (ok) newData[a._id] = data
-          } catch (e) {
-            // skip silently
-          }
-        })
-      )
-      setActionData(newData)
+      const { ok, data, code } = await api.post("/excel/parent_action_aggregation", { collectivity, action })
+      if (!ok) return toast.error(code || "Erreur lors du chargement des données")
+      setResult(data)
+    } catch (error) {
+      toast.error(error.code || "Erreur lors du chargement des données")
+    } finally {
       setLoadingData(false)
     }
+  }
+
+  useEffect(() => {
     fetchData()
-  }, [actions, collectivity])
+  }, [action, collectivity])
 
-  const availableIndicators = useMemo(() => {
-    const keys = new Set()
-    for (const d of Object.values(actionData)) {
-      for (const key of Object.keys(d?.indicators ?? {})) {
-        if (d.indicators[key]?.yearlyData?.length > 0) keys.add(key)
-      }
-    }
-    return INDICATORS.filter((i) => keys.has(i.key))
-  }, [actionData])
+  const allYears = Array.from({ length: 41 }, (_, i) => 2010 + i)
 
-  const allYears = useMemo(() => {
+  useEffect(() => {
+    if (!result.actions.length) return
     let minYear = Infinity
     let maxYear = -Infinity
-    for (const a of actions) {
+    for (const a of result.actions) {
       if (a.year_init && a.year_init < minYear) minYear = a.year_init
-    }
-    for (const a of actions) {
       if (a.year_prev && a.year_prev > maxYear) maxYear = a.year_prev
       if (a.year_expost && a.year_expost > maxYear) maxYear = a.year_expost
     }
-    if (minYear === Infinity || maxYear === -Infinity) return []
-    return Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i)
-  }, [actions, actionData])
+    if (yearFrom == null && minYear !== Infinity) setYearFrom(minYear)
+    if (yearTo == null && maxYear !== -Infinity) setYearTo(maxYear)
+  }, [result.actions])
 
-  useEffect(() => {
-    if (allYears.length && yearFrom == null) setYearFrom(allYears[0])
-    if (allYears.length && yearTo == null) setYearTo(allYears.at(-1))
-  }, [allYears])
+  const start = yearFrom ?? allYears[0]
+  const end = yearTo ?? allYears.at(-1)
+  const periodRange = !start || !end ? [] : Array.from({ length: end - start + 1 }, (_, i) => start + i)
 
-  const periodRange = useMemo(() => {
-    const start = yearFrom ?? allYears[0]
-    const end = yearTo ?? allYears.at(-1)
-    if (!start || !end) return []
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i)
-  }, [yearFrom, yearTo, allYears])
-
-  const currentYear = new Date().getFullYear()
-
-  const chartData = useMemo(() => {
-    return periodRange.map((year) => {
-      const row = { year }
-      for (const a of actions) {
-        const yd = actionData[a._id]?.indicators?.[activeIndicator]?.yearlyData ?? []
-        const yearRow = yd.find((d) => d.year === year)
-        let val = null
-        let usedType = null
-        if (yearRow) {
-          if (year <= currentYear && yearRow.ecartExpostRef !== 0) {
-            val = Math.abs(yearRow.ecartExpostRef)
-            usedType = "ecartExpostRef"
-          } else if (yearRow.ecartPrevRef !== 0) {
-            val = Math.abs(yearRow.ecartPrevRef)
-            usedType = "ecartPrevRef"
-          } else if (yearRow.ecartExpostRef !== 0) {
-            val = Math.abs(yearRow.ecartExpostRef)
-            usedType = "ecartExpostRef"
-          }
+  const chartData = periodRange.map((year) => {
+    const row = { year }
+    for (const a of result.actions) {
+      const yd = result.aggregations[a._id]?.gains?.[activeIndicator]?.yearlyData ?? []
+      const yearRow = yd.find((d) => d.year === year)
+      let val = null
+      let usedType = null
+      if (yearRow) {
+        if (year <= new Date().getFullYear() && yearRow.ecartExpostRef !== 0) {
+          val = Math.abs(yearRow.ecartExpostRef)
+          usedType = "ecartExpostRef"
         }
-        row[`val_${a._id}`] = val
-        row[`type_${a._id}`] = usedType
+        if (yearRow.ecartPrevRef !== 0) {
+          val = Math.abs(yearRow.ecartPrevRef)
+          usedType = "ecartPrevRef"
+        }
+        if (yearRow.ecartExpostRef !== 0) {
+          val = Math.abs(yearRow.ecartExpostRef)
+          usedType = "ecartExpostRef"
+        }
       }
-      return row
-    })
-  }, [periodRange, actions, actionData, activeIndicator, currentYear])
+      row[`val_${a._id}`] = val
+      row[`type_${a._id}`] = usedType
+    }
+    return row
+  })
 
-  const actionsWithData = useMemo(() => {
-    return actions.filter((a) => chartData.some((row) => row[`val_${a._id}`] != null && row[`val_${a._id}`] > 0))
-  }, [actions, chartData])
+  const actionsWithData = result.actions.filter((a) => chartData.some((row) => row[`val_${a._id}`] != null && row[`val_${a._id}`] > 0))
 
-  const unit = INDICATORS.find((i) => i.key === activeIndicator)?.unit || ""
-  const indLabel = INDICATORS.find((i) => i.key === activeIndicator)?.label || activeIndicator
-
-  if (loading) return <Loader />
 
   return (
     <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
@@ -186,7 +138,7 @@ export default function ParentDashboard({ action }) {
               onChange={(e) => setActiveIndicator(e.target.value)}
               className="input-primary !py-2 !pl-3 text-sm cursor-pointer font-medium"
             >
-              {(availableIndicators.length > 0 ? availableIndicators : INDICATORS).map((i) => (
+              {INDICATORS.map((i) => (
                 <option key={i.key} value={i.key}>{i.label}</option>
               ))}
             </select>
@@ -224,12 +176,12 @@ export default function ParentDashboard({ action }) {
         <div className="card-shadow p-6">
           <div className="flex items-start justify-between mb-6 gap-4">
             <div>
-              <h3 className="text-base font-semibold text-[#111]">Gains annuels par action de la charte — {indLabel}</h3>
+              <h3 className="text-base font-semibold text-[#111]">Gains annuels par action de la charte — {INDICATORS.find((i) => i.key === activeIndicator)?.label || activeIndicator}</h3>
               <p className="text-sm text-gray-500 mt-0.5">
                 Ex-post − réf expost pour les années passées (si disponible), sinon prévisionnelle − réf prév.
               </p>
             </div>
-            <div className="text-xs text-gray-400 shrink-0">{unit}</div>
+            <div className="text-xs text-gray-400 shrink-0">{INDICATORS.find((i) => i.key === activeIndicator)?.unit || ""}</div>
           </div>
 
           {actionsWithData.length > 0 && (
@@ -257,8 +209,8 @@ export default function ParentDashboard({ action }) {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
                   <XAxis dataKey="year" tick={{ fontSize: 13, fill: "#999", fontWeight: 500 }} />
                   <YAxis tick={{ fontSize: 11, fill: "#999" }} tickFormatter={fmtAxis} width={60} />
-                  <Tooltip content={<StackedTooltip actions={actionsWithData} unit={unit} />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
-                  <ReferenceLine x={currentYear} stroke="#2DAC6A" strokeWidth={1.5} strokeDasharray="5 3" />
+                  <Tooltip content={<StackedTooltip actions={actionsWithData} unit={INDICATORS.find((i) => i.key === activeIndicator)?.unit || ""} />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
+                  <ReferenceLine x={new Date().getFullYear()} stroke="#2DAC6A" strokeWidth={1.5} strokeDasharray="5 3" />
                   {actionsWithData.map((a, idx) => {
                     const color = ACTION_COLORS[idx % ACTION_COLORS.length]
                     return (
