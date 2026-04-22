@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { FiArrowLeft } from "react-icons/fi"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts"
@@ -6,8 +6,6 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
-
-// ── Constants ──────────────────────────────────────────────────────────────
 
 const INDICATORS = [
   { key: "GES", label: "Gaz à effet de serre", unit: "tCO₂e" },
@@ -34,154 +32,12 @@ const GAIN_TYPES = [
   { key: "ecartExpostPrev", label: "Ex-post vs Prév.", color: "#8B5E3C" },
 ]
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-const fmtNum = (v) => {
-  if (v == null) return "—"
-  const abs = Math.abs(v)
-  if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
-  if (abs >= 1_000) return `${(v / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
-  return Math.round(v).toLocaleString("fr-FR")
-}
-
 const fmtAxis = (v) => {
   const abs = Math.abs(v)
   if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}k`
   return String(v)
 }
-
-/**
- * Build the list of situation bars from the action's year configuration.
- * Replicates the exact same logic as dashboard.jsx — only includes
- * horizons actually filled by the user (init, ref, expost, prev).
- * Returns bars sorted chronologically, each with { year, type, dataKey, label }.
- */
-function buildSituationBars(action) {
-  const bars = []
-
-  // 1. Situation initiale
-  if (action.year_init) {
-    bars.push({ year: action.year_init, type: "init", dataKey: "initiale", label: `Init. ${action.year_init}` })
-  }
-
-  // 2. Collect all ref/expost pairs
-  const expostEntries = action.excel_files_expost?.length
-    ? action.excel_files_expost.filter((e) => e.year_expost)
-    : action.year_expost ? [{ year_expost: action.year_expost, year_ref: action.year_ref }] : []
-
-  // 3. Collect all ref/prev pairs
-  const prevEntries = action.exel_files_prev?.length
-    ? action.exel_files_prev.filter((e) => e.year_prev)
-    : action.year_prev ? [{ year_prev: action.year_prev, year_ref: action.year_ref }] : []
-
-  const addedRefYears = new Map()
-
-  for (const entry of expostEntries) {
-    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
-      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}` })
-      addedRefYears.set(entry.year_ref, "expost")
-    }
-    bars.push({ year: entry.year_expost, type: "expost", dataKey: "expost", label: `Ex-post ${entry.year_expost}` })
-  }
-
-  for (const entry of prevEntries) {
-    if (entry.year_ref && !addedRefYears.has(entry.year_ref)) {
-      bars.push({ year: entry.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${entry.year_ref}` })
-      addedRefYears.set(entry.year_ref, "prev")
-    }
-    bars.push({ year: entry.year_prev, type: "prev", dataKey: "previsionnelle", label: `Prév. ${entry.year_prev}` })
-  }
-
-  if (!addedRefYears.size && action.year_ref) {
-    bars.push({ year: action.year_ref, type: "ref", dataKey: "reference", label: `Réf. ${action.year_ref}` })
-  }
-
-  const typeOrder = { init: 0, ref: 1, expost: 2, prev: 3 }
-  bars.sort((a, b) => a.year - b.year || typeOrder[a.type] - typeOrder[b.type])
-
-  return bars
-}
-
-/**
- * For a given action's emission yearlyData, extract the known values
- * at the years/situations actually filled (using buildSituationBars).
- * Returns Map<year, value> with only real (user-filled) data points.
- */
-function getKnownEmissionPoints(action, yearlyData) {
-  const bars = buildSituationBars(action)
-  const byYear = new Map(yearlyData.map((d) => [d.year, d]))
-  const known = new Map()
-
-  for (const bar of bars) {
-    const row = byYear.get(bar.year)
-    const val = row ? row[bar.dataKey] : null
-    if (val != null && val > 0) {
-      // If multiple situations at the same year, keep the latest (expost > prev > ref > init)
-      known.set(bar.year, { value: val, type: bar.type })
-    }
-  }
-
-  return known
-}
-
-/**
- * Linear interpolation: given known data points Map<year, value>,
- * fill missing years with interpolated values.
- * Returns Map<year, { value, interpolated: boolean }>
- */
-function interpolateValues(knownPoints, allYears) {
-  const result = new Map()
-  const sorted = [...knownPoints.entries()].sort(([a], [b]) => a - b)
-
-  for (const year of allYears) {
-    const known = knownPoints.get(year)
-    if (known != null) {
-      result.set(year, { value: known.value, type: known.type, interpolated: false })
-      continue
-    }
-
-    // Find surrounding known points for interpolation
-    let before = null, after = null
-    for (const [y, entry] of sorted) {
-      if (y < year && entry.value != null) before = { year: y, value: entry.value }
-      if (y > year && entry.value != null && !after) after = { year: y, value: entry.value }
-    }
-
-    if (before && after) {
-      const ratio = (year - before.year) / (after.year - before.year)
-      const interpolated = before.value + ratio * (after.value - before.value)
-      result.set(year, { value: Math.round(interpolated * 100) / 100, interpolated: true })
-    }
-  }
-
-  return result
-}
-
-// Custom label renderer: displays the situation type (Init./Réf./Ex-post/Prév.)
-// at the bottom of each bar, so the user knows which horizon the value comes from.
-function renderSituationLabel(props) {
-  const { x, y, width, height, value } = props
-  if (!value) return null
-  const h = typeof height === "number" ? height : 0
-  const w = typeof width === "number" ? width : 0
-  if (h < 14 || w < 20) return null
-  return (
-    <text
-      x={x + w / 2}
-      y={y + h - 4}
-      textAnchor="middle"
-      fontSize={9}
-      fontWeight={600}
-      fill="#ffffff"
-      style={{ pointerEvents: "none" }}
-    >
-      {value}
-    </text>
-  )
-}
-
-// ── Main Component ─────────────────────────────────────────────────────────
 
 export default function CompareActions() {
   const navigate = useNavigate()
@@ -192,45 +48,39 @@ export default function CompareActions() {
   const [loadingData, setLoadingData] = useState(false)
   const [selectedType, setSelectedType] = useState(null)
   const [selectedActionIds, setSelectedActionIds] = useState([])
-  const [actionData, setActionData] = useState({}) // { actionId: processedData }
+  const [actionData, setActionData] = useState(null)
   const [activeIndicator, setActiveIndicator] = useState("GES")
   const [selectedYears, setSelectedYears] = useState([])
-  const [viewTab, setViewTab] = useState("emissions") // "emissions" | "gains"
+  const [viewTab, setViewTab] = useState("emissions")
   const [activeGainType, setActiveGainType] = useState("ecartExpostRef")
-  
+
   const fetchActions = async () => {
-  if (!collectivity?._id) return
-  try {
-    setLoading(true)
-    const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id })
-    if (!ok) return toast.error("Erreur lors du chargement des actions")
-    setActions(data.filter((a) => a.excel_worksheetname))
-  } catch (e) {
-    toast.error("Erreur lors du chargement des actions")
-  } finally {
-    setLoading(false)
+    if (!collectivity?._id) return
+    try {
+      setLoading(true)
+      const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id })
+      if (!ok) return toast.error(code || "Erreur lors du chargement des actions")
+      setActions(data)
+    } catch (error) {
+      toast.error(error.code || "Erreur lors du chargement des actions")
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
 
   useEffect(() => {
     fetchActions()
   }, [collectivity])
 
-  // ── Group actions by type (excel_worksheetname) ────────────────────────
-
-  const actionsByType = useMemo(() => {
-    const groups = {}
-    for (const action of actions) {
-      const type = action.excel_worksheetname
-      if (!groups[type]) groups[type] = []
-      groups[type].push(action)
-    }
-    // Only keep types with 2+ actions (comparison needs at least 2)
-    return Object.fromEntries(Object.entries(groups).filter(([, v]) => v.length >= 2))
-  }, [actions])
-
+  const groups = {}
+  for (const action of actions) {
+    if (!groups[action.excel_worksheetname]) groups[action.excel_worksheetname] = []
+    groups[action.excel_worksheetname].push(action)
+  }
+  const actionsByType = Object.fromEntries(Object.entries(groups).filter(([, v]) => v.length >= 2))
   const availableTypes = Object.keys(actionsByType).sort()
+
   useEffect(() => {
     if (!selectedType && availableTypes.length > 0) setSelectedType(availableTypes[0])
   }, [availableTypes])
@@ -239,28 +89,18 @@ export default function CompareActions() {
     if (selectedType && actionsByType[selectedType]) setSelectedActionIds(actionsByType[selectedType].map((a) => a._id))
   }, [selectedType])
 
-
-
-    const fetchData = async () => {
+  const fetchData = async () => {
     if (!selectedActionIds.length || !collectivity) return
-    setLoadingData(true)
-    const newData = {}
-    await Promise.all(
-      selectedActionIds.map(async (id) => {
-        const action = actions.find((a) => a._id === id)
-        if (!action) return
-        try {
-          const { ok, data, code } = await api.post("/excel/action_aggregation", { collectivity, action })
-          if (!ok) return  toast.error( code.error || "Erreur lors du chargement des actions")
-          newData[id] = data
-        } catch (e) {
-          toast.error( "Erreur lors du chargement des actions")
-
-        }
-      })
-    )
-    setActionData(newData)
-    setLoadingData(false)
+    try {
+      setLoadingData(true)
+      const { ok, data, code } = await api.post("/excel/compare_actions", { collectivity, action_ids: selectedActionIds })
+      if (!ok) return toast.error(code || "Erreur lors du chargement des actions")
+      setActionData(data)
+    } catch (error) {
+      toast.error(error.code || "Erreur lors du chargement des actions")
+    } finally {
+      setLoadingData(false)
+    }
   }
 
 
@@ -268,108 +108,37 @@ export default function CompareActions() {
     fetchData()
   }, [selectedActionIds, collectivity])
 
-  // ── Compute all unique years across selected actions ───────────────────
+  const selectedActions = selectedActionIds.map((id) => actions.find((a) => a._id === id)).filter(Boolean)
+  const allAvailableYears = actionData?.availableYears?.[activeIndicator] ?? []
 
-  const selectedActions = useMemo(
-    () => selectedActionIds.map((id) => actions.find((a) => a._id === id)).filter(Boolean),
-    [selectedActionIds, actions]
-  )
-
-  const allAvailableYears = useMemo(() => {
-    const years = new Set()
-    for (const action of selectedActions) {
-      const emData = actionData[action._id]?.emissions?.indicators?.[activeIndicator]?.yearlyData ?? []
-      const known = getKnownEmissionPoints(action, emData)
-      for (const year of known.keys()) {
-        years.add(year)
-      }
-    }
-    return [...years].sort((a, b) => a - b)
-  }, [selectedActions, actionData, activeIndicator])
-
-  // Auto-select all years when they change
   useEffect(() => {
     setSelectedYears(allAvailableYears)
-  }, [allAvailableYears])
+  }, [allAvailableYears.join(",")])
 
-  // ── Build chart data with interpolation ────────────────────────────────
-
-  const chartData = useMemo(() => {
-    if (!selectedYears.length || !selectedActions.length) return []
-    const actionInterpolated = {} 
-
-    for (const action of selectedActions) {
-      const emData = actionData[action._id]?.emissions?.indicators?.[activeIndicator]?.yearlyData ?? []
-      const knownPoints = getKnownEmissionPoints(action, emData)
-      actionInterpolated[action._id] = interpolateValues(knownPoints, selectedYears)
-    }
-    return selectedYears.map((year) => {
-      const row = { year }
-      for (const action of selectedActions) {
-        const entry = actionInterpolated[action._id]?.get(year)
-        row[`val_${action._id}`] = entry?.value ?? null
-        row[`interp_${action._id}`] = entry?.interpolated ?? false
-        row[`sit_${action._id}`] = entry && !entry.interpolated ? (SITUATION_LABELS[entry.type] || "") : ""
-      }
-      return row
-    })
-  }, [selectedYears, selectedActions, actionData, activeIndicator, allAvailableYears])
-
-
-  const gainsChartData = useMemo(() => {
-    if (!selectedYears.length || !selectedActions.length) return []
-
-    const actionGainsInterpolated = {}
-
-    for (const action of selectedActions) {
-      const gainsYearlyData = actionData[action._id]?.indicators?.[activeIndicator]?.yearlyData ?? []
-      const gainsMap = new Map(gainsYearlyData.map((d) => [d.year, d]))
-      const bars = buildSituationBars(action)
-      const knownPoints = new Map()
-      for (const bar of bars) {
-        const row = gainsMap.get(bar.year)
-        if (row && row[activeGainType] !== 0) {
-          knownPoints.set(bar.year, { value: row[activeGainType], type: bar.type })
-        }
-      }
-
-      actionGainsInterpolated[action._id] = interpolateValues(knownPoints, selectedYears)
-    }
-
-    return selectedYears.map((year) => {
-      const row = { year }
-      for (const action of selectedActions) {
-        const entry = actionGainsInterpolated[action._id]?.get(year)
-        row[`gain_${action._id}`] = entry?.value ?? null
-        row[`gainInterp_${action._id}`] = entry?.interpolated ?? false
-      }
-      return row
-    })
-  }, [selectedYears, selectedActions, actionData, activeIndicator, activeGainType])
-
-  const availableGainTypes = useMemo(() => {
-    const available = new Set()
-    for (const action of selectedActions) {
-      const gainsYearlyData = actionData[action._id]?.indicators?.[activeIndicator]?.yearlyData ?? []
-      for (const row of gainsYearlyData) {
-        for (const gt of GAIN_TYPES) {
-          if (row[gt.key] !== 0 && row[gt.key] != null) available.add(gt.key)
-        }
-      }
-    }
-    return GAIN_TYPES.filter((gt) => available.has(gt.key))
-  }, [selectedActions, actionData, activeIndicator])
-
+  const availableIndicators = INDICATORS.filter((i) => actionData?.availableIndicators?.includes(i.key))
+  const availableGainTypes = GAIN_TYPES.filter((gt) => actionData?.availableGainTypes?.includes(gt.key))
   const activeInd = INDICATORS.find((i) => i.key === activeIndicator)
-  const availableIndicators = useMemo(() => {
-    const keys = new Set()
-    for (const [, data] of Object.entries(actionData)) {
-      for (const key of Object.keys(data?.emissions?.indicators ?? {})) {
-        if (data.emissions.indicators[key]?.yearlyData?.length > 0) keys.add(key)
-      }
+
+  const chartData = selectedYears.map((year) => {
+    const row = { year }
+    for (const action of selectedActions) {
+      const p = actionData?.emissions?.[action._id]?.[activeIndicator]?.[year]
+      row[`val_${action._id}`] = p?.value ?? null
+      row[`interp_${action._id}`] = p?.interpolated ?? false
+      row[`sit_${action._id}`] = p && !p.interpolated ? (SITUATION_LABELS[p.situationType] || "") : ""
     }
-    return INDICATORS.filter((i) => keys.has(i.key))
-  }, [actionData])
+    return row
+  })
+
+  const gainsChartData = selectedYears.map((year) => {
+    const row = { year }
+    for (const action of selectedActions) {
+      const p = actionData?.gains?.[action._id]?.[activeIndicator]?.[activeGainType]?.[year]
+      row[`gain_${action._id}`] = p?.value ?? null
+      row[`gainInterp_${action._id}`] = p?.interpolated ?? false
+    }
+    return row
+  })
 
   if (loading) return <Loader />
 
@@ -404,7 +173,6 @@ export default function CompareActions() {
         </div>
       </div>
 
-      {/* ── Type selector ──────────────────────────────────────────────────── */}
       <div className="card-shadow p-4">
         <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Type d'action</div>
         <div className="flex gap-2 flex-wrap">
@@ -424,7 +192,6 @@ export default function CompareActions() {
         </div>
       </div>
 
-      {/* ── Action selection ───────────────────────────────────────────────── */}
       {selectedType && actionsByType[selectedType] && (
         <div className="card-shadow p-4">
           <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Actions à comparer</div>
@@ -460,7 +227,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Indicator tabs ─────────────────────────────────────────────────── */}
       {selectedActionIds.length >= 2 && (
         <div className="card-shadow p-4">
           <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Indicateur</div>
@@ -482,7 +248,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Year selection ─────────────────────────────────────────────────── */}
       {selectedActionIds.length >= 2 && allAvailableYears.length > 0 && (
         <div className="card-shadow p-4">
           <div className="flex items-center justify-between mb-3">
@@ -508,15 +273,12 @@ export default function CompareActions() {
           <div className="flex gap-2 flex-wrap">
             {allAvailableYears.map((year) => {
               const selected = selectedYears.includes(year)
-              // Determine which situation types exist at this year across all selected actions
               const situationTypes = new Set()
               for (const action of selectedActions) {
-                for (const bar of buildSituationBars(action)) {
-                  if (bar.year === year) situationTypes.add(bar.type)
-                }
+                const p = actionData?.emissions?.[action._id]?.[activeIndicator]?.[year]
+                if (p && !p.interpolated && p.situationType) situationTypes.add(p.situationType)
               }
-              const typeLabels = { init: "Init.", ref: "Réf.", expost: "Ex-post", prev: "Prév." }
-              const hint = [...situationTypes].map((t) => typeLabels[t] || t).join(", ")
+              const hint = [...situationTypes].map((t) => SITUATION_LABELS[t] || t).join(", ")
               return (
                 <button
                   key={year}
@@ -543,7 +305,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── View toggle (Emissions / Gains) ──────────────────────────────── */}
       {selectedActionIds.length >= 2 && (
         <div className="flex bg-gray-100 rounded-lg p-0.5 w-fit">
           {[
@@ -563,7 +324,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Loading indicator ──────────────────────────────────────────────── */}
       {loadingData && (
         <div className="card-shadow p-6 text-center">
           <Loader />
@@ -571,7 +331,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Emissions chart ───────────────────────────────────────────────── */}
       {viewTab === "emissions" && selectedActionIds.length >= 2 && !loadingData && chartData.length > 0 && (
         <div className="card-shadow p-6">
           <div className="flex items-start justify-between mb-6 gap-4">
@@ -602,7 +361,13 @@ export default function CompareActions() {
                       {chartData.map((entry, i) => (
                         <Cell key={i} fill={color} fillOpacity={entry[`interp_${action._id}`] ? INTERPOLATED_OPACITY : 1} />
                       ))}
-                      <LabelList dataKey={`sit_${action._id}`} content={renderSituationLabel} />
+                      <LabelList dataKey={`sit_${action._id}`} content={(p) => {
+                        if (!p.value) return null
+                        const h = typeof p.height === "number" ? p.height : 0
+                        const w = typeof p.width === "number" ? p.width : 0
+                        if (h < 14 || w < 20) return null
+                        return <text x={p.x + w / 2} y={p.y + h - 4} textAnchor="middle" fontSize={9} fontWeight={600} fill="#ffffff" style={{ pointerEvents: "none" }}>{p.value}</text>
+                      }} />
                     </Bar>
                   )
                 })}
@@ -612,7 +377,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Gains: type selector ──────────────────────────────────────────── */}
       {viewTab === "gains" && selectedActionIds.length >= 2 && !loadingData && (
         <div className="card-shadow p-4">
           <div className="text-xs text-[#9ca3af] uppercase tracking-wider font-medium mb-3">Type de gain (écart)</div>
@@ -635,7 +399,6 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Gains chart ────────────────────────────────────────────────────── */}
       {viewTab === "gains" && selectedActionIds.length >= 2 && !loadingData && gainsChartData.length > 0 && (
         <div className="card-shadow p-6">
           <div className="flex items-start justify-between mb-6 gap-4">
@@ -675,11 +438,10 @@ export default function CompareActions() {
         </div>
       )}
 
-      {/* ── Empty state ────────────────────────────────────────────────────── */}
       {selectedActionIds.length >= 2 && !loadingData && (
         (viewTab === "emissions" && chartData.length === 0) ||
         (viewTab === "gains" && gainsChartData.length === 0)
-      ) && Object.keys(actionData).length > 0 && (
+      ) && actionData && (
         <div className="card-shadow p-8 text-center text-gray-400">
           <p>Aucune donnée disponible pour cet indicateur.</p>
         </div>
@@ -688,12 +450,10 @@ export default function CompareActions() {
   )
 }
 
-// ── Shared sub-components ────────────────────────────────────────────────
-
-function ChartLegend({ actions }) {
+function ChartLegend(props) {
   return (
     <div className="flex flex-wrap gap-4 mb-4">
-      {actions.map((action, idx) => {
+      {props.actions.map((action, idx) => {
         const color = ACTION_COLORS[idx % ACTION_COLORS.length]
         return (
           <div key={action._id} className="flex items-center gap-1.5 text-xs text-gray-600">
@@ -710,16 +470,24 @@ function ChartLegend({ actions }) {
   )
 }
 
-function CompareTooltip({ active, payload, label, actions, unit, prefix = "val_", interpPrefix = "interp_" }) {
-  if (!active || !payload?.length) return null
+function CompareTooltip(props) {
+  if (!props.active || !props.payload?.length) return null
+  const prefix = props.prefix || "val_"
+  const interpPrefix = props.interpPrefix || "interp_"
+  const fmtNum = (v) => {
+    if (v == null) return "—"
+    const abs = Math.abs(v)
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
+    if (abs >= 1_000) return `${(v / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
+    return Math.round(v).toLocaleString("fr-FR")
+  }
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2 max-w-xs">
-      <div className="font-bold text-[#111] text-sm">Année {label}</div>
-      {payload.map((p, i) => {
+      <div className="font-bold text-[#111] text-sm">Année {props.label}</div>
+      {props.payload.map((p, i) => {
         const actionId = p.dataKey?.replace(prefix, "")
-        const action = actions?.find((a) => a._id === actionId)
-        const entry = p.payload
-        const isInterpolated = entry?.[`${interpPrefix}${actionId}`]
+        const action = props.actions?.find((a) => a._id === actionId)
+        const isInterpolated = p.payload?.[`${interpPrefix}${actionId}`]
         return (
           <div key={i} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-1.5">
@@ -728,7 +496,7 @@ function CompareTooltip({ active, payload, label, actions, unit, prefix = "val_"
               {isInterpolated && <span className="text-[10px] text-orange-400 font-medium">(interpolée)</span>}
             </div>
             <span className="font-semibold text-[#333] tabular-nums whitespace-nowrap">
-              {p.value != null ? `${fmtNum(p.value)} ${unit}` : "—"}
+              {p.value != null ? `${fmtNum(p.value)} ${props.unit}` : "—"}
             </span>
           </div>
         )

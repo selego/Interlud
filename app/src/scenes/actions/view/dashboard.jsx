@@ -366,11 +366,11 @@ export default function Dashboard({ action }) {
       if (!ok) return toast.error(code || "Erreur de chargement")
       setProcessedData(data)
 
-      const allYrs = [...new Set(Object.values(data.indicators || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
+      const allYrs = [...new Set(Object.values(data.gains || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
 
       if (!allYrs.length) return
 
-      const availK = Object.keys(data.indicators || {}).filter((k) => data.indicators[k]?.yearlyData?.length > 0)
+      const availK = Object.keys(data.gains || {}).filter((k) => data.gains[k]?.yearlyData?.length > 0)
       if (availK.length && !availK.includes(activePill)) setActivePill(availK[0])
     } catch (e) {
       toast.error(e.code || "Erreur de chargement")
@@ -396,12 +396,12 @@ export default function Dashboard({ action }) {
 
   // ── Derived: shared ───────────────────────────────────────────────────────
 
-  const availKeys = Object.keys(processedData.indicators || {}).filter((k) => processedData.indicators[k]?.yearlyData?.length > 0)
+  const availKeys = Object.keys(processedData.gains || {}).filter((k) => processedData.gains[k]?.yearlyData?.length > 0)
   const active = availKeys.includes(activePill) ? activePill : (availKeys[0] ?? "GES")
   const activeLabel = INDICATORS.find((i) => i.key === active)?.label || active
-  const activeUnit = processedData.indicators[active]?.unit || INDICATORS.find((i) => i.key === active)?.unit || ""
+  const activeUnit = processedData.gains?.[active]?.unit || INDICATORS.find((i) => i.key === active)?.unit || ""
 
-  const allYears = [...new Set(Object.values(processedData.indicators || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
+  const allYears = [...new Set(Object.values(processedData.gains || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
 
   const periodMin = allYears[0] ?? new Date().getFullYear()
   const periodMax = allYears.at(-1) ?? new Date().getFullYear()
@@ -409,7 +409,7 @@ export default function Dashboard({ action }) {
 
   // ── Derived: section 01 gains ─────────────────────────────────────────────
 
-  const indData = processedData.indicators[active]
+  const indData = processedData.gains?.[active]
 
   // Full year range spanning the selected period (includes years with no data → null entries in charts)
   const periodStart = yearFrom ?? allYears[0]
@@ -444,10 +444,10 @@ export default function Dashboard({ action }) {
   // ── Derived: section 01 trajectories ─────────────────────────────────────
 
   // trajData: covers every year in the period; null for years with no data
-  const trajRaw = processedData.emissions?.indicators?.[active]?.yearlyData ?? []
+  const trajRaw = processedData.emissions?.[active]?.yearlyData ?? []
   const trajByYear = new Map(trajRaw.map((d) => [d.year, d]))
   const trajData = periodRange.map((year) => trajByYear.get(year) ?? { year, initiale: null, reference: null, previsionnelle: null, expost: null })
-  const trajUnit = processedData.emissions?.indicators?.[active]?.unit || ""
+  const trajUnit = processedData.emissions?.[active]?.unit || ""
 
   // ── Derived: section 01 émissions par situation ──────────────────────────
 
@@ -480,11 +480,11 @@ export default function Dashboard({ action }) {
   // ── Derived: section 02 (niveaux d'émissions absolus) ───────────────────
 
   // selYear: last year with ex-post data — used only for trajectory reference line
-  const selYear = allYears.filter((y) => Object.values(processedData.indicators || {}).some((ind) => ind.yearlyData?.find((d) => d.year === y)?.ecartExpostRef !== 0)).at(-1) ?? allYears.at(-1)
+  const selYear = allYears.filter((y) => Object.values(processedData.gains || {}).some((ind) => ind.yearlyData?.find((d) => d.year === y)?.ecartExpostRef !== 0)).at(-1) ?? allYears.at(-1)
 
   const emissionProfile = availKeys.map((key) => {
-    const emData = processedData.emissions?.indicators?.[key]?.yearlyData ?? []
-    const unit = processedData.emissions?.indicators?.[key]?.unit || INDICATORS.find((i) => i.key === key)?.unit || ""
+    const emData = processedData.emissions?.[key]?.yearlyData ?? []
+    const unit = processedData.emissions?.[key]?.unit || INDICATORS.find((i) => i.key === key)?.unit || ""
     const ind = INDICATORS.find((i) => i.key === key)
 
     const firstRow = emData.find((d) => d.initiale > 0)

@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADNZP32VURAL2ZFZJYXPPUMULGLC"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADMMNZK62ESSGNGIVZPLFGYFVBOZ"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -1528,8 +1528,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {

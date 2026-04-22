@@ -162,7 +162,7 @@ router.post('/action-contribution', passport.authenticate(['admin', 'user'], { s
 });
 
 const extractAggregation = (action, gainsYearRows, emYearRows) => {
-  let processedData = { score: 0, indicators: {}, emissions: { indicators: {} } };
+  let processedData = { score: 0, gains: {}, emissions: {} };
 
   let totalAchievement = 0;
   let achievementCount = 0;
@@ -191,7 +191,7 @@ const extractAggregation = (action, gainsYearRows, emYearRows) => {
       achievementCount++;
     }
 
-    processedData.indicators[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData };
+    processedData.gains[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData };
   }
 
   processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
@@ -199,7 +199,7 @@ const extractAggregation = (action, gainsYearRows, emYearRows) => {
   for (const emissionType of EMISSION_TYPES) {
     if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
     const emCol = (action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number]) + INSTANCE_EMISSION_COL[emissionType];
-    processedData.emissions.indicators[emissionType] = {
+    processedData.emissions[emissionType] = {
       label: emissionType,
       unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit,
       yearlyData: emYearRows.map((d) => ({
@@ -294,10 +294,160 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     const actions = await Action.find(query).sort({ name: 1 });
     const aggregations = {};
     for (const a of actions) {
-      const d = extractAggregation(a, gainsYearRows, emYearRows);
-      aggregations[a._id] = { score: d.score, gains: d.indicators, emissions: d.emissions.indicators };
+      aggregations[a._id] = extractAggregation(a, gainsYearRows, emYearRows);
     }
     res.json({ ok: true, data: { actions, aggregations } });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
+router.post('/compare_actions', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity, action_ids, date_start, date_end } = req.body;
+    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+    if (!action_ids?.length) return res.json({ ok: false, data: { error: 'action_ids is required' } });
+
+    const actions = await Action.find({ _id: { $in: action_ids } });
+    if (!actions.length) return res.json({ ok: false, data: { error: 'no actions found' } });
+
+    const worksheetKey = actions[0].excel_worksheetname || 'B2';
+    if (!ACTION_GAINS_RANGES[worksheetKey]) return res.json({ ok: false, data: { error: `Action '${worksheetKey}' not found in gains configuration` } });
+
+    let aggregationFileId = null;
+    if (req.user?.role === 'economic_actor') {
+      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
+      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
+
+    const siteId = await getSiteId();
+
+    const [gainsResult, emResult] = await Promise.all([
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:DY${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:DY${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
+    ]);
+
+    const toYearRows = (r) => (r?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050 && (!date_start || year >= new Date(date_start).getFullYear()) && (!date_end || year <= new Date(date_end).getFullYear()));
+    const gainsYearRows = toYearRows(gainsResult);
+    const emYearRows = toYearRows(emResult);
+
+    const TYPE_ORDER = { init: 0, ref: 1, expost: 2, prev: 3 };
+    const DATA_KEYS = { init: 'initiale', ref: 'reference', expost: 'expost', prev: 'previsionnelle' };
+    const GAIN_KEYS = ['ecartRefInit', 'ecartExpostRef', 'ecartPrevRef', 'ecartExpostPrev'];
+
+    const buildBars = (action) => {
+      const bars = [];
+      if (action.year_init) bars.push({ year: action.year_init, type: 'init' });
+      const expostEntries = action.excel_files_expost?.length ? action.excel_files_expost.filter((e) => e.year_expost) : action.year_expost ? [{ year_expost: action.year_expost, year_ref: action.year_ref }] : [];
+      const prevEntries = action.exel_files_prev?.length ? action.exel_files_prev.filter((e) => e.year_prev) : action.year_prev ? [{ year_prev: action.year_prev, year_ref: action.year_ref }] : [];
+      const addedRef = new Set();
+      for (const e of expostEntries) {
+        if (e.year_ref && !addedRef.has(e.year_ref)) {
+          bars.push({ year: e.year_ref, type: 'ref' });
+          addedRef.add(e.year_ref);
+        }
+        bars.push({ year: e.year_expost, type: 'expost' });
+      }
+      for (const e of prevEntries) {
+        if (e.year_ref && !addedRef.has(e.year_ref)) {
+          bars.push({ year: e.year_ref, type: 'ref' });
+          addedRef.add(e.year_ref);
+        }
+        bars.push({ year: e.year_prev, type: 'prev' });
+      }
+      if (!addedRef.size && action.year_ref) bars.push({ year: action.year_ref, type: 'ref' });
+      bars.sort((a, b) => a.year - b.year || TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
+      return bars;
+    };
+
+    const interpolate = (known, years) => {
+      const sorted = [...known.entries()].sort(([a], [b]) => a - b);
+      const out = {};
+      for (const year of years) {
+        const k = known.get(year);
+        if (k != null) {
+          out[year] = { value: k.value, situationType: k.type, interpolated: false };
+          continue;
+        }
+        let before = null,
+          after = null;
+        for (const [y, e] of sorted) {
+          if (y < year && e.value != null) before = { year: y, value: e.value };
+          if (y > year && e.value != null && !after) after = { year: y, value: e.value };
+        }
+        if (before && after) {
+          const v = before.value + ((year - before.year) / (after.year - before.year)) * (after.value - before.value);
+          out[year] = { value: Math.round(v * 100) / 100, situationType: null, interpolated: true };
+        }
+      }
+      return out;
+    };
+
+    const years = [...new Set([...emYearRows.map((d) => d.year), ...gainsYearRows.map((d) => d.year)])].sort((a, b) => a - b);
+    const emissions = {};
+    const gains = {};
+    const availableYears = {};
+    const availableIndicators = new Set();
+    const availableGainTypes = new Set();
+
+    for (const action of actions) {
+      const agg = extractAggregation(action, gainsYearRows, emYearRows);
+      const bars = buildBars(action);
+      emissions[action._id] = {};
+      gains[action._id] = {};
+
+      for (const [indicator, emData] of Object.entries(agg.emissions)) {
+        const byYear = new Map(emData.yearlyData.map((d) => [d.year, d]));
+        const known = new Map();
+        for (const bar of bars) {
+          const row = byYear.get(bar.year);
+          const val = row?.[DATA_KEYS[bar.type]];
+          if (val != null && val > 0) known.set(bar.year, { value: val, type: bar.type });
+        }
+        if (!known.size) continue;
+        availableIndicators.add(indicator);
+        if (!availableYears[indicator]) availableYears[indicator] = new Set();
+        for (const y of known.keys()) availableYears[indicator].add(y);
+        emissions[action._id][indicator] = interpolate(known, years);
+      }
+
+      for (const [indicator, gainsData] of Object.entries(agg.gains)) {
+        gains[action._id][indicator] = {};
+        const gmap = new Map(gainsData.yearlyData.map((d) => [d.year, d]));
+        for (const gainType of GAIN_KEYS) {
+          const known = new Map();
+          for (const bar of bars) {
+            const row = gmap.get(bar.year);
+            if (row && row[gainType] !== 0) known.set(bar.year, { value: row[gainType], type: bar.type });
+          }
+          if (known.size) availableGainTypes.add(gainType);
+          gains[action._id][indicator][gainType] = interpolate(known, years);
+        }
+      }
+    }
+
+    const availableYearsOut = {};
+    for (const [ind, set] of Object.entries(availableYears)) availableYearsOut[ind] = [...set].sort((a, b) => a - b);
+
+    res.json({
+      ok: true,
+      data: {
+        years,
+        emissions,
+        gains,
+        availableIndicators: [...availableIndicators],
+        availableGainTypes: [...availableGainTypes],
+        availableYears: availableYearsOut,
+      },
+    });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });
