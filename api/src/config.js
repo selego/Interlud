@@ -1,17 +1,16 @@
 /* eslint-disable no-undef */
-const ENVIRONMENT = process.env.ENVIRONMENT || "development";
+const ENVIRONMENT = process.env.ENVIRONMENT || 'development';
 const PORT = process.env.PORT || 8080;
-const MONGODB_ENDPOINT =
-  process.env.MONGODB_ENDPOINT || "mongodb+srv://axel_db_user:EbubtALClwn4lrZR@interlud.zt98xxe.mongodb.net/db";
-const SECRET = process.env.SECRET || "not-so-secret";
-const APP_URL = process.env.APP_URL || "http://localhost:3000";
-const SENTRY_DSN = process.env.SENTRY_DSN || "https://c59cb0d9a0baefe0bd28ad58d45bd5fe@sentry.selego.co/212";
+const MONGODB_ENDPOINT = process.env.MONGODB_ENDPOINT;
+const SECRET = process.env.SECRET;
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+const SENTRY_DSN = process.env.SENTRY_DSN;
 
-const S3_ENDPOINT = process.env.S3_ENDPOINT || "";
-const S3_ACCESSKEYID = process.env.S3_ACCESSKEYID || "";
-const S3_SECRETACCESSKEY = process.env.S3_SECRETACCESSKEY || "";
+const S3_ENDPOINT = process.env.S3_ENDPOINT || '';
+const S3_ACCESSKEYID = process.env.S3_ACCESSKEYID || '';
+const S3_SECRETACCESSKEY = process.env.S3_SECRETACCESSKEY || '';
 
-const BREVO_KEY = process.env.BREVO_KEY || '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';
+const BREVO_KEY = process.env.BREVO_KEY;
 
 const CONFIG = {
   ENVIRONMENT,
@@ -26,6 +25,6 @@ const CONFIG = {
   BREVO_KEY,
 };
 
-if (ENVIRONMENT === "development") console.log(CONFIG);
+if (ENVIRONMENT === 'development') console.log(CONFIG);
 
 module.exports = CONFIG;
