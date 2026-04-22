@@ -162,22 +162,32 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     const completion = {};
     let totalAll = 0;
     let filledAll = 0;
+    let totalPrimordialAll = 0;
+    let filledPrimordialAll = 0;
 
     for (const iv of indicatorValues) {
       const key = `${iv.situation}_${iv.year}`;
       if (!shouldDisplayIndicator(iv, yearMappingsBySituationYear[key], conditionValuesMap)) continue;
 
-      if (!completion[key]) completion[key] = { total: 0, filled: 0 };
+      if (!completion[key]) completion[key] = { total: 0, filled: 0, totalPrimordial: 0, filledPrimordial: 0 };
       completion[key].total++;
       totalAll++;
+      if (iv.is_primordial) {
+        completion[key].totalPrimordial++;
+        totalPrimordialAll++;
+      }
 
       if (isIndicatorValueFilled(iv)) {
         completion[key].filled++;
         filledAll++;
+        if (iv.is_primordial) {
+          completion[key].filledPrimordial++;
+          filledPrimordialAll++;
+        }
       }
     }
 
-    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll, actionsBySituationYear, yearMappingsBySituationYear } });
+    return res.status(200).send({ ok: true, data: { situationYears, completion, totalAll, filledAll, totalPrimordialAll, filledPrimordialAll, actionsBySituationYear, yearMappingsBySituationYear } });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -674,6 +684,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
         { indicator_type: 'checkbox', $or: [{ 'value.checkbox': { $size: 0 } }, { 'value.checkbox': null }] },
       ];
     }
+
+    if (req.body.primordial_only) query.is_primordial = true;
 
     const data = await IndicatorValue.find(query)
       .sort({ excel_line_number: 1 })

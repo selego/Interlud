@@ -67,7 +67,7 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
       id={`indicator-${indicatorValue._id}`}
       className="bg-white p-4 rounded-lg border border-gray-200 transition-all"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2 mb-4">
         <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
       </div>
 

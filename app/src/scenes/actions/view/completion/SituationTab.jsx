@@ -1,4 +1,5 @@
 import React, { useState } from "react"
+import { FiStar } from "react-icons/fi"
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import IndicatorValueInput from "./IndicatorValueInput"
 import Loader from "@/components/loader"
@@ -22,6 +23,9 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
       filteredValues = filteredValues.filter(iv => iv.indicator_category_name === selectedCategory.categoryName && !iv.indicator_sub_category_name)
     }
   }
+
+  // Stable sort: primordiaux first within the filtered list
+  filteredValues = [...filteredValues].sort((a, b) => (b.is_primordial ? 1 : 0) - (a.is_primordial ? 1 : 0))
 
   return (
     <div className="card-shadow rounded-2xl p-6">
@@ -67,8 +71,13 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
       id={`indicator-${indicatorValue._id}`}
       className="bg-white p-4 rounded-lg border border-gray-200 transition-all"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2 mb-4">
         <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
+        {indicatorValue.is_primordial && (
+          <Tooltip content="Indicateur primordial : il a un fort impact sur le calcul des gains, à renseigner manuellement en priorité.">
+            <FiStar className="w-3.5 h-3.5 fill-amber-400 stroke-amber-500 cursor-help" />
+          </Tooltip>
+        )}
       </div>
 
       <div className="grid grid-cols-[2fr_2fr_2fr] gap-x-6 gap-y-4">

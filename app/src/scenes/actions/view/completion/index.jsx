@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter } from "react-icons/fi"
+import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter, FiStar } from "react-icons/fi"
 import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
@@ -10,9 +10,9 @@ import ProgressCircle from "@/components/ProgressCircle"
 import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
 
-const HIDDEN_INDICATOR_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte']
-const SITUATION_LABELS = { init: 'Initiale', ref: 'Référence', prev: 'Prévisionnel', expost: 'Ex-post' }
-const SITUATION_ORDER = ['init', 'ref', 'prev', 'expost']
+const HIDDEN_INDICATOR_IDS = ["AnneeRempl", "AnRef", "ActionsAutres", "ActionsCharte"]
+const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" }
+const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
 export default function Completion({ action }) {
   const { collectivity } = useStore()
@@ -24,12 +24,13 @@ export default function Completion({ action }) {
   const [isImporting, setIsImporting] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [showUnfilledOnly, setShowUnfilledOnly] = useState(true)
+  const [showPrimordialOnly, setShowPrimordialOnly] = useState(false)
 
   const situationYears = stats?.situationYears || {}
 
   const buildDynamicTabs = () => {
-    if (action.type === 'config' && stats) {
-      const shortLabels = { init: 'Init', ref: 'Réf', prev: 'Prév', expost: 'Expost' }
+    if (action.type === "config" && stats) {
+      const shortLabels = { init: "Init", ref: "Réf", prev: "Prév", expost: "Expost" }
       const tabs = []
       for (const situation of SITUATION_ORDER) {
         const years = situationYears[situation] || []
@@ -37,20 +38,19 @@ export default function Completion({ action }) {
           tabs.push({ key: `${situation}_${year}`, label: `${shortLabels[situation]} ${year}`, situation, year })
         }
       }
-      return tabs.length > 0 ? tabs : [{ key: 'init', label: 'Initiale', situation: 'init' }]
+      return tabs.length > 0 ? tabs : [{ key: "init", label: "Initiale", situation: "init" }]
     }
 
     // Dériver les années de référence depuis les tableaux de fichiers
-    const refYears = [...new Set([
-      ...(action.exel_files_prev || []).map(f => f.year_ref),
-      ...(action.excel_files_expost || []).map(f => f.year_ref),
-    ].filter(Boolean))].sort((a, b) => a - b);
+    const refYears = [...new Set([...(action.exel_files_prev || []).map((f) => f.year_ref), ...(action.excel_files_expost || []).map((f) => f.year_ref)].filter(Boolean))].sort(
+      (a, b) => a - b
+    )
 
     return [
-      { key: 'init', label: `Initiale${action.year_init ? ` ${action.year_init}` : ""}`, situation: 'init', year: action.year_init },
-      ...refYears.map(year => ({ key: `ref_${year}`, label: `Réf. ${year}`, situation: 'ref', year })),
-      ...(action.exel_files_prev || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: 'prev' })),
-      ...(action.excel_files_expost || []).map((file) => ({ key: `expost_${file.year_expost}`, label: `Expost ${file.year_expost}`, year: file.year_expost, situation: 'expost' })),
+      { key: "init", label: `Initiale${action.year_init ? ` ${action.year_init}` : ""}`, situation: "init", year: action.year_init },
+      ...refYears.map((year) => ({ key: `ref_${year}`, label: `Réf. ${year}`, situation: "ref", year })),
+      ...(action.exel_files_prev || []).map((file) => ({ key: `prev_${file.year_prev}`, label: `Prév. ${file.year_prev}`, year: file.year_prev, situation: "prev" })),
+      ...(action.excel_files_expost || []).map((file) => ({ key: `expost_${file.year_expost}`, label: `Expost ${file.year_expost}`, year: file.year_expost, situation: "expost" }))
     ]
   }
 
@@ -65,10 +65,14 @@ export default function Completion({ action }) {
     }
     // Aggregate across all years for this situation (non-config init/ref)
     const years = situationYears[tab.situation] || []
-    let totalFilled = 0, totalCount = 0
+    let totalFilled = 0,
+      totalCount = 0
     for (const y of years) {
       const c = stats.completion[`${tab.situation}_${y}`]
-      if (c) { totalFilled += c.filled; totalCount += c.total }
+      if (c) {
+        totalFilled += c.filled
+        totalCount += c.total
+      }
     }
     return totalCount > 0 ? Math.round((totalFilled / totalCount) * 100) : 0
   }
@@ -111,10 +115,16 @@ export default function Completion({ action }) {
       reader.readAsDataURL(file)
       reader.onload = async () => {
         try {
-          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", { fileBase64: reader.result.split(",")[1], collectivity, action_id: action._id, situation: currentTab?.situation, year: currentTab?.year })
+          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", {
+            fileBase64: reader.result.split(",")[1],
+            collectivity,
+            action_id: action._id,
+            situation: currentTab?.situation,
+            year: currentTab?.year
+          })
           if (!ok) return toast.error(code || "Erreur lors de l'import")
           toast.success("Valeurs importées avec succès")
-          setRefreshKey(k => k + 1)
+          setRefreshKey((k) => k + 1)
           fetchStats()
         } catch (error) {
           toast.error("Erreur lors de l'import")
@@ -135,7 +145,7 @@ export default function Completion({ action }) {
 
   useEffect(() => {
     if (dynamicTabs.length > 0) {
-      const currentTabExists = dynamicTabs.some(t => t.key === activeTab)
+      const currentTabExists = dynamicTabs.some((t) => t.key === activeTab)
       if (!currentTabExists) setActiveTab(dynamicTabs[0].key)
     }
   }, [stats, action.type])
@@ -151,7 +161,8 @@ export default function Completion({ action }) {
           </button>
           <span>/</span>
           <button onClick={() => navigate(`/actions/${action._id}/dashboard`)} className="hover:text-primary-green transition-colors truncate max-w-[150px]">
-            {action.name}{action.instance_number > 1 ? ` #${action.instance_number}` : ''}
+            {action.name}
+            {action.instance_number > 1 ? ` #${action.instance_number}` : ""}
           </button>
           <span>/</span>
           <span className="text-gray-900 font-medium">Complétion</span>
@@ -162,35 +173,72 @@ export default function Completion({ action }) {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate(-1)}
-                className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
+                className="p-2 pl-0 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
                 aria-label="Revenir à la page précédente"
               >
                 <FiArrowLeft size={18} />
               </button>
-              <h1 className="text-3xl font-bold text-gray-900">{action.name}{action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {action.name}
+                {action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}
+              </h1>
             </div>
           </div>
 
-          <div className="flex gap-2 items-center ml-14">
-            <ProgressCircle percentage={stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0} size={20} />
-            <p className="text-sm text-gray-900">
-              Complété à{" "}
-              <strong>{stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0}%</strong>
-            </p>
-            <p className="text-sm text-gray-600">
-              - Dernière mise à jour le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong>
-              <span>
-                {" "}par <strong>{action.last_modif_by_name || action.last_modif_by_email || "Inconnu"}</strong>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2 text-sm min-h-[32px]">
+              <ProgressCircle percentage={stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0} size={20} />
+              <span className="text-gray-900">
+                Complété à <strong>{stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0}%</strong>
               </span>
-            </p>
-            <button
-              onClick={() => setShowUnfilledOnly(prev => !prev)}
-              className={`flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-lg transition-all border ${showUnfilledOnly ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-            >
-              <FiFilter className="w-4 h-4" />
-              {showUnfilledOnly ? 'Afficher les valeurs remplies' : 'Non remplis uniquement'}
-            </button>
+              <span className="text-gray-300">·</span>
+              <span className="text-gray-600">
+                MAJ le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong> par{" "}
+                <strong>{action.last_modif_by_name || action.last_modif_by_email || "Inconnu"}</strong>
+              </span>
+            </div>
+
+            <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
+              <button
+                onClick={() => {
+                  setShowUnfilledOnly(false)
+                  setShowPrimordialOnly(false)
+                }}
+                className={`px-3 h-8 text-sm font-medium rounded-md transition-all ${!showUnfilledOnly && !showPrimordialOnly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                Tous
+              </button>
+              <button
+                onClick={() => {
+                  setShowUnfilledOnly(true)
+                  setShowPrimordialOnly(false)
+                }}
+                className={`px-3 h-8 text-sm font-medium rounded-md transition-all inline-flex items-center gap-1.5 ${showUnfilledOnly && !showPrimordialOnly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                <FiFilter className="w-3.5 h-3.5" />
+                Non remplis
+              </button>
+              <button
+                onClick={() => {
+                  setShowPrimordialOnly(true)
+                  setShowUnfilledOnly(false)
+                }}
+                className={`px-3 h-8 text-sm font-medium rounded-md transition-all inline-flex items-center gap-1.5 ${showPrimordialOnly ? "bg-white text-amber-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                <FiStar className={`w-3.5 h-3.5 ${showPrimordialOnly ? "fill-amber-500 stroke-amber-500" : ""}`} />À remplir en priorité
+              </button>
+            </div>
           </div>
+
+          {showPrimordialOnly && (
+            <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800">
+              <FiInfo className="w-4 h-4 text-amber-600 shrink-0 mt-1" />
+              <p>
+                Ces indicateurs <strong>ont un fort impact sur le calcul des gains</strong> : il est primordial de les renseigner manuellement. Les autres indicateurs ont un impact
+                plus limité et peuvent conserver la valeur mise par défaut via notre méthode de récupération. Vous pouvez tout de même ajuster les valeurs si vous le souhaitez.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between border-b border-gray-200 mb-8">
@@ -261,6 +309,8 @@ export default function Completion({ action }) {
           yearMappings={stats?.yearMappingsBySituationYear?.[`${currentTab?.situation}_${currentTab?.year}`]}
           showUnfilledOnly={showUnfilledOnly}
           onToggleUnfilledOnly={() => setShowUnfilledOnly(false)}
+          showPrimordialOnly={showPrimordialOnly}
+          onTogglePrimordialOnly={() => setShowPrimordialOnly(false)}
           tabTotal={stats?.completion?.[`${currentTab?.situation}_${currentTab?.year}`]?.total || 0}
         />
       </div>
@@ -268,14 +318,28 @@ export default function Completion({ action }) {
   )
 }
 
-function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly, tabTotal }) {
+function IndicatorView({
+  action,
+  activeSituation,
+  activeYear,
+  refreshKey,
+  onStatsRefresh,
+  yearMappings,
+  showUnfilledOnly,
+  onToggleUnfilledOnly,
+  showPrimordialOnly,
+  onTogglePrimordialOnly,
+  tabTotal
+}) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const displayedIndicatorValues = indicatorValues.filter(iv => !HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id) && shouldDisplayIndicatorFromMap(iv, yearMappings, conditionValuesMap))
+  const displayedIndicatorValues = indicatorValues.filter(
+    (iv) => !HIDDEN_INDICATOR_IDS.includes(iv.indicator_excel_id) && shouldDisplayIndicatorFromMap(iv, yearMappings, conditionValuesMap)
+  )
 
   const fetchConditionValues = async (data) => {
     const map = await fetchConditionValuesMap(data, action)
@@ -286,7 +350,18 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
     const indicatorIds = new Set()
     for (const iv of data) indicatorIds.add(iv.indicator_id)
     if (indicatorIds.size === 0) return
-    const { ok, data: resData, code } = await api.post("/indicator_value/search", { indicator_ids: [...indicatorIds], situation: activeSituation, collectivity_id: action.collectivity_id, owner: 'economic_actor', limit: 10000, year: activeYear })
+    const {
+      ok,
+      data: resData,
+      code
+    } = await api.post("/indicator_value/search", {
+      indicator_ids: [...indicatorIds],
+      situation: activeSituation,
+      collectivity_id: action.collectivity_id,
+      owner: "economic_actor",
+      limit: 10000,
+      year: activeYear
+    })
     if (!ok) return toast.error(code || "Une erreur est survenue")
     const grouped = {}
     for (const iv of resData) {
@@ -303,6 +378,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
       const params = { action_id: action._id, situation: activeSituation, limit: 10000 }
       if (activeYear) params.year = activeYear
       if (showUnfilledOnly) params.unfilled_only = true
+      if (showPrimordialOnly) params.primordial_only = true
       const { ok, data, code } = await api.post("/indicator_value/search", params)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setIndicatorValues(data)
@@ -316,10 +392,10 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
     try {
-      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues(prev => prev.filter(iv => iv._id !== indicatorValue._id))
-      if (!showUnfilledOnly) setIndicatorValues(prev => prev.map(iv => iv._id === indicatorValue._id ? indicatorValue : iv))
+      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
+      if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {
-        setConditionValuesMap(prev => {
+        setConditionValuesMap((prev) => {
           const condKey = `${indicatorValue.indicator_excel_id}_${indicatorValue.situation}_${indicatorValue.year}`
           if (!prev.has(condKey)) return prev
           const next = new Map(prev)
@@ -327,7 +403,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
           return next
         })
       }
-      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: 'manual', ...indicatorValue })
+      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       toast.success("Valeur enregistrée avec succès")
       onStatsRefresh()
@@ -338,7 +414,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
 
   useEffect(() => {
     loadData()
-  }, [action?._id, activeSituation, activeYear, refreshKey, showUnfilledOnly])
+  }, [action?._id, activeSituation, activeYear, refreshKey, showUnfilledOnly, showPrimordialOnly])
 
   useEffect(() => {
     setSelectedCategory(null)
@@ -347,7 +423,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
   useEffect(() => {
     if (displayedIndicatorValues.length > 0) {
       const firstCat = displayedIndicatorValues[0]?.indicator_category_name
-      if (firstCat && (!selectedCategory || !displayedIndicatorValues.some(iv => iv.indicator_category_name === selectedCategory.categoryName))) {
+      if (firstCat && (!selectedCategory || !displayedIndicatorValues.some((iv) => iv.indicator_category_name === selectedCategory.categoryName))) {
         setSelectedCategory({ categoryName: firstCat })
       }
     }
@@ -359,9 +435,31 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
         <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          />
         </svg>
         <p className="text-lg font-medium text-gray-600">Aucun indicateur pour cette situation</p>
+      </div>
+    )
+  }
+
+  if (!isLoading && showPrimordialOnly && displayedIndicatorValues.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <svg className="w-16 h-16 mb-4 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-lg font-medium text-gray-600">Aucun champ à remplir en priorité</p>
+        <p className="text-sm text-gray-500 mt-1 max-w-md text-center">
+          Les autres indicateurs de cette situation s'appuient sur une valeur par défaut, que vous pouvez ajuster si besoin.
+        </p>
+        <button onClick={onTogglePrimordialOnly} className="mt-4 text-sm text-primary-green hover:underline">
+          Afficher tous les indicateurs
+        </button>
       </div>
     )
   }
@@ -385,7 +483,7 @@ function IndicatorView({ action, activeSituation, activeYear, refreshKey, onStat
       <div className="w-full lg:w-72 shrink-0">
         <div className="card-shadow p-4 sticky top-8 self-start">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Situation : {activeSituation ? `${SITUATION_LABELS[activeSituation]} ${activeYear || ''}` : ''}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Situation : {activeSituation ? `${SITUATION_LABELS[activeSituation]} ${activeYear || ""}` : ""}</h3>
           </div>
           <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
             {isLoading ? (
