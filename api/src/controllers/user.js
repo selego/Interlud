@@ -193,7 +193,7 @@ router.post('/reset_password', passport.authenticate('user', { session: false })
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const data = await UserObject.findOne({ _id: req.params.id });
     return res.status(200).send({ ok: true, data });

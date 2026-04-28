@@ -454,7 +454,7 @@ router.post('/compare_actions', passport.authenticate(['admin', 'user'], { sessi
   }
 });
 
-router.post('/export', async (req, res) => {
+router.post('/export', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { fileId } = req.body;
     if (!fileId) return res.json({ ok: false, data: { error: 'fileId is required' } });
