@@ -1,4 +1,38 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s https://raw.githubusercontent.com/selego/whitepaper/main/README.md > /tmp/selego-whitepaper.md && echo 'Whitepaper Selego chargé.'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"SELEGO_REVIEW: Verifie que le fichier edite respecte le whitepaper Selego dans /tmp/selego-whitepaper.md. Points cles : early returns, pas de filtres frontend, POST /search pour les listes, reponses API { ok, data }, KIS, flat data MongoDB, separation des concerns, small PRs. Si violation detectee, signale la section.\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"DESIGN_REVIEW (app/ frontend uniquement, ignore si fichier hors app/src): Avant de finir, verifie que ton edit est uniformise avec le design system existant. 1) Tailwind : reprends les memes paddings/margins/gaps/rounded/shadow/colors que les scenes voisines (ex: scenes/actions, scenes/dashboard) - n'invente pas de valeurs arbitraires. 2) Strings UI en francais. 3) Garde la meme hierarchie typographique (titres, sous-titres, body) que les pages existantes du meme niveau. 4) Si tu introduis un nouveau pattern visuel, justifie-le ou propose plutot d'aligner sur l'existant. Si une incoherence est detectee dans ton edit, signale-la et corrige.\""
+          }
+        ]
+      }
+    ]
+  }
+}
+{
   "permissions": {
     "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "WebFetch", "WebSearch", "NotebookEdit", "TodoWrite", "mcp__claude_ai_Accounting", "mcp__claude_ai_HubSpot", "mcp__claude_ai_PubMed"],
     "deny": ["Bash(git push*)", "Bash(git push --force*)"]
