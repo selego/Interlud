@@ -5,18 +5,18 @@
 ALWAYS use this exact pattern for API calls:
 
 ```jsx
-const fetchObjectifs = async () => {
+const fetchIndicators = async () => {
   try {
-    const { ok, data, code } = await api.post("/scrim-objectif/search", { team_id: user?.team_id })
-    if (!ok) return toast.error(code || "Failed to fetch objectives")
-    setObjectifs(data)
+    const { ok, data, code } = await api.post("/indicator/search", { action_id: action?._id })
+    if (!ok) return toast.error(code || "Failed to fetch indicators")
+    setIndicators(data)
   } catch (error) {
-    toast.error(error.code || "Failed to fetch objectives")
+    toast.error(error.code || "Failed to fetch indicators")
   }
 }
 
 useEffect(() => {
-  fetchObjectifs()
+  fetchIndicators()
 }, [])
 ```
 
@@ -30,19 +30,19 @@ Rules:
 
 ## State Management for Fetched Objects
 
-When fetching an object (e.g. a team, a player), ALWAYS store it as a single state object. For PUT/update requests, send the entire object directly.
+When fetching an object (e.g. an action, a collectivity), ALWAYS store it as a single state object. For PUT/update requests, send the entire object directly.
 
 ```jsx
-const [team, setTeam] = useState(null)
+const [action, setAction] = useState(null)
 
 // update a field
-onChange={e => setTeam(prev => ({ ...prev, league: e.target.value }))}
+onChange={e => setAction(prev => ({ ...prev, name: e.target.value }))}
 
 // send the whole object
-await api.put(`/enemy-team/${id}`, team)
+await api.put(`/action/${id}`, action)
 ```
 
-NEVER create separate useState for each field. NEVER split a fetched object into multiple setState calls (e.g. `setPrioPicks(data.prio_pick)` + `setPrioFlex(data.prio_flex)`) — store the whole object in one `setData(data)` and access fields via dot notation. NEVER create a helper like `setField`. NEVER list fields individually in PUT requests.
+NEVER create separate useState for each field. NEVER split a fetched object into multiple setState calls (e.g. `setCompletionInit(data.completion_init)` + `setCompletionRef(data.completion_ref)`) — store the whole object in one `setData(data)` and access fields via dot notation. NEVER create a helper like `setField`. NEVER list fields individually in PUT requests.
 
 ## No Promise.all
 
@@ -72,14 +72,14 @@ NEVER have multiple fetches in a single component. If a component needs data fro
 
 ## Props Convention
 
-ALWAYS pass the full `data` object as prop to child components. NEVER destructure or cherry-pick individual fields as props (e.g. `playerId={data.player._id}`). The child accesses what it needs via dot notation.
+ALWAYS pass the full `data` object as prop to child components. NEVER destructure or cherry-pick individual fields as props (e.g. `actionId={data.action._id}`). The child accesses what it needs via dot notation.
 
 ```jsx
 // BAD
-<SoloObjectives playerId={data.player._id} />
+<IndicatorList actionId={data.action._id} />
 
 // GOOD
-<SoloObjectives data={data} />
+<IndicatorList data={data} />
 ```
 
 ## No Unnecessary Variables
@@ -102,17 +102,17 @@ NEVER destructure objects into intermediate variables. Access properties directl
 
 ```jsx
 // BAD
-const { w, l } = stats
+const { in_progress, completed } = stats
 return (
   <span>
-    {w}W {l}L
+    {in_progress} en cours, {completed} terminées
   </span>
 )
 
 // GOOD
 return (
   <span>
-    {stats.w}W {stats.l}L
+    {stats.in_progress} en cours, {stats.completed} terminées
   </span>
 )
 ```
@@ -126,20 +126,20 @@ ALWAYS filter data on the backend. NEVER filter on the frontend with `useMemo`, 
 Store filters in a single `useState` object and spread them directly into the `api.post` body. The `useEffect` re-fetches whenever `filters` changes.
 
 ```jsx
-const [filters, setFilters] = useState({ search: "", patch: "", opponent_name: "" })
+const [filters, setFilters] = useState({ search: "", situation: "", owner: "" })
 
-const fetchSessions = async () => {
+const fetchActions = async () => {
   try {
-    const { ok, data, code } = await api.post("/scrim-session/search", { team_id: user?.team_id, ...filters })
-    if (!ok) return toast.error(code || "Failed to fetch sessions")
-    setSessions(data)
+    const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity?._id, ...filters })
+    if (!ok) return toast.error(code || "Failed to fetch actions")
+    setActions(data)
   } catch (error) {
-    toast.error(error.code || "Failed to fetch sessions")
+    toast.error(error.code || "Failed to fetch actions")
   }
 }
 
 useEffect(() => {
-  fetchSessions()
+  fetchActions()
 }, [filters])
 ```
 
@@ -148,7 +148,7 @@ Rules:
 - ALWAYS store all filters in a single `useState` object, NEVER one `useState` per filter
 - ALWAYS spread `...filters` directly in the `api.post` call, NEVER build a separate `body` variable
 - ALWAYS re-fetch via `useEffect` on `[filters]`, the backend handles empty/falsy filter values
-- Filter dropdowns (patch, opponent, etc.) are self-contained components that fetch their own options
+- Filter dropdowns (situation, owner, etc.) are self-contained components that fetch their own options
 
 ## No External Body Variable
 
@@ -156,10 +156,10 @@ NEVER create an intermediate `body` or `payload` variable for `api.post`. Pass t
 
 ```jsx
 // BAD
-const body = { team_id: user?.team_id }
+const body = { collectivity_id: collectivity?._id }
 if (filters.search) body.search = filters.search
 const { ok, data, code } = await api.post("/endpoint", body)
 
 // GOOD
-const { ok, data, code } = await api.post("/endpoint", { team_id: user?.team_id, ...filters })
+const { ok, data, code } = await api.post("/endpoint", { collectivity_id: collectivity?._id, ...filters })
 ```
