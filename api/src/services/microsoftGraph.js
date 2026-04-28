@@ -1,7 +1,7 @@
 const ExcelJS = require('exceljs');
 
-const tenantId = 'efa89c5e-5599-439d-8f01-b4da9ded0a55';
-const clientId = 'f2924bbc-a975-49fe-a2ca-df4ff711be14';
+const tenantId = process.env.TENANT_ID;
+const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const sharePointSiteName = 'selegobv';
 const masterExcelFileId = '01IBL4ADNZP32VURAL2ZFZJYXPPUMULGLC';
