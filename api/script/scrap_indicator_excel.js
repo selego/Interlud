@@ -1320,7 +1320,8 @@ async function generateExcelForAllCollectivities() {
 
         try {
           // Dupliquer le master pour remplacer l'Excel
-          const fileName = `${action.name}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
+          const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : '';
+          const fileName = `${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           // Sync les valeurs (prev file contient init + ref + prev)
@@ -1348,7 +1349,8 @@ async function generateExcelForAllCollectivities() {
         if (!expostFile.excel_file_id) continue;
 
         try {
-          const fileName = `${action.name}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
+          const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : '';
+          const fileName = `${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           const situationYears = [
