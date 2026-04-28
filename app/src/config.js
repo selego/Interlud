@@ -6,7 +6,7 @@ if (environment === "production") {
   apiURL = "https://interlud-api.cleverapps.io"
 }
 
-const SENTRY_URL = "YOUR_SENTRY_URL"
+const SENTRY_URL = process.env.SENTRY_URL
 
 function getEnvironment() {
   if (window.location.href.indexOf("app-staging") !== -1) return "staging"
