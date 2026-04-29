@@ -598,7 +598,7 @@ export default function Dashboard({ action }) {
     )
   if (loading) return <Loader />
 
-  const isEmpty = !action.completion_init && !action.completion_ref && !action.completion_prev && !action.completion_expost
+  const isEmpty = action.completion_init !== 100 && action.completion_ref !== 100 && action.completion_prev !== 100 && action.completion_expost !== 100
 
   // ── Derived: shared ───────────────────────────────────────────────────────
 
