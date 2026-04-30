@@ -23,8 +23,8 @@ export default function Completion({ action }) {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [showUnfilledOnly, setShowUnfilledOnly] = useState(true)
-  const [showPrimordialOnly, setShowPrimordialOnly] = useState(false)
+  const [showUnfilledOnly, setShowUnfilledOnly] = useState(false)
+  const [showPrimordialOnly, setShowPrimordialOnly] = useState(true)
 
   const situationYears = stats?.situationYears || {}
 
@@ -186,27 +186,15 @@ export default function Completion({ action }) {
           </div>
 
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-sm min-h-[32px]">
-              <ProgressCircle percentage={stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0} size={20} />
-              <span className="text-gray-900">
-                Complété à <strong>{stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0}%</strong>
-              </span>
-              <span className="text-gray-300">·</span>
-              <span className="text-gray-600">
-                MAJ le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong> par{" "}
-                <strong>{action.last_modif_by_name || action.last_modif_by_email || "Inconnu"}</strong>
-              </span>
-            </div>
-
             <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
               <button
                 onClick={() => {
+                  setShowPrimordialOnly(true)
                   setShowUnfilledOnly(false)
-                  setShowPrimordialOnly(false)
                 }}
-                className={`px-3 h-8 text-sm font-medium rounded-md transition-all ${!showUnfilledOnly && !showPrimordialOnly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                className={`px-3 h-8 text-sm font-medium rounded-md transition-all inline-flex items-center gap-1.5 ${showPrimordialOnly ? "bg-white text-amber-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
               >
-                Tous
+                <FiStar className={`w-3.5 h-3.5 ${showPrimordialOnly ? "fill-amber-500 stroke-amber-500" : ""}`} />À remplir en priorité
               </button>
               <button
                 onClick={() => {
@@ -220,13 +208,25 @@ export default function Completion({ action }) {
               </button>
               <button
                 onClick={() => {
-                  setShowPrimordialOnly(true)
                   setShowUnfilledOnly(false)
+                  setShowPrimordialOnly(false)
                 }}
-                className={`px-3 h-8 text-sm font-medium rounded-md transition-all inline-flex items-center gap-1.5 ${showPrimordialOnly ? "bg-white text-amber-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                className={`px-3 h-8 text-sm font-medium rounded-md transition-all ${!showUnfilledOnly && !showPrimordialOnly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
               >
-                <FiStar className={`w-3.5 h-3.5 ${showPrimordialOnly ? "fill-amber-500 stroke-amber-500" : ""}`} />À remplir en priorité
+                Tous
               </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm min-h-[32px]">
+              <ProgressCircle percentage={stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0} size={20} />
+              <span className="text-gray-900">
+                Complété à <strong>{stats?.totalAll > 0 ? Math.round((stats.filledAll / stats.totalAll) * 100) : 0}%</strong>
+              </span>
+              <span className="text-gray-300">·</span>
+              <span className="text-gray-600">
+                MAJ le <strong>{new Date(action.last_modif_date).toLocaleDateString()}</strong> par{" "}
+                <strong>{action.last_modif_by_name || action.last_modif_by_email || "Inconnu"}</strong>
+              </span>
             </div>
           </div>
 

@@ -547,7 +547,7 @@ export default function Dashboard({ action }) {
 
   const [processedData, setProcessedData] = useState({ score: 0, indicators: {}, emissions: { indicators: {} } })
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState("gains")
+  const [tab, setTab] = useState("situations")
   const [activePill, setActivePill] = useState("GES")
   const [yearFrom, setYearFrom] = useState(action.date_start ? new Date(action.date_start).getFullYear() : null)
   const [yearTo, setYearTo] = useState(action.date_end ? new Date(action.date_end).getFullYear() : null)
