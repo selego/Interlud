@@ -106,7 +106,7 @@ router.post('/logout', async (_, res) => {
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -311,11 +311,11 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
 
 router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    if (req.user.role === 'user' && req.user._id.toString() !== req.params.id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN, message: 'Vous ne pouvez pas réinitialiser le mot de passe de cet utilisateur' });
-    if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH, message: 'Les mots de passe ne correspondent pas' });
-    if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED, message: 'Le mot de passe doit contenir au moins 6 caractères' });
+    if (req.user.role === 'user' && req.user._id.toString() !== req.params.id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
+    if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
     const obj = await UserObject.findById(req.params.id);
-    if (!obj) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS, message: 'Utilisateur non trouvé' });
+    if (!obj) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
     obj.set({ password: req.body.newPassword });
     await obj.save();
     return res.status(200).send({ ok: true, user: obj });
@@ -329,7 +329,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
   try {
     const obj = req.body;
     const exist = await UserObject.findOne({ email: obj.email });
-    if (exist) return res.status(409).send({ ok: false, code: 'EMAIL_ALREADY_EXIST' });
+    if (exist) return res.status(409).send({ ok: false, code: ERROR_CODES.EMAIL_ALREADY_EXIST });
 
     obj.created_at = new Date();
 
@@ -411,7 +411,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 router.post('/send-invite/:id', passport.authenticate(['admin'], { session: false }), async (req, res) => {
   try {
     const user = await UserObject.findById(req.params.id);
-    if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
+    if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
 
     const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365); // 1 an
@@ -485,8 +485,8 @@ router.post('/check-invitation-token', async (req, res) => {
   try {
     const { invitation_token } = req.body;
     const user = await UserObject.findOne({ invitation_token });
-    if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
-    // if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: "INVITATION_TOKEN_EXPIRED" });
+    if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
+    // if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
     return res.status(200).send({ ok: true, user });
   } catch (error) {
     capture(error);
@@ -498,9 +498,9 @@ router.post('/invite-accepted', async (req, res) => {
   try {
     const { email, password, name, invitation_token } = req.body;
     const user = await UserObject.findOne({ email, invitation_token });
-    if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
+    if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
 
-    if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: 'INVITATION_TOKEN_EXPIRED' });
+    if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
 
     const updateData = { password, name, invitation_token: null, invitation_token_expires: null, invitation_accepted_at: new Date(), last_login_at: new Date() };
 
@@ -536,7 +536,7 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     const user = await UserObject.findById(req.user._id);
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: 'ALREADY_REQUESTED' });
+    if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_REQUESTED });
 
     const adminCollectivity = await UserObject.find({ collectivities: { $elemMatch: { id: collectivityId, role: 'admin' } } });
     const redirectUrl = `${config.APP_URL}/collectivity?collectivityId=${collectivityId}`;

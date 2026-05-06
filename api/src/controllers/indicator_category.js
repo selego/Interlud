@@ -52,7 +52,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
     return res.status(200).send({ ok: true, data: indicatorCategory });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, data: { code: ERROR_CODES.SERVER_ERROR } });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 

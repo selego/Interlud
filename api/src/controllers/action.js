@@ -703,7 +703,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     // Vérifier si cette année prévisionnelle existe déjà
     const existingPrev = action.exel_files_prev?.find((f) => f.year_prev === year_prev);
-    if (existingPrev) return res.status(400).send({ ok: false, code: 'YEAR_PREV_ALREADY_EXISTS' });
+    if (existingPrev) return res.status(400).send({ ok: false, code: ERROR_CODES.YEAR_PREV_ALREADY_EXISTS });
 
     const collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
@@ -963,7 +963,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
     // Vérifier si cette année expost existe déjà
     const existingExpost = action.excel_files_expost?.find((f) => f.year_expost === year_expost);
-    if (existingExpost) return res.status(400).send({ ok: false, code: 'YEAR_EXPOST_ALREADY_EXISTS' });
+    if (existingExpost) return res.status(400).send({ ok: false, code: ERROR_CODES.YEAR_EXPOST_ALREADY_EXISTS });
 
     const collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });

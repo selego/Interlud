@@ -20,6 +20,12 @@ const ERROR_CODES = {
   FORBIDDEN: 'Accès refusé',
   COLLECTIVITY_ALREADY_EXISTS: 'Collectivité déjà existante',
   MAX_INSTANCES_REACHED: "Nombre maximum d'instances atteint",
+  EMAIL_ALREADY_EXIST: 'Cette adresse e-mail existe déjà',
+  USER_NOT_FOUND: 'Utilisateur non trouvé',
+  INVITATION_TOKEN_EXPIRED: "Token d'invitation expiré",
+  ALREADY_REQUESTED: 'Demande déjà effectuée',
+  YEAR_PREV_ALREADY_EXISTS: 'Année prévisionnelle déjà existante',
+  YEAR_EXPOST_ALREADY_EXISTS: 'Année ex-post déjà existante',
 };
 
 module.exports = ERROR_CODES;
