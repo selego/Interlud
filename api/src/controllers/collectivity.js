@@ -6,6 +6,9 @@ const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const { createFolder, duplicateExcelFile } = require('../services/microsoftGraph');
+const { pickFields } = require('../utils');
+
+const COLLECTIVITY_UPDATABLE_FIELDS = ['name', 'description', 'department', 'population', 'siren', 'year', 'area', 'basedata_onboarded', 'parc_types_onboarded'];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -21,7 +24,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const collectivity = await Collectivity.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const collectivity = await Collectivity.findByIdAndUpdate(req.params.id, pickFields(req.body, COLLECTIVITY_UPDATABLE_FIELDS), { new: true });
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: collectivity });
   } catch (error) {

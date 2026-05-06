@@ -4,6 +4,9 @@ const passport = require('passport');
 const Notification = require('../models/notification');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
+const { pickFields } = require('../utils');
+
+const NOTIFICATION_UPDATABLE_FIELDS = ['message', 'redirect', 'read_at'];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -19,7 +22,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const notification = await Notification.findByIdAndUpdate(req.params.id, pickFields(req.body, NOTIFICATION_UPDATABLE_FIELDS), { new: true });
     if (!notification) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: notification });
   } catch (error) {
