@@ -19,7 +19,8 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const log = await Log.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { model_name, name, field, operation, new_value, previous_value, type_value, date, source, user_id, user_name, user_email, indicator_value_id, indicator_value_name, indicator_category_id, indicator_category_name, user_action_right_id, user_action_right_name, collectivity_id, collectivity_name, action_id, action_name, economic_actor_id, economic_actor_name, indicator_id, indicator_name } = req.body;
+    const log = await Log.findByIdAndUpdate(req.params.id, { model_name, name, field, operation, new_value, previous_value, type_value, date, source, user_id, user_name, user_email, indicator_value_id, indicator_value_name, indicator_category_id, indicator_category_name, user_action_right_id, user_action_right_name, collectivity_id, collectivity_name, action_id, action_name, economic_actor_id, economic_actor_name, indicator_id, indicator_name }, { new: true });
     if (!log) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: log });
   } catch (error) {
@@ -53,8 +54,9 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const log = await Log.create( req.body );
+    const { model_name, name, field, operation, new_value, previous_value, type_value, date, source, user_id, user_name, user_email, indicator_value_id, indicator_value_name, indicator_category_id, indicator_category_name, user_action_right_id, user_action_right_name, collectivity_id, collectivity_name, action_id, action_name, economic_actor_id, economic_actor_name, indicator_id, indicator_name } = req.body;
+    if (!name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const log = await Log.create({ model_name, name, field, operation, new_value, previous_value, type_value, date, source, user_id, user_name, user_email, indicator_value_id, indicator_value_name, indicator_category_id, indicator_category_name, user_action_right_id, user_action_right_name, collectivity_id, collectivity_name, action_id, action_name, economic_actor_id, economic_actor_name, indicator_id, indicator_name });
 
     return res.status(200).send({ ok: true, data: log });
   } catch (error) {

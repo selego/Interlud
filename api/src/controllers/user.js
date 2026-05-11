@@ -249,12 +249,12 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin'], { session: false }), async (req, res) => {
   try {
-    const { password, role, economic_actor_name, email } = req.body;
+    const { name, password, role, economic_actor_name, email } = req.body;
     const existingUser = await UserObject.findOne({ email });
     if (existingUser) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     if (!validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
 
-    let payload = { ...req.body };
+    let payload = { name, email, password, role };
 
     // Si c'est un acteur économique, créer l'entité EconomicActor
     if (role === 'economic_actor' && economic_actor_name) {

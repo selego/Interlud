@@ -19,7 +19,8 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
 router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const indicatorCategory = await IndicatorCategory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { name, description, type, principal_category_id, principal_category_name } = req.body;
+    const indicatorCategory = await IndicatorCategory.findByIdAndUpdate(req.params.id, { name, description, type, principal_category_id, principal_category_name }, { new: true });
     if (!indicatorCategory) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: indicatorCategory });
   } catch (error) {
@@ -46,8 +47,9 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const indicatorCategory = await IndicatorCategory.create( req.body );
+    const { name, description, type, principal_category_id, principal_category_name } = req.body;
+    if (!name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const indicatorCategory = await IndicatorCategory.create({ name, description, type, principal_category_id, principal_category_name });
 
     return res.status(200).send({ ok: true, data: indicatorCategory });
   } catch (error) {
