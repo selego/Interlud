@@ -229,7 +229,7 @@ function UserInfoTab({ user, setUser }) {
       <div className="flex items-center justify-between pt-6 border-t border-gray-200">
         <div className="flex items-center gap-3">
           {user.role === "admin" && <ResetPassword user={user} />}
-          <InviteButton user={user} />
+          {!user.last_login_at && <InviteButton user={user} />}
         </div>
         <div className="flex items-center gap-3">
           <button
