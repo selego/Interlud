@@ -1,3 +1,4 @@
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const { getAccessToken } = require("../src/services/microsoftGraph");
 const fs = require("fs");
 
