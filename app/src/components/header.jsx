@@ -27,7 +27,8 @@ function SelectSearch({ value, label, onChange }) {
   const fetchCollectivities = async () => {
       try {
       setLoading(true)
-      const { ok, data, code } = await api.post("/collectivity/search", { search, limit: 20 })
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const { ok, data, code } = await api.post("/collectivity/search", { search: escaped, limit: 20 })
         if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités")
         setOptions(data)
       } catch (error) {
@@ -38,6 +39,10 @@ function SelectSearch({ value, label, onChange }) {
     }
 
   useEffect(() => {
+    if (!search) {
+      setOptions([])
+      return
+    }
     fetchCollectivities()
   }, [search])
 
@@ -50,7 +55,7 @@ function SelectSearch({ value, label, onChange }) {
         <FiChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </div>
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 mt-1 left-1/2 -translate-x-1/2 w-max min-w-full max-w-[28rem] bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           <div className="sticky top-0 bg-white p-2 border-b border-gray-200">
             <DebounceInput
               debounce={300}
@@ -74,7 +79,7 @@ function SelectSearch({ value, label, onChange }) {
                 className={`px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${value === option._id ? "bg-primary/10 text-primary" : "text-gray-900"}`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xs truncate">{option.name}</span>
+                  <span className="text-xs whitespace-nowrap">{option.name}</span>
                   {value === option._id && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
                 </div>
               </div>
