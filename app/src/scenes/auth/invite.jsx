@@ -46,14 +46,16 @@ const Invite = () => {
     try {
       const data = { ...values, invitation_token: inviteToken }
 
-      const { ok, data: user, token, code, userActionRights, collectivity, economicActor } = await api.post("/user/invite-accepted", data)
+      const { ok, user, token, code, userActionRights, collectivity, economicActor } = await api.post("/user/invite-accepted", data)
       if (!ok) return toast.error(code || "Une erreur est survenue")
       if (token) api.setToken(token)
       if (user) setUser(user)
       if (userActionRights) setActionRights(userActionRights)
-      if (collectivity) setCollectivity(collectivity)
+      if (collectivity) {
+        setCollectivity(collectivity)
+        localStorage.setItem("selectedCollectivityId", collectivity._id)
+      }
       if (economicActor) setEconomicActor(economicActor)
-      localStorage.setItem("selectedCollectivityId", collectivity._id)
       toast.success("Votre compte a été créé avec succès !")
       if (redirect) return navigate(redirect)
       navigate("/")
