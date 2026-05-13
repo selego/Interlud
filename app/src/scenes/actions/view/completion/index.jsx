@@ -14,7 +14,7 @@ const HIDDEN_INDICATOR_IDS = ["AnneeRempl", "AnRef", "ActionsAutres", "ActionsCh
 const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" }
 const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
-export default function Completion({ action }) {
+export default function Completion({ action, onSave }) {
   const { collectivity } = useStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(null)
@@ -156,11 +156,11 @@ export default function Completion({ action }) {
     <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-          <button onClick={() => navigate("/actions")} className="hover:text-primary-green transition-colors">
+          <button onClick={() => { onSave?.(); navigate("/actions") }} className="hover:text-primary-green transition-colors">
             Actions
           </button>
           <span>/</span>
-          <button onClick={() => navigate(`/actions/${action._id}/dashboard`)} className="hover:text-primary-green transition-colors truncate max-w-[150px]">
+          <button onClick={() => { onSave?.(); navigate(`/actions/${action._id}/dashboard`) }} className="hover:text-primary-green transition-colors truncate max-w-[150px]">
             {action.name}
             {action.instance_number > 1 ? ` #${action.instance_number}` : ""}
           </button>
@@ -172,7 +172,10 @@ export default function Completion({ action }) {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate(-1)}
+                onClick={() => {
+                  onSave?.()
+                  navigate(-1)
+                }}
                 className="p-2 pl-0 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary-green transition-colors"
                 aria-label="Revenir à la page précédente"
               >
