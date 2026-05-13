@@ -14,6 +14,13 @@ const getStatusLabel = (status) => {
   return "Nouvelle"
 }
 
+const getPiloteLabel = (pilote) => {
+  if (pilote === "epci") return "EPCI"
+  if (pilote === "acteur_economique") return "Acteur économique"
+  if (pilote === "autres") return "Autres"
+  return "-"
+}
+
 function CollectivityFilter({ value, label, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -128,13 +135,15 @@ function GlobalActionFilter({ value, onChange }) {
 export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
-  const [filters, setFilters] = useState({ collectivity_id: "", action_parent_id: "", collectivity_name: "" })
+  const [total, setTotal] = useState(0)
+  const [filters, setFilters] = useState({ collectivity_id: "", action_parent_id: "", collectivity_name: "", is_subsidized_by_program: "", pilote: "", budget_min: "", budget_max: "", page: 0 })
 
   const fetchActions = async () => {
     try {
-      const { ok, data, code } = await api.post("/action/search", {limit: 10000,collectivity_id: filters.collectivity_id,action_parent_id: filters.action_parent_id,})
+      const { ok, data, code, total } = await api.post("/action/search", { ...filters })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setActions(data)
+      setTotal(total)
     } catch (error) {
       toast.error(error.message || "Une erreur est survenue")
     }
@@ -142,7 +151,7 @@ export default function List() {
 
   useEffect(() => {
     fetchActions()
-  }, [filters.collectivity_id, filters.action_parent_id])
+  }, [filters])
 
   return (
     <div className="p-8">
@@ -150,18 +159,62 @@ export default function List() {
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
       </div>
 
-      <div className="flex gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6">
         <div className="w-64">
           <CollectivityFilter
             value={filters.collectivity_id}
             label={filters.collectivity_name}
-            onChange={(id, name) => setFilters((prev) => ({ ...prev, collectivity_id: id, collectivity_name: name }))}
+            onChange={(id, name) => setFilters((prev) => ({ ...prev, collectivity_id: id, collectivity_name: name, page: 0 }))}
           />
         </div>
         <div className="w-64">
           <GlobalActionFilter
             value={filters.action_parent_id}
-            onChange={(id) => setFilters((prev) => ({ ...prev, action_parent_id: id }))}
+            onChange={(id) => setFilters((prev) => ({ ...prev, action_parent_id: id, page: 0 }))}
+          />
+        </div>
+        <div className="w-48">
+          <Select
+            value={filters.is_subsidized_by_program}
+            onChange={(value) => setFilters((prev) => ({ ...prev, is_subsidized_by_program: value, page: 0 }))}
+            placeholder="Subventionné ?"
+            constrained={true}
+            options={[
+              { value: "", label: "Subventionné ?" },
+              { value: true, label: "Oui" },
+              { value: false, label: "Non" },
+            ]}
+          />
+        </div>
+        <div className="w-48">
+          <Select
+            value={filters.pilote}
+            onChange={(value) => setFilters((prev) => ({ ...prev, pilote: value, page: 0 }))}
+            placeholder="Pilote"
+            constrained={true}
+            options={[
+              { value: "", label: "Tous les pilotes" },
+              { value: "epci", label: "EPCI" },
+              { value: "acteur_economique", label: "Acteur économique" },
+              { value: "autres", label: "Autres" },
+            ]}
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            value={filters.budget_min}
+            onChange={(e) => setFilters((prev) => ({ ...prev, budget_min: e.target.value, page: 0 }))}
+            placeholder="Budget min"
+            className="input-primary w-32"
+          />
+          <span className="text-gray-400">—</span>
+          <input
+            type="number"
+            value={filters.budget_max}
+            onChange={(e) => setFilters((prev) => ({ ...prev, budget_max: e.target.value, page: 0 }))}
+            placeholder="Budget max"
+            className="input-primary w-32"
           />
         </div>
       </div>
@@ -172,6 +225,9 @@ export default function List() {
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Collectivité</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Pilote</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Budget</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Subventionné</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
@@ -180,10 +236,28 @@ export default function List() {
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{action.name}</td>
               <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-xs">{action.collectivity_name}</td>
               <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{getPiloteLabel(action.pilote)}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.budget_costs != null ? `${action.budget_costs.toLocaleString()} €` : "-"}</td>
+              <td className="px-6 py-4 text-sm text-gray-600">{action.is_subsidized_by_program ? "Oui" : "Non"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {Math.ceil(total / 50) > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-sm text-gray-600">{total} actions</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))} disabled={filters.page === 0} className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+              Précédent
+            </button>
+            <span className="text-sm text-gray-600">{filters.page + 1} / {Math.ceil(total / 50)}</span>
+            <button onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))} disabled={filters.page >= Math.ceil(total / 50) - 1} className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

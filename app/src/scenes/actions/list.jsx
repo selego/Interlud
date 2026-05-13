@@ -15,10 +15,18 @@ const getStatusLabel = (status) => {
   return "Nouvelle"
 }
 
+const getPiloteLabel = (pilote) => {
+  if (pilote === "epci") return "EPCI"
+  if (pilote === "acteur_economique") return "Acteur économique"
+  if (pilote === "autres") return "Autres"
+  return "-"
+}
+
 export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [filters, setFilters] = useState({ is_subsidized_by_program: "", pilote: "", budget_min: "", budget_max: "" })
   const { collectivity, user } = useStore()
 
 
@@ -28,7 +36,7 @@ export default function List() {
   const fetchActions = async () => {
     if (!collectivity?._id) return;
     try {
-      const { ok, data, code} = await api.post("/action/search", { collectivity_id: collectivity._id })
+      const { ok, data, code} = await api.post("/action/search", { collectivity_id: collectivity._id, ...filters })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setActions(data)
     } catch (error) {
@@ -38,7 +46,7 @@ export default function List() {
 
   useEffect(() => {
     fetchActions()
-  }, [collectivity])
+  }, [collectivity, filters])
 
   // if ( actions.length === 0 ) return (
   //   <div className="p-8"> 
@@ -73,13 +81,63 @@ export default function List() {
           )}
         </div>
       </div>
-      
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <div className="w-48">
+          <Select
+            value={filters.is_subsidized_by_program}
+            onChange={(value) => setFilters((prev) => ({ ...prev, is_subsidized_by_program: value }))}
+            placeholder="Subventionné ?"
+            constrained={true}
+            options={[
+              { value: "", label: "Subventionné ?" },
+              { value: true, label: "Oui" },
+              { value: false, label: "Non" },
+            ]}
+          />
+        </div>
+        <div className="w-48">
+          <Select
+            value={filters.pilote}
+            onChange={(value) => setFilters((prev) => ({ ...prev, pilote: value }))}
+            placeholder="Pilote"
+            constrained={true}
+            options={[
+              { value: "", label: "Tous les pilotes" },
+              { value: "epci", label: "EPCI" },
+              { value: "acteur_economique", label: "Acteur économique" },
+              { value: "autres", label: "Autres" },
+            ]}
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            value={filters.budget_min}
+            onChange={(e) => setFilters((prev) => ({ ...prev, budget_min: e.target.value }))}
+            placeholder="Budget min"
+            className="input-primary w-32"
+          />
+          <span className="text-gray-400">—</span>
+          <input
+            type="number"
+            value={filters.budget_max}
+            onChange={(e) => setFilters((prev) => ({ ...prev, budget_max: e.target.value }))}
+            placeholder="Budget max"
+            className="input-primary w-32"
+          />
+        </div>
+      </div>
+
       <table className="w-full overflow-hidden card-shadow">
         <thead className="bg-gray-100">
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Priorité</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Pilote</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Budget</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Subventionné</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date Start</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date End</th>
           </tr>
@@ -94,13 +152,16 @@ export default function List() {
             }, {})
           ).flatMap(([parentName, children]) => [
             <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}>
-              <td colSpan={5} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
+              <td colSpan={8} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
             </tr>,
             ...children.map((action) => (
               <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
                 <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{getPiloteLabel(action.pilote)}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.budget_costs != null ? `${action.budget_costs.toLocaleString()} €` : "-"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{action.is_subsidized_by_program ? "Oui" : "Non"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{action.date_start ? new Date(action.date_start).toLocaleDateString() : "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{action.date_end ? new Date(action.date_end).toLocaleDateString() : "-"}</td>
               </tr>

@@ -88,6 +88,13 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
     if (req.body.createdAt) query.createdAt = { $gte: new Date(req.body.createdAt) };
+    if (req.body.is_subsidized_by_program === true || req.body.is_subsidized_by_program === false) query.is_subsidized_by_program = req.body.is_subsidized_by_program;
+    if (req.body.pilote) query.pilote = req.body.pilote;
+    if (req.body.budget_min || req.body.budget_max) {
+      query.budget_costs = {};
+      if (req.body.budget_min) query.budget_costs.$gte = Number(req.body.budget_min);
+      if (req.body.budget_max) query.budget_costs.$lte = Number(req.body.budget_max);
+    }
 
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
@@ -103,7 +110,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     }
 
     const limit = req.body.limit || 50;
-    const skip = req.body.offset || 0;
+    const skip = req.body.page ? req.body.page * limit : req.body.offset || 0;
     const total = await Action.countDocuments(query);
     const data = await Action.find(query).sort({ name: 1 }).skip(skip).limit(limit);
     return res.status(200).send({ ok: true, data, total });
