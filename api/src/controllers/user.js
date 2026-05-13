@@ -329,7 +329,56 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
   try {
     const obj = req.body;
     const exist = await UserObject.findOne({ email: obj.email });
-    if (exist) return res.status(409).send({ ok: false, code: ERROR_CODES.EMAIL_ALREADY_EXIST });
+
+    if (exist) {
+      if (exist.collectivities?.some((c) => c.id === obj.collectivity._id)) {
+        return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_MEMBER });
+      }
+
+      exist.collectivities.push({
+        id: obj.collectivity._id,
+        name: obj.collectivity.name,
+        role: 'user',
+        status: 'approved',
+      });
+      await exist.save();
+
+      const addedBodyHTML = `
+        <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Nouvelle collectivité</h1>
+          </div>
+          <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Bonjour${exist.name ? ` ${exist.name}` : ''},</p>
+            <p style="font-size: 16px; margin-bottom: 20px;">
+              Vous avez été ajouté à la collectivité <strong>${obj.collectivity.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+            </p>
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${config.APP_URL}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
+                Accéder à la plateforme
+              </a>
+            </div>
+            <p style="font-size: 16px; margin-bottom: 0;">
+              Cordialement,<br>
+              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+            </p>
+          </div>
+          <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 12px; color: #768776; margin: 0;">
+              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+            </p>
+          </div>
+        </div>
+      `;
+
+      await brevo.sendEmail(addedBodyHTML, {
+        subject: `Vous avez été ajouté à ${obj.collectivity.name} sur InTerLUD+`,
+        sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+        to: [{ email: exist.email }],
+      });
+
+      return res.status(200).send({ data: exist, ok: true });
+    }
 
     obj.created_at = new Date();
 

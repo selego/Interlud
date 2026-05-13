@@ -24,6 +24,7 @@ const ERROR_CODES = {
   USER_NOT_FOUND: 'Utilisateur non trouvé',
   INVITATION_TOKEN_EXPIRED: "Token d'invitation expiré",
   ALREADY_REQUESTED: 'Demande déjà effectuée',
+  ALREADY_MEMBER: 'Cet utilisateur est déjà membre de la collectivité',
   YEAR_PREV_ALREADY_EXISTS: 'Année prévisionnelle déjà existante',
   YEAR_EXPOST_ALREADY_EXISTS: 'Année ex-post déjà existante',
 };

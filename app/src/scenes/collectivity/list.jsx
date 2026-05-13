@@ -151,7 +151,7 @@ const InviteMemberModal = ({ isOpen, onClose, collectivity, onSuccess }) => {
       onClose()
       if (onSuccess) onSuccess()
     } catch (error) {
-      if (error.code === "EMAIL_ALREADY_EXIST") return toast.error("Cette adresse e-mail existe déjà.")
+      if (error.code === "ALREADY_MEMBER") return toast.error("Cet utilisateur est déjà membre de la collectivité.")
       toast.error("Une erreur est survenue")
     } finally {
       setLoading(false)
