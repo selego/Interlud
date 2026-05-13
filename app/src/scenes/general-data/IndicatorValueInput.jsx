@@ -10,7 +10,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
         placeholder="Valeur texte"
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
-        debounce={800}
+        debounce={1000}
         className={`text-gray-900 font-bold ${className}`}
       />
     )
@@ -23,7 +23,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
         value={value ?? ""}
         onChange={(e) => onChange(Number(e.target.value))}
         placeholder="Valeur numérique"
-        debounce={800}
+        debounce={1000}
         className={`text-gray-900 font-bold ${className}`}
       />
     )
@@ -65,7 +65,7 @@ function CheckboxInput({ value, onChange, options }) {
 
   const debouncedOnChange = useCallback((newValues) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => onChange(newValues), 800)
+    debounceRef.current = setTimeout(() => onChange(newValues), 1000)
   }, [onChange])
 
   useEffect(() => {
