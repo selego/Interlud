@@ -43,9 +43,8 @@ const DebounceInput = ({
       value={inputValue}
       onChange={(event) => setInputValue(event.target.value)}
       {...(type === "number" && {
-        min: 0,
         onWheel: (e) => e.target.blur(),
-        onKeyDown: (e) => { if (e.key === "-" || e.key === "e") e.preventDefault(); },
+        onKeyDown: (e) => { if (e.key === "e") e.preventDefault(); },
       })}
     />
   );
