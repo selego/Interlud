@@ -84,7 +84,11 @@ export default function Home() {
 
   const exportExcelFile = async () => {
     try {
-      const { ok, data, code } = await api.post("/excel/export", { fileId: collectivity.excelFileId })
+      const { ok, data, code } = await api.post("/excel/export", {
+        fileId: user.role === "economic_actor" && economicActor
+          ? economicActor.collectivities?.find(c => c.id === collectivity._id)?.aggregation_excel_file_id
+          : collectivity.aggregation_excel_file_id
+      })
       if (!ok) return toast.error(code || "Erreur lors de l'export")
       const link = document.createElement("a");
       link.href = data.downloadUrl

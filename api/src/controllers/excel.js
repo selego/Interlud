@@ -43,19 +43,25 @@ const parseNumber = (val) => {
 
 router.post('/global-gains', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let { collectivity } = req.body;
+    const { collectivity } = req.body;
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+
+    let aggregationFileId = null;
     if (req.user?.role === 'economic_actor') {
       const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
       if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      collectivity = economicActor.collectivities.find((c) => c.id === collectivity._id);
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
     }
-
-    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
 
     const siteId = await getSiteId();
 
-    const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`);
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`);
     const allValues = result.values || [];
 
     const gainsPrevisionnels = allValues.slice(6, 13).map((row) => row.slice(0, 9));
@@ -105,18 +111,24 @@ router.post('/global-gains', passport.authenticate(['admin', 'user'], { session:
 
 router.post('/action-contribution', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    let { collectivity } = req.body;
+    const { collectivity } = req.body;
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+
+    let aggregationFileId = null;
     if (req.user?.role === 'economic_actor') {
       const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
       if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      collectivity = economicActor.collectivities.find((c) => c.id === collectivity._id);
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
     }
-
-    if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
 
     const siteId = await getSiteId();
-    const result = await graphFetch(`/sites/${siteId}/drive/items/${collectivity.excelFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`);
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`);
 
     const values = result.values || [];
     const actionGains = [];
@@ -263,14 +275,14 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     if (!ACTION_GAINS_RANGES[worksheetKey]) return res.json({ ok: false, data: { error: `Action '${worksheetKey}' not found in gains configuration` } });
 
     let aggregationFileId = null;
-    if (req.user?.role === 'economic_actor') {
-      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
+    if (req.user?.role === 'economic_actor' || (action.type !== 'global' && action.owner === 'economic_actor')) {
+      const economicActor = await EconomicActor.findById(req.user?.role === 'economic_actor' ? req.user.economic_actor_id : action.economic_actor_id);
       if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
       const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
       if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
       aggregationFileId = actorCollectivity.aggregation_excel_file_id;
     }
-    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+    if (!aggregationFileId && req.user?.role !== 'economic_actor' && !(action.type !== 'global' && action.owner === 'economic_actor')) {
       aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
     }
     if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
@@ -286,11 +298,12 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     const gainsYearRows = toYearRows(gainsResult);
     const emYearRows = toYearRows(emResult);
 
-    let query = { owner: 'collectivity', type: { $ne: 'config' }, collectivity_id: collectivity._id, action_parent_id: action._id };
-    if (req.user.role === 'economic_actor') {
-      query.economic_actor_id = req.user.economic_actor_id;
+    let query = { type: { $ne: 'config' }, collectivity_id: collectivity._id, action_parent_id: action._id };
+    if (req.user.role === 'economic_actor' || (action.type !== 'global' && action.owner === 'economic_actor')) {
       query.owner = 'economic_actor';
+      query.economic_actor_id = req.user?.role === 'economic_actor' ? req.user.economic_actor_id : action.economic_actor_id;
     }
+    if (!query.owner) query.owner = 'collectivity';
     const actions = await Action.find(query).sort({ name: 1 });
     const aggregations = {};
     for (const a of actions) {
@@ -315,15 +328,16 @@ router.post('/compare_actions', passport.authenticate(['admin', 'user'], { sessi
     const worksheetKey = actions[0].excel_worksheetname || 'B2';
     if (!ACTION_GAINS_RANGES[worksheetKey]) return res.json({ ok: false, data: { error: `Action '${worksheetKey}' not found in gains configuration` } });
 
+    const firstAction = actions[0];
     let aggregationFileId = null;
-    if (req.user?.role === 'economic_actor') {
-      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
+    if (req.user?.role === 'economic_actor' || (firstAction.type !== 'global' && firstAction.owner === 'economic_actor')) {
+      const economicActor = await EconomicActor.findById(req.user?.role === 'economic_actor' ? req.user.economic_actor_id : firstAction.economic_actor_id);
       if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
       const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
       if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
       aggregationFileId = actorCollectivity.aggregation_excel_file_id;
     }
-    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+    if (!aggregationFileId && req.user?.role !== 'economic_actor' && !(firstAction.type !== 'global' && firstAction.owner === 'economic_actor')) {
       aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
     }
     if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
