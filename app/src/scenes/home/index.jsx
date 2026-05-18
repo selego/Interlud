@@ -84,11 +84,7 @@ export default function Home() {
 
   const exportExcelFile = async () => {
     try {
-      const { ok, data, code } = await api.post("/excel/export", {
-        fileId: user.role === "economic_actor" && economicActor
-          ? economicActor.collectivities?.find(c => c.id === collectivity._id)?.aggregation_excel_file_id
-          : collectivity.aggregation_excel_file_id
-      })
+      const { ok, data, code } = await api.post("/excel/export", { fileId: user.role === "economic_actor" && economicActor ? economicActor.collectivities?.find(c => c.id === collectivity._id)?.aggregation_excel_file_id : collectivity.aggregation_excel_file_id})
       if (!ok) return toast.error(code || "Erreur lors de l'export")
       const link = document.createElement("a");
       link.href = data.downloadUrl
@@ -104,7 +100,7 @@ export default function Home() {
   const onboardingSteps = (() => {
     if (actions.length === 0) return null
     const firstNonConfigAction = actions.find(a => a.type !== "config")
-    const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.completion_expost || 0)) / 4): 0
+    const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.excel_files_expost?.length > 0 ? (firstNonConfigAction.completion_expost || 0) : 0)) / (firstNonConfigAction.excel_files_expost?.length > 0 ? 4 : 3)): 0
     const onboardingSource = user.role === 'economic_actor' && economicActor
       ? economicActor.collectivities?.find(c => c.id === collectivity._id) || {}
       : collectivity
@@ -572,7 +568,7 @@ function EvolutionChart({ globalGains }) {
 function CardAction({ action }) {
   const navigate = useNavigate()
   const statutBadge = getStatutBadgeClass(action.status)
-  const completion = Math.round(((action.completion_init || 0) + (action.completion_ref || 0) + (action.completion_prev || 0) + (action.completion_expost || 0)) / 4)
+  const completion = Math.round(((action.completion_init || 0) + (action.completion_ref || 0) + (action.completion_prev || 0) + (action.excel_files_expost?.length > 0 ? (action.completion_expost || 0) : 0)) / (action.excel_files_expost?.length > 0 ? 4 : 3))
 
   return (
     <div key={action._id} className="card-shadow p-6 h-full flex flex-col" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>

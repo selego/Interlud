@@ -43,6 +43,7 @@ app.use('/excel', require('./controllers/excel'));
 app.use('/user_action_right', require('./controllers/user_action_right'));
 app.use('/economic_actor', require('./controllers/economic_actor'));
 app.use('/notification', require('./controllers/notification'));
+app.use('/contact', require('./controllers/contact'));
 
 setupErrorHandler(app);
 require('./services/passport')(app);
