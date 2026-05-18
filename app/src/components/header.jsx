@@ -105,7 +105,7 @@ export default function Header() {
   const location = useLocation()
 
   const fetchUnreadNotifications = async () => {
-    if (!user) return toast.error("Utilisateur non connecté")
+    if (!user) return
     try {
       const { ok, total, code } = await api.post("/notification/search", { user_id: user._id, read_at: null, limit: 0 })
       if (!ok) return toast.error(code || "Erreur lors de la récupération des notifications")

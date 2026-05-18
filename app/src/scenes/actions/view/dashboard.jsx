@@ -367,6 +367,7 @@ function OnboardingContent({ action, onStart }) {
   const pctRef = action.completion_ref || 0
   const pctPrev = action.completion_prev || 0
   const pctExpost = action.completion_expost || 0
+  const hasExpost = action.excel_files_expost?.length > 0
 
   return (
     <div className="space-y-6">
@@ -420,20 +421,22 @@ function OnboardingContent({ action, onStart }) {
           </div>
         </div>
 
-        <div className="card-shadow p-5 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: "#2DAC6A18", color: "#2DAC6A" }}>
-              Étape 4
-            </span>
-          </div>
-          <div className="flex gap-3">
-            <div className="w-0.5 rounded-full shrink-0 self-stretch bg-[#2DAC6A]" />
-            <div>
-              <div className="text-sm font-semibold text-[#123314] mb-1">Ex-post</div>
-              <div className="text-xs text-font-secondary leading-relaxed">Mesurez les résultats réels après mise en œuvre.</div>
+        {hasExpost && (
+          <div className="card-shadow p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: "#2DAC6A18", color: "#2DAC6A" }}>
+                Étape 4
+              </span>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-0.5 rounded-full shrink-0 self-stretch bg-[#2DAC6A]" />
+              <div>
+                <div className="text-sm font-semibold text-[#123314] mb-1">Ex-post</div>
+                <div className="text-xs text-font-secondary leading-relaxed">Mesurez les résultats réels après mise en œuvre.</div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── Blurred fake dashboard + overlay — même pattern que LockedChart du home ── */}
@@ -484,7 +487,7 @@ function OnboardingContent({ action, onStart }) {
               <FiLock size={20} className="text-gray-400" />
             </div>
             <h3 className="text-base font-semibold text-[#123314] mb-1">Tableau de bord verrouillé</h3>
-            <p className="text-xs text-font-secondary mb-6 leading-relaxed">Renseignez les indicateurs des 4 situations pour générer vos graphiques.</p>
+            <p className="text-xs text-font-secondary mb-6 leading-relaxed">Renseignez les indicateurs des {hasExpost ? 4 : 3} situations pour générer vos graphiques.</p>
             <div className="space-y-3 mb-6 text-left">
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -519,17 +522,19 @@ function OnboardingContent({ action, onStart }) {
                   <div className="h-full rounded-full bg-[#A3B84B]" style={{ width: `${pctPrev}%` }} />
                 </div>
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-[#123314]">Ex-post</span>
-                  <span className="text-xs font-semibold tabular-nums" style={{ color: pctExpost > 0 ? "#2DAC6A" : "#bbb" }}>
-                    {pctExpost}%
-                  </span>
+              {hasExpost && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-[#123314]">Ex-post</span>
+                    <span className="text-xs font-semibold tabular-nums" style={{ color: pctExpost > 0 ? "#2DAC6A" : "#bbb" }}>
+                      {pctExpost}%
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-[#2DAC6A]" style={{ width: `${pctExpost}%` }} />
+                  </div>
                 </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-[#2DAC6A]" style={{ width: `${pctExpost}%` }} />
-                </div>
-              </div>
+              )}
             </div>
             <button onClick={onStart} className="button-primary w-full flex items-center justify-center gap-2">
               Commencer à remplir <FiArrowRight size={13} />
@@ -598,7 +603,7 @@ export default function Dashboard({ action }) {
     )
   if (loading) return <Loader />
 
-  const isEmpty = action.completion_init !== 100 || action.completion_ref !== 100 || action.completion_prev !== 100 || action.completion_expost !== 100
+  const isEmpty = action.completion_init !== 100 || action.completion_ref !== 100 || action.completion_prev !== 100 || (action.excel_files_expost?.length > 0 && action.completion_expost !== 100)
 
   // ── Derived: shared ───────────────────────────────────────────────────────
 

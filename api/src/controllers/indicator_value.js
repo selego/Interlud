@@ -396,32 +396,32 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         if (indicatorValue.situation === 'prev') {
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year)
-              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
           }
         }
         if (indicatorValue.situation === 'ref') {
           for (const excelFile of targetAction.exel_files_prev || []) {
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
-              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
           }
           for (const excelFile of targetAction.excel_files_expost || []) {
             if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year)
-              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
           }
         }
         if (indicatorValue.situation === 'expost') {
           for (const excelFile of targetAction.excel_files_expost || []) {
             if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year)
-              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+              excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
           }
         }
         if (indicatorValue.situation === 'init') {
           // init : mettre à jour tous les fichiers
           for (const excelFile of targetAction.exel_files_prev || []) {
-            if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+            if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
           }
           for (const excelFile of targetAction.excel_files_expost || []) {
-            if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+            if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
           }
         }
       }
@@ -430,29 +430,29 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       if (indicatorValue.situation === 'init') {
         const AllExcelFiles = [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])];
         for (const excelFile of AllExcelFiles) {
-          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
         }
       }
       if (indicatorValue.situation === 'prev') {
         for (const excelFile of action.exel_files_prev || []) {
           if (excelFile.year_prev !== indicatorValue.year) continue;
-          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
         }
       }
       if (indicatorValue.situation === 'ref') {
         for (const excelFile of action.exel_files_prev || []) {
           if (excelFile.year_ref !== indicatorValue.year) continue;
-          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
         }
         for (const excelFile of action.excel_files_expost || []) {
           if (excelFile.year_ref !== indicatorValue.year) continue;
-          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
         }
       }
       if (indicatorValue.situation === 'expost') {
         for (const excelFile of action.excel_files_expost || []) {
           if (excelFile.year_expost !== indicatorValue.year) continue;
-          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation).catch(capture));
+          excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, req.body.value[indicatorValue.indicator_type], indicatorValue.situation, indicator.value_unit).catch(capture));
         }
       }
     }
@@ -899,7 +899,10 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       const matchingValues = indicatorValueMap.get(`${indicator._id.toString()}_${data.situation}`) || [];
 
       for (const indicatorValue of matchingValues) {
-        if (indicatorValue.indicator_type === 'number') data.value = isNaN(parseFloat(data.value)) ? null : parseFloat(data.value);
+        if (indicatorValue.indicator_type === 'number') {
+          data.value = isNaN(parseFloat(data.value)) ? null : parseFloat(data.value);
+          if (indicator.value_unit === '%' && data.value != null) data.value = data.value * 100;
+        }
         if (indicatorValue.indicator_type === 'checkbox') {
           const strValue = data.value != null ? String(data.value) : '';
           data.value = strValue
@@ -1035,28 +1038,28 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
           for (const targetAction of actionsWithSameYear) {
             if (indicatorValue.situation === 'prev') {
               for (const excelFile of targetAction.exel_files_prev || []) {
-                if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+                if (excelFile.excel_file_id && excelFile.year_prev === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation, indicator.value_unit).catch(capture));
               }
             }
             if (indicatorValue.situation === 'ref') {
               for (const excelFile of targetAction.exel_files_prev || []) {
-                if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+                if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation, indicator.value_unit).catch(capture));
               }
               for (const excelFile of targetAction.excel_files_expost || []) {
-                if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+                if (excelFile.excel_file_id && excelFile.year_ref === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation, indicator.value_unit).catch(capture));
               }
             }
             if (indicatorValue.situation === 'expost') {
               for (const excelFile of targetAction.excel_files_expost || []) {
-                if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+                if (excelFile.excel_file_id && excelFile.year_expost === indicatorValue.year) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation, indicator.value_unit).catch(capture));
               }
             }
             if (indicatorValue.situation === 'init') {
               for (const excelFile of targetAction.exel_files_prev || []) {
-                if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+                if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation, indicator.value_unit).catch(capture));
               }
               for (const excelFile of targetAction.excel_files_expost || []) {
-                if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation).catch(capture));
+                if (excelFile.excel_file_id) excelUpdatePromises.push(updateExcelCellByIndicatorId(excelFile.excel_file_id, indicator.excel_indicator_id, newTypedValue, indicatorValue.situation, indicator.value_unit).catch(capture));
               }
             }
           }

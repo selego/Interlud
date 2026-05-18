@@ -97,7 +97,7 @@ async function graphFetch(endpoint, options = {}) {
   throw lastError;
 }
 
-async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation) {
+async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation, unit = null) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
@@ -111,6 +111,7 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
   const rowNumber = startRow + rowIndex;
 
+  if (unit === '%' && typeof value === 'number') value = value / 100;
   const cellValue = Array.isArray(value) ? value.join(', ') : value;
   await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='F${rowNumber}')`, {
     method: 'PATCH',
@@ -118,7 +119,7 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   });
 }
 
-// Update multiple cells in batch - updates is array of { excel_indicator_id, value }
+// Update multiple cells in batch - updates is array of { excel_indicator_id, value, unit? }
 async function updateExcelCellsBatch(fileId, updates, situation) {
   if (!updates || updates.length === 0) return;
 
@@ -141,7 +142,8 @@ async function updateExcelCellsBatch(fileId, updates, situation) {
     .map((u) => {
       const rowIndex = indicatorRowMap.get(String(u.excel_indicator_id).trim());
       if (rowIndex === undefined) return null;
-      const cellValue = Array.isArray(u.value) ? u.value.join(', ') : (u.value ?? '');
+      const v = (u.unit === '%' && typeof u.value === 'number') ? u.value / 100 : u.value;
+      const cellValue = Array.isArray(v) ? v.join(', ') : (v ?? '');
       return { rowIndex, cellValue };
     })
     .filter(Boolean);

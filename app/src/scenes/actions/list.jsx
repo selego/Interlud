@@ -183,7 +183,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
-    const [year,setYear] = useState( { init: null, prev: null, expost: null })
+    const [year,setYear] = useState( { init: null, prev: null })
     const [isLoading, setIsLoading] = useState(false)
     const [loadingSeconds, setLoadingSeconds] = useState(0)
     const [createdActionId, setCreatedActionId] = useState(null)
@@ -216,7 +216,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
         if (!year.init) return toast.error("Veuillez sélectionner une année initiale")
         if (!year.prev) return toast.error("Veuillez sélectionner une année prévisionnelle")
-        if (!year.expost) return toast.error("Veuillez sélectionner une année ex-post")
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
 
         const selectedAction = actions.find(a => a._id === selectedActionId)
@@ -229,7 +228,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           collectivity_name: collectivity.name,
           year_init: parseInt(year.init),
           year_prev: parseInt(year.prev),
-          year_expost: parseInt(year.expost),
           started_before_interlud: startedBeforeInterlud,
           ...(user.role === 'economic_actor' ? {owner: 'economic_actor', economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name} : {}),
         }
@@ -353,19 +351,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                   type="number"
                   value={year.prev}
                   onChange={(e) => setYear({ ...year, prev: e.target.value })}
-                  className="input-primary"
-                  placeholder="Année"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Année ex-post <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={year.expost}
-                  onChange={(e) => setYear({ ...year, expost: e.target.value })}
                   className="input-primary"
                   placeholder="Année"
                 />
