@@ -4,7 +4,6 @@ import { FiUser, FiHome, FiUsers, FiArrowLeft, FiX } from "react-icons/fi"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Modal from "@/components/modal"
-import Select from "@/components/Select"
 
 export default function View() {
   const { id } = useParams()
@@ -182,66 +181,7 @@ function InfoTab({ economicActor, setEconomicActor }) {
 }
 
 function CollectivitiesTab({ economicActor, setEconomicActor }) {
-  const [collectivities, setCollectivities] = useState([])
   const [addOpen, setAddOpen] = useState(false)
-  const [addValues, setAddValues] = useState({ collectivity_id: "" })
-  const [loading, setLoading] = useState(false)
-
-  const fetchCollectivities = async () => {
-    try {
-      const { ok, data, code } = await api.post("/collectivity/search", {})
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setCollectivities(data)
-    } catch (e) {
-      console.log(e)
-      toast.error("Une erreur est survenue")
-    }
-  }
-
-  useEffect(() => {
-    fetchCollectivities()
-  }, [])
-
-  const addCollectivity = async () => {
-    if (!addValues.collectivity_id) return toast.error("Sélectionnez une collectivité")
-    const collectivity = collectivities.find((x) => x._id === addValues.collectivity_id)
-    if (!collectivity) return toast.error("Collectivité introuvable")
-
-    const exists = (economicActor?.collectivities || []).some((x) => x.id === collectivity._id)
-    if (exists) return toast.error("Cette collectivité est déjà associée")
-
-    try {
-      setLoading(true)
-      const { ok, data, code } = await api.put(`/economic_actor/${economicActor._id}/add_collectivity`, { collectivity_id: collectivity._id, collectivity_name: collectivity.name })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setEconomicActor(data)
-      await addUserCollectivities(collectivity)
-
-      setAddOpen(false)
-      setAddValues({ collectivity_id: "" })
-      toast.success("Collectivité ajoutée avec succès")
-    } catch (e) {
-      console.log(e)
-      toast.error("Une erreur est survenue")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const addUserCollectivities = async (collectivity) => {
-    try {
-      const { ok, data, code } = await api.post("/user/search", { economic_actor_id: economicActor._id })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      for (const user of data) {
-        if (user.collectivities.some((col) => col.id === collectivity._id)) continue
-        const updatedUserCollectivities = [...(user.collectivities || []), { id: collectivity._id, name: collectivity.name, role: "economic_actor", status: "approved" }]
-        await api.put(`/user/${user._id}`, { collectivities: updatedUserCollectivities })
-      }
-    } catch (e) {
-      console.log(e)
-      toast.error("Une erreur est survenue")
-    }
-  }
 
   const removeCollectivity = async (collectivity) => {
     if (!window.confirm("Êtes-vous sûr de vouloir retirer cette collectivité ? Elle sera également retirée de tous les utilisateurs de cet acteur économique.")) return
@@ -319,45 +259,141 @@ function CollectivitiesTab({ economicActor, setEconomicActor }) {
         </div>
       )}
 
-      <Modal isOpen={addOpen} className="max-w-lg" onClose={() => setAddOpen(false)}>
-        <div className="p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-6">Ajouter une collectivité</h3>
-
-      
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
-            </div>
-          )}
-
-          {!loading && (
-            <>
-            <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Collectivité</label>
-              <Select
-                value={addValues.collectivity_id}
-                onChange={(value) => setAddValues({ ...addValues, collectivity_id: value })}
-                options={[
-                  { value: "", label: "Sélectionner une collectivité" },
-                  ...collectivities
-                    .filter((c) => !economicActor?.collectivities?.some((ec) => ec.id === c._id))
-                    .map((c) => ({value: c._id, label: c.name }))
-                ]}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end mt-6">
-            <button className="button-primary" onClick={addCollectivity}>
-              Ajouter
-              </button>
-            </div>
-          </>
-        )}
-        </div>
-      </Modal>
+      <AddCollectivityModal
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        economicActor={economicActor}
+        setEconomicActor={setEconomicActor}
+      />
     </div>
+  )
+}
+
+const AddCollectivityModal = ({ isOpen, onClose, economicActor, setEconomicActor }) => {
+  const [searchValue, setSearchValue] = useState("")
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [adding, setAdding] = useState(false)
+
+  const searchCollectivities = async (search) => {
+    try {
+      setSearching(true)
+      const { ok, data, code } = await api.post("/collectivity/search", { search })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      setSearchResults(data.filter((c) => !economicActor?.collectivities?.some((ec) => ec.id === c._id)))
+    } catch (e) {
+      console.log(e)
+      toast.error("Une erreur est survenue")
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const addCollectivity = async (collectivity) => {
+    try {
+      setAdding(true)
+      const { ok, data, code } = await api.put(`/economic_actor/${economicActor._id}/add_collectivity`, { collectivity_id: collectivity._id, collectivity_name: collectivity.name })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      setEconomicActor(data)
+      await addUserCollectivities(collectivity)
+      toast.success("Collectivité ajoutée avec succès")
+      handleClose()
+    } catch (e) {
+      console.log(e)
+      toast.error("Une erreur est survenue")
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const addUserCollectivities = async (collectivity) => {
+    try {
+      const { ok, data, code } = await api.post("/user/search", { economic_actor_id: economicActor._id })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      for (const user of data) {
+        if (user.collectivities.some((col) => col.id === collectivity._id)) continue
+        const updatedUserCollectivities = [...(user.collectivities || []), { id: collectivity._id, name: collectivity.name, role: "economic_actor", status: "approved" }]
+        await api.put(`/user/${user._id}`, { collectivities: updatedUserCollectivities })
+      }
+    } catch (e) {
+      console.log(e)
+      toast.error("Une erreur est survenue")
+    }
+  }
+
+  const handleClose = () => {
+    setSearchValue("")
+    setSearchResults([])
+    onClose()
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+    const timer = setTimeout(() => {
+      searchCollectivities(searchValue)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchValue, isOpen])
+
+  return (
+    <Modal isOpen={isOpen} className="max-w-2xl" onClose={handleClose}>
+      <div className="p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-6">Ajouter une collectivité</h3>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Rechercher une collectivité</label>
+          <input
+            type="text"
+            className="w-full input-primary"
+            placeholder="Entrez le nom d'une collectivité..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+          />
+        </div>
+
+        {searching && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
+          </div>
+        )}
+
+        {!searching && searchResults.length > 0 && (
+          <div className="border border-gray-200 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Nom</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {searchResults.map((collectivity) => (
+                  <tr key={collectivity._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{collectivity.name}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        className="px-3 py-1 bg-primary-green text-white text-sm rounded-lg hover:bg-primary-green/90 transition-colors disabled:opacity-50"
+                        onClick={() => addCollectivity(collectivity)}
+                        disabled={adding}
+                      >
+                        Ajouter
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!searching && searchResults.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-sm">Aucune collectivité trouvée</p>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 

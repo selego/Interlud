@@ -427,8 +427,9 @@ function IndicatorView({
         })
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
+      if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
       await onStatsRefresh()
+      toast.success("Valeur enregistrée", { id: "indicator-save" })
     } catch (error) {
       toast.error("Une erreur est survenue", { id: "indicator-save" })
     } finally {
