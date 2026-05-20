@@ -78,6 +78,14 @@ export default function Layout({ children }) {
                 <Link to="/politique-de-confidentialite" className="text-sm text-gray-700 hover:text-primary-green hover:underline underline-offset-4 transition-colors">
                   Politique de confidentialité
                 </Link>
+                <a
+                  href="https://github.com/selego/Interlud"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-700 hover:text-primary-green hover:underline underline-offset-4 transition-colors"
+                >
+                  Code source (GitHub)
+                </a>
               </div>
             </nav>
           </div>
