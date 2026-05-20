@@ -1,14 +1,16 @@
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const { graphFetch, duplicateExcelFile } = require("../src/services/microsoftGraph");
 const Indicator = require("../src/models/indicator");
 const IndicatorValue = require("../src/models/indicator_value");
 const IndicatorCategory = require("../src/models/indicator_category");
 const Action = require("../src/models/action");
 const Collectivity = require("../src/models/collectivity");
+const Log = require("../src/models/log");
 const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADMMNZK62ESSGNGIVZPLFGYFVBOZ"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADN6ZYBKXDVI2FEJMKF5BACAMSY2"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -207,6 +209,33 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
       return { operator: "AND", conditions };
     } else if (conditions.length === 1) {
       return { conditions };
+    }
+    return null;
+  }
+
+  // CAS 4b: =IFERROR(SEARCH(B1594, $F$1593), 0) [* $K$1593] - contains avec label de cellule, parent ref optionnel
+  // Variante française: =SIERREUR(CHERCHE(B1594; $F$1593); 0) [* $K$1593]
+  const iferrorSearchMatch = formulaContent.match(/(?:IFERROR|SIERREUR)\s*\(\s*(?:SEARCH|CHERCHE)\s*\(\s*\$?([A-Z]+)\$?(\d+)\s*[,;]\s*(?:'([^']+)'!)?\$?([A-Z]+)\$?(\d+)\s*\)\s*[,;]\s*0\s*\)(?:\s*\*\s*\$?([A-Z]+)\$?(\d+))?/i);
+  if (iferrorSearchMatch && getCellValue) {
+    const labelColumn = iferrorSearchMatch[1];
+    const labelRow = parseInt(iferrorSearchMatch[2], 10);
+    const sourceSheet = iferrorSearchMatch[3];
+    const sourceRow = parseInt(iferrorSearchMatch[5], 10);
+    const parentColumn = iferrorSearchMatch[6];
+    const parentRow = iferrorSearchMatch[7];
+
+    const sourceSituation = extractSituationFromSheetName(sourceSheet);
+    const targetMap = sourceSheet ? getRowToIndicatorMapForSituation(sourceSheet) : rowToIndicatorMap;
+    const sourceIndicatorId = targetMap.get(sourceRow);
+
+    if (sourceIndicatorId) {
+      const labelValue = getCellValue(labelRow, labelColumn);
+      if (labelValue !== null && labelValue !== undefined && labelValue !== "") {
+        const condition = { type: "contains", excel_indicator_id: sourceIndicatorId, value: String(labelValue).trim() };
+        if (sourceSituation) condition.excel_indicator_situation = sourceSituation;
+        if (parentColumn && parentRow) return { _referenceToMerge: `${parentColumn}${parentRow}`, conditions: [condition] };
+        return { conditions: [condition] };
+      }
     }
     return null;
   }
@@ -474,6 +503,22 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
         return resolved;
       }
       return null;
+    }
+
+    // Résoudre les _referenceToMerge dans la feuille cible (AND avec parent)
+    if (parsed._referenceToMerge) {
+      const refRowNum = extractRowNumber(parsed._referenceToMerge);
+      if (refRowNum) {
+        const parentCondition = resolveConditionInSheet(refRowNum, targetSituation, new Set(visited));
+        if (parentCondition?.conditions && parsed.conditions) {
+          const result = { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
+          situationCache.set(rowNum, result);
+          return result;
+        }
+      }
+      const result = { conditions: parsed.conditions };
+      situationCache.set(rowNum, result);
+      return result;
     }
 
     // Pour les autres cas, retourner le résultat parsé
@@ -998,10 +1043,10 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     }
     console.log(`📋 ${conditionsCount} conditions d'affichage générées`);
 
-    // if (logsToCreate.length > 0) {
-    //   await Log.insertMany(logsToCreate);
-    //   console.log(`📝 ${logsToCreate.length} logs créés`);
-    // }
+    if (logsToCreate.length > 0) {
+      await Log.insertMany(logsToCreate);
+      console.log(`📝 ${logsToCreate.length} logs créés`);
+    }
   } catch (error) {
     console.error("❌ Erreur:", error.message);
     throw error;
@@ -1295,7 +1340,7 @@ async function generateExcelForAllCollectivities() {
   const versionMatch = masterFile.name.replace(".xlsx", "").match(/_V(\d+)$/);
   const versionSuffix = versionMatch ? `_V${versionMatch[1]}` : "";
 
-  const collectivities = await Collectivity.find({ name: "Test Aggregation" });
+  const collectivities = await Collectivity.find();
   console.log(`📋 ${collectivities.length} collectivités trouvées (master: ${masterFile.name})`);
 
   let totalFiles = 0;
@@ -1303,7 +1348,6 @@ async function generateExcelForAllCollectivities() {
 
   for (const collectivity of collectivities) {
     if (!collectivity.sharepoint_folder_id) {
-      console.log(`⏭️ "${collectivity.name}" : pas de dossier SharePoint, ignorée`);
       continue;
     }
 
@@ -1320,7 +1364,7 @@ async function generateExcelForAllCollectivities() {
 
         try {
           // Dupliquer le master pour remplacer l'Excel
-          const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : '';
+          const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
           const fileName = `${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
@@ -1349,7 +1393,7 @@ async function generateExcelForAllCollectivities() {
         if (!expostFile.excel_file_id) continue;
 
         try {
-          const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : '';
+          const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
           const fileName = `${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
@@ -1530,8 +1574,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      // await generateExcelForAllCollectivities();
+      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {

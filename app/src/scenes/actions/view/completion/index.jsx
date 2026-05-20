@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter, FiStar } from "react-icons/fi"
+import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter, FiStar, FiBarChart2 } from "react-icons/fi"
 import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
@@ -25,6 +25,7 @@ export default function Completion({ action, onSave }) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [showUnfilledOnly, setShowUnfilledOnly] = useState(false)
   const [showPrimordialOnly, setShowPrimordialOnly] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
   const situationYears = stats?.situationYears || {}
 
@@ -185,6 +186,18 @@ export default function Completion({ action, onSave }) {
                 {action.name}
                 {action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}
               </h1>
+              <button
+                onClick={() => {
+                  onSave?.()
+                  navigate(`/actions/${action._id}/dashboard`)
+                }}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                title={isSaving ? "Enregistrement en cours…" : "Visualiser les graphiques de cette action"}
+              >
+                {isSaving ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiBarChart2 className="w-4 h-4" />}
+                <span>Visualiser mes graphs</span>
+              </button>
             </div>
           </div>
 
@@ -309,6 +322,7 @@ export default function Completion({ action, onSave }) {
           activeYear={currentTab?.year}
           refreshKey={refreshKey}
           onStatsRefresh={fetchStats}
+          onSavingChange={setIsSaving}
           yearMappings={stats?.yearMappingsBySituationYear?.[`${currentTab?.situation}_${currentTab?.year}`]}
           showUnfilledOnly={showUnfilledOnly}
           onToggleUnfilledOnly={() => setShowUnfilledOnly(false)}
@@ -327,6 +341,7 @@ function IndicatorView({
   activeYear,
   refreshKey,
   onStatsRefresh,
+  onSavingChange,
   yearMappings,
   showUnfilledOnly,
   onToggleUnfilledOnly,
@@ -393,8 +408,13 @@ function IndicatorView({
     }
   }
 
+  const saveCounterRef = useRef(0)
   const handleSaveIndicatorValue = async (indicatorValue) => {
+    saveCounterRef.current += 1
+    const mySaveId = saveCounterRef.current
+    toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
+      onSavingChange?.(true)
       if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
       if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {
@@ -408,10 +428,11 @@ function IndicatorView({
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      toast.success("Valeur enregistrée avec succès")
-      onStatsRefresh()
+      await onStatsRefresh()
     } catch (error) {
-      toast.error("Une erreur est survenue")
+      toast.error("Une erreur est survenue", { id: "indicator-save" })
+    } finally {
+      if (mySaveId === saveCounterRef.current) onSavingChange?.(false)
     }
   }
 

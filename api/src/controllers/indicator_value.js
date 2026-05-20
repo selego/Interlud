@@ -380,7 +380,6 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     await updateOnboardingStatus(action);
 
-    res.status(200).send({ ok: true, data: indicatorValue });
     const excelUpdatePromises = [];
     let actionsWithSameYear = [];
 
@@ -580,7 +579,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     if (logs.length > 0) await Log.insertMany(logs);
 
-    if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return;
+    if (!(indicatorValue.indicator_id && indicatorValue.situation && indicatorValue.year && indicatorValue.collectivity_id)) return res.status(200).send({ ok: true, data: indicatorValue });
     const payload = { indicator_id: indicatorValue.indicator_id, situation: indicatorValue.situation, year: indicatorValue.year, source_type: indicatorValue.source_type, owner: indicatorValue.owner, _id: { $ne: indicatorValue._id } };
 
     // For non-config actions, scope sync to the same action only (each instance has independent values)
@@ -642,6 +641,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     await IndicatorValue.updateMany(updateQuery, { $set: { value: indicatorValue.value } });
 
     if (syncLogs.length > 0) await Log.insertMany(syncLogs);
+
+    return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
