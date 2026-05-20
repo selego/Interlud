@@ -897,35 +897,38 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       if (!indicator) continue;
 
       const matchingValues = indicatorValueMap.get(`${indicator._id.toString()}_${data.situation}`) || [];
+      if (!matchingValues.length) continue;
+
+      const indicatorType = matchingValues[0].indicator_type;
+      let convertedValue = data.value;
+      if (indicatorType === 'number') {
+        convertedValue = isNaN(parseFloat(convertedValue)) ? null : parseFloat(convertedValue);
+        if (indicator.value_unit === '%' && convertedValue != null) convertedValue = convertedValue * 100;
+      }
+      if (indicatorType === 'checkbox') {
+        const strValue = convertedValue != null ? String(convertedValue) : '';
+        convertedValue = strValue
+          .split(/[,;.]/)
+          .map((v) => v.trim())
+          .filter((v) => v);
+      }
+      if (indicatorType === 'radio' || indicatorType === 'text') convertedValue = convertedValue != null ? String(convertedValue).trim() : '';
 
       for (const indicatorValue of matchingValues) {
-        if (indicatorValue.indicator_type === 'number') {
-          data.value = isNaN(parseFloat(data.value)) ? null : parseFloat(data.value);
-          if (indicator.value_unit === '%' && data.value != null) data.value = data.value * 100;
-        }
-        if (indicatorValue.indicator_type === 'checkbox') {
-          const strValue = data.value != null ? String(data.value) : '';
-          data.value = strValue
-            .split(/[,;.]/)
-            .map((v) => v.trim())
-            .filter((v) => v);
-        }
-        if (indicatorValue.indicator_type === 'radio' || indicatorValue.indicator_type === 'text') data.value = data.value != null ? String(data.value).trim() : '';
-
         const oldValue = indicatorValue.value?.[indicatorValue.indicator_type];
         const isOldEmpty = oldValue == null || oldValue === '' || (Array.isArray(oldValue) && oldValue.length === 0);
-        const isNewEmpty = data.value == null || data.value === '' || (Array.isArray(data.value) && data.value.length === 0);
+        const isNewEmpty = convertedValue == null || convertedValue === '' || (Array.isArray(convertedValue) && convertedValue.length === 0);
         if (isOldEmpty && isNewEmpty) continue;
-        if (JSON.stringify(oldValue) === JSON.stringify(data.value)) continue;
+        if (JSON.stringify(oldValue) === JSON.stringify(convertedValue)) continue;
         logs.push(
           new Log({
             model_name: 'indicator_value',
             name: indicator.name,
             field: 'value',
             operation: 'update',
-            new_value: { [Array.isArray(data.value) ? 'array' : typeof data.value]: data.value },
+            new_value: { [Array.isArray(convertedValue) ? 'array' : typeof convertedValue]: convertedValue },
             previous_value: { [Array.isArray(oldValue) ? 'array' : typeof oldValue]: oldValue },
-            type_value: Array.isArray(data.value) ? 'array' : typeof data.value,
+            type_value: Array.isArray(convertedValue) ? 'array' : typeof convertedValue,
             date: new Date(),
             source: 'import_excel',
             user_id: req.user._id,
@@ -941,8 +944,8 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             indicator_value_name: indicatorValue.name,
           }),
         );
-        bulkOps.push({ updateOne: { filter: { _id: indicatorValue._id }, update: { $set: { [`value.${indicatorValue.indicator_type}`]: data.value, value_source: 'import_excel' } } } });
-        updatedValues.push({ indicatorValue, indicator, newTypedValue: data.value });
+        bulkOps.push({ updateOne: { filter: { _id: indicatorValue._id }, update: { $set: { [`value.${indicatorValue.indicator_type}`]: convertedValue, value_source: 'import_excel' } } } });
+        updatedValues.push({ indicatorValue, indicator, newTypedValue: convertedValue });
       }
     }
 
