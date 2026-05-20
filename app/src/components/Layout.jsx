@@ -25,11 +25,17 @@ export const { ConsentBannerAndConsentManagement, FooterConsentManagementItem, F
 export default function Layout({ children }) {
   return (
     <div className="flex flex-col min-h-screen">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary-green focus:text-white focus:rounded-md focus:shadow-lg"
+      >
+        Aller au contenu principal
+      </a>
       <div className="relative z-50">
         <Header />
       </div>
 
-      <main className="flex-1 bg-white relative" id="main">
+      <main className="flex-1 bg-white relative" id="main" tabIndex={-1}>
         <div className="fixed w-1/2 h-3/5 pointer-events-none z-0" style={{ right: "-200px", top: "-100px" }}>
           <img src={background_element} alt="" className="w-full h-full object-contain" />
         </div>

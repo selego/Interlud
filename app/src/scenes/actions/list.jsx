@@ -151,11 +151,35 @@ export default function List() {
               return groups;
             }, {})
           ).flatMap(([parentName, children]) => [
-            <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}>
+            <tr
+              key={parentName}
+              role="button"
+              tabIndex={0}
+              className="bg-gray-50 hover:bg-gray-100 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-green"
+              onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)
+                }
+              }}
+            >
               <td colSpan={8} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
             </tr>,
             ...children.map((action) => (
-              <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
+              <tr
+                key={action._id}
+                role="button"
+                tabIndex={0}
+                className="hover:bg-gray-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-green"
+                onClick={() => navigate(`/actions/${action._id}/dashboard`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    navigate(`/actions/${action._id}/dashboard`)
+                  }
+                }}
+              >
                 <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>

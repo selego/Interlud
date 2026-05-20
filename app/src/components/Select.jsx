@@ -14,9 +14,15 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
   }, [])
 
   return (
-    <div ref={selectRef} className="relative">
+    <div ref={selectRef} className="relative" onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}>
       <div className="relative">
-        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`input-primary w-full text-left pr-10 ${className}`}>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          className={`input-primary w-full text-left pr-10 ${className}`}
+        >
           <span className="block truncate">{value ? selectedLabel || options.find((option) => option.value === value)?.label : placeholder}</span>
         </button>
 
@@ -27,19 +33,23 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
 
       {isOpen && (
         <div
+          role="listbox"
           className={`absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto ${
             constrained ? "w-full" : "w-max min-w-full left-1/2 -translate-x-1/2"
           }`}
         >
           {options.length > 0 ? (
             options.map((option) => (
-              <div
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === option.value}
                 key={option.value}
                 onClick={() => {
                   onChange?.(option.value)
                   setIsOpen(false)
                 }}
-                className={`px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50
+                className={`w-full text-left px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50
                   ${value === option.value ? "bg-primary/10 text-primary" : "text-gray-900"}
                 `}
               >
@@ -47,7 +57,7 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
                   <span className={`text-xs ${constrained ? "truncate" : "whitespace-nowrap"}`}>{option.label}</span>
                   {value === option.value && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
                 </div>
-              </div>
+              </button>
             ))
           ) : (
             <div className="px-4 py-3 text-gray-500 text-sm text-center">Aucune option disponible</div>
