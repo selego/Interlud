@@ -10,6 +10,7 @@ export default function View() {
   const navigate = useNavigate()
   const [parentActions, setParentActions] = useState([])
   const [collectivities, setCollectivities] = useState([])
+  const [deleting, setDeleting] = useState(false)
   const [action, setAction] = useState({
     type: "custom",
     action_parent_id: "",
@@ -68,11 +69,16 @@ export default function View() {
   const handleDelete = async () => {
     try {
       if (!confirm("Are you sure you want to delete this action?")) return
+      setDeleting(true)
       const { ok, data, code } = await api.delete(`/action/${id}`);
-      if (!ok) return toast.error(code || "Une erreur est survenue")
+      if (!ok) {
+        setDeleting(false)
+        return toast.error(code || "Une erreur est survenue")
+      }
       toast.success("Action supprimée !")
       navigate("/admin/action")
     } catch (error) {
+      setDeleting(false)
       toast.error(error || "Une erreur est survenue")
     }
   }
@@ -97,9 +103,10 @@ export default function View() {
     <div className="flex justify-end gap-3">
       <button
         onClick={handleDelete}
-        className="button-primary bg-red-600"
+        disabled={deleting}
+        className="button-primary bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Supprimer
+        {deleting ? "Suppression..." : "Supprimer"}
       </button>
       <button
         onClick={handleSave}
@@ -148,9 +155,10 @@ export default function View() {
             <div className="flex justify-end gap-3">
       <button
         onClick={handleDelete}
-        className="button-primary bg-red-600"
+        disabled={deleting}
+        className="button-primary bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Supprimer
+        {deleting ? "Suppression..." : "Supprimer"}
       </button>
       <button
         onClick={handleSave}
@@ -418,9 +426,10 @@ export default function View() {
           <div className="flex justify-end gap-3">
       <button
         onClick={handleDelete}
-        className="button-primary bg-red-600"
+        disabled={deleting}
+        className="button-primary bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Supprimer
+        {deleting ? "Suppression..." : "Supprimer"}
       </button>
       <button
         onClick={handleSave}
