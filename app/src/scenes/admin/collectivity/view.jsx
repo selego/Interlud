@@ -105,6 +105,26 @@ export default function View() {
             </div>
 
             <div>
+              <label className="block text-sm font-semibold mb-2">SIREN</label>
+              <input
+                type="number"
+                value={collectivity.siren || ""}
+                onChange={(e) => setCollectivity({ ...collectivity, siren: e.target.value })}
+                className="w-full input-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold mb-2">Superficie (km²)</label>
+              <input
+                type="number"
+                value={collectivity.area || ""}
+                onChange={(e) => setCollectivity({ ...collectivity, area: e.target.value })}
+                className="w-full input-primary"
+              />
+            </div>
+
+            <div>
               <label className="block text-sm font-semibold mb-2">Description</label>
               <textarea
                 value={collectivity.description || ""}
