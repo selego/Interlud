@@ -202,9 +202,23 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
   const [newPrevYear, setNewPrevYear] = useState("");
   const [isAddingPrev, setIsAddingPrev] = useState(false);
+  const [prevLoadingSeconds, setPrevLoadingSeconds] = useState(0);
   const [isAddExpostModalOpen, setIsAddExpostModalOpen] = useState(false);
   const [newExpostYear, setNewExpostYear] = useState("");
   const [isAddingExpost, setIsAddingExpost] = useState(false);
+  const [expostLoadingSeconds, setExpostLoadingSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isAddingPrev) { setPrevLoadingSeconds(0); return; }
+    const interval = setInterval(() => setPrevLoadingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isAddingPrev]);
+
+  useEffect(() => {
+    if (!isAddingExpost) { setExpostLoadingSeconds(0); return; }
+    const interval = setInterval(() => setExpostLoadingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isAddingExpost]);
 
   const handleDelete = async () => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette action ? Cette opération est irréversible.")) return;
@@ -613,55 +627,123 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
         </div>
       </div>
 
-      <Modal isOpen={isAddPrevModalOpen} onClose={() => setIsAddPrevModalOpen(false)} className="max-w-md">
+      <Modal isOpen={isAddPrevModalOpen} onClose={() => { if (!isAddingPrev) setIsAddPrevModalOpen(false); }} className="max-w-md">
         <div className="p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-6">Ajouter une situation prévisionnelle</h2>
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Année prévisionnelle <span className="text-red-500">*</span>
-            </label>
-            <Select
-              options={Array.from({ length: 30 }, (_, i) => {
-                const year = new Date().getFullYear() + i;
-                return { value: year.toString(), label: year.toString() };
-              })}
-              value={newPrevYear}
-              onChange={(value) => setNewPrevYear(value)}
-              placeholder="Sélectionner une année"
-              constrained={true}
-            />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={addPrevisionnel} disabled={isAddingPrev} className="button-primary">
-              {isAddingPrev ? "Création..." : "Créer"}
-            </button>
-          </div>
+          {isAddingPrev ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-5">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-primary-green border-t-transparent animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-800 mb-1">Création en cours...</p>
+                <p className="text-sm text-gray-500 mb-3">
+                  {prevLoadingSeconds < 10
+                    ? "Préparation des fichiers des indicateurs"
+                    : prevLoadingSeconds < 25
+                    ? "Préparation des moteurs de calcul"
+                    : prevLoadingSeconds < 40
+                    ? "Génerations des valeurs par défaut"
+                    : prevLoadingSeconds < 60
+                    ? "Application des valeurs par défaut"
+                    : prevLoadingSeconds < 80
+                    ? "Création du dashboard"
+                    : prevLoadingSeconds < 100
+                    ? "Finalisation de la création"
+                    : prevLoadingSeconds < 120
+                    ? "Finalisation et vérification des résultats"
+                    : "Finalisation de la création"}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Cette opération peut prendre plusieurs minutes
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Année prévisionnelle <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  options={Array.from({ length: 30 }, (_, i) => {
+                    const year = new Date().getFullYear() + i;
+                    return { value: year.toString(), label: year.toString() };
+                  })}
+                  value={newPrevYear}
+                  onChange={(value) => setNewPrevYear(value)}
+                  placeholder="Sélectionner une année"
+                  constrained={true}
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={addPrevisionnel} className="button-primary">
+                  Créer
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 
-      <Modal isOpen={isAddExpostModalOpen} onClose={() => setIsAddExpostModalOpen(false)} className="max-w-md">
+      <Modal isOpen={isAddExpostModalOpen} onClose={() => { if (!isAddingExpost) setIsAddExpostModalOpen(false); }} className="max-w-md">
         <div className="p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-6">Ajouter une situation ex-post</h2>
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Année ex-post <span className="text-red-500">*</span>
-            </label>
-            <Select
-              options={Array.from({ length: 30 }, (_, i) => {
-                const year = new Date().getFullYear() + i;
-                return { value: year.toString(), label: year.toString() };
-              })}
-              value={newExpostYear}
-              onChange={(value) => setNewExpostYear(value)}
-              placeholder="Sélectionner une année"
-              constrained={true}
-            />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={addExpost} disabled={isAddingExpost} className="button-primary">
-              {isAddingExpost ? "Création..." : "Créer"}
-            </button>
-          </div>
+          {isAddingExpost ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-5">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-primary-green border-t-transparent animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-800 mb-1">Création en cours...</p>
+                <p className="text-sm text-gray-500 mb-3">
+                  {expostLoadingSeconds < 10
+                    ? "Préparation des fichiers des indicateurs"
+                    : expostLoadingSeconds < 25
+                    ? "Préparation des moteurs de calcul"
+                    : expostLoadingSeconds < 40
+                    ? "Génerations des valeurs par défaut"
+                    : expostLoadingSeconds < 60
+                    ? "Application des valeurs par défaut"
+                    : expostLoadingSeconds < 80
+                    ? "Création du dashboard"
+                    : expostLoadingSeconds < 100
+                    ? "Finalisation de la création"
+                    : expostLoadingSeconds < 120
+                    ? "Finalisation et vérification des résultats"
+                    : "Finalisation de la création"}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Cette opération peut prendre plusieurs minutes
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Année ex-post <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  options={Array.from({ length: 30 }, (_, i) => {
+                    const year = new Date().getFullYear() + i;
+                    return { value: year.toString(), label: year.toString() };
+                  })}
+                  value={newExpostYear}
+                  onChange={(value) => setNewExpostYear(value)}
+                  placeholder="Sélectionner une année"
+                  constrained={true}
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={addExpost} className="button-primary">
+                  Créer
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>
