@@ -342,6 +342,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (hasExpost && req.body.year_expost !== req.body.year_prev) actionSituationYearPairs.push({ situation: 'ref', year: req.body.year_expost });
 
     const createdIndicatorValues = [];
+    const nonPrimordialInitialPrev = { init: [], ref: [], prev: [] };
+    const nonPrimordialInitialExpost = { init: [], ref: [], expost: [] };
 
     for (const indicator of indicators) {
       const pairs = actionSituationYearPairs.filter((p) => indicator.presence_in_excel?.[p.situation] === true);
@@ -370,12 +372,40 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           indicator_excel_id: indicator.excel_indicator_id,
           is_primordial: indicator.is_primordial,
         };
+        if (indicator.is_primordial === false) {
+          indicatorValue.value = { [indicator.value_type]: defaultValue };
+          if (defaultValue !== null && indicator.excel_indicator_id) {
+            const cell = { excel_indicator_id: indicator.excel_indicator_id, value: defaultValue, unit: indicator.value_unit };
+            if (situation === 'init') {
+              nonPrimordialInitialPrev.init.push(cell);
+              if (hasExpost) nonPrimordialInitialExpost.init.push(cell);
+            }
+            if (situation === 'ref') {
+              if (year === req.body.year_prev) nonPrimordialInitialPrev.ref.push(cell);
+              if (hasExpost && year === req.body.year_expost) nonPrimordialInitialExpost.ref.push(cell);
+            }
+            if (situation === 'prev') nonPrimordialInitialPrev.prev.push(cell);
+            if (situation === 'expost' && hasExpost) nonPrimordialInitialExpost.expost.push(cell);
+          }
+        }
         const displayCondition = indicator.display_condition?.[situation];
         if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
         createdIndicatorValues.push(indicatorValue);
       }
     }
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
+
+    // Écrire les valeurs par défaut des non primordiaux dans les fichiers Excel (colonne F vidée par clearUpdates)
+    const initialNonPrimordialPromises = [];
+    for (const situation of ['init', 'ref', 'prev']) {
+      if (nonPrimordialInitialPrev[situation].length > 0) initialNonPrimordialPromises.push(updateExcelCellsBatch(excelFileIdPrev, nonPrimordialInitialPrev[situation], situation).catch(capture));
+    }
+    if (hasExpost) {
+      for (const situation of ['init', 'ref', 'expost']) {
+        if (nonPrimordialInitialExpost[situation].length > 0) initialNonPrimordialPromises.push(updateExcelCellsBatch(excelFileIdExpost, nonPrimordialInitialExpost[situation], situation).catch(capture));
+      }
+    }
+    if (initialNonPrimordialPromises.length > 0) await Promise.all(initialNonPrimordialPromises);
 
     // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base consolidée
     if (configActionBasicDataObj) {
@@ -905,6 +935,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
     const createdPrevIndicatorValues = [];
     const createdRefIndicatorValues = [];
+    const nonPrimordialInitialAddYearPrev = { ref: [], prev: [] };
 
     for (const indicator of indicators) {
       const situations = [];
@@ -953,6 +984,13 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
         }
 
+        if (indicator.is_primordial === false) {
+          indicatorValue.value = { ...(indicatorValue.value || {}), [indicator.value_type]: defaultValue };
+          if (defaultValue !== null && indicator.excel_indicator_id) {
+            nonPrimordialInitialAddYearPrev[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue, unit: indicator.value_unit });
+          }
+        }
+
         const displayCondition = indicator.display_condition?.[situation];
         if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
 
@@ -963,6 +1001,15 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     if (createdPrevIndicatorValues.length > 0) await IndicatorValue.insertMany(createdPrevIndicatorValues);
     if (createdRefIndicatorValues.length > 0) await IndicatorValue.insertMany(createdRefIndicatorValues);
+
+    // Écrire les valeurs par défaut des non primordiaux dans l'Excel (colonne F vidée par clearUpdatesPrev)
+    if (excelFileId) {
+      const addYearPrevPromises = [];
+      for (const situation of ['ref', 'prev']) {
+        if (nonPrimordialInitialAddYearPrev[situation].length > 0) addYearPrevPromises.push(updateExcelCellsBatch(excelFileId, nonPrimordialInitialAddYearPrev[situation], situation).catch(capture));
+      }
+      if (addYearPrevPromises.length > 0) await Promise.all(addYearPrevPromises);
+    }
 
     // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
@@ -1242,6 +1289,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     const indicators = await Indicator.find({ linked_action_id: parentAction?._id || action.action_parent_id });
     const createdExpostIndicatorValues = [];
     const createdRefIndicatorValues = [];
+    const nonPrimordialInitialAddYearExpost = { ref: [], expost: [] };
 
     for (const indicator of indicators) {
       const situations = [];
@@ -1290,6 +1338,13 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           indicatorValue.value = { text: null, number: null, radio: null, checkbox: [] };
         }
 
+        if (indicator.is_primordial === false) {
+          indicatorValue.value = { ...(indicatorValue.value || {}), [indicator.value_type]: defaultValue };
+          if (defaultValue !== null && indicator.excel_indicator_id) {
+            nonPrimordialInitialAddYearExpost[situation].push({ excel_indicator_id: indicator.excel_indicator_id, value: defaultValue, unit: indicator.value_unit });
+          }
+        }
+
         const displayCondition = indicator.display_condition?.[situation];
         if (displayCondition?.operator || displayCondition?.conditions?.length) indicatorValue.display_condition = displayCondition;
 
@@ -1300,6 +1355,15 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
     if (createdExpostIndicatorValues.length > 0) await IndicatorValue.insertMany(createdExpostIndicatorValues);
     if (createdRefIndicatorValues.length > 0) await IndicatorValue.insertMany(createdRefIndicatorValues);
+
+    // Écrire les valeurs par défaut des non primordiaux dans l'Excel (colonne F vidée à la création)
+    if (excelFileId) {
+      const addYearExpostPromises = [];
+      for (const situation of ['ref', 'expost']) {
+        if (nonPrimordialInitialAddYearExpost[situation].length > 0) addYearExpostPromises.push(updateExcelCellsBatch(excelFileId, nonPrimordialInitialAddYearExpost[situation], situation).catch(capture));
+      }
+      if (addYearExpostPromises.length > 0) await Promise.all(addYearExpostPromises);
+    }
 
     // Mettre à jour l'indicateur AnneeRempl avec la nouvelle année expost dans l'Excel
     if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_expost, 'expost');
