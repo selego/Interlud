@@ -1140,7 +1140,7 @@ export default function Dashboard({ action }) {
                 <div className="card-shadow p-6 mt-6">
                   <div className="flex items-center gap-5 mb-6 flex-wrap">
                     <h3 className="text-base font-semibold text-[#111]">Gains entre situations</h3>
-                    <p className="text-sm text-gray-500">Écart d'émissions entre chaque situation et sa référence — valeurs positives = réduction</p>
+                    <p className="text-sm text-gray-500">Écart d'émissions entre chaque situation et sa référence — valeurs positives = augmentation</p>
                     <div className="flex gap-5 ml-auto">
                       {Object.entries(GAIN_COLORS).map(([type, color]) => (
                         <div key={type} className="flex items-center gap-1.5 text-xs text-gray-500">
