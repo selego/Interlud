@@ -118,6 +118,20 @@
     -moz-appearance: auto;
   }
 
+  :focus-visible {
+    outline: 2px solid #0a3641;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #0a3641;
+    outline-offset: 2px;
+  }
+
   ::-webkit-inner-spin-button,
   ::-webkit-outer-spin-button {
     -webkit-appearance: none;

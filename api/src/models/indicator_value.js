@@ -22,6 +22,7 @@ const Schema = new mongoose.Schema(
     economic_actor_name: { type: String, trim: true },
     indicator_id: { type: String, trim: true },
     indicator_name: { type: String, trim: true },
+    indicator_description: { type: String, trim: true },
     indicator_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
     indicator_value_possibilities: { type: Array, default: [] },
     indicator_category_id: { type: String, trim: true },

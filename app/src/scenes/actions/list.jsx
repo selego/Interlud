@@ -151,11 +151,35 @@ export default function List() {
               return groups;
             }, {})
           ).flatMap(([parentName, children]) => [
-            <tr key={parentName} className="bg-gray-50 hover:bg-gray-100 cursor-pointer" onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}>
+            <tr
+              key={parentName}
+              role="button"
+              tabIndex={0}
+              className="bg-gray-50 hover:bg-gray-100 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-green"
+              onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)
+                }
+              }}
+            >
               <td colSpan={8} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
             </tr>,
             ...children.map((action) => (
-              <tr key={action._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
+              <tr
+                key={action._id}
+                role="button"
+                tabIndex={0}
+                className="hover:bg-gray-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-green"
+                onClick={() => navigate(`/actions/${action._id}/dashboard`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    navigate(`/actions/${action._id}/dashboard`)
+                  }
+                }}
+              >
                 <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
@@ -183,7 +207,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
-    const [year,setYear] = useState( { init: null, prev: null, expost: null })
+    const [year,setYear] = useState( { init: null, prev: null })
     const [isLoading, setIsLoading] = useState(false)
     const [loadingSeconds, setLoadingSeconds] = useState(0)
     const [createdActionId, setCreatedActionId] = useState(null)
@@ -216,7 +240,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
         if (!year.init) return toast.error("Veuillez sélectionner une année initiale")
         if (!year.prev) return toast.error("Veuillez sélectionner une année prévisionnelle")
-        if (!year.expost) return toast.error("Veuillez sélectionner une année ex-post")
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
 
         const selectedAction = actions.find(a => a._id === selectedActionId)
@@ -229,7 +252,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           collectivity_name: collectivity.name,
           year_init: parseInt(year.init),
           year_prev: parseInt(year.prev),
-          year_expost: parseInt(year.expost),
           started_before_interlud: startedBeforeInterlud,
           ...(user.role === 'economic_actor' ? {owner: 'economic_actor', economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name} : {}),
         }
@@ -353,19 +375,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                   type="number"
                   value={year.prev}
                   onChange={(e) => setYear({ ...year, prev: e.target.value })}
-                  className="input-primary"
-                  placeholder="Année"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Année ex-post <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={year.expost}
-                  onChange={(e) => setYear({ ...year, expost: e.target.value })}
                   className="input-primary"
                   placeholder="Année"
                 />

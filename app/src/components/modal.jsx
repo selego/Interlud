@@ -47,9 +47,14 @@ export default function Modal({ isOpen, children, onClose, className = "w-[calc(
               className={`w-full z-10 bg-white rounded-3xl shadow-md absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 max-h-screen overflow-visible ${className}`}
             >
               {onClose && (
-                <div className="absolute cursor-pointer top-5 right-5">
-                  <HiX className="text-xl text-gray-500 transition-colors hover:text-red-500" onClick={onClose} />
-                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Fermer"
+                  className="absolute top-5 right-5 p-1 rounded text-gray-500 hover:text-red-500 transition-colors"
+                >
+                  <HiX className="text-xl" aria-hidden="true" />
+                </button>
               )}
               {children}
             </div>

@@ -47,8 +47,14 @@ function SelectSearch({ value, label, onChange }) {
   }, [search])
 
   return (
-    <div ref={selectRef} className="relative">
-      <button type="button" onClick={() => setIsOpen(!isOpen)} className="input-primary w-full text-left pr-10 truncate">
+    <div ref={selectRef} className="relative" onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className="input-primary w-full text-left pr-10 truncate"
+      >
         <span className="block truncate">{label || "Sélectionner"}</span>
       </button>
       <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
@@ -69,20 +75,21 @@ function SelectSearch({ value, label, onChange }) {
             <div className="px-4 py-3 text-gray-500 text-sm text-center">Chargement...</div>
           ) : options.length > 0 ? (
             options.map((option) => (
-              <div
+              <button
+                type="button"
                 key={option._id}
                 onClick={() => {
                   onChange?.(option._id)
                   setIsOpen(false)
                   setSearch("")
                 }}
-                className={`px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${value === option._id ? "bg-primary/10 text-primary" : "text-gray-900"}`}
+                className={`w-full text-left px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${value === option._id ? "bg-primary/10 text-primary" : "text-gray-900"}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xs whitespace-nowrap">{option.name}</span>
                   {value === option._id && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
                 </div>
-              </div>
+              </button>
             ))
           ) : search ? (
             <div className="px-4 py-3 text-gray-500 text-sm text-center">Aucun résultat</div>
@@ -105,7 +112,7 @@ export default function Header() {
   const location = useLocation()
 
   const fetchUnreadNotifications = async () => {
-    if (!user) return toast.error("Utilisateur non connecté")
+    if (!user) return
     try {
       const { ok, total, code } = await api.post("/notification/search", { user_id: user._id, read_at: null, limit: 0 })
       if (!ok) return toast.error(code || "Erreur lors de la récupération des notifications")
@@ -126,13 +133,22 @@ export default function Header() {
       }
     }
 
-    if (openQuickAccessDropdown !== null) {
-      document.addEventListener("mousedown", handleClickOutside)
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside)
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setOpenQuickAccessDropdown(null)
+        setOpenDropdown(null)
       }
     }
-  }, [openQuickAccessDropdown])
+
+    if (openQuickAccessDropdown !== null || openDropdown !== null) {
+      document.addEventListener("mousedown", handleClickOutside)
+      document.addEventListener("keydown", handleKeyDown)
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside)
+        document.removeEventListener("keydown", handleKeyDown)
+      }
+    }
+  }, [openQuickAccessDropdown, openDropdown])
 
   const handleCollectivityChange = async (collectivityId) => {
     if (!collectivityId) {
@@ -282,6 +298,8 @@ export default function Header() {
                         <>
                           <button
                             className="fr-btn mt-0 ml-2 px-2 rounded hover:bg-primary-green/10 transition-colors"
+                            aria-haspopup="menu"
+                            aria-expanded={openQuickAccessDropdown === index}
                             onClick={() => setOpenQuickAccessDropdown(openQuickAccessDropdown === index ? null : index)}
                           >
                             <span className={`${item.iconId} relative`} aria-hidden="true">

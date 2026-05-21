@@ -10,7 +10,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADN6ZYBKXDVI2FEJMKF5BACAMSY2"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -944,6 +944,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             situation: situation,
             updateData: {
               indicator_name: newData.name,
+              indicator_description: newData.description,
               indicator_type: newData.value_type,
               indicator_value_possibilities: newData.value_possibilities || [],
               indicator_category_id: newData.indicator_category_id?.toString(),
