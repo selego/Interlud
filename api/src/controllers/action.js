@@ -1140,8 +1140,9 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     let excelFileName = `${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
     if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${action.economic_actor_name}_${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
 
-    // Dupliquer l'Excel depuis le premier fichier expost existant de cette action
-    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || null;
+    // Dupliquer l'Excel depuis le premier fichier expost existant, sinon fallback sur le premier fichier prev
+    // (pour récupérer init + infos collectivité + config quand expost n'existait pas à la création de l'action)
+    const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.exel_files_prev?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
     // Vider les feuilles init et prev du nouveau fichier Excel
@@ -1252,6 +1253,31 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost }, { 'value.number': year_expost }, { new: true });
         }
       }
+    }
+
+    // Injecter les infos collectivité (NomTerr/SIRENTerr/SupTerr) dans les IVs config pour la situation expost
+    // afin qu'elles soient propagées dans la sheet expost via le bloc d'écriture ci-dessous
+    if (configActionBasicData) {
+      const collectivityFieldsMapping = [
+        { excel_indicator_id: 'NomTerr', value: collectivity.name, value_type: 'text' },
+        { excel_indicator_id: 'SIRENTerr', value: collectivity.siren, value_type: 'number' },
+        { excel_indicator_id: 'SupTerr', value: collectivity.area, value_type: 'number' },
+      ].filter((f) => f.value !== null && f.value !== undefined);
+
+      if (collectivityFieldsMapping.length > 0) {
+        await Promise.all(collectivityFieldsMapping.map(({ excel_indicator_id, value, value_type }) => IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: excel_indicator_id, situation: 'expost', year: year_expost }, { [`value.${value_type}`]: value })));
+      }
+    }
+
+    // Ajouter cette action à ActionsCharte/ActionsAutres pour la nouvelle année expost (comme au create POST)
+    if (configActionBasicData && action.excel_worksheetname) {
+      const targetExcelId = action.started_before_interlud === true ? 'ActionsAutres' : 'ActionsCharte';
+      const ivExpost = await IndicatorValue.findOneAndUpdate(
+        { action_id: configActionBasicData._id, indicator_excel_id: targetExcelId, situation: 'expost', year: year_expost },
+        { $addToSet: { 'value.checkbox': action.excel_worksheetname } },
+        { new: true },
+      );
+      if (ivExpost && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, ivExpost.value?.checkbox, 'expost').catch(capture);
     }
 
     // Écrire les valeurs config existantes (Données de base + Parc types) dans le nouveau fichier Excel
