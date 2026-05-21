@@ -4,7 +4,7 @@ const tenantId = process.env.TENANT_ID;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const sharePointSiteName = 'selegobv';
-const masterExcelFileId = '01IBL4ADN6ZYBKXDVI2FEJMKF5BACAMSY2';
+const masterExcelFileId = '01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3';
 
 const WORKSHEETS = {
   init: 'Remplissage - Sit. Init.',
@@ -142,7 +142,7 @@ async function updateExcelCellsBatch(fileId, updates, situation) {
     .map((u) => {
       const rowIndex = indicatorRowMap.get(String(u.excel_indicator_id).trim());
       if (rowIndex === undefined) return null;
-      const v = (u.unit === '%' && typeof u.value === 'number') ? u.value / 100 : u.value;
+      const v = u.unit === '%' && typeof u.value === 'number' ? u.value / 100 : u.value;
       const cellValue = Array.isArray(v) ? v.join(', ') : (v ?? '');
       return { rowIndex, cellValue };
     })
