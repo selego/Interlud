@@ -944,6 +944,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             situation: situation,
             updateData: {
               indicator_name: newData.name,
+              indicator_description: newData.description,
               indicator_type: newData.value_type,
               indicator_value_possibilities: newData.value_possibilities || [],
               indicator_category_id: newData.indicator_category_id?.toString(),
