@@ -1499,4 +1499,197 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
   }
 });
 
+// Nettoie les IVs config orphelines pour une situation/année donnée + supprime les actions config sans IVs restantes
+const cleanupOrphanConfigIVs = async (action, situation, year) => {
+  const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
+  const configActions = await Action.find({ collectivity_id: action.collectivity_id, type: 'config', ...ownerFilter });
+  if (configActions.length === 0) return;
+  const configActionIds = configActions.map((a) => a._id.toString());
+
+  const baseQuery = { collectivity_id: action.collectivity_id, type: { $ne: 'config' }, ...ownerFilter };
+  let otherAction = null;
+  if (situation === 'init') otherAction = await Action.findOne({ ...baseQuery, year_init: year });
+  if (situation === 'prev') otherAction = await Action.findOne({ ...baseQuery, 'exel_files_prev.year_prev': year });
+  if (situation === 'expost') otherAction = await Action.findOne({ ...baseQuery, 'excel_files_expost.year_expost': year });
+  if (situation === 'ref') otherAction = await Action.findOne({ ...baseQuery, $or: [{ 'exel_files_prev.year_ref': year }, { 'excel_files_expost.year_ref': year }] });
+
+  if (!otherAction) await IndicatorValue.deleteMany({ action_id: { $in: configActionIds }, situation, year });
+
+  for (const configAction of configActions) {
+    const remainingIVs = await IndicatorValue.countDocuments({ action_id: configAction._id.toString() });
+    if (remainingIVs === 0) await Action.deleteOne({ _id: configAction._id });
+  }
+};
+
+// Helper: clear rows in aggregation file "1. Données d'entrée" matching `${worksheetname}-*-${sitLabel}-${year}`
+const clearAggregationRows = async (action, sitLabel, year) => {
+  if (!action.excel_worksheetname || action.type === 'config') return;
+  const aggregationFileId = action.owner === 'economic_actor' && action.economic_actor_id
+    ? (await EconomicActor.findById(action.economic_actor_id))?.collectivities?.find((c) => c.id === action.collectivity_id)?.aggregation_excel_file_id
+    : (await Collectivity.findById(action.collectivity_id))?.aggregation_excel_file_id;
+  if (!aggregationFileId) return;
+
+  const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+  const sheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
+  const usedRange = await graphFetch(`${sheetPath}/usedRange`);
+  const rows = usedRange.values || [];
+  const startRow = parseInt(usedRange.address?.match(/\d+/)?.[0] || 1);
+  const col = String.fromCharCode(72 + (action.instance_number || 1));
+  const prefix = `${action.excel_worksheetname}-`;
+  const suffix = `-${sitLabel}-${year}`;
+
+  for (let i = 0; i < rows.length; i++) {
+    const id = rows[i][1] ? String(rows[i][1]).trim() : '';
+    if (!id.startsWith(prefix) || !id.endsWith(suffix)) continue;
+    await graphFetch(`${sheetPath}/range(address='${col}${startRow + i}')`, {
+      method: 'PATCH',
+      body: JSON.stringify({ values: [['']] }),
+    }).catch((e) => console.error('[clearAggregationRows]', e.message));
+  }
+};
+
+router.post('/remove_year_previsionnel', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { action_id, year_prev } = req.body;
+    if (!action_id || !year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const action = await Action.findById(action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const entry = (action.exel_files_prev || []).find((f) => f.year_prev === year_prev);
+    if (!entry) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Supprimer le fichier Excel de SharePoint
+    if (entry.excel_file_id) {
+      try {
+        const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE' });
+      } catch (e) {
+        console.error(`Failed to delete Excel file ${entry.excel_file_id}:`, e.message);
+      }
+    }
+
+    // Nettoyer fichier d'agrégation (Prév pour cette année)
+    await clearAggregationRows(action, 'Prév', year_prev).catch((e) => console.error('[Agrégation prev cleanup]', e.message));
+
+    // Retirer l'entrée du tableau
+    action.exel_files_prev = (action.exel_files_prev || []).filter((f) => f.year_prev !== year_prev);
+
+    // Le year_ref de l'entrée supprimée est-il encore référencé par une autre entrée prev/expost ?
+    const refStillUsed = [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])].some((f) => f.year_ref === entry.year_ref);
+
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
+    action.last_modif_date = new Date();
+    await action.save();
+
+    // Supprimer les IVs prev de cette année
+    await IndicatorValue.deleteMany({ action_id: action._id, situation: 'prev', year: year_prev });
+
+    // Si le year_ref n'est plus utilisé : supprimer aussi les IVs ref + nettoyer agrégation ref
+    if (!refStillUsed) {
+      await IndicatorValue.deleteMany({ action_id: action._id, situation: 'ref', year: entry.year_ref });
+      await clearAggregationRows(action, 'Réf', entry.year_ref).catch((e) => console.error('[Agrégation ref cleanup]', e.message));
+    }
+
+    // Nettoyer les IVs config orphelines (prev + ref si orphelin)
+    await cleanupOrphanConfigIVs(action, 'prev', year_prev);
+    if (!refStillUsed) await cleanupOrphanConfigIVs(action, 'ref', entry.year_ref);
+
+    await computeActionCompletion(action._id);
+
+    await Log.create({
+      model_name: 'action',
+      name: action.name,
+      field: 'exel_files_prev',
+      operation: 'remove_previsionnel',
+      new_value: { number: year_prev },
+      type_value: 'number',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+
+    return res.status(200).send({ ok: true, data: action });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+router.post('/remove_year_expost', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { action_id, year_expost } = req.body;
+    if (!action_id || !year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    const action = await Action.findById(action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    const entry = (action.excel_files_expost || []).find((f) => f.year_expost === year_expost);
+    if (!entry) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    if (entry.excel_file_id) {
+      try {
+        const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
+        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE' });
+      } catch (e) {
+        console.error(`Failed to delete Excel file ${entry.excel_file_id}:`, e.message);
+      }
+    }
+
+    await clearAggregationRows(action, 'Expost', year_expost).catch((e) => console.error('[Agrégation expost cleanup]', e.message));
+
+    action.excel_files_expost = (action.excel_files_expost || []).filter((f) => f.year_expost !== year_expost);
+
+    const refStillUsed = [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])].some((f) => f.year_ref === entry.year_ref);
+
+    action.last_modif_by_id = req.user._id;
+    action.last_modif_by_name = req.user.name;
+    action.last_modif_by_email = req.user.email;
+    action.last_modif_date = new Date();
+    await action.save();
+
+    await IndicatorValue.deleteMany({ action_id: action._id, situation: 'expost', year: year_expost });
+
+    if (!refStillUsed) {
+      await IndicatorValue.deleteMany({ action_id: action._id, situation: 'ref', year: entry.year_ref });
+      await clearAggregationRows(action, 'Réf', entry.year_ref).catch((e) => console.error('[Agrégation ref cleanup]', e.message));
+    }
+
+    // Nettoyer les IVs config orphelines (expost + ref si orphelin)
+    await cleanupOrphanConfigIVs(action, 'expost', year_expost);
+    if (!refStillUsed) await cleanupOrphanConfigIVs(action, 'ref', entry.year_ref);
+
+    await computeActionCompletion(action._id);
+
+    await Log.create({
+      model_name: 'action',
+      name: action.name,
+      field: 'excel_files_expost',
+      operation: 'remove_expost',
+      new_value: { number: year_expost },
+      type_value: 'number',
+      date: new Date(),
+      user_id: req.user._id,
+      user_name: req.user.name,
+      user_email: req.user.email,
+      action_id: action._id,
+      action_name: action.name,
+      collectivity_id: action.collectivity_id,
+      collectivity_name: action.collectivity_name,
+    });
+
+    return res.status(200).send({ ok: true, data: action });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
 module.exports = router;

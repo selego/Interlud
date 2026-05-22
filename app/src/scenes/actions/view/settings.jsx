@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import Modal from "@/components/modal";
-import { FiList, FiSettings, FiClock, FiArrowLeft, FiPlus } from "react-icons/fi";
+import { FiList, FiSettings, FiClock, FiArrowLeft, FiPlus, FiTrash2 } from "react-icons/fi";
 import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
@@ -207,6 +207,12 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const [newExpostYear, setNewExpostYear] = useState("");
   const [isAddingExpost, setIsAddingExpost] = useState(false);
   const [expostLoadingSeconds, setExpostLoadingSeconds] = useState(0);
+  const [yearToRemovePrev, setYearToRemovePrev] = useState(null);
+  const [isRemovingPrev, setIsRemovingPrev] = useState(false);
+  const [removePrevLoadingSeconds, setRemovePrevLoadingSeconds] = useState(0);
+  const [yearToRemoveExpost, setYearToRemoveExpost] = useState(null);
+  const [isRemovingExpost, setIsRemovingExpost] = useState(false);
+  const [removeExpostLoadingSeconds, setRemoveExpostLoadingSeconds] = useState(0);
 
   useEffect(() => {
     if (!isAddingPrev) { setPrevLoadingSeconds(0); return; }
@@ -219,6 +225,18 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
     const interval = setInterval(() => setExpostLoadingSeconds((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [isAddingExpost]);
+
+  useEffect(() => {
+    if (!isRemovingPrev) { setRemovePrevLoadingSeconds(0); return; }
+    const interval = setInterval(() => setRemovePrevLoadingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isRemovingPrev]);
+
+  useEffect(() => {
+    if (!isRemovingExpost) { setRemoveExpostLoadingSeconds(0); return; }
+    const interval = setInterval(() => setRemoveExpostLoadingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isRemovingExpost]);
 
   const handleDelete = async () => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette action ? Cette opération est irréversible.")) return;
@@ -272,6 +290,38 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
       toast.error(error.message || "Une erreur est survenue");
     } finally {
       setIsAddingExpost(false);
+    }
+  };
+
+  const confirmRemovePrev = async () => {
+    if (!yearToRemovePrev) return;
+    try {
+      setIsRemovingPrev(true);
+      const { ok, data, code } = await api.post("/action/remove_year_previsionnel", { action_id: action._id, year_prev: yearToRemovePrev });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Année prévisionnelle supprimée");
+      setYearToRemovePrev(null);
+      if (onActionUpdate) onActionUpdate(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsRemovingPrev(false);
+    }
+  };
+
+  const confirmRemoveExpost = async () => {
+    if (!yearToRemoveExpost) return;
+    try {
+      setIsRemovingExpost(true);
+      const { ok, data, code } = await api.post("/action/remove_year_expost", { action_id: action._id, year_expost: yearToRemoveExpost });
+      if (!ok) return toast.error(code || "Une erreur est survenue");
+      toast.success("Année ex-post supprimée");
+      setYearToRemoveExpost(null);
+      if (onActionUpdate) onActionUpdate(data);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setIsRemovingExpost(false);
     }
   };
 
@@ -410,8 +460,15 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
           ) : (
             <div className="flex flex-wrap gap-2">
               {(action.excel_files_expost || []).map(f => f.year_expost).sort((a, b) => a - b).map((year) => (
-                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
+                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium flex items-center gap-2">
                   {year}
+                  <button
+                    onClick={() => setYearToRemoveExpost(year)}
+                    className="text-gray-400 hover:text-red-600 transition-colors"
+                    aria-label={`Supprimer l'année ${year}`}
+                  >
+                    <FiTrash2 size={14} />
+                  </button>
                 </span>
               ))}
             </div>
@@ -433,8 +490,15 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
           ) : (
             <div className="flex flex-wrap gap-2">
               {(action.exel_files_prev || []).map(f => f.year_prev).sort((a, b) => a - b).map((year) => (
-                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium">
+                <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium flex items-center gap-2">
                   {year}
+                  <button
+                    onClick={() => setYearToRemovePrev(year)}
+                    className="text-gray-400 hover:text-red-600 transition-colors"
+                    aria-label={`Supprimer l'année ${year}`}
+                  >
+                    <FiTrash2 size={14} />
+                  </button>
                 </span>
               ))}
             </div>
@@ -740,6 +804,92 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               <div className="flex justify-end gap-3">
                 <button onClick={addExpost} className="button-primary">
                   Créer
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={yearToRemovePrev !== null} onClose={() => { if (!isRemovingPrev) setYearToRemovePrev(null); }} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Supprimer une année prévisionnelle</h2>
+          {isRemovingPrev ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-5">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-red-500 border-t-transparent animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-800 mb-1">Suppression en cours...</p>
+                <p className="text-sm text-gray-500 mb-3">
+                  {removePrevLoadingSeconds < 10
+                    ? "Suppression du fichier Excel"
+                    : removePrevLoadingSeconds < 25
+                    ? "Nettoyage du fichier d'agrégation"
+                    : removePrevLoadingSeconds < 40
+                    ? "Suppression des valeurs"
+                    : removePrevLoadingSeconds < 60
+                    ? "Recalcul de la complétion"
+                    : "Finalisation de la suppression"}
+                </p>
+                <p className="text-xs text-gray-400">Cette opération peut prendre plusieurs minutes</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700 mb-6">
+                Êtes-vous sûr de vouloir supprimer l'année prévisionnelle <span className="font-semibold">{yearToRemovePrev}</span> ? Les valeurs saisies seront perdues. Cette action est irréversible.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setYearToRemovePrev(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                  Annuler
+                </button>
+                <button onClick={confirmRemovePrev} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
+                  Supprimer
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={yearToRemoveExpost !== null} onClose={() => { if (!isRemovingExpost) setYearToRemoveExpost(null); }} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Supprimer une année ex-post</h2>
+          {isRemovingExpost ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-5">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-red-500 border-t-transparent animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-800 mb-1">Suppression en cours...</p>
+                <p className="text-sm text-gray-500 mb-3">
+                  {removeExpostLoadingSeconds < 10
+                    ? "Suppression du fichier Excel"
+                    : removeExpostLoadingSeconds < 25
+                    ? "Nettoyage du fichier d'agrégation"
+                    : removeExpostLoadingSeconds < 40
+                    ? "Suppression des valeurs"
+                    : removeExpostLoadingSeconds < 60
+                    ? "Recalcul de la complétion"
+                    : "Finalisation de la suppression"}
+                </p>
+                <p className="text-xs text-gray-400">Cette opération peut prendre plusieurs minutes</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700 mb-6">
+                Êtes-vous sûr de vouloir supprimer l'année ex-post <span className="font-semibold">{yearToRemoveExpost}</span> ? Les valeurs saisies seront perdues. Cette action est irréversible.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setYearToRemoveExpost(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                  Annuler
+                </button>
+                <button onClick={confirmRemoveExpost} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
+                  Supprimer
                 </button>
               </div>
             </>
