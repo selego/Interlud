@@ -661,7 +661,7 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
       for (const fileId of allExcelFileIds) {
         try {
-          await graphFetch(`/sites/${siteId}/drive/items/${fileId}`, { method: 'DELETE' });
+          await graphFetch(`/sites/${siteId}/drive/items/${fileId}`, { method: 'DELETE', headers: { Prefer: 'bypass-shared-lock' } });
         } catch (e) {
           console.error(`Failed to delete Excel file ${fileId}:`, e.message);
         }
@@ -1569,7 +1569,7 @@ router.post('/remove_year_previsionnel', passport.authenticate(['admin', 'user']
     if (entry.excel_file_id) {
       try {
         const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE' });
+        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE', headers: { Prefer: 'bypass-shared-lock' } });
       } catch (e) {
         console.error(`Failed to delete Excel file ${entry.excel_file_id}:`, e.message);
       }
@@ -1643,7 +1643,7 @@ router.post('/remove_year_expost', passport.authenticate(['admin', 'user'], { se
     if (entry.excel_file_id) {
       try {
         const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE' });
+        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE', headers: { Prefer: 'bypass-shared-lock' } });
       } catch (e) {
         console.error(`Failed to delete Excel file ${entry.excel_file_id}:`, e.message);
       }
