@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { Link } from "react-router-dom"
-import { ChevronDown, HelpCircle, MessageCircle, Sparkles, Mail } from "lucide-react"
+import { ChevronDown, HelpCircle, MessageCircle, Sparkles, Mail, Download } from "lucide-react"
 import { FAQ, FAQ_CATEGORIES } from "./data"
 
 export default function Faq() {
@@ -28,6 +28,14 @@ export default function Faq() {
           <p className="mt-3 text-base text-font-secondary max-w-xl mx-auto">
             Trouvez les réponses aux questions les plus fréquentes sur l'utilisation de la plateforme InTerLUD+.
           </p>
+          <a
+            href="/EVALUD_Guide_Utilisateurs.pdf"
+            download
+            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-green hover:bg-primary-green/90 text-white text-sm font-semibold rounded-md transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Télécharger le guide utilisateur
+          </a>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
