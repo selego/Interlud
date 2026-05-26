@@ -1366,7 +1366,8 @@ async function generateExcelForAllCollectivities() {
         try {
           // Dupliquer le master pour remplacer l'Excel
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
-          const fileName = `${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
+          const ownerPrefix = action.owner === "economic_actor" && action.economic_actor_name ? `${action.economic_actor_name}_` : "";
+          const fileName = `${ownerPrefix}${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           // Sync les valeurs (prev file contient init + ref + prev)
@@ -1395,7 +1396,8 @@ async function generateExcelForAllCollectivities() {
 
         try {
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
-          const fileName = `${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
+          const ownerPrefix = action.owner === "economic_actor" && action.economic_actor_name ? `${action.economic_actor_name}_` : "";
+          const fileName = `${ownerPrefix}${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           const situationYears = [
