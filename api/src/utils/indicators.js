@@ -79,4 +79,47 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
   return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
 };
 
-module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator };
+// Résout dynamiquement indicator_value_possibilities pour les IVs qui pointent vers un autre indicateur.
+// Mute les IVs en place : remplace indicator_value_possibilities par la valeur courante de l'IV source.
+// Une IV source = même collectivity_id + même owner (+ economic_actor_id si applicable) + excel_indicator_id + situation.
+const resolveDynamicPossibilities = async (ivs) => {
+  const IndicatorValue = require('../models/indicator_value');
+  const refs = ivs.filter((iv) => iv.indicator_value_possibilities_source?.excel_indicator_id && iv.indicator_value_possibilities_source?.situation);
+  if (refs.length === 0) return;
+
+  const lookupGroups = new Map();
+  for (const iv of refs) {
+    const key = `${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}`;
+    if (!lookupGroups.has(key)) lookupGroups.set(key, { collectivity_id: iv.collectivity_id, owner: iv.owner, economic_actor_id: iv.economic_actor_id, excel_ids: new Set(), situations: new Set() });
+    lookupGroups.get(key).excel_ids.add(iv.indicator_value_possibilities_source.excel_indicator_id);
+    lookupGroups.get(key).situations.add(iv.indicator_value_possibilities_source.situation);
+  }
+
+  const sourceMap = new Map();
+  for (const group of lookupGroups.values()) {
+    const query = {
+      collectivity_id: group.collectivity_id,
+      owner: group.owner,
+      indicator_excel_id: { $in: [...group.excel_ids] },
+      situation: { $in: [...group.situations] },
+    };
+    if (group.economic_actor_id) query.economic_actor_id = group.economic_actor_id;
+    const sourceIVs = await IndicatorValue.find(query);
+    for (const src of sourceIVs) {
+      const mapKey = `${group.collectivity_id}|${group.owner}|${group.economic_actor_id || ''}|${src.indicator_excel_id}|${src.situation}`;
+      if (!sourceMap.has(mapKey)) sourceMap.set(mapKey, src);
+    }
+  }
+
+  for (const iv of refs) {
+    const src = iv.indicator_value_possibilities_source;
+    const mapKey = `${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}|${src.excel_indicator_id}|${src.situation}`;
+    const sourceIV = sourceMap.get(mapKey);
+    if (!sourceIV) continue;
+    const val = sourceIV.value?.[sourceIV.indicator_type];
+    if (Array.isArray(val)) iv.indicator_value_possibilities = val;
+    if (typeof val === 'string' && val !== '') iv.indicator_value_possibilities = [val];
+  }
+};
+
+module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities };

@@ -25,6 +25,11 @@ const Schema = new mongoose.Schema(
     indicator_description: { type: String, trim: true },
     indicator_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
     indicator_value_possibilities: { type: Array, default: [] },
+    // Si défini, la liste de possibilités est résolue dynamiquement au fetch depuis la valeur de l'IV source
+    indicator_value_possibilities_source: {
+      excel_indicator_id: { type: String },
+      situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+    },
     indicator_category_id: { type: String, trim: true },
     indicator_category_name: { type: String, trim: true },
     indicator_sub_category_id: { type: String, trim: true },

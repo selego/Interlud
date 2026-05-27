@@ -18,6 +18,25 @@ const Schema = new mongoose.Schema(
     //Nom de la variable dans l'excel
     excel_indicator_id: { type: String, trim: true },
     value_possibilities: { type: Array, default: [] },
+    // Référence à un autre indicateur dont la valeur (radio/checkbox) sert de liste d'options dynamique
+    value_possibilities_source: {
+      init: {
+        excel_indicator_id: { type: String },
+        situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+      },
+      ref: {
+        excel_indicator_id: { type: String },
+        situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+      },
+      prev: {
+        excel_indicator_id: { type: String },
+        situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+      },
+      expost: {
+        excel_indicator_id: { type: String },
+        situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+      },
+    },
     value_default: {
       init: { type: type, trim: true },
       ref: { type: type, trim: true },

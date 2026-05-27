@@ -63,6 +63,38 @@ function extractSituationFromSheetName(sheetName) {
   return null;
 }
 
+// Parse une formule de référence simple pour les valeurs possibles dynamiques.
+// Exemples acceptés :
+//   ='Remplissage - Sit. Init.'!$F$1593  → { excel_indicator_id, situation: 'init' }
+//   =$F$1593                              → { excel_indicator_id, situation: <currentSituation> }
+// Retourne null si la formule n'est pas une simple référence cellule.
+function parsePossibilitiesFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps) {
+  if (!formula || typeof formula !== "string") return null;
+  const f = formula.trim();
+  if (!f.startsWith("=")) return null;
+  const content = f.substring(1).trim();
+
+  const sheetRefMatch = content.match(/^['']([^'']+)['']!\$?[A-Z]+\$?(\d+)$/i);
+  if (sheetRefMatch) {
+    const sourceSituation = extractSituationFromSheetName(sheetRefMatch[1]);
+    if (!sourceSituation) return null;
+    const targetMap = allRowToIndicatorMaps?.get(sourceSituation);
+    if (!targetMap) return null;
+    const excelIndicatorId = targetMap.get(parseInt(sheetRefMatch[2], 10));
+    if (!excelIndicatorId) return null;
+    return { excel_indicator_id: excelIndicatorId, situation: sourceSituation };
+  }
+
+  const sameSheetMatch = content.match(/^\$?[A-Z]+\$?(\d+)$/i);
+  if (sameSheetMatch) {
+    const excelIndicatorId = rowToIndicatorMap.get(parseInt(sameSheetMatch[1], 10));
+    if (!excelIndicatorId) return null;
+    return { excel_indicator_id: excelIndicatorId, situation: currentSituation };
+  }
+
+  return null;
+}
+
 function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allRowToIndicatorMaps = null) {
   if (!formula || typeof formula !== "string") return null;
 
@@ -774,6 +806,11 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       // Vérifier si l'indicateur existe déjà (depuis le cache)
       const existingIndicator = indicatorsMap.get(row[4]);
 
+      // Détecter une formule de référence dans la cellule "valeurs possibles" (colonne G, index 6)
+      // Si présente, on stocke la référence vers l'indicateur source pour résolution dynamique au fetch
+      const possibilitiesFormula = formulaRows?.[i]?.[6];
+      const possibilitiesSourceForSituation = parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps);
+
       // Récupérer la condition d'affichage résolue pour cette situation
       const rawCondition = resolvedConditions.get(excelRowNumber) || null;
       let display_condition_for_situation = null;
@@ -852,6 +889,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const updatedDisplayCondition = { ...existingIndicator.display_condition };
           if (situation && display_condition_for_situation) updatedDisplayCondition[situation] = display_condition_for_situation;
 
+          const updatedPossibilitiesSource = { ...(existingIndicator.value_possibilities_source || {}) };
+          if (situation) updatedPossibilitiesSource[situation] = possibilitiesSourceForSituation || undefined;
+
           const newData = {
             indicator_category_id: category?._id,
             indicator_category_name: category?.name,
@@ -861,12 +901,14 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             description: row[3] || undefined,
             is_primordial: row[14] === true || row[14] === "VRAI",
             value_possibilities:
-              row[6] !== undefined && row[6] !== ""
-                ? String(row[6])
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter((v) => v !== "")
-                : [],
+              possibilitiesSourceForSituation
+                ? []
+                : row[6] !== undefined && row[6] !== ""
+                  ? String(row[6])
+                      .split(",")
+                      .map((v) => v.trim())
+                      .filter((v) => v !== "")
+                  : [],
             value_default: updatedValueDefault,
             value_unit: row[8] || undefined,
             value_type: valueType,
@@ -875,6 +917,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             presence_in_excel: updatedPresenceInExcel,
             excel_line_number: updatedExcelLineNumber,
             display_condition: updatedDisplayCondition,
+            value_possibilities_source: updatedPossibilitiesSource,
           };
 
           const fieldsToLog = [
@@ -947,6 +990,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               indicator_description: newData.description,
               indicator_type: newData.value_type,
               indicator_value_possibilities: newData.value_possibilities || [],
+              indicator_value_possibilities_source: possibilitiesSourceForSituation || null,
               indicator_category_id: newData.indicator_category_id?.toString(),
               indicator_category_name: newData.indicator_category_name,
               indicator_sub_category_id: newData.indicator_sub_category_id?.toString(),
@@ -963,6 +1007,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const valueDefault = situation && valueDefaultForSituation ? { [situation]: valueDefaultForSituation } : undefined;
           const displayCondition = situation && display_condition_for_situation ? { [situation]: display_condition_for_situation } : undefined;
           const excelLineNumber = situation ? { [situation]: excelRowNumber } : undefined;
+          const possibilitiesSource = situation && possibilitiesSourceForSituation ? { [situation]: possibilitiesSourceForSituation } : undefined;
 
           const indicatorData = {
             indicator_category_id: category?._id,
@@ -974,12 +1019,14 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             is_primordial: row[14] === true || row[14] === "VRAI",
             excel_indicator_id: row[4] || undefined,
             value_possibilities:
-              row[6] !== undefined && row[6] !== ""
-                ? String(row[6])
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter((v) => v !== "")
-                : [],
+              possibilitiesSourceForSituation
+                ? []
+                : row[6] !== undefined && row[6] !== ""
+                  ? String(row[6])
+                      .split(",")
+                      .map((v) => v.trim())
+                      .filter((v) => v !== "")
+                  : [],
             value_default: valueDefault,
             value_unit: row[8] || undefined,
             value_type: valueType,
@@ -988,6 +1035,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             presence_in_excel: situation ? { [situation]: true } : undefined,
             excel_line_number: excelLineNumber,
             display_condition: displayCondition,
+            value_possibilities_source: possibilitiesSource,
           };
 
           indicators.push(indicatorData);
@@ -1577,8 +1625,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
