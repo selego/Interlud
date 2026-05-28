@@ -3,6 +3,7 @@ import background_element from "@/assets/background_element.png"
 import Logo from "@/assets/primary_logo.png"
 import FullBanner from "@/assets/Bandeau-complet-BAT.svg"
 import Header from "@/components/header"
+import FaqWidget from "@/components/FaqWidget"
 import { createConsentManagement } from "@codegouvfr/react-dsfr/consentManagement"
 import { Link } from "react-router-dom"
 
@@ -104,6 +105,8 @@ export default function Layout({ children }) {
       <div className="bg-white max-w-7xl mx-auto pt-4 pb-3 md:pt-6 md:pb-7">
         <img src={FullBanner} alt="Full Banner" className="w-full h-full object-contain" />
       </div>
+
+      <FaqWidget />
     </div>
   )
 }

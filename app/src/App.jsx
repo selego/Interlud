@@ -19,6 +19,8 @@ import AdminEconomicActors from "@/scenes/admin/economic-actors"
 import NotFound from "@/scenes/not-found"
 import Conditions from "@/scenes/confidentiality/conditions"
 import Politique from "@/scenes/confidentiality/politique"
+import Faq from "@/scenes/faq"
+import Contact from "@/scenes/contact"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 
@@ -52,6 +54,8 @@ export default function App() {
           <Route path="/politique" element={<Politique />} />
           <Route path="/cgu" element={<Conditions />} />
           <Route path="/politique-de-confidentialite" element={<Politique />} />
+          <Route path="/faq" element={<Faq />} />
+          <Route path="/contact" element={<Contact />} />
         </Route>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
@@ -62,7 +66,6 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/collectivity/*" element={<Collectivity />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
-          <Route path="/contact" element={<div>Contact</div>} />
           <Route path="/admin/action/*" element={<AdminAction />} />
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
