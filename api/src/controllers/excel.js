@@ -2,10 +2,12 @@ const express = require('express');
 const passport = require('passport');
 const router = express.Router();
 const { capture } = require('../services/sentry');
-const { graphFetch, getSiteId, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
+const { graphFetch, getSiteId, exportExcelFile, sharePointSiteName, getActiveMasterFileId, uploadFileToFolder } = require('../services/microsoftGraph');
 const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
+const ExcelVersion = require('../models/excel_version');
+const { runFullExcelSync } = require('../../script/scrap_indicator_excel');
 const ERROR_CODES = require('../utils/errorCodes');
 
 // Old ranges kept for action-contribution endpoint
@@ -462,6 +464,89 @@ router.post('/compare_actions', passport.authenticate(['admin', 'user'], { sessi
         availableYears: availableYearsOut,
       },
     });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
+// Lance la synchronisation complète en arrière-plan puis met à jour le statut de la version.
+async function runMasterSyncInBackground(versionId, newFileId) {
+  try {
+    const stats = await runFullExcelSync({ masterFileId: newFileId, regenerateCollectivities: true });
+    // La nouvelle version devient le master actif ; on désactive les précédentes.
+    await ExcelVersion.updateMany({ _id: { $ne: versionId } }, { $set: { is_active: false } });
+    await ExcelVersion.findByIdAndUpdate(versionId, { $set: { status: 'done', is_active: true, stats } });
+  } catch (error) {
+    capture(error);
+    await ExcelVersion.findByIdAndUpdate(versionId, { $set: { status: 'error', error_message: error.message } });
+  }
+}
+
+// Upload d'une nouvelle version du fichier master Excel (admin uniquement).
+// Le fichier est déposé sur SharePoint comme nouveau fichier versionné, puis la
+// synchronisation des indicateurs tourne en arrière-plan (statut suivi en base).
+router.post('/upload-master', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { fileBase64 } = req.body;
+    if (!fileBase64) return res.status(400).json({ ok: false, data: { error: 'fileBase64 is required' } });
+
+    // Refuser si une synchronisation est déjà en cours
+    const ongoing = await ExcelVersion.findOne({ status: 'processing' });
+    if (ongoing) return res.json({ ok: false, data: { error: 'Une synchronisation est déjà en cours' } });
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+
+    // Récupérer le master actif pour en déduire le dossier parent et la version
+    const siteId = await getSiteId();
+    const currentMasterId = await getActiveMasterFileId();
+    const currentMaster = await graphFetch(`/sites/${siteId}/drive/items/${currentMasterId}`);
+    const parentFolderId = currentMaster.parentReference?.id;
+    if (!parentFolderId) return res.json({ ok: false, data: { error: 'Impossible de localiser le dossier du fichier master' } });
+
+    const latestVersion = await ExcelVersion.findOne({}).sort({ version: -1 });
+    const nameVersionMatch = currentMaster.name.match(/_V(\d+)\.xlsx$/i);
+    const newVersion = Math.max(latestVersion?.version || 0, nameVersionMatch ? parseInt(nameVersionMatch[1], 10) : 0) + 1;
+    const baseName = currentMaster.name.replace(/\.xlsx$/i, '').replace(/_V\d+$/i, '');
+    const newFileName = `${baseName}_V${newVersion}.xlsx`;
+
+    const newFileId = await uploadFileToFolder(parentFolderId, newFileName, buffer);
+
+    const excelVersion = await ExcelVersion.create({
+      file_name: newFileName,
+      excel_file_id: newFileId,
+      version: newVersion,
+      status: 'processing',
+      is_active: false,
+      uploaded_by_id: req.user._id?.toString(),
+      uploaded_by_name: req.user.name || req.user.email,
+    });
+
+    // Synchronisation en arrière-plan (best effort, non bloquante pour la réponse)
+    runMasterSyncInBackground(excelVersion._id, newFileId);
+
+    res.json({ ok: true, data: excelVersion });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
+router.get('/versions', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const versions = await ExcelVersion.find({}).sort({ version: -1 });
+    res.json({ ok: true, data: versions });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
+router.get('/versions/:id', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const version = await ExcelVersion.findById(req.params.id);
+    if (!version) return res.status(404).json({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    res.json({ ok: true, data: version });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });

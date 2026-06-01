@@ -230,6 +230,10 @@ export default function Header() {
             {
               linkProps: { to: "/admin/economic-actors" },
               text: "Acteurs économiques"
+            },
+            {
+              linkProps: { to: "/admin/excel-version" },
+              text: "Version Excel"
             }
           ]
         },

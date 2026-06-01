@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs');
+const ExcelVersion = require('../models/excel_version');
 
 const tenantId = process.env.TENANT_ID;
 const clientId = process.env.CLIENT_ID;
@@ -39,6 +40,14 @@ async function getAccessToken() {
   _cachedToken = res.access_token;
   _tokenExpiresAt = Date.now() + (res.expires_in ? (res.expires_in - 120) * 1000 : 50 * 60 * 1000);
   return _cachedToken;
+}
+
+// Résout l'ID du fichier master actif. Lit la dernière version Excel marquée active
+// et terminée en base ; à défaut, retombe sur l'ID hardcodé historique.
+async function getActiveMasterFileId() {
+  const active = await ExcelVersion.findOne({ is_active: true, status: 'done' }).sort({ version: -1 });
+  if (active?.excel_file_id) return active.excel_file_id;
+  return masterExcelFileId;
 }
 
 let _cachedSiteId = null;
@@ -194,7 +203,7 @@ async function createFolder(folderName, parentFolderId = null) {
 
 async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFileId = null) {
   const siteId = await getSiteId();
-  const fileIdToCopy = sourceFileId || masterExcelFileId;
+  const fileIdToCopy = sourceFileId || (await getActiveMasterFileId());
   const sourceFile = await graphFetch(`/sites/${siteId}/drive/items/${fileIdToCopy}`);
   const parentReference = targetFolderId ? { driveId: sourceFile.parentReference.driveId, id: targetFolderId } : { driveId: sourceFile.parentReference.driveId, id: sourceFile.parentReference.id };
 
@@ -221,6 +230,53 @@ async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFile
   }
 
   throw new Error('Copy operation timed out - could not find copied file');
+}
+
+// Upload un fichier binaire dans un dossier SharePoint via une upload session
+// (gère les fichiers > 4 Mo en chunks). Retourne l'ID du fichier créé.
+async function uploadFileToFolder(folderId, fileName, buffer) {
+  const siteId = await getSiteId();
+  const token = await getAccessToken();
+
+  const sessionResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${folderId}:/${encodeURIComponent(fileName)}:/createUploadSession`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'rename' } }),
+  });
+  if (!sessionResponse.ok) {
+    const error = await sessionResponse.json().catch(() => ({}));
+    throw new Error(error.error?.message || 'Cannot create upload session');
+  }
+  const uploadUrl = (await sessionResponse.json()).uploadUrl;
+
+  const total = buffer.length;
+  const CHUNK_SIZE = 5 * 320 * 1024; // ~1.6 Mo, multiple de 320 Ko requis par Graph
+  let start = 0;
+  let uploadedItem = null;
+
+  while (start < total) {
+    const end = Math.min(start + CHUNK_SIZE, total);
+    const chunk = buffer.subarray(start, end);
+
+    const chunkResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Length': String(chunk.length), 'Content-Range': `bytes ${start}-${end - 1}/${total}` },
+      body: chunk,
+    });
+
+    if (chunkResponse.status === 200 || chunkResponse.status === 201) {
+      uploadedItem = await chunkResponse.json();
+      break;
+    }
+    if (chunkResponse.status !== 202) {
+      const error = await chunkResponse.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Upload failed: ${chunkResponse.status}`);
+    }
+    start = end;
+  }
+
+  if (!uploadedItem?.id) throw new Error('Upload did not complete');
+  return uploadedItem.id;
 }
 
 async function exportExcelFile(fileId) {
@@ -371,6 +427,8 @@ module.exports = {
   getAccessToken,
   graphFetch,
   getSiteId,
+  getActiveMasterFileId,
+  uploadFileToFolder,
   sharePointSiteName,
   createFolder,
   updateExcelCellByIndicatorId,
