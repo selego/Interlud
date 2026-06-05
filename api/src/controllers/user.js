@@ -128,7 +128,6 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
 
 router.post('/forgot_password', async (req, res) => {
   try {
-    4;
     const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
 
     if (!obj) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
