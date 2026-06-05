@@ -1636,4 +1636,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities };
+module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities };
