@@ -128,18 +128,39 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
 
 router.post('/forgot_password', async (req, res) => {
   try {
+    4;
     const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
 
     if (!obj) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     const token = await crypto.randomBytes(20).toString('hex');
-    obj.set({ forgot_password_reset_token: token, forgot_password_reset_expires: Date.now() + 7200000 }); //2h
+    obj.set({ password_reset_token: token, password_reset_expires: Date.now() + 7200000 }); //2h
     await obj.save();
 
-    await brevo.sendTemplate(BREVO_TEMPLATES.FORGOT_PASSWORD, {
-      emailTo: [{ email: obj.email }],
-      params: { cta: `${config.APP_URL}/auth/reset?token=${token}` },
-    });
+    await brevo.sendEmail(
+      `<div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+      <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Réinitialisation de votre mot de passe</h1>
+      </div>
+      <div style="padding: 40px 30px; background: #F9FFFC;">
+        <p style="margin: 0 0 16px;">Bonjour ${obj.name},</p>
+        <p style="margin: 0 0 16px;">Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour en définir un nouveau :</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${config.APP_URL}/auth/reset?token=${token}" style="display: inline-block; background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 14px 32px; border-radius: 30px;">Réinitialiser mon mot de passe</a>
+        </div>
+        <p style="margin: 0 0 8px; font-size: 14px; color: #768776;">Ce lien est valable pendant 2 heures.</p>
+        <p style="margin: 0; font-size: 14px; color: #768776;">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail.</p>
+      </div>
+      <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 12px; color: #768776; margin: 0;">© ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial</p>
+      </div>
+    </div>`,
+      {
+        subject: 'Réinitialisation de votre mot de passe',
+        sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+        to: [{ email: obj.email }],
+      },
+    );
 
     res.status(200).send({ ok: true });
   } catch (error) {
@@ -151,8 +172,8 @@ router.post('/forgot_password', async (req, res) => {
 router.post('/forgot_password_reset', async (req, res) => {
   try {
     const obj = await UserObject.findOne({
-      forgot_password_reset_token: req.body.token,
-      forgot_password_reset_expires: { $gt: Date.now() },
+      password_reset_token: req.body.token,
+      password_reset_expires: { $gt: new Date() },
     });
 
     if (!obj) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_TOKEN_EXPIRED_OR_INVALID });
@@ -160,8 +181,8 @@ router.post('/forgot_password_reset', async (req, res) => {
     if (!validatePassword(req.body.password)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
 
     obj.password = req.body.password;
-    obj.forgot_password_reset_token = '';
-    obj.forgot_password_reset_expires = '';
+    obj.password_reset_token = '';
+    obj.password_reset_expires = undefined;
     await obj.save();
     return res.status(200).send({ ok: true });
   } catch (error) {
