@@ -15,7 +15,7 @@ const getStatutBadgeClass = (statut) => {
   if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Complétée" }
   if (statut === "upcoming") return { class: "bg-primary-teal/10 text-primary-teal", text: "À venir" }
   if (statut === "in_progress") return { class: "bg-primary-orange/10 text-primary-orange", text: "En cours" }
-  if (statut === "blocked") return { class: "bg-red-100 text-red-700", text: "Bloquée" }
+  if (statut === "blocked") return { class: "bg-red-100 text-red-700", text: "À l'arrêt" }
   return { class: "bg-gray-100 text-gray-700", text: "Nouvelle" }
 }
 
@@ -281,7 +281,7 @@ export default function Home() {
                   { value: "completed", label: "Complétée" },
                   { value: "in_progress", label: "À compléter" },
                   { value: "upcoming", label: "En attente" },
-                  { value: "blocked", label: "Bloquée" },
+                  { value: "blocked", label: "À l'arrêt" },
                   { value: "no_status", label: "Sans statut" }
                 ]}
               />
@@ -395,7 +395,7 @@ function ActionsDistribution({ synthese }) {
     { name: "En progression", value: synthese.actionsInProgress || 0, color: "#F59600" },
     { name: "À venir", value: synthese.actionsUpcoming || 0, color: "#56BDB8" },
     { name: "Sans statut", value: synthese.actionsWithoutStatus || 0, color: "#9CA3AF" },
-    { name: "Bloquées", value: synthese.actionsBlocked || 0, color: "#EE4B2B" }
+    { name: "À l'arrêt", value: synthese.actionsBlocked || 0, color: "#EE4B2B" }
   ].filter(d => d.value > 0);
 
   const displayData = pieData.length > 0 ? pieData : [{ name: "Aucune", value: 1, color: "#E5E7EB" }];
