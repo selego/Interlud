@@ -5,7 +5,7 @@ import toast from "react-hot-toast"
 import api from "@/services/api"
 
 export default () => {
-  const [values, setValues] = useState({ email: "admin@selego.co", password: "abc123$$" })
+  const [values, setValues] = useState({ email: "", password: "" })
   const { user, setUser, setCollectivity, setActionRights, setEconomicActor } = store()
   const navigate = useNavigate()
 
