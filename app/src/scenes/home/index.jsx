@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
@@ -37,17 +38,20 @@ const fmtSigned = (v, decimals = 1) => {
 
 export default function Home() {
   const { collectivity } = useStore()
+  const navigate = useNavigate()
   const [activeIndicator, setActiveIndicator] = useState("GES")
   const [data, setData] = useState(null)
   const [allActions, setAllActions] = useState([])
+  const [ready, setReady] = useState(false)
 
+  // Pas de fichier d'agrégation tant que la collectivité n'est pas onboardée : échec silencieux attendu.
   const fetchHomeAggregation = async () => {
     try {
-      const { ok, data, code } = await api.post("/excel/home_aggregation", { collectivity })
-      if (!ok) return toast.error(data?.error || code || "Impossible de charger le tableau de bord")
+      const { ok, data } = await api.post("/excel/home_aggregation", { collectivity })
+      if (!ok) return
       setData(data)
     } catch (error) {
-      toast.error(error.message || error.code || "Impossible de charger le tableau de bord")
+      console.error(error)
     }
   }
 
@@ -58,40 +62,43 @@ export default function Home() {
       setAllActions(data)
     } catch (error) {
       toast.error(error.code || "Impossible de charger les actions")
+    } finally {
+      setReady(true)
     }
   }
 
   useEffect(() => {
     if (!collectivity) return
     const load = async () => {
-      await fetchHomeAggregation()
       await fetchActions()
+      await fetchHomeAggregation()
     }
     load()
   }, [collectivity])
 
-  if (!collectivity || !data) return (
+  if (!collectivity || !ready) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-lg text-gray-600">Chargement…</div>
     </div>
   )
 
-  const indicators = data.indicators.map((ind) => ({ ...ind, ...(META[ind.key] || { short: ind.key, label: ind.key }) }))
+  const onboardingSteps = [
+    { label: "Créer votre première action", done: allActions.length > 0, link: "/actions" },
+    { label: "Remplir votre première action à 100%", done: allActions.some((a) => a.status === "completed"), link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions" },
+  ]
+
+  const indicators = data ? data.indicators.map((ind) => ({ ...ind, ...(META[ind.key] || { short: ind.key, label: ind.key }) })) : []
   const indicator = indicators.find((i) => i.key === activeIndicator) || indicators[0]
   const ges = indicators.find((i) => i.key === "GES") || indicator
-  const advancement = ges.advancement || 0
-  const traj = indicator.yearly || []
+  const advancement = ges?.advancement || 0
+  const traj = indicator?.yearly || []
   const yearInit = traj[0]?.year
   const yearExpost = [...traj].reverse().find((d) => d.reel > 0)?.year
 
-  const contributions = data.actions.map((a) => ({ action: a.code, name: a.name, parent: a.group, status: a.status, ges: a.totals.GES?.real ?? 0, ges_prev: a.totals.GES?.target ?? 0 }))
+  const contributions = data ? data.actions.map((a) => ({ action: a.code, name: a.name, parent: a.group, status: a.status, ges: a.totals.GES?.real ?? 0, ges_prev: a.totals.GES?.target ?? 0 })) : []
   const topActions = [...contributions].filter((a) => a.ges < 0).sort((a, b) => a.ges - b.ges).slice(0, 5)
   const maxAction = Math.max(...contributions.map((a) => Math.abs(a.ges_prev)), 1)
   const nbRetard = indicators.filter((i) => i.ecartRelatif < 0).length
-
-  const status = advancement >= 90 ? "en avance" : advancement >= 70 ? "proche de la cible" : advancement >= 50 ? "en retard modéré" : "en retard significatif"
-  const statusColor = advancement >= 90 ? "text-primary-green" : advancement >= 70 ? "text-primary-orange" : "text-red-500"
-  const donutColor = advancement >= 90 ? "#2DAC6A" : advancement >= 70 ? "#F59600" : "#FB6B69"
 
   return (
     <div className="bg-white">
@@ -103,12 +110,35 @@ export default function Home() {
           </h1>
         </div>
 
+        {/* Onboarding */}
+        {!onboardingSteps.every((s) => s.done) && (
+          <div className="card-shadow rounded-2xl p-5 mb-6 bg-white border border-[#D9EFE3]">
+            <SectionLabel sub="Quelques étapes pour bien démarrer">Pour bien démarrer</SectionLabel>
+            <div className="flex flex-col gap-2">
+              {onboardingSteps.map((step, i) => (
+                <button
+                  key={i}
+                  onClick={() => navigate(step.link)}
+                  className="flex items-center gap-3 text-left px-2 py-2 rounded-lg hover:bg-[#F9FFFC] transition-colors cursor-pointer"
+                >
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${step.done ? "bg-primary-green text-white" : "border-2 border-[#D9EFE3] text-[#9CA3AF]"}`}>
+                    {step.done ? "✓" : i + 1}
+                  </span>
+                  <span className={`text-[14px] ${step.done ? "line-through text-[#9CA3AF]" : "text-font-primary font-medium"}`}>{step.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data && indicator && (
+        <>
         {/* Hero narratif */}
         <div className="rounded-[20px] p-8 mb-6 border" style={{ background: "linear-gradient(135deg, #F9FFFC 0%, #fff 60%)", borderColor: "#D9EFE3" }}>
           <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
             <div>
-              <div className={`text-[11px] font-bold uppercase tracking-[0.08em] mb-3 ${statusColor}`}>
-                ● Bilan {yearExpost || "—"} · Trajectoire {status}
+              <div className={`text-[11px] font-bold uppercase tracking-[0.08em] mb-3 ${advancement >= 90 ? "text-primary-green" : advancement >= 70 ? "text-primary-orange" : "text-red-500"}`}>
+                ● Bilan {yearExpost || "—"} · Trajectoire {advancement >= 90 ? "en avance" : advancement >= 70 ? "proche de la cible" : advancement >= 50 ? "en retard modéré" : "en retard significatif"}
               </div>
               <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
                 Vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévu,
@@ -119,7 +149,7 @@ export default function Home() {
               </p>
             </div>
             <div className="flex justify-center">
-              <ProgressDonut value={advancement} size={200} stroke={20} label="de la cible" sub="atteinte" color={donutColor} />
+              <ProgressDonut value={advancement} size={200} stroke={20} label="de la cible" sub="atteinte" color={advancement >= 90 ? "#2DAC6A" : advancement >= 70 ? "#F59600" : "#FB6B69"} />
             </div>
           </div>
         </div>
@@ -163,6 +193,8 @@ export default function Home() {
           </div>
           <StackedActionsChart traj={traj} unit={indicator.unit} contributions={contributions} yearInit={yearInit} yearExpost={yearExpost} />
         </div>
+        </>
+        )}
 
         {/* Bas — 2 colonnes */}
         <div className="grid grid-cols-[2fr_1fr] gap-5 mb-8">
