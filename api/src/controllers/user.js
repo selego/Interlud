@@ -21,6 +21,14 @@ const { capture } = require('../services/sentry');
 const COOKIE_MAX_AGE = 31557600000;
 const JWT_MAX_AGE = '1y';
 
+// Logo InTerLUD+ pour les emails (URL publique)
+const INTERLUD_LOGO_URL = 'https://www.interlud.green/images/interlud-plus@2x.png';
+
+const emailLogoBanner = () => `
+  <div style="background: #ffffff; padding: 24px 30px; text-align: center; border-radius: 12px 12px 0 0; border-bottom: 1px solid #EEEEEE;">
+    <img src="${INTERLUD_LOGO_URL}" alt="InTerLUD+" height="40" style="height: 40px; vertical-align: middle;" />
+  </div>`;
+
 const cookieOptions = () => {
   if (config.ENVIRONMENT === 'development') {
     return { maxAge: COOKIE_MAX_AGE, httpOnly: true, secure: false, sameSite: 'Lax' };
@@ -420,15 +428,18 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 
     const bodyHTML = `
         <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-          <!-- En-tête avec dégradé vert Interlud -->
-          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre InTerLUD+</h1>
+          <!-- Bandeau blanc avec les logos -->
+          ${emailLogoBanner()}
+
+          <!-- En-tête avec dégradé vert Interlud (background-color de repli pour Outlook) -->
+          <div style="background-color: #2DAC6A; background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre votre collectivité</h1>
           </div>
-          
+
           <!-- Corps du message -->
           <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
             <p style="font-size: 16px; margin-bottom: 20px;">Bonjour,</p>
-            
+
             <p style="font-size: 16px; margin-bottom: 20px;">
               Vous avez été invité à rejoindre <strong>${obj.collectivity.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
             </p>
@@ -495,11 +506,14 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
 
     const bodyHTML = `
         <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-          <!-- En-tête avec dégradé vert Interlud -->
-          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre InTerLUD+</h1>
+          <!-- Bandeau blanc avec les logos -->
+          ${emailLogoBanner()}
+
+          <!-- En-tête avec dégradé vert Interlud (background-color de repli pour Outlook) -->
+          <div style="background-color: #2DAC6A; background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre votre collectivité</h1>
           </div>
-          
+
           <!-- Corps du message -->
           <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
             <p style="font-size: 16px; margin-bottom: 20px;">Bonjour${user.name ? ` ${user.name}` : ''},</p>

@@ -130,7 +130,7 @@ export default function Home() {
         <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
           <div className="mb-8">
             <h1 className="text-font-primary text-4xl">
-              Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
+              Tableau de bord <span className="font-bold text-primary-green">{collectivity.name}</span>
             </h1>
           </div>
           <div className="flex flex-col items-center justify-center py-20">
@@ -165,7 +165,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-font-primary text-4xl">
-                Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
+                Tableau de bord <span className="font-bold text-primary-green">{collectivity.name}</span>
               </h1>
             </div>
             {isOnboarded && (

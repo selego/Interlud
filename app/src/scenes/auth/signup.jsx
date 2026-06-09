@@ -5,6 +5,9 @@ import toast from "react-hot-toast"
 import store from "@/services/store"
 import api from "@/services/api"
 
+const validatePassword = (password) =>
+  password.length >= 12 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password) && !/\s/.test(password)
+
 export default () => {
   const [values, setValues] = useState({ name: "", email: "", password: "", confirmPassword: "", entityName: "", last_name: "", first_name: "" })
   const [errors, setErrors] = useState({ email: "", password: "", confirmPassword: "", entityName: "", first_name: "", last_name: "", acceptedTerms: "" })
@@ -17,6 +20,7 @@ export default () => {
   const send = async () => {
     if (!values.email) return setErrors({ ...errors, email: "Ce champ est requis" })
     if (!values.password) return setErrors({ ...errors, password: "Ce champ est requis" })
+    if (!validatePassword(values.password)) return setErrors({ ...errors, password: "Le mot de passe doit contenir au moins 12 caractères, dont une majuscule, une minuscule, un chiffre et un caractère spécial" })
     if (!values.confirmPassword) return setErrors({ ...errors, confirmPassword: "Ce champ est requis" })
     if (values.password !== values.confirmPassword) return setErrors({ ...errors, confirmPassword: "Les mots de passe ne correspondent pas" })
     if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
@@ -173,6 +177,7 @@ export default () => {
                 placeholder="••••••••"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</p>
               {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
             </div>
 
