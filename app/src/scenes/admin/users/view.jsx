@@ -481,7 +481,7 @@ function UserActionRightsSection({ user }) {
 
   const fetchAction = async () => {
     try {
-      const { ok, data, code } = await api.post("/action/search", {})
+      const { ok, data, code } = await api.post("/action/search", { collectivity_ids: (user.collectivities || []).map((c) => c.id) })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setActions(data)
     } catch (e) {
@@ -693,10 +693,13 @@ function UserActionRightsSection({ user }) {
                 onChange={(value) => setAddValues({ ...addValues, action_id: value })}
                 options={[
                   { value: "", label: "Sélectionner une action" },
-                  ...actions.map((a) => ({
-                    value: a._id,
-                    label: `${a.name} ${a.collectivity_name ? `— ${a.collectivity_name}` : ""}`
-                  }))
+                  ...[...actions]
+                    .sort((a, b) => (a.collectivity_name || "").localeCompare(b.collectivity_name || "") || (a.name || "").localeCompare(b.name || ""))
+                    .map((a) => ({
+                      value: a._id,
+                      label: a.name,
+                      group: a.collectivity_name || "Sans collectivité"
+                    }))
                 ]}
               />
             </div>

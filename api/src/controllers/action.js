@@ -84,6 +84,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     let query = { owner: 'collectivity', type: { $ne: 'config' } };
 
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
+    if (req.body.collectivity_ids) query.collectivity_id = { $in: req.body.collectivity_ids };
     if (req.body.action_parent_id) query.action_parent_id = req.body.action_parent_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
