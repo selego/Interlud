@@ -370,7 +370,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
                 { value: "upcoming", label: "À venir" },
                 { value: "in_progress", label: "En cours" },
                 { value: "blocked", label: "Bloqué" },
-                { value: "completed", label: "Terminé" }
+                { value: "completed", label: "Complété" }
               ]}
             />
           </div>

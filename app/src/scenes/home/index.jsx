@@ -12,7 +12,7 @@ import Loader from "@/components/loader"
 import Modal from "@/components/modal"
 
 const getStatutBadgeClass = (statut) => {
-  if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Terminée" }
+  if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Complétée" }
   if (statut === "upcoming") return { class: "bg-primary-teal/10 text-primary-teal", text: "À venir" }
   if (statut === "in_progress") return { class: "bg-primary-orange/10 text-primary-orange", text: "En cours" }
   if (statut === "blocked") return { class: "bg-red-100 text-red-700", text: "Bloquée" }
@@ -278,7 +278,7 @@ export default function Home() {
                 onChange={(value) => setFilters({ ...filters, status: value })}
                 options={[
                   { value: "", label: "Tous les statuts" },
-                  { value: "completed", label: "Terminée" },
+                  { value: "completed", label: "Complétée" },
                   { value: "in_progress", label: "À compléter" },
                   { value: "upcoming", label: "En attente" },
                   { value: "blocked", label: "Bloquée" },

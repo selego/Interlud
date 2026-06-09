@@ -8,7 +8,7 @@ import useStore from "@/services/store"
 import Loader from "@/components/loader"
 
 const getStatusLabel = (status) => {
-  if (status === "completed") return "Terminée"
+  if (status === "completed") return "Complétée"
   if (status === "upcoming") return "À venir"
   if (status === "in_progress") return "En cours"
   if (status === "blocked") return "Bloquée"
