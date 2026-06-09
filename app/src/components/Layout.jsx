@@ -52,15 +52,15 @@ export default function Layout({ children }) {
         <div className="relative z-10">{children}</div>
       </main>
 
-      <footer className="bg-gray-50 border border-primary backdrop-blur-sm w-full mt-16">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+      <footer className="bg-gray-50 border border-primary backdrop-blur-sm w-full mt-10">
+        <div className="max-w-7xl mx-auto px-6 py-5">
           {/* Section principale */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-8 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-8 mb-5">
             {/* Logo et description */}
             <div className="col-span-4 flex-shrink-0 max-w-2xl">
-              <img src={Logo} alt="Logo InTerLUD" className="h-10 mb-4" />
-              <p className="text-md font-bold text-gray-600 ml-2">À propos</p>
-              <p className="text-sm text-gray-600 leading-relaxed ml-2">
+              <img src={Logo} alt="Logo InTerLUD" className="h-8 mb-3" />
+              <p className="text-sm font-bold text-gray-600 ml-2">À propos</p>
+              <p className="text-xs text-gray-600 leading-relaxed ml-2">
                 Le Programme Interlud+ vise le déploiement, par les collectivités territoriales et les acteurs économiques, d’actions volontaires sur le transport de marchandises
                 en ville dans le cadre des chartes de logistique urbaine durable sur l’ensemble du territoire français. Le site interlud.green fait partie des outils numériques
                 d’intérêt général développés par Interlud+.
@@ -69,7 +69,10 @@ export default function Layout({ children }) {
 
             {/* Navigation */}
             <nav className="col-span-2 flex-shrink-0 flex items-center">
-              <div className="flex flex-col gap-y-2 items-start">
+              <div className="flex flex-col gap-y-1.5 items-start">
+                <Link to="/faq" className="text-sm text-gray-700 hover:text-primary-green hover:underline underline-offset-4 transition-colors">
+                  FAQ
+                </Link>
                 <Link to="/contact" className="text-sm text-gray-700 hover:text-primary-green hover:underline underline-offset-4 transition-colors">
                   Contactez-nous
                 </Link>
@@ -92,11 +95,11 @@ export default function Layout({ children }) {
           </div>
 
           {/* Séparateur */}
-          <div className="h-px bg-gray-200/70 mb-6" />
+          <div className="h-px bg-gray-200/70 mb-4" />
 
           {/* Copyright */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
-            <p className="text-center text-sm">© 2026 Interlud+ · Tous droits réservés</p>
+            <p className="text-center text-xs">© 2026 Interlud+ · Tous droits réservés</p>
           </div>
         </div>
       </footer>
