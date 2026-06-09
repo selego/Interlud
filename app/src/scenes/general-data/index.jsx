@@ -182,6 +182,13 @@ export default function Index() {
             </div>
           )}
 
+          {activeConfigAction?.name?.toLowerCase().includes("parc") && (
+            <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+              <FiInfo className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Toutes les données sont préremplies avec des valeurs par défaut lorsqu'elles sont disponibles. Elles peuvent être modifiées à tout moment par la collectivité elle-même.</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2 text-sm min-h-[32px]">
               <ProgressCircle percentage={globalProgress} size={20} />
