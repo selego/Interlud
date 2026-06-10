@@ -43,15 +43,19 @@ export default function Home() {
   const [data, setData] = useState(null)
   const [allActions, setAllActions] = useState([])
   const [ready, setReady] = useState(false)
+  const [loadingData, setLoadingData] = useState(false)
 
   // Pas de fichier d'agrégation tant que la collectivité n'est pas onboardée : échec silencieux attendu.
   const fetchHomeAggregation = async () => {
     try {
+      setLoadingData(true)
       const { ok, data } = await api.post("/excel/home_aggregation", { collectivity })
       if (!ok) return
       setData(data)
     } catch (error) {
       console.error(error)
+    } finally {
+      setLoadingData(false)
     }
   }
 
@@ -69,6 +73,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!collectivity) return
+    setReady(false)
+    setData(null)
+    setAllActions([])
+    setLoadingData(true)
     const load = async () => {
       await fetchActions()
       await fetchHomeAggregation()
@@ -106,7 +114,7 @@ export default function Home() {
         {/* Header */}
         <div className="mb-5">
           <h1 className="text-font-primary text-4xl">
-            Dashboard de <span className="font-bold text-primary-green">{collectivity.name}</span>
+            Tableau de bord <span className="font-bold text-primary-green">{collectivity.name}</span>
           </h1>
         </div>
 
@@ -130,6 +138,8 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {loadingData && !data && <DashboardSkeleton />}
 
         {data && indicator && (
         <>
@@ -233,6 +243,45 @@ export default function Home() {
 // ============================================================================
 // Primitives
 // ============================================================================
+
+function DashboardSkeleton() {
+  return (
+    <div className="animate-pulse">
+      {/* Hero */}
+      <div className="rounded-[20px] p-8 mb-6 border border-[#D9EFE3] bg-[#F9FFFC]">
+        <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
+          <div className="space-y-3">
+            <div className="h-3 w-48 bg-[#D9EFE3] rounded" />
+            <div className="h-6 w-full max-w-[560px] bg-[#E5EDE9] rounded" />
+            <div className="h-6 w-3/4 bg-[#E5EDE9] rounded" />
+            <div className="h-4 w-1/2 bg-[#EAF0ED] rounded" />
+          </div>
+          <div className="flex justify-center">
+            <div className="w-[200px] h-[200px] rounded-full bg-[#E5EDE9]" />
+          </div>
+        </div>
+      </div>
+
+      {/* Cartes indicateurs */}
+      <div className="grid grid-cols-3 gap-3.5 mb-6">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="bg-white rounded-[14px] p-4 border border-[#e1e5e8] space-y-3">
+            <div className="h-4 w-2/3 bg-[#E5EDE9] rounded" />
+            <div className="h-3 w-full bg-[#EAF0ED] rounded" />
+            <div className="h-3 w-4/5 bg-[#EAF0ED] rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Graphique */}
+      <div className="card-shadow rounded-2xl p-6 mb-6 bg-white">
+        <div className="h-4 w-56 bg-[#E5EDE9] rounded mb-2" />
+        <div className="h-3 w-80 bg-[#EAF0ED] rounded mb-6" />
+        <div className="h-64 w-full bg-[#F1F4F2] rounded-xl" />
+      </div>
+    </div>
+  )
+}
 
 function SectionLabel({ children, sub, right }) {
   return (
