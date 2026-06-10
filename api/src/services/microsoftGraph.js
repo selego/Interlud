@@ -350,6 +350,15 @@ async function clearWorksheetValues(fileId, situation) {
   });
 }
 
+// Force le recalcul des formules du workbook (les défauts dépendant de AnRef/AnneeRempl sont calculés par formule)
+async function calculateWorkbook(fileId) {
+  const siteId = await getSiteId();
+  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/application/calculate`, {
+    method: 'POST',
+    body: JSON.stringify({ calculationType: 'Recalculate' }),
+  });
+}
+
 async function readExcelDefaultValues(fileId, situation) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
@@ -380,5 +389,6 @@ module.exports = {
   exportExcelFileWithSpecificSheets,
   importSheetsToExcelFile,
   clearWorksheetValues,
+  calculateWorkbook,
   readExcelDefaultValues,
 };
