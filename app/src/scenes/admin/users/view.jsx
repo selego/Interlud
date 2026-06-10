@@ -759,40 +759,47 @@ function UserActionRightsSection({ user }) {
 }
 
 function UserCollectivitiesTab({ user, setUser }) {
-  const [collectivities, setCollectivities] = useState([])
   const [addOpen, setAddOpen] = useState(false)
-  const [addValues, setAddValues] = useState({ collectivity_id: "", role: "user" })
+  const [addValues, setAddValues] = useState({ collectivity_id: "", collectivity_name: "", role: "user" })
+  const [search, setSearch] = useState("")
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
 
-  const fetchCollectivities = async () => {
+  const searchCollectivities = async () => {
     try {
-      const { ok, data, code } = await api.post("/collectivity/search", {})
+      setSearching(true)
+      const { ok, data, code } = await api.post("/collectivity/search", { search })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setCollectivities(data)
+      setSearchResults(data)
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")
+    } finally {
+      setSearching(false)
     }
   }
 
   useEffect(() => {
-    fetchCollectivities()
-  }, [])
+    if (!addOpen) return
+    const timer = setTimeout(searchCollectivities, 300)
+    return () => clearTimeout(timer)
+  }, [search, addOpen])
 
   const addCollectivity = async () => {
     if (!addValues.collectivity_id) return toast.error("Sélectionnez une collectivité")
-    const c = collectivities.find((x) => x._id === addValues.collectivity_id)
-    if (!c) return toast.error("Collectivité introuvable")
 
-    const exists = (user?.collectivities || []).some((x) => x._id === c._id)
+    const exists = (user?.collectivities || []).some((x) => x.id === addValues.collectivity_id)
     if (exists) return toast.error("Cette collectivité est déjà associée")
-    const updated = [...(user?.collectivities || []), { id: c._id, name: c.name, role: addValues.role, status: "approved" }]
+    const updated = [...(user?.collectivities || []), { id: addValues.collectivity_id, name: addValues.collectivity_name, role: addValues.role, status: "approved" }]
 
     try {
       const { ok, data, code } = await api.put(`/user/${user._id}`, { collectivities: updated })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setUser(data)
       setAddOpen(false)
-      setAddValues({ collectivity_id: "", role: "user" })
+      setAddValues({ collectivity_id: "", collectivity_name: "", role: "user" })
+      setSearch("")
+      setSearchResults([])
       toast.success("Collectivité ajoutée avec succès")
     } catch (e) {
       console.log(e)
@@ -913,19 +920,42 @@ function UserCollectivitiesTab({ user, setUser }) {
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Collectivité</label>
-              <Select
-                value={addValues.collectivity_id}
-                onChange={(value) => setAddValues({ ...addValues, collectivity_id: value })}
-                options={[
-                  { value: "", label: "Sélectionner une collectivité" },
-                  ...collectivities
-                    .filter((c) => !user?.collectivities?.some((uc) => uc.id === c._id))
-                    .map((c) => ({
-                      value: c._id,
-                      label: c.name
-                    }))
-                ]}
+              <input
+                type="text"
+                className="w-full input-primary"
+                placeholder="Rechercher une collectivité..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
+
+              {searching && (
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-green"></div>
+                </div>
+              )}
+
+              {!searching && (
+                <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                  {searchResults.filter((c) => !user?.collectivities?.some((uc) => uc.id === c._id)).length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-gray-500">Aucune collectivité trouvée</div>
+                  ) : (
+                    searchResults
+                      .filter((c) => !user?.collectivities?.some((uc) => uc.id === c._id))
+                      .map((c) => (
+                        <button
+                          key={c._id}
+                          type="button"
+                          onClick={() => setAddValues({ ...addValues, collectivity_id: c._id, collectivity_name: c.name })}
+                          className={`w-full text-left px-4 py-3 text-sm transition-colors hover:bg-gray-50 ${
+                            addValues.collectivity_id === c._id ? "bg-primary-green/10 text-primary-green font-medium" : "text-gray-900"
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      ))
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
