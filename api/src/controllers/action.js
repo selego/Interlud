@@ -541,7 +541,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     };
 
     // Récupérer tous les IVs des actions créées pour mettre à jour leurs valeurs par défaut
-    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionBasicDataObj._id.toString(), configActionParcTypesObj._id.toString()];
+    // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypesObj._id.toString()];
     const allIVsForDefaultUpdate = await IndicatorValue.find({
       action_id: { $in: allActionIdsForDefaultUpdate },
       indicator_excel_id: { $exists: true, $ne: null },
@@ -1049,7 +1050,8 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
         return null;
       };
 
-      const actionIdsForDefaultUpdate = [action._id.toString(), configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
+      // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+      const actionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
       const allIVsForDefaultUpdate = await IndicatorValue.find({
         action_id: { $in: actionIdsForDefaultUpdate },
         indicator_excel_id: { $exists: true, $ne: null },
@@ -1433,7 +1435,8 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
         return null;
       };
 
-      const actionIdsForDefaultUpdate = [action._id.toString(), configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
+      // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+      const actionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
       const allIVsForDefaultUpdate = await IndicatorValue.find({
         action_id: { $in: actionIdsForDefaultUpdate },
         indicator_excel_id: { $exists: true, $ne: null },
