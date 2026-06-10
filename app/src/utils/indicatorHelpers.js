@@ -48,6 +48,7 @@ export const shouldDisplayIndicatorFromMap = (iv, yearMappings, conditionValuesM
   if (visited.has(ivKey)) return false
   visited.add(ivKey)
   const evalLeaf = (cond) => {
+    if (cond.type === "neverVisible") return false
     const targetSituation = cond.excel_indicator_situation || iv.situation
     const possibleYears = yearMappings?.[`year_${targetSituation}`] || []
     return possibleYears.some((year) => {

@@ -4,7 +4,7 @@ const MODELNAME = 'indicator_value';
 
 // Condition d'affichage : une feuille compare la valeur d'un indicateur source.
 const leafCondition = {
-  type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
+  type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty', 'neverVisible'] },
   excel_indicator_id: { type: String },
   excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
   value: { type: mongoose.Schema.Types.Mixed },

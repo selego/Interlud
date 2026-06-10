@@ -135,9 +135,9 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
 
   const formulaContent = f.substring(1).trim();
 
-  // CAS 0: Constante numérique (ex: =1) → toujours affiché, aucune condition à générer.
-  // On ignore 0 (qui signifierait "jamais affiché", cas non géré ici).
-  if (/^-?\d+(?:\.\d+)?$/.test(formulaContent) && parseFloat(formulaContent) !== 0) {
+  // CAS 0: Constante numérique. =1 (ou tout non-zéro) → toujours affiché. =0 → jamais affiché.
+  if (/^-?\d+(?:\.\d+)?$/.test(formulaContent)) {
+    if (parseFloat(formulaContent) === 0) return { _neverVisible: true };
     return { _alwaysVisible: true };
   }
 
@@ -640,6 +640,11 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       const refRowNum = extractRowNumber(parsed._referenceToMerge);
       if (refRowNum) {
         const parentCondition = resolveConditionInSheet(refRowNum, targetSituation, new Set(visited));
+        // Parent jamais affiché → AND avec faux → jamais affiché
+        if (parentCondition?._neverVisible) {
+          situationCache.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
         if (parentCondition?.conditions && parsed.conditions) {
           // Si le parent est un OR, on l'imbrique pour préserver (A OR B) AND C au lieu de l'aplatir.
           const result = parentCondition.operator === "OR" ? { operator: "AND", conditions: [{ operator: "OR", conditions: parentCondition.conditions }, ...parsed.conditions] } : { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
@@ -685,6 +690,10 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       if (refRowNum && sourceSituation && allSheetsData) {
         // Résoudre la condition dans la feuille source
         const refCondition = resolveConditionInSheet(refRowNum, sourceSituation, new Set());
+        if (refCondition?._neverVisible) {
+          resolvedConditions.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
         if (refCondition?.conditions) {
           // Ajouter sourceSituation à chaque feuille (en descendant dans les groupes imbriqués)
           const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: sourceSituation }));
@@ -707,6 +716,10 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
         return { _ignored: true };
       }
       const refCondition = resolveConditionInSheet(targetRow, refSituation, new Set());
+      if (refCondition?._neverVisible) {
+        resolvedConditions.set(rowNum, { _neverVisible: true });
+        return { _neverVisible: true };
+      }
       if (refCondition?.conditions?.length > 0) {
         const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: cond.excel_indicator_situation || refSituation }));
         const result = { ...refCondition, conditions: conditionsWithSource };
@@ -722,6 +735,11 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       const refRowNum = extractRowNumber(parsed._referenceToMerge);
       if (refRowNum) {
         const parentCondition = resolveCondition(refRowNum, new Set(visited));
+        // Parent jamais affiché → AND avec faux → jamais affiché
+        if (parentCondition?._neverVisible) {
+          resolvedConditions.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
         if (parentCondition?.conditions && parsed.conditions) {
           // Si le parent est un OR, on l'imbrique pour préserver (A OR B) AND C au lieu de l'aplatir.
           const result = parentCondition.operator === "OR" ? { operator: "AND", conditions: [{ operator: "OR", conditions: parentCondition.conditions }, ...parsed.conditions] } : { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
@@ -818,6 +836,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       for (let i = 0; i < formulaRows.length; i++) {
         const formula = formulaRows[i][10];
         if (formula && String(formula).startsWith("=")) formulasMap.set(startRow + 1 + i, String(formula));
+        // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" pour le parseur
+        if (String(formula).trim() === "0") formulasMap.set(startRow + 1 + i, "=0");
       }
       console.log(`📋 ${formulasMap.size} formules d'affichage trouvées`);
     }
@@ -854,6 +874,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           for (let i = 0; i < sheetData.formulaRows.length; i++) {
             const formula = sheetData.formulaRows[i][10];
             if (formula && String(formula).startsWith("=")) sitFormulasMap.set(sheetData.startRow + 1 + i, String(formula));
+            // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" pour le parseur
+            if (String(formula).trim() === "0") sitFormulasMap.set(sheetData.startRow + 1 + i, "=0");
           }
         }
         allFormulasMapsBySituation.set(sit, sitFormulasMap);
@@ -929,6 +951,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       // Récupérer la condition d'affichage résolue pour cette situation
       const rawCondition = resolvedConditions.get(excelRowNumber) || null;
       let display_condition_for_situation = null;
+      // 0 en colonne K → jamais affiché : condition spéciale toujours fausse
+      if (rawCondition?._neverVisible) display_condition_for_situation = { conditions: [{ type: "neverVisible" }] };
       if (rawCondition && rawCondition.conditions?.length > 0) {
         display_condition_for_situation = { conditions: rawCondition.conditions };
         if (rawCondition.operator === "OR" || (rawCondition.conditions.length > 1 && rawCondition.operator)) {
