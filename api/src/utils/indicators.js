@@ -1,5 +1,13 @@
 const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
 
+// Collecte récursivement tous les excel_indicator_id des feuilles (en descendant dans les groupes imbriqués).
+const collectConditionExcelIds = (node, acc) => {
+  if (!node) return acc;
+  if (Array.isArray(node.conditions)) for (const c of node.conditions) collectConditionExcelIds(c, acc);
+  if (node.excel_indicator_id) acc.add(node.excel_indicator_id);
+  return acc;
+};
+
 const buildYearMappings = (regularActions) => {
   const mappings = {};
   const ensure = (k) => {
@@ -49,7 +57,7 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
   const ivKey = `${iv.indicator_excel_id}_${iv.situation}_${iv.year}`;
   if (visited.has(ivKey)) return false;
   visited.add(ivKey);
-  const results = iv.display_condition.conditions.map((cond) => {
+  const evalLeaf = (cond) => {
     const targetSituation = cond.excel_indicator_situation || iv.situation;
     const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
     return possibleYears.some((year) => {
@@ -75,8 +83,18 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
       if (cond.negate) isMatch = !isMatch;
       return isMatch;
     });
-  });
-  return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+  };
+
+  // Un noeud est soit un groupe (operator + sous-conditions), soit une feuille.
+  const evalNode = (node) => {
+    if (Array.isArray(node.conditions) && node.conditions.length) {
+      const results = node.conditions.map(evalNode);
+      return node.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+    }
+    return evalLeaf(node);
+  };
+
+  return evalNode(iv.display_condition);
 };
 
 // Résout dynamiquement indicator_value_possibilities pour les IVs qui pointent vers un autre indicateur.
@@ -122,4 +140,4 @@ const resolveDynamicPossibilities = async (ivs) => {
   }
 };
 
-module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities };
+module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds };

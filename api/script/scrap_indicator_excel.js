@@ -631,7 +631,8 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       if (refRowNum) {
         const parentCondition = resolveConditionInSheet(refRowNum, targetSituation, new Set(visited));
         if (parentCondition?.conditions && parsed.conditions) {
-          const result = { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
+          // Si le parent est un OR, on l'imbrique pour préserver (A OR B) AND C au lieu de l'aplatir.
+          const result = parentCondition.operator === "OR" ? { operator: "AND", conditions: [{ operator: "OR", conditions: parentCondition.conditions }, ...parsed.conditions] } : { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
           situationCache.set(rowNum, result);
           return result;
         }
@@ -718,7 +719,8 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       if (refRowNum) {
         const parentCondition = resolveCondition(refRowNum, new Set(visited));
         if (parentCondition?.conditions && parsed.conditions) {
-          const result = { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
+          // Si le parent est un OR, on l'imbrique pour préserver (A OR B) AND C au lieu de l'aplatir.
+          const result = parentCondition.operator === "OR" ? { operator: "AND", conditions: [{ operator: "OR", conditions: parentCondition.conditions }, ...parsed.conditions] } : { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
           resolvedConditions.set(rowNum, result);
           return result;
         }
@@ -1734,8 +1736,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {

@@ -9,16 +9,26 @@ const type = {
   checkbox: { type: Array, default: [] },
 };
 
+const leafCondition = {
+  type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
+  excel_indicator_id: { type: String },
+  excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+  value: { type: mongoose.Schema.Types.Mixed },
+  negate: { type: Boolean, default: false },
+};
+
+const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND', 'OR'] }, conditions: [leafCondition] };
+
+const displayConditionForSituation = { operator: { type: String, enum: ['AND', 'OR'] }, conditions: [conditionNode] };
+
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
     description: { type: String, trim: true },
     value_unit: { type: String, trim: true },
     value_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
-    //Nom de la variable dans l'excel
     excel_indicator_id: { type: String, trim: true },
     value_possibilities: { type: Array, default: [] },
-    // Référence à un autre indicateur dont la valeur (radio/checkbox) sert de liste d'options dynamique
     value_possibilities_source: {
       init: {
         excel_indicator_id: { type: String },
@@ -63,54 +73,10 @@ const Schema = new mongoose.Schema(
       expost: { type: Number },
     },
     display_condition: {
-      init: {
-        operator: { type: String, enum: ['AND', 'OR'] },
-        conditions: [
-          {
-            type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
-            excel_indicator_id: { type: String }, // excel_indicator_id de l'indicateur à évaluer
-            excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] }, // Si la source vient d'une autre situation
-            value: { type: mongoose.Schema.Types.Mixed }, // Valeur à comparer (String ou Number)
-            negate: { type: Boolean, default: false }, // Si true, inverse le résultat de la condition
-          },
-        ],
-      },
-      ref: {
-        operator: { type: String, enum: ['AND', 'OR'] },
-        conditions: [
-          {
-            type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
-            excel_indicator_id: { type: String },
-            excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-            value: { type: mongoose.Schema.Types.Mixed },
-            negate: { type: Boolean, default: false },
-          },
-        ],
-      },
-      prev: {
-        operator: { type: String, enum: ['AND', 'OR'] },
-        conditions: [
-          {
-            type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
-            excel_indicator_id: { type: String },
-            excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-            value: { type: mongoose.Schema.Types.Mixed },
-            negate: { type: Boolean, default: false },
-          },
-        ],
-      },
-      expost: {
-        operator: { type: String, enum: ['AND', 'OR'] },
-        conditions: [
-          {
-            type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
-            excel_indicator_id: { type: String },
-            excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-            value: { type: mongoose.Schema.Types.Mixed },
-            negate: { type: Boolean, default: false },
-          },
-        ],
-      },
+      init: displayConditionForSituation,
+      ref: displayConditionForSituation,
+      prev: displayConditionForSituation,
+      expost: displayConditionForSituation,
     },
   },
   { timestamps: true },
