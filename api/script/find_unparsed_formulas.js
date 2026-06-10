@@ -7,7 +7,7 @@ const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas } = require
 // Il reprend le master Excel et liste toutes les formules d'affichage (colonne K)
 // que le parser de scrap_indicator_excel.js ne sait pas interpréter.
 
-const masterFileId = "01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3"; // même ID que scrap_indicator_excel.js
+const masterFileId = "01IBL4ADJHP7ORRNDOMREZVCQPBE4I2QZZ"; // même ID que scrap_indicator_excel.js
 
 const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -58,6 +58,7 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
 
     // Étape 3 : rejouer la résolution par situation et collecter les formules non prises en compte
     const unparsed = [];
+    const flattenedOr = []; // cas complexes : un OR référencé aplati en AND lors d'un merge
     let totalFormulas = 0;
     let totalParsed = 0;
 
@@ -88,12 +89,30 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
           continue;
         }
         totalParsed++;
+
+        // Cas complexe : la formule fusionne une référence (K{x} * ...) dont la condition est un OR.
+        // Le merge aplatit alors (A OR B) AND C en A AND B AND C → fidélité partielle, on le signale.
+        const parsed = parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps);
+        if (!parsed?._referenceToMerge) continue;
+        const refRow = parseInt((parsed._referenceToMerge.match(/(\d+)/) || [])[1], 10);
+        const refResolved = resolvedConditions.get(refRow);
+        if (refResolved?.operator !== "OR") continue;
+        flattenedOr.push({
+          situation,
+          worksheetName,
+          rowNum,
+          excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A",
+          refRow,
+          refIndicatorId: rowToIndicatorMap.get(refRow) || "N/A",
+          refFormula: formulasMap.get(refRow) || "",
+          formula,
+        });
       }
     }
 
     // Étape 4 : affichage
     console.log("═══════════════════════════════════════════════════════════");
-    console.log(`📊 ${totalFormulas} formules trouvées · ${totalParsed} parsées · ${unparsed.length} NON prises en compte`);
+    console.log(`📊 ${totalFormulas} formules trouvées · ${totalParsed} parsées · ${unparsed.length} NON prises en compte · ${flattenedOr.length} cas complexes (OR aplati)`);
     console.log("═══════════════════════════════════════════════════════════\n");
 
     for (const { situation } of WORKSHEETS) {
@@ -106,10 +125,31 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
       }
     }
 
+    // Étape 4b : cas complexes (OR aplati en AND lors d'un merge de référence)
+    if (flattenedOr.length > 0) {
+      console.log(`\n⚠️  ${flattenedOr.length} cas complexe(s) : un OR référencé est aplati en AND (fidélité partielle) :`);
+      for (const u of flattenedOr) {
+        console.log(`   • [${u.situation}] L${u.rowNum} [${u.excelIndicatorId}] → référence L${u.refRow} [${u.refIndicatorId}] qui est un OR`);
+        console.log(`     ${u.formula}`);
+      }
+    }
+
     // Étape 5 : export JSON à côté du script (pour réutilisation)
     const outPath = path.resolve(__dirname, "unparsed_formulas.json");
     fs.writeFileSync(outPath, JSON.stringify(unparsed, null, 2));
     console.log(`\n💾 Détail exporté dans ${outPath}`);
+
+    const flattenedPath = path.resolve(__dirname, "flattened_or_formulas.json");
+    fs.writeFileSync(flattenedPath, JSON.stringify(flattenedOr, null, 2));
+    console.log(`💾 Cas complexes (OR aplati) exportés dans ${flattenedPath}`);
+
+    // CSV propre : pour chaque cas, la formule de base (OR) et la formule qui en découle et pose problème
+    const csvEscape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csvRows = [["situation", "indicateur_base", "formule_base (OR)", "indicateur_derive", "formule_derivee (probleme)"]];
+    for (const u of flattenedOr) csvRows.push([u.situation, u.refIndicatorId, u.refFormula, u.excelIndicatorId, u.formula]);
+    const csvPath = path.resolve(__dirname, "flattened_or_formulas.csv");
+    fs.writeFileSync(csvPath, csvRows.map((r) => r.map(csvEscape).join(",")).join("\n"));
+    console.log(`💾 CSV propre exporté dans ${csvPath}`);
 
     process.exit(0);
   } catch (error) {
