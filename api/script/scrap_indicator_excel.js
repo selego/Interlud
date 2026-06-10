@@ -85,6 +85,16 @@ function extractIfFactors(content) {
   return factors;
 }
 
+// Applique fn à chaque feuille d'un arbre de conditions, en préservant la structure des groupes (OR/AND imbriqués).
+// Indispensable depuis l'introduction des groupes : appliquer une transfo (situation, negate) via un .map() plat
+// la poserait sur le noeud-groupe (ignoré à l'évaluation) au lieu des feuilles.
+function mapConditionLeaves(conditions, fn) {
+  return conditions.map((cond) => {
+    if (Array.isArray(cond.conditions) && cond.conditions.length) return { ...cond, conditions: mapConditionLeaves(cond.conditions, fn) };
+    return fn(cond);
+  });
+}
+
 // Parse une formule de référence simple pour les valeurs possibles dynamiques.
 // Exemples acceptés :
 //   ='Remplissage - Sit. Init.'!$F$1593  → { excel_indicator_id, situation: 'init' }
@@ -676,11 +686,8 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
         // Résoudre la condition dans la feuille source
         const refCondition = resolveConditionInSheet(refRowNum, sourceSituation, new Set());
         if (refCondition?.conditions) {
-          // Ajouter sourceSituation à chaque condition
-          const conditionsWithSource = refCondition.conditions.map((cond) => ({
-            ...cond,
-            excel_indicator_situation: sourceSituation,
-          }));
+          // Ajouter sourceSituation à chaque feuille (en descendant dans les groupes imbriqués)
+          const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: sourceSituation }));
           const result = { ...refCondition, conditions: conditionsWithSource };
           resolvedConditions.set(rowNum, result);
           return result;
@@ -701,10 +708,7 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       }
       const refCondition = resolveConditionInSheet(targetRow, refSituation, new Set());
       if (refCondition?.conditions?.length > 0) {
-        const conditionsWithSource = refCondition.conditions.map((cond) => ({
-          ...cond,
-          excel_indicator_situation: cond.excel_indicator_situation || refSituation,
-        }));
+        const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: cond.excel_indicator_situation || refSituation }));
         const result = { ...refCondition, conditions: conditionsWithSource };
         resolvedConditions.set(rowNum, result);
         return result;
@@ -736,10 +740,8 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       for (const { rowNum: refRowNum, negate } of parsed._andNotReferences) {
         const refCondition = resolveCondition(refRowNum, new Set(visited));
         if (refCondition?.conditions) {
-          // Ajouter les conditions avec le flag negate si nécessaire
-          for (const cond of refCondition.conditions) {
-            allConditions.push({ ...cond, negate: negate ? !cond.negate : cond.negate });
-          }
+          // Appliquer le flag negate à chaque feuille (en descendant dans les groupes imbriqués)
+          allConditions.push(...mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, negate: negate ? !cond.negate : cond.negate })));
         }
       }
       if (allConditions.length > 0) {
