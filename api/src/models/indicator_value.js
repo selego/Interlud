@@ -2,6 +2,18 @@ const mongoose = require('mongoose');
 
 const MODELNAME = 'indicator_value';
 
+// Condition d'affichage : une feuille compare la valeur d'un indicateur source.
+const leafCondition = {
+  type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
+  excel_indicator_id: { type: String },
+  excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+  value: { type: mongoose.Schema.Types.Mixed },
+  negate: { type: Boolean, default: false },
+};
+
+// Un noeud est soit une feuille, soit un groupe (operator + sous-conditions de feuilles) permettant (A OR B) AND C.
+const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND', 'OR'] }, conditions: [leafCondition] };
+
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
@@ -40,15 +52,7 @@ const Schema = new mongoose.Schema(
     excel_line_number: { type: Number, trim: true },
     display_condition: {
       operator: { type: String, enum: ['AND', 'OR'] },
-      conditions: [
-        {
-          type: { type: String, enum: ['equals', 'contains', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'notEmpty', 'isEmpty'] },
-          excel_indicator_id: { type: String },
-          excel_indicator_situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-          value: { type: mongoose.Schema.Types.Mixed },
-          negate: { type: Boolean, default: false },
-        },
-      ],
+      conditions: [conditionNode],
     },
     situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'], trim: true },
     year: { type: Number, trim: true },

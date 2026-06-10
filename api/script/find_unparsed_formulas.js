@@ -58,7 +58,8 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
 
     // Étape 3 : rejouer la résolution par situation et collecter les formules non prises en compte
     const unparsed = [];
-    const flattenedOr = []; // cas complexes : un OR référencé aplati en AND lors d'un merge
+    const nestedOk = []; // "(A OR B) AND C" correctement imbriqués (le OR est conservé comme sous-groupe) → fix OK
+    const stillFlat = []; // cas qui DEVRAIENT être imbriqués mais restent plats → fix KO
     let totalFormulas = 0;
     let totalParsed = 0;
 
@@ -90,14 +91,15 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
         }
         totalParsed++;
 
-        // Cas complexe : la formule fusionne une référence (K{x} * ...) dont la condition est un OR.
-        // Le merge aplatit alors (A OR B) AND C en A AND B AND C → fidélité partielle, on le signale.
+        // Vérif du fix : une formule "K{x} * ..." dont la référence est un OR doit produire une condition
+        // résolue contenant un GROUPE OR imbriqué (et non une liste plate de feuilles).
         const parsed = parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps);
         if (!parsed?._referenceToMerge) continue;
         const refRow = parseInt((parsed._referenceToMerge.match(/(\d+)/) || [])[1], 10);
-        const refResolved = resolvedConditions.get(refRow);
-        if (refResolved?.operator !== "OR") continue;
-        flattenedOr.push({
+        if (resolvedConditions.get(refRow)?.operator !== "OR") continue;
+
+        const isNested = (resolved.conditions || []).some((c) => c.operator === "OR" && Array.isArray(c.conditions) && c.conditions.length);
+        const entry = {
           situation,
           worksheetName,
           rowNum,
@@ -106,13 +108,15 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
           refIndicatorId: rowToIndicatorMap.get(refRow) || "N/A",
           refFormula: formulasMap.get(refRow) || "",
           formula,
-        });
+          resolved,
+        };
+        (isNested ? nestedOk : stillFlat).push(entry);
       }
     }
 
     // Étape 4 : affichage
     console.log("═══════════════════════════════════════════════════════════");
-    console.log(`📊 ${totalFormulas} formules trouvées · ${totalParsed} parsées · ${unparsed.length} NON prises en compte · ${flattenedOr.length} cas complexes (OR aplati)`);
+    console.log(`📊 ${totalFormulas} formules trouvées · ${totalParsed} parsées · ${unparsed.length} NON prises en compte · ${nestedOk.length} OR imbriqués ✓ · ${stillFlat.length} encore plats`);
     console.log("═══════════════════════════════════════════════════════════\n");
 
     for (const { situation } of WORKSHEETS) {
@@ -125,13 +129,19 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
       }
     }
 
-    // Étape 4b : cas complexes (OR aplati en AND lors d'un merge de référence)
-    if (flattenedOr.length > 0) {
-      console.log(`\n⚠️  ${flattenedOr.length} cas complexe(s) : un OR référencé est aplati en AND (fidélité partielle) :`);
-      for (const u of flattenedOr) {
-        console.log(`   • [${u.situation}] L${u.rowNum} [${u.excelIndicatorId}] → référence L${u.refRow} [${u.refIndicatorId}] qui est un OR`);
+    // Étape 4b : vérification du fix (le OR doit être conservé comme sous-groupe imbriqué)
+    console.log(`\n✅ ${nestedOk.length} cas "(A OR B) AND C" correctement imbriqués (OR conservé comme sous-groupe).`);
+    if (stillFlat.length > 0) {
+      console.log(`\n❌ ${stillFlat.length} cas ENCORE APLATIS (le fix ne s'applique pas ici) :`);
+      for (const u of stillFlat) {
+        console.log(`   • [${u.situation}] L${u.rowNum} [${u.excelIndicatorId}] → réf L${u.refRow} [${u.refIndicatorId}] (OR)`);
         console.log(`     ${u.formula}`);
       }
+    }
+    // Aperçu de 3 cas imbriqués pour contrôle visuel de la structure
+    for (const u of nestedOk.slice(0, 3)) {
+      console.log(`\n   🔎 [${u.situation}] L${u.rowNum} [${u.excelIndicatorId}] →`);
+      console.log(`      ${JSON.stringify(u.resolved)}`);
     }
 
     // Étape 5 : export JSON à côté du script (pour réutilisation)
@@ -139,17 +149,18 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
     fs.writeFileSync(outPath, JSON.stringify(unparsed, null, 2));
     console.log(`\n💾 Détail exporté dans ${outPath}`);
 
-    const flattenedPath = path.resolve(__dirname, "flattened_or_formulas.json");
-    fs.writeFileSync(flattenedPath, JSON.stringify(flattenedOr, null, 2));
-    console.log(`💾 Cas complexes (OR aplati) exportés dans ${flattenedPath}`);
+    const verifPath = path.resolve(__dirname, "nested_or_verification.json");
+    fs.writeFileSync(verifPath, JSON.stringify({ nestedOk, stillFlat }, null, 2));
+    console.log(`💾 Vérification (imbriqués ✓ / encore plats ✗) exportée dans ${verifPath}`);
 
-    // CSV propre : pour chaque cas, la formule de base (OR) et la formule qui en découle et pose problème
+    // CSV de vérification : formule de base (OR), formule dérivée, imbriqué OUI/NON, condition résolue
     const csvEscape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const csvRows = [["situation", "indicateur_base", "formule_base (OR)", "indicateur_derive", "formule_derivee (probleme)"]];
-    for (const u of flattenedOr) csvRows.push([u.situation, u.refIndicatorId, u.refFormula, u.excelIndicatorId, u.formula]);
-    const csvPath = path.resolve(__dirname, "flattened_or_formulas.csv");
+    const csvRows = [["situation", "indicateur_base", "formule_base (OR)", "indicateur_derive", "formule_derivee", "imbrique_ok", "condition_resolue"]];
+    for (const u of nestedOk) csvRows.push([u.situation, u.refIndicatorId, u.refFormula, u.excelIndicatorId, u.formula, "OUI", JSON.stringify(u.resolved)]);
+    for (const u of stillFlat) csvRows.push([u.situation, u.refIndicatorId, u.refFormula, u.excelIndicatorId, u.formula, "NON", JSON.stringify(u.resolved)]);
+    const csvPath = path.resolve(__dirname, "nested_or_verification.csv");
     fs.writeFileSync(csvPath, csvRows.map((r) => r.map(csvEscape).join(",")).join("\n"));
-    console.log(`💾 CSV propre exporté dans ${csvPath}`);
+    console.log(`💾 CSV de vérification exporté dans ${csvPath}`);
 
     process.exit(0);
   } catch (error) {

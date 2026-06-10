@@ -1,6 +1,6 @@
 const IndicatorValue = require('../models/indicator_value');
 const Action = require('../models/action');
-const { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator } = require('./indicators');
+const { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, collectConditionExcelIds } = require('./indicators');
 
 const isIndicatorValueFilled = (iv) => {
   const val = iv.value?.[iv.indicator_type];
@@ -17,13 +17,7 @@ const computeActionCompletion = async (actionId) => {
 
   // Build display condition context
   const condExcelIds = new Set();
-  for (const iv of indicatorValues) {
-    if (iv.display_condition?.conditions) {
-      for (const cond of iv.display_condition.conditions) {
-        if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-      }
-    }
-  }
+  for (const iv of indicatorValues) collectConditionExcelIds(iv.display_condition, condExcelIds);
 
   const [regularActions, condValues] = await Promise.all([
     Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }),
