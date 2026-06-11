@@ -410,6 +410,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
   }
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
+    toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
       if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
       if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
@@ -423,11 +424,11 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
         })
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      toast.success("Valeur enregistrée avec succès")
-      onStatsRefresh()
+      if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
+      await onStatsRefresh()
+      toast.success("Valeur enregistrée", { id: "indicator-save" })
     } catch (error) {
-      toast.error("Une erreur est survenue")
+      toast.error("Une erreur est survenue", { id: "indicator-save" })
     }
   }
 
