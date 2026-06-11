@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter, FiStar, FiBarChart2 } from "react-icons/fi"
-import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
+import { shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
@@ -415,8 +415,7 @@ function IndicatorView({
     toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
       onSavingChange?.(true)
-      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
-      if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
+      setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {
         setConditionValuesMap((prev) => {
           const condKey = `${indicatorValue.indicator_excel_id}_${indicatorValue.situation}_${indicatorValue.year}`
