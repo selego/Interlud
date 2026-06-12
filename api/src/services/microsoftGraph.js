@@ -97,12 +97,35 @@ async function graphFetch(endpoint, options = {}) {
   throw lastError;
 }
 
-async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation, unit = null) {
+// Sessions workbook persistantes : garantissent que les écritures, le recalcul des formules et les lectures
+// qui suivent voient le même état du classeur (sans session, chaque appel ouvre une session éphémère côté
+// SharePoint et une lecture peut tomber sur un état pas encore recalculé)
+async function createWorkbookSession(fileId) {
+  const siteId = await getSiteId();
+  const session = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/createSession`, {
+    method: 'POST',
+    body: JSON.stringify({ persistChanges: true }),
+  });
+  return session?.id || null;
+}
+
+async function closeWorkbookSession(fileId, sessionId) {
+  if (!sessionId) return;
+  const siteId = await getSiteId();
+  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/closeSession`, {
+    method: 'POST',
+    headers: { 'workbook-session-id': sessionId },
+  });
+}
+
+const sessionHeaders = (sessionId) => (sessionId ? { headers: { 'workbook-session-id': sessionId } } : {});
+
+async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation, unit = null, sessionId = null) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
 
   const rowIndex = rows.findIndex((row) => row[4] && String(row[4]).trim() === String(excelIndicatorId).trim());
@@ -116,18 +139,19 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='F${rowNumber}')`, {
     method: 'PATCH',
     body: JSON.stringify({ values: [[cellValue]] }),
+    ...sessionHeaders(sessionId),
   });
 }
 
 // Update multiple cells in batch - updates is array of { excel_indicator_id, value, unit? }
-async function updateExcelCellsBatch(fileId, updates, situation) {
+async function updateExcelCellsBatch(fileId, updates, situation, sessionId = null) {
   if (!updates || updates.length === 0) return;
 
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
@@ -167,6 +191,7 @@ async function updateExcelCellsBatch(fileId, updates, situation) {
   await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
     method: 'PATCH',
     body: JSON.stringify({ values: rangeValues }),
+    ...sessionHeaders(sessionId),
   });
 }
 
@@ -315,13 +340,13 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
 }
 
 // Clear all values in column F for a given worksheet
-async function clearWorksheetValues(fileId, situation) {
+async function clearWorksheetValues(fileId, situation, sessionId = null) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
 
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
@@ -347,24 +372,26 @@ async function clearWorksheetValues(fileId, situation) {
   await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
     method: 'PATCH',
     body: JSON.stringify({ values: rangeValues }),
+    ...sessionHeaders(sessionId),
   });
 }
 
 // Force le recalcul des formules du workbook (les défauts dépendant de AnRef/AnneeRempl sont calculés par formule)
-async function calculateWorkbook(fileId) {
+async function calculateWorkbook(fileId, sessionId = null) {
   const siteId = await getSiteId();
   await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/application/calculate`, {
     method: 'POST',
     body: JSON.stringify({ calculationType: 'Recalculate' }),
+    ...sessionHeaders(sessionId),
   });
 }
 
-async function readExcelDefaultValues(fileId, situation) {
+async function readExcelDefaultValues(fileId, situation, sessionId = null) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`);
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
 
   const defaults = new Map();
@@ -391,4 +418,6 @@ module.exports = {
   clearWorksheetValues,
   calculateWorkbook,
   readExcelDefaultValues,
+  createWorkbookSession,
+  closeWorkbookSession,
 };

@@ -9,7 +9,7 @@ const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder, createWorkbookSession, closeWorkbookSession } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -182,17 +182,26 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         : null,
     ]);
 
+    // Sessions workbook persistantes : toutes les écritures/recalculs/lectures d'un même fichier passent par
+    // la même session pour que la relecture des défauts voie bien les formules recalculées (fallback sans session si échec).
+    // Les appels sur un même fichier doivent être séquentiels (une session ne supporte pas les requêtes concurrentes).
+    const [excelSessionPrev, excelSessionExpost] = await Promise.all([
+      createWorkbookSession(excelFileIdPrev).catch((e) => { capture(e); return null; }),
+      hasExpost ? createWorkbookSession(excelFileIdExpost).catch((e) => { capture(e); return null; }) : null,
+    ]);
+
     // Nettoyer les sheets inutiles dans chaque fichier
-    const clearSheetPromises = [clearWorksheetValues(excelFileIdPrev, 'expost')];
-    if (hasExpost) clearSheetPromises.push(clearWorksheetValues(excelFileIdExpost, 'prev'));
+    const clearSheetPromises = [clearWorksheetValues(excelFileIdPrev, 'expost', excelSessionPrev)];
+    if (hasExpost) clearSheetPromises.push(clearWorksheetValues(excelFileIdExpost, 'prev', excelSessionExpost));
     await Promise.all(clearSheetPromises);
 
     // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne action)
     const clearUpdates = (await Indicator.find({ linked_action_id: parentAction._id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
     if (clearUpdates.length > 0) {
-      const clearPromises = ['init', 'ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileIdPrev, clearUpdates, s).catch(capture));
-      if (hasExpost) clearPromises.push(...['init', 'ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileIdExpost, clearUpdates, s).catch(capture)));
-      await Promise.all(clearPromises);
+      const clearFile = async (fileId, sessionId, situations) => {
+        for (const s of situations) await updateExcelCellsBatch(fileId, clearUpdates, s, sessionId).catch(capture);
+      };
+      await Promise.all([clearFile(excelFileIdPrev, excelSessionPrev, ['init', 'ref', 'prev']), hasExpost ? clearFile(excelFileIdExpost, excelSessionExpost, ['init', 'ref', 'expost']) : null]);
     }
 
     // Créer l'action
@@ -318,18 +327,14 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       }
 
       // Update Excel with Parc types + Données de base values in batch — écrire dans les 2 fichiers
-      const excelBatchPromises = [];
-      for (const situation of ['init', 'ref', 'prev']) {
-        if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, parcTypesDefaultValues[situation], situation).catch(capture));
-        if (existingBasicDataValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdPrev, existingBasicDataValues[situation], situation).catch(capture));
-      }
-      if (hasExpost) {
-        for (const situation of ['init', 'ref', 'expost']) {
-          if (parcTypesDefaultValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, parcTypesDefaultValues[situation], situation).catch(capture));
-          if (existingBasicDataValues[situation].length > 0) excelBatchPromises.push(updateExcelCellsBatch(excelFileIdExpost, existingBasicDataValues[situation], situation).catch(capture));
+      // Séquentiel par fichier : 2 batchs parallèles sur une même feuille s'écrasent mutuellement (chaque batch réécrit une plage F contiguë avec les valeurs lues avant l'autre)
+      const writeConfigToFile = async (fileId, sessionId, situations) => {
+        for (const situation of situations) {
+          if (parcTypesDefaultValues[situation].length > 0) await updateExcelCellsBatch(fileId, parcTypesDefaultValues[situation], situation, sessionId).catch(capture);
+          if (existingBasicDataValues[situation].length > 0) await updateExcelCellsBatch(fileId, existingBasicDataValues[situation], situation, sessionId).catch(capture);
         }
-      }
-      await Promise.all(excelBatchPromises);
+      };
+      await Promise.all([writeConfigToFile(excelFileIdPrev, excelSessionPrev, ['init', 'ref', 'prev']), hasExpost ? writeConfigToFile(excelFileIdExpost, excelSessionExpost, ['init', 'ref', 'expost']) : null]);
     }
 
     // Créer les indicator values pour l'action principale
@@ -401,16 +406,15 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (createdIndicatorValues.length > 0) await IndicatorValue.insertMany(createdIndicatorValues);
 
     // Écrire les valeurs par défaut des non primordiaux dans les fichiers Excel (colonne F vidée par clearUpdates)
-    const initialNonPrimordialPromises = [];
-    for (const situation of ['init', 'ref', 'prev']) {
-      if (nonPrimordialInitialPrev[situation].length > 0) initialNonPrimordialPromises.push(updateExcelCellsBatch(excelFileIdPrev, nonPrimordialInitialPrev[situation], situation).catch(capture));
-    }
-    if (hasExpost) {
-      for (const situation of ['init', 'ref', 'expost']) {
-        if (nonPrimordialInitialExpost[situation].length > 0) initialNonPrimordialPromises.push(updateExcelCellsBatch(excelFileIdExpost, nonPrimordialInitialExpost[situation], situation).catch(capture));
+    const writeNonPrimordialToFile = async (fileId, sessionId, valuesBySituation, situations) => {
+      for (const situation of situations) {
+        if (valuesBySituation[situation].length > 0) await updateExcelCellsBatch(fileId, valuesBySituation[situation], situation, sessionId).catch(capture);
       }
-    }
-    if (initialNonPrimordialPromises.length > 0) await Promise.all(initialNonPrimordialPromises);
+    };
+    await Promise.all([
+      writeNonPrimordialToFile(excelFileIdPrev, excelSessionPrev, nonPrimordialInitialPrev, ['init', 'ref', 'prev']),
+      hasExpost ? writeNonPrimordialToFile(excelFileIdExpost, excelSessionExpost, nonPrimordialInitialExpost, ['init', 'ref', 'expost']) : null,
+    ]);
 
     // Mettre à jour l'indicateur ActionsCharte ou ActionsAutres dans l'action Données de base consolidée
     if (configActionBasicDataObj) {
@@ -422,14 +426,15 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         hasExpost ? IndicatorValue.findOneAndUpdate({ action_id: configActionBasicDataObj._id, indicator_excel_id: targetExcelId, situation: 'expost', year: req.body.year_expost }, { $addToSet: { 'value.checkbox': parentAction.excel_worksheetname } }, { new: true }) : null,
       ]);
 
-      // Écrire dans les fichiers Excel en parallèle
-      const excelWritePromises = [];
-      if (ivInit) {
-        if (excelFileIdPrev) excelWritePromises.push(updateExcelCellByIndicatorId(excelFileIdPrev, targetExcelId, ivInit.value?.checkbox, 'init'));
-        if (excelFileIdExpost) excelWritePromises.push(updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivInit.value?.checkbox, 'init'));
-      }
-      if (ivExpost && excelFileIdExpost) excelWritePromises.push(updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivExpost.value?.checkbox, 'expost'));
-      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
+      // Écrire dans les fichiers Excel — séquentiel par fichier, les 2 fichiers en parallèle
+      const writeChartePrev = async () => {
+        if (ivInit && excelFileIdPrev) await updateExcelCellByIndicatorId(excelFileIdPrev, targetExcelId, ivInit.value?.checkbox, 'init', null, excelSessionPrev);
+      };
+      const writeCharteExpost = async () => {
+        if (ivInit && excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivInit.value?.checkbox, 'init', null, excelSessionExpost);
+        if (ivExpost && excelFileIdExpost) await updateExcelCellByIndicatorId(excelFileIdExpost, targetExcelId, ivExpost.value?.checkbox, 'expost', null, excelSessionExpost);
+      };
+      await Promise.all([writeChartePrev(), writeCharteExpost()]);
 
       // Écriture des années dans les 2 fichiers Excel
       const anneeExcelIds = { init: 'AnneeRempl', ref: 'AnRef', prev: 'AnneeRempl', expost: 'AnneeRempl' };
@@ -485,38 +490,38 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         await Promise.all(collectivityDbUpdates);
       }
 
-      // Toutes les écritures Excel (années + collectivité) en parallèle
-      const excelWrites = [];
-      if (excelFileIdPrev) {
+      // Écritures Excel (années + collectivité) — séquentiel par fichier, les 2 fichiers en parallèle
+      const writeYearsPrev = async () => {
+        if (!excelFileIdPrev) return;
         for (const { situation, year } of prevFileYears) {
-          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation));
+          await updateExcelCellByIndicatorId(excelFileIdPrev, anneeExcelIds[situation], year, situation, null, excelSessionPrev);
         }
         for (const { excel_indicator_id, value } of collectivityFieldsMapping) {
-          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdPrev, excel_indicator_id, value, 'init'));
+          await updateExcelCellByIndicatorId(excelFileIdPrev, excel_indicator_id, value, 'init', null, excelSessionPrev);
         }
-      }
-      if (excelFileIdExpost) {
+      };
+      const writeYearsExpost = async () => {
+        if (!excelFileIdExpost) return;
         for (const { situation, year } of expostFileYears) {
-          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation));
+          await updateExcelCellByIndicatorId(excelFileIdExpost, anneeExcelIds[situation], year, situation, null, excelSessionExpost);
         }
         for (const { excel_indicator_id, value } of collectivityFieldsMapping) {
-          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'init'));
-          excelWrites.push(updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'expost'));
+          await updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'init', null, excelSessionExpost);
+          await updateExcelCellByIndicatorId(excelFileIdExpost, excel_indicator_id, value, 'expost', null, excelSessionExpost);
         }
-      }
-      if (excelWrites.length > 0) await Promise.all(excelWrites);
+      };
+      await Promise.all([writeYearsPrev(), writeYearsExpost()]);
     }
 
     // Forcer le recalcul des formules avant de relire les défauts (sinon les défauts dépendant de AnRef peuvent être lus avant recalcul)
-    await Promise.all([calculateWorkbook(excelFileIdPrev).catch(capture), hasExpost ? calculateWorkbook(excelFileIdExpost).catch(capture) : null]);
+    await Promise.all([calculateWorkbook(excelFileIdPrev, excelSessionPrev).catch(capture), hasExpost ? calculateWorkbook(excelFileIdExpost, excelSessionExpost).catch(capture) : null]);
 
     // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années et infos collectivité)
-    const [prevInitDefaults, prevRefDefaults, prevPrevDefaults, expostRefDefaults, expostExpostDefaults] = await Promise.all([
-      readExcelDefaultValues(excelFileIdPrev, 'init').catch(() => new Map()),
-      readExcelDefaultValues(excelFileIdPrev, 'ref').catch(() => new Map()),
-      readExcelDefaultValues(excelFileIdPrev, 'prev').catch(() => new Map()),
-      hasExpost ? readExcelDefaultValues(excelFileIdExpost, 'ref').catch(() => new Map()) : new Map(),
-      hasExpost ? readExcelDefaultValues(excelFileIdExpost, 'expost').catch(() => new Map()) : new Map(),
+    // Séquentiel par fichier (même session), les 2 fichiers en parallèle ; les erreurs partent dans Sentry
+    const readDefaults = (fileId, situation, sessionId) => readExcelDefaultValues(fileId, situation, sessionId).catch((e) => { capture(e); return new Map(); });
+    const [[prevInitDefaults, prevRefDefaults, prevPrevDefaults], [expostRefDefaults, expostExpostDefaults]] = await Promise.all([
+      (async () => [await readDefaults(excelFileIdPrev, 'init', excelSessionPrev), await readDefaults(excelFileIdPrev, 'ref', excelSessionPrev), await readDefaults(excelFileIdPrev, 'prev', excelSessionPrev)])(),
+      (async () => (hasExpost ? [await readDefaults(excelFileIdExpost, 'ref', excelSessionExpost), await readDefaults(excelFileIdExpost, 'expost', excelSessionExpost)] : [new Map(), new Map()]))(),
     ]);
 
     const getDefaultsForSituation = (situation, year) => {
@@ -605,20 +610,21 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (defaultUpdateBulkOps.length > 0) {
       await IndicatorValue.bulkWrite(defaultUpdateBulkOps);
 
-      // Réécrire les valeurs Parc types + non primordiales mises à jour dans les fichiers Excel
-      const rewritePromises = [];
-      for (const situation of ['init', 'ref', 'prev']) {
-        if (parcTypesNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileIdPrev, parcTypesNewValues[situation], situation).catch(capture));
-        if (nonPrimordialNewValuesPrev[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileIdPrev, nonPrimordialNewValuesPrev[situation], situation).catch(capture));
-      }
-      if (hasExpost) {
-        for (const situation of ['init', 'ref', 'expost']) {
-          if (parcTypesNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileIdExpost, parcTypesNewValues[situation], situation).catch(capture));
-          if (nonPrimordialNewValuesExpost[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileIdExpost, nonPrimordialNewValuesExpost[situation], situation).catch(capture));
+      // Réécrire les valeurs Parc types + non primordiales mises à jour — séquentiel par fichier, les 2 fichiers en parallèle
+      const rewriteFile = async (fileId, sessionId, nonPrimordialValues, situations) => {
+        for (const situation of situations) {
+          if (parcTypesNewValues[situation].length > 0) await updateExcelCellsBatch(fileId, parcTypesNewValues[situation], situation, sessionId).catch(capture);
+          if (nonPrimordialValues[situation].length > 0) await updateExcelCellsBatch(fileId, nonPrimordialValues[situation], situation, sessionId).catch(capture);
         }
-      }
-      await Promise.all(rewritePromises);
+      };
+      await Promise.all([
+        rewriteFile(excelFileIdPrev, excelSessionPrev, nonPrimordialNewValuesPrev, ['init', 'ref', 'prev']),
+        hasExpost ? rewriteFile(excelFileIdExpost, excelSessionExpost, nonPrimordialNewValuesExpost, ['init', 'ref', 'expost']) : null,
+      ]);
     }
+
+    // Fermer les sessions workbook (les changements sont persistés au fil de l'eau, persistChanges: true)
+    await Promise.all([closeWorkbookSession(excelFileIdPrev, excelSessionPrev).catch(capture), hasExpost ? closeWorkbookSession(excelFileIdExpost, excelSessionExpost).catch(capture) : null]);
 
     // Recalculer la completion pour l'action créée et les actions config
     await Promise.all([computeActionCompletion(action._id), configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null, configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null].filter(Boolean));
@@ -803,13 +809,18 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     const sourceExcelId = action.exel_files_prev?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
+    // Session workbook persistante : toutes les écritures/recalculs/lectures passent par la même session
+    // pour que la relecture des défauts voie bien les formules recalculées (fallback sans session si échec).
+    // Les appels sur le fichier doivent être séquentiels (une session ne supporte pas les requêtes concurrentes).
+    const excelSession = await createWorkbookSession(excelFileId).catch((e) => { capture(e); return null; });
+
     // Vider les feuilles init et expost du nouveau fichier Excel
-    await clearWorksheetValues(excelFileId, 'expost');
+    await clearWorksheetValues(excelFileId, 'expost', excelSession);
 
     // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
     const clearUpdatesPrev = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
-    if (clearUpdatesPrev.length > 0) {
-      await Promise.all(['ref', 'prev'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesPrev, s).catch(capture)));
+    for (const s of clearUpdatesPrev.length > 0 ? ['ref', 'prev'] : []) {
+      await updateExcelCellsBatch(excelFileId, clearUpdatesPrev, s, excelSession).catch(capture);
     }
 
     // Ajouter le nouveau fichier Excel à l'action
@@ -935,12 +946,11 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
         }
       }
 
-      const excelWritePromises = [];
+      // Séquentiel : 2 batchs parallèles sur une même feuille s'écrasent mutuellement (chaque batch réécrit une plage F contiguë avec les valeurs lues avant l'autre)
       for (const situation of ['ref', 'prev']) {
-        if (parcTypesValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation).catch(capture));
-        if (basicDataValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation).catch(capture));
+        if (parcTypesValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation, excelSession).catch(capture);
+        if (basicDataValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation, excelSession).catch(capture);
       }
-      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
     }
 
     // Créer les indicator values pour les situations prev et ref (year_ref = year_prev)
@@ -1019,26 +1029,22 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     // Écrire les valeurs par défaut des non primordiaux dans l'Excel (colonne F vidée par clearUpdatesPrev)
     if (excelFileId) {
-      const addYearPrevPromises = [];
       for (const situation of ['ref', 'prev']) {
-        if (nonPrimordialInitialAddYearPrev[situation].length > 0) addYearPrevPromises.push(updateExcelCellsBatch(excelFileId, nonPrimordialInitialAddYearPrev[situation], situation).catch(capture));
+        if (nonPrimordialInitialAddYearPrev[situation].length > 0) await updateExcelCellsBatch(excelFileId, nonPrimordialInitialAddYearPrev[situation], situation, excelSession).catch(capture);
       }
-      if (addYearPrevPromises.length > 0) await Promise.all(addYearPrevPromises);
     }
 
     // Mettre à jour l'indicateur AnPrev avec la nouvelle année prévisionnelle dans l'Excel
-    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev');
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_prev, 'prev', null, excelSession);
 
     // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_prev) dans l'Excel
-    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_prev, 'ref');
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_prev, 'ref', null, excelSession);
 
     // Relire les valeurs par défaut depuis l'Excel et appliquer les non primordiales (après écriture des années et infos config)
     if (excelFileId) {
-      await calculateWorkbook(excelFileId).catch(capture);
-      const [refDefaults, prevDefaults] = await Promise.all([
-        readExcelDefaultValues(excelFileId, 'ref').catch(() => new Map()),
-        readExcelDefaultValues(excelFileId, 'prev').catch(() => new Map()),
-      ]);
+      await calculateWorkbook(excelFileId, excelSession).catch(capture);
+      const refDefaults = await readExcelDefaultValues(excelFileId, 'ref', excelSession).catch((e) => { capture(e); return new Map(); });
+      const prevDefaults = await readExcelDefaultValues(excelFileId, 'prev', excelSession).catch((e) => { capture(e); return new Map(); });
 
       const parseDefaultValue = (rawValue, indicatorType, unit) => {
         if (rawValue === null || rawValue === undefined || rawValue === '') return null;
@@ -1100,14 +1106,15 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
       if (defaultUpdateBulkOps.length > 0) {
         await IndicatorValue.bulkWrite(defaultUpdateBulkOps);
-        const rewritePromises = [];
         for (const situation of ['ref', 'prev']) {
-          if (parcTypesNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesNewValues[situation], situation).catch(capture));
-          if (nonPrimordialNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileId, nonPrimordialNewValues[situation], situation).catch(capture));
+          if (parcTypesNewValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, parcTypesNewValues[situation], situation, excelSession).catch(capture);
+          if (nonPrimordialNewValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, nonPrimordialNewValues[situation], situation, excelSession).catch(capture);
         }
-        await Promise.all(rewritePromises);
       }
     }
+
+    // Fermer la session workbook (les changements sont persistés au fil de l'eau, persistChanges: true)
+    await closeWorkbookSession(excelFileId, excelSession).catch(capture);
 
     // Recalculer la completion pour l'action et les actions config
     await computeActionCompletion(action._id);
@@ -1164,13 +1171,18 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     const sourceExcelId = action.excel_files_expost?.[0]?.excel_file_id || action.exel_files_prev?.[0]?.excel_file_id || null;
     const excelFileId = await duplicateExcelFile(excelFileName, collectivity.sharepoint_folder_id, sourceExcelId);
 
+    // Session workbook persistante : toutes les écritures/recalculs/lectures passent par la même session
+    // pour que la relecture des défauts voie bien les formules recalculées (fallback sans session si échec).
+    // Les appels sur le fichier doivent être séquentiels (une session ne supporte pas les requêtes concurrentes).
+    const excelSession = await createWorkbookSession(excelFileId).catch((e) => { capture(e); return null; });
+
     // Vider les feuilles init et prev du nouveau fichier Excel
-    await clearWorksheetValues(excelFileId, 'prev');
+    await clearWorksheetValues(excelFileId, 'prev', excelSession);
 
     // Vider les cellules des indicateurs liés à l'action parent (données spécifiques à l'ancienne année)
     const clearUpdatesExpost = (await Indicator.find({ linked_action_id: action.action_parent_id })).filter((ind) => ind.excel_indicator_id).map((ind) => ({ excel_indicator_id: ind.excel_indicator_id, value: '' }));
-    if (clearUpdatesExpost.length > 0) {
-      await Promise.all(['ref', 'expost'].map((s) => updateExcelCellsBatch(excelFileId, clearUpdatesExpost, s).catch(capture)));
+    for (const s of clearUpdatesExpost.length > 0 ? ['ref', 'expost'] : []) {
+      await updateExcelCellsBatch(excelFileId, clearUpdatesExpost, s, excelSession).catch(capture);
     }
 
     // Ajouter le nouveau fichier Excel à l'action
@@ -1298,7 +1310,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
         { $addToSet: { 'value.checkbox': action.excel_worksheetname } },
         { new: true },
       );
-      if (ivExpost && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, ivExpost.value?.checkbox, 'expost').catch(capture);
+      if (ivExpost && excelFileId) await updateExcelCellByIndicatorId(excelFileId, targetExcelId, ivExpost.value?.checkbox, 'expost', null, excelSession).catch(capture);
     }
 
     // Écrire les valeurs config existantes (Données de base + Parc types) dans le nouveau fichier Excel
@@ -1323,12 +1335,11 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
         }
       }
 
-      const excelWritePromises = [];
+      // Séquentiel : 2 batchs parallèles sur une même feuille s'écrasent mutuellement (chaque batch réécrit une plage F contiguë avec les valeurs lues avant l'autre)
       for (const situation of ['ref', 'expost']) {
-        if (parcTypesValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation).catch(capture));
-        if (basicDataValues[situation].length > 0) excelWritePromises.push(updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation).catch(capture));
+        if (parcTypesValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, parcTypesValues[situation], situation, excelSession).catch(capture);
+        if (basicDataValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, basicDataValues[situation], situation, excelSession).catch(capture);
       }
-      if (excelWritePromises.length > 0) await Promise.all(excelWritePromises);
     }
 
     // Créer les indicator values pour les situations expost et ref (year_ref = year_expost)
@@ -1407,26 +1418,22 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
     // Écrire les valeurs par défaut des non primordiaux dans l'Excel (colonne F vidée à la création)
     if (excelFileId) {
-      const addYearExpostPromises = [];
       for (const situation of ['ref', 'expost']) {
-        if (nonPrimordialInitialAddYearExpost[situation].length > 0) addYearExpostPromises.push(updateExcelCellsBatch(excelFileId, nonPrimordialInitialAddYearExpost[situation], situation).catch(capture));
+        if (nonPrimordialInitialAddYearExpost[situation].length > 0) await updateExcelCellsBatch(excelFileId, nonPrimordialInitialAddYearExpost[situation], situation, excelSession).catch(capture);
       }
-      if (addYearExpostPromises.length > 0) await Promise.all(addYearExpostPromises);
     }
 
     // Mettre à jour l'indicateur AnneeRempl avec la nouvelle année expost dans l'Excel
-    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_expost, 'expost');
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnneeRempl', year_expost, 'expost', null, excelSession);
 
     // Mettre à jour l'indicateur AnRef avec la nouvelle année de référence (= year_expost) dans l'Excel
-    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_expost, 'ref');
+    if (excelFileId) await updateExcelCellByIndicatorId(excelFileId, 'AnRef', year_expost, 'ref', null, excelSession);
 
     // Relire les valeurs par défaut depuis l'Excel et appliquer les non primordiales (après écriture des années et infos config)
     if (excelFileId) {
-      await calculateWorkbook(excelFileId).catch(capture);
-      const [refDefaults, expostDefaults] = await Promise.all([
-        readExcelDefaultValues(excelFileId, 'ref').catch(() => new Map()),
-        readExcelDefaultValues(excelFileId, 'expost').catch(() => new Map()),
-      ]);
+      await calculateWorkbook(excelFileId, excelSession).catch(capture);
+      const refDefaults = await readExcelDefaultValues(excelFileId, 'ref', excelSession).catch((e) => { capture(e); return new Map(); });
+      const expostDefaults = await readExcelDefaultValues(excelFileId, 'expost', excelSession).catch((e) => { capture(e); return new Map(); });
 
       const parseDefaultValue = (rawValue, indicatorType, unit) => {
         if (rawValue === null || rawValue === undefined || rawValue === '') return null;
@@ -1488,14 +1495,15 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
       if (defaultUpdateBulkOps.length > 0) {
         await IndicatorValue.bulkWrite(defaultUpdateBulkOps);
-        const rewritePromises = [];
         for (const situation of ['ref', 'expost']) {
-          if (parcTypesNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileId, parcTypesNewValues[situation], situation).catch(capture));
-          if (nonPrimordialNewValues[situation].length > 0) rewritePromises.push(updateExcelCellsBatch(excelFileId, nonPrimordialNewValues[situation], situation).catch(capture));
+          if (parcTypesNewValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, parcTypesNewValues[situation], situation, excelSession).catch(capture);
+          if (nonPrimordialNewValues[situation].length > 0) await updateExcelCellsBatch(excelFileId, nonPrimordialNewValues[situation], situation, excelSession).catch(capture);
         }
-        await Promise.all(rewritePromises);
       }
     }
+
+    // Fermer la session workbook (les changements sont persistés au fil de l'eau, persistChanges: true)
+    await closeWorkbookSession(excelFileId, excelSession).catch(capture);
 
     // Recalculer la completion pour l'action et les actions config
     await computeActionCompletion(action._id);
