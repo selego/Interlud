@@ -55,7 +55,6 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       .sort({ [sortBy]: sortOrder })
       .skip(skip)
       .limit(limit);
-
     // Add action counts
     const collectivityIds = data.map((c) => c._id.toString());
     const actionCounts = await Action.aggregate([{ $match: { collectivity_id: { $in: collectivityIds }, type: { $ne: 'config' } } }, { $group: { _id: '$collectivity_id', count: { $sum: 1 } } }]);
