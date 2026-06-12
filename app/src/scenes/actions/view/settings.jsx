@@ -199,6 +199,7 @@ function IndicatorsTab({ action }) {
 function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
   const [newPrevYear, setNewPrevYear] = useState("");
   const [isAddingPrev, setIsAddingPrev] = useState(false);
@@ -239,7 +240,6 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   }, [isRemovingExpost]);
 
   const handleDelete = async () => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette action ? Cette opération est irréversible.")) return;
     try {
       setIsDeleting(true);
       const { ok, code } = await api.delete(`/action/${action._id}`);
@@ -684,7 +684,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             <p className="text-sm text-red-600 mt-1">Cette action est irréversible. Toutes les données de base et Parc types associées seront perdues.</p>
           </div>
           <button
-            onClick={handleDelete}
+            onClick={() => setIsDeleteModalOpen(true)}
             disabled={isDeleting}
             className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -692,6 +692,38 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
           </button>
         </div>
       </div>
+
+      <Modal isOpen={isDeleteModalOpen} onClose={() => { if (!isDeleting) setIsDeleteModalOpen(false); }} className="max-w-md">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Supprimer l'action</h2>
+          {isDeleting ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-5">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-red-500 border-t-transparent animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-800 mb-1">Suppression en cours...</p>
+                <p className="text-xs text-gray-400">Cette opération peut prendre quelques instants</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700 mb-6">
+                Êtes-vous sûr de vouloir supprimer l'action <span className="font-semibold">{action.name}</span> ? Toutes les données de base et Parc types associées seront perdues. Cette opération est irréversible.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                  Annuler
+                </button>
+                <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium">
+                  Supprimer
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
 
       <Modal isOpen={isAddPrevModalOpen} onClose={() => { if (!isAddingPrev) setIsAddPrevModalOpen(false); }} className="max-w-md">
         <div className="p-6">
