@@ -1,0 +1,26 @@
+[
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 1693,
+    "excelIndicatorId": "ELUTourneeTCCyclolog",
+    "reason": "non parsée",
+    "formula": "=IF(ISNUMBER(SEARCH('Remplissage - Sit. Expost'!$F$127,$F$2146)),1,0)"
+  },
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 1694,
+    "excelIndicatorId": "ELUTourneeDistCyclolog",
+    "reason": "non parsée",
+    "formula": "=(IF(ISNUMBER(SEARCH('Remplissage - Sit. Expost'!$F$127,$F$2146)),1,0))*(IF(ISNUMBER(SEARCH(\"La distance totale parcourue\",#REF!)),1,0))"
+  },
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 1695,
+    "excelIndicatorId": "ELUTourneeNbCyclolog",
+    "reason": "non parsée",
+    "formula": "=(IF(ISNUMBER(SEARCH('Remplissage - Sit. Expost'!$F$127,$F$2146)),1,0))*(IF(ISNUMBER(SEARCH(\"La distance moyenne d'un trajet et le nombre de trajets\",#REF!)),1,0))"
+  }
+]

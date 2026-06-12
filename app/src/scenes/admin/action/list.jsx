@@ -7,10 +7,10 @@ import Select from "@/components/Select"
 import DebounceInput from "@/components/debounceInput"
 
 const getStatusLabel = (status) => {
-  if (status === "completed") return "Terminée"
+  if (status === "completed") return "Complétée"
   if (status === "upcoming") return "À venir"
   if (status === "in_progress") return "En cours"
-  if (status === "blocked") return "Bloquée"
+  if (status === "blocked") return "À l'arrêt"
   return "Nouvelle"
 }
 

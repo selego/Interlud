@@ -6,14 +6,17 @@ export const isIndicatorValueFilled = (indicatorValue) => {
   return val !== null && val !== undefined && val !== ""
 }
 
+// Collecte récursivement tous les excel_indicator_id des feuilles (en descendant dans les groupes imbriqués).
+const collectConditionExcelIds = (node, acc) => {
+  if (!node) return acc
+  if (Array.isArray(node.conditions)) for (const c of node.conditions) collectConditionExcelIds(c, acc)
+  if (node.excel_indicator_id) acc.add(node.excel_indicator_id)
+  return acc
+}
+
 export const fetchConditionValuesMap = async (indicatorValues, action) => {
   const excelIds = new Set()
-  for (const iv of indicatorValues) {
-    if (!iv.display_condition?.conditions) continue
-    for (const cond of iv.display_condition.conditions) {
-      if (cond.excel_indicator_id) excelIds.add(cond.excel_indicator_id)
-    }
-  }
+  for (const iv of indicatorValues) collectConditionExcelIds(iv.display_condition, excelIds)
   if (excelIds.size === 0) return new Map()
   const condParams = { collectivity_id: action.collectivity_id, excel_indicator_ids: [...excelIds] }
   if (action.owner === "economic_actor") {
@@ -26,12 +29,7 @@ export const fetchConditionValuesMap = async (indicatorValues, action) => {
   for (const cv of resData) map.set(`${cv.indicator_excel_id}_${cv.situation}_${cv.year}`, cv)
 
   const transitiveIds = new Set()
-  for (const cv of resData) {
-    if (!cv.display_condition?.conditions) continue
-    for (const cond of cv.display_condition.conditions) {
-      if (cond.excel_indicator_id && !excelIds.has(cond.excel_indicator_id)) transitiveIds.add(cond.excel_indicator_id)
-    }
-  }
+  for (const cv of resData) for (const id of collectConditionExcelIds(cv.display_condition, new Set())) if (!excelIds.has(id)) transitiveIds.add(id)
   if (transitiveIds.size > 0) {
     const transParams = { collectivity_id: action.collectivity_id, excel_indicator_ids: [...transitiveIds] }
     if (action.owner === "economic_actor") {
@@ -49,7 +47,8 @@ export const shouldDisplayIndicatorFromMap = (iv, yearMappings, conditionValuesM
   const ivKey = `${iv.indicator_excel_id}_${iv.situation}_${iv.year}`
   if (visited.has(ivKey)) return false
   visited.add(ivKey)
-  const results = iv.display_condition.conditions.map((cond) => {
+  const evalLeaf = (cond) => {
+    if (cond.type === "neverVisible") return false
     const targetSituation = cond.excel_indicator_situation || iv.situation
     const possibleYears = yearMappings?.[`year_${targetSituation}`] || []
     return possibleYears.some((year) => {
@@ -76,6 +75,16 @@ export const shouldDisplayIndicatorFromMap = (iv, yearMappings, conditionValuesM
       if (cond.negate) isMatch = !isMatch
       return isMatch
     })
-  })
-  return iv.display_condition.operator === "OR" ? results.some((r) => r) : results.every((r) => r)
+  }
+
+  // Un noeud est soit un groupe (operator + sous-conditions), soit une feuille.
+  const evalNode = (node) => {
+    if (Array.isArray(node.conditions) && node.conditions.length) {
+      const results = node.conditions.map(evalNode)
+      return node.operator === "OR" ? results.some((r) => r) : results.every((r) => r)
+    }
+    return evalLeaf(node)
+  }
+
+  return evalNode(iv.display_condition)
 }

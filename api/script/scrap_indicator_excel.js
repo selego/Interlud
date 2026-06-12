@@ -10,7 +10,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADJHP7ORRNDOMREZVCQPBE4I2QZZ"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -63,6 +63,70 @@ function extractSituationFromSheetName(sheetName) {
   return null;
 }
 
+// Extrait chaque bloc IF(...) d'une formule en équilibrant les parenthèses.
+// Ex: "K1632 * IF(F1632=B1632,0,1) * IF(F1632=\"\",0,1)" → ["IF(F1632=B1632,0,1)", "IF(F1632=\"\",0,1)"]
+function extractIfFactors(content) {
+  const factors = [];
+  const re = /IF\s*\(/gi;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    let depth = 0;
+    let i = m.index;
+    for (; i < content.length; i++) {
+      if (content[i] === "(") depth++;
+      if (content[i] === ")") {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    factors.push(content.substring(m.index, i + 1));
+    re.lastIndex = i + 1;
+  }
+  return factors;
+}
+
+// Applique fn à chaque feuille d'un arbre de conditions, en préservant la structure des groupes (OR/AND imbriqués).
+// Indispensable depuis l'introduction des groupes : appliquer une transfo (situation, negate) via un .map() plat
+// la poserait sur le noeud-groupe (ignoré à l'évaluation) au lieu des feuilles.
+function mapConditionLeaves(conditions, fn) {
+  return conditions.map((cond) => {
+    if (Array.isArray(cond.conditions) && cond.conditions.length) return { ...cond, conditions: mapConditionLeaves(cond.conditions, fn) };
+    return fn(cond);
+  });
+}
+
+// Parse une formule de référence simple pour les valeurs possibles dynamiques.
+// Exemples acceptés :
+//   ='Remplissage - Sit. Init.'!$F$1593  → { excel_indicator_id, situation: 'init' }
+//   =$F$1593                              → { excel_indicator_id, situation: <currentSituation> }
+// Retourne null si la formule n'est pas une simple référence cellule.
+function parsePossibilitiesFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps) {
+  if (!formula || typeof formula !== "string") return null;
+  const f = formula.trim();
+  if (!f.startsWith("=")) return null;
+  const content = f.substring(1).trim();
+
+  const sheetRefMatch = content.match(/^['']([^'']+)['']!\$?[A-Z]+\$?(\d+)$/i);
+  if (sheetRefMatch) {
+    const sourceSituation = extractSituationFromSheetName(sheetRefMatch[1]);
+    if (!sourceSituation) return null;
+    const targetMap = allRowToIndicatorMaps?.get(sourceSituation);
+    if (!targetMap) return null;
+    const excelIndicatorId = targetMap.get(parseInt(sheetRefMatch[2], 10));
+    if (!excelIndicatorId) return null;
+    return { excel_indicator_id: excelIndicatorId, situation: sourceSituation };
+  }
+
+  const sameSheetMatch = content.match(/^\$?[A-Z]+\$?(\d+)$/i);
+  if (sameSheetMatch) {
+    const excelIndicatorId = rowToIndicatorMap.get(parseInt(sameSheetMatch[1], 10));
+    if (!excelIndicatorId) return null;
+    return { excel_indicator_id: excelIndicatorId, situation: currentSituation };
+  }
+
+  return null;
+}
+
 function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allRowToIndicatorMaps = null) {
   if (!formula || typeof formula !== "string") return null;
 
@@ -71,12 +135,79 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
 
   const formulaContent = f.substring(1).trim();
 
+  // CAS 0: Constante numérique. =1 (ou tout non-zéro) → toujours affiché. =0 → jamais affiché.
+  if (/^-?\d+(?:\.\d+)?$/.test(formulaContent)) {
+    if (parseFloat(formulaContent) === 0) return { _neverVisible: true };
+    return { _alwaysVisible: true };
+  }
+
   // Helper pour récupérer le bon rowToIndicatorMap selon la situation
   const getRowToIndicatorMapForSituation = (sheetName) => {
     if (!sheetName || !allRowToIndicatorMaps) return rowToIndicatorMap;
     const situation = extractSituationFromSheetName(sheetName);
     if (situation && allRowToIndicatorMaps.has(situation)) return allRowToIndicatorMaps.get(situation);
     return rowToIndicatorMap;
+  };
+
+  // Parse un facteur IF(...) unique en une condition. Renvoie null si non reconnu.
+  // negate = true si la branche "vrai" vaut 0 (ex: IF(cond,0,1) → afficher quand cond est FAUX).
+  const parseIfFactor = (ifText) => {
+    const branchMatch = ifText.match(/,\s*([01])\s*,\s*[01]\s*\)\s*$/);
+    const negate = branchMatch ? branchMatch[1] === "0" : false;
+
+    // contains: ISNUMBER(SEARCH("lit", 'Feuille'!$F$xxx)) (préfixe feuille optionnel)
+    const containsLit = ifText.match(/SEARCH\s*\(\s*"([^"]+)"\s*,\s*(?:['']([^'']+)['']!)?\$?([A-Z]+)\$?(\d+)/i);
+    if (containsLit) {
+      const id = getRowToIndicatorMapForSituation(containsLit[2]).get(parseInt(containsLit[4], 10));
+      if (!id) return null;
+      const c = { type: "contains", excel_indicator_id: id, value: containsLit[1] };
+      const sit = extractSituationFromSheetName(containsLit[2]);
+      if (sit) c.excel_indicator_situation = sit;
+      if (negate) c.negate = true;
+      return c;
+    }
+
+    // vide: $F$xxx = "" → notEmpty (branche vrai=0) ou isEmpty (branche vrai=1)
+    const emptyMatch = ifText.match(/\$?([A-Z]+)\$?(\d+)\s*=\s*""/);
+    if (emptyMatch) {
+      const id = rowToIndicatorMap.get(parseInt(emptyMatch[2], 10));
+      if (!id) return null;
+      return { type: negate ? "notEmpty" : "isEmpty", excel_indicator_id: id, value: null };
+    }
+
+    // égalité littérale: $F$xxx = "literal"
+    const eqLit = ifText.match(/\$?([A-Z]+)\$?(\d+)\s*=\s*"([^"]+)"/);
+    if (eqLit) {
+      const id = rowToIndicatorMap.get(parseInt(eqLit[2], 10));
+      if (!id) return null;
+      const c = { type: "equals", excel_indicator_id: id, value: eqLit[3] };
+      if (negate) c.negate = true;
+      return c;
+    }
+
+    // égalité entre deux cellules: $F$xxx = $B$yyy → on lit la valeur littérale de la 2e cellule
+    const eqCell = ifText.match(/\$?([A-Z]+)\$?(\d+)\s*=\s*\$?([A-Z]+)\$?(\d+)/);
+    if (eqCell && getCellValue) {
+      const id = rowToIndicatorMap.get(parseInt(eqCell[2], 10));
+      const cmpValue = getCellValue(parseInt(eqCell[4], 10), eqCell[3]);
+      if (!id || cmpValue === null || cmpValue === undefined || cmpValue === "") return null;
+      const c = { type: "equals", excel_indicator_id: id, value: String(cmpValue).trim() };
+      if (negate) c.negate = true;
+      return c;
+    }
+
+    // comparaison numérique: $F$xxx >/>=/</<= n
+    const numMatch = ifText.match(/\$?([A-Z]+)\$?(\d+)\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)/);
+    if (numMatch) {
+      const id = rowToIndicatorMap.get(parseInt(numMatch[2], 10));
+      if (!id) return null;
+      const typeMap = { ">": "greaterThan", "<": "lessThan", ">=": "greaterOrEqual", "<=": "lessOrEqual" };
+      const c = { type: typeMap[numMatch[3]], excel_indicator_id: id, value: parseFloat(numMatch[4]) };
+      if (negate) c.negate = true;
+      return c;
+    }
+
+    return null;
   };
 
   // CAS 1: Référence simple (=K478)
@@ -120,41 +251,15 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
     return null;
   }
 
-  // CAS 3: K477 * IF(...) - AND avec référence cellule (SEARCH ou égalité)
+  // CAS 3: référence de tête * un ou plusieurs IF(...) - AND
+  // Ex: =K477 * IF(ISNUMBER(SEARCH("Diesel",$F$1089)),1,0)
+  // Ex: =K1632 * IF(F1632=B1632,0,1) * IF(F1632="",0,1)  → miroir de K1632 ET valeur ≠ B1632 ET valeur non vide
   if (/^\$?[A-Z]+\$?\d+\s*\*\s*IF\s*\(/i.test(formulaContent)) {
     const refMatch = formulaContent.match(/^(\$?[A-Z]+\$?\d+)\s*\*/i);
-
-    // Essayer d'abord avec SEARCH (contains)
-    const searchMatch = formulaContent.match(/SEARCH\s*\(\s*"([^"]+)"\s*,\s*\$?([A-Z]+)\$?(\d+)/i);
-    if (searchMatch) {
-      const sourceIndicatorId = rowToIndicatorMap.get(parseInt(searchMatch[3], 10));
-      if (sourceIndicatorId) {
-        if (refMatch) {
-          return {
-            _referenceToMerge: refMatch[1],
-            conditions: [{ type: "contains", excel_indicator_id: sourceIndicatorId, value: searchMatch[1] }],
-          };
-        }
-        return { conditions: [{ type: "contains", excel_indicator_id: sourceIndicatorId, value: searchMatch[1] }] };
-      }
-    }
-
-    // Sinon essayer avec égalité de chaîne (equals)
-    const equalsMatch = formulaContent.match(/IF\s*\(\s*\$?([A-Z]+)\$?(\d+)\s*=\s*"([^"]+)"/i);
-    if (equalsMatch) {
-      const sourceIndicatorId = rowToIndicatorMap.get(parseInt(equalsMatch[2], 10));
-      if (sourceIndicatorId) {
-        if (refMatch) {
-          return {
-            _referenceToMerge: refMatch[1],
-            conditions: [{ type: "equals", excel_indicator_id: sourceIndicatorId, value: equalsMatch[3] }],
-          };
-        }
-        return { conditions: [{ type: "equals", excel_indicator_id: sourceIndicatorId, value: equalsMatch[3] }] };
-      }
-    }
-
-    return null;
+    const conditions = extractIfFactors(formulaContent).map(parseIfFactor).filter(Boolean);
+    if (conditions.length === 0) return null;
+    if (refMatch) return { _referenceToMerge: refMatch[1], conditions };
+    return { conditions };
   }
 
   // CAS 4: IF(...) * IF(...) ou (IF(...))*(IF(...)) - AND entre plusieurs conditions
@@ -434,6 +539,19 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
     }
   }
 
+  // CAS 13: =VLOOKUP("Prefix" & P1124+1, 'Sit. Init.'!$E$1594:$K$1728, 7, FALSE)
+  // Référence dynamique vers la condition d'affichage (colonne K) d'un autre indicateur,
+  // dont l'excel_indicator_id = "Prefix" + (valeur de la cellule + 1). On recopiera sa condition (miroir).
+  const vlookupRefMatch = formulaContent.match(/^VLOOKUP\s*\(\s*"([^"]+)"\s*&\s*\$?([A-Z]+)\$?(\d+)\s*\+\s*1\s*[,;]\s*(?:['']([^'']+)['']!)?\$?[A-Z]+\$?\d+\s*:\s*\$?[A-Z]+\$?\d+\s*[,;]\s*\d+\s*[,;]\s*FALSE\s*\)$/i);
+  if (vlookupRefMatch && getCellValue) {
+    const prefix = vlookupRefMatch[1];
+    const index = Number(getCellValue(parseInt(vlookupRefMatch[3], 10), vlookupRefMatch[2]));
+    if (!isNaN(index)) {
+      const sourceSituation = extractSituationFromSheetName(vlookupRefMatch[4]);
+      return { _indicatorRefByName: { excel_indicator_id: `${prefix}${index + 1}`, situation: sourceSituation } };
+    }
+  }
+
   return null;
 }
 
@@ -443,6 +561,18 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
 
   // Cache des conditions résolues par situation (pour les références inter-feuilles)
   const resolvedBySituation = new Map();
+
+  // Cache des maps inverses excel_indicator_id → ligne, par situation (pour les VLOOKUP par nom)
+  const inverseIndicatorMaps = new Map();
+  const getRowForIndicatorId = (indicatorId, situation) => {
+    if (!inverseIndicatorMaps.has(situation)) {
+      const inverse = new Map();
+      const map = allRowToIndicatorMaps?.get(situation);
+      if (map) for (const [r, id] of map) inverse.set(id, r);
+      inverseIndicatorMaps.set(situation, inverse);
+    }
+    return inverseIndicatorMaps.get(situation).get(indicatorId) || null;
+  };
 
   for (const [rowNum, formula] of formulasMap) {
     parseCache.set(rowNum, parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps));
@@ -510,8 +640,14 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       const refRowNum = extractRowNumber(parsed._referenceToMerge);
       if (refRowNum) {
         const parentCondition = resolveConditionInSheet(refRowNum, targetSituation, new Set(visited));
+        // Parent jamais affiché → AND avec faux → jamais affiché
+        if (parentCondition?._neverVisible) {
+          situationCache.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
         if (parentCondition?.conditions && parsed.conditions) {
-          const result = { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
+          // Si le parent est un OR, on l'imbrique pour préserver (A OR B) AND C au lieu de l'aplatir.
+          const result = parentCondition.operator === "OR" ? { operator: "AND", conditions: [{ operator: "OR", conditions: parentCondition.conditions }, ...parsed.conditions] } : { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
           situationCache.set(rowNum, result);
           return result;
         }
@@ -554,12 +690,13 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       if (refRowNum && sourceSituation && allSheetsData) {
         // Résoudre la condition dans la feuille source
         const refCondition = resolveConditionInSheet(refRowNum, sourceSituation, new Set());
+        if (refCondition?._neverVisible) {
+          resolvedConditions.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
         if (refCondition?.conditions) {
-          // Ajouter sourceSituation à chaque condition
-          const conditionsWithSource = refCondition.conditions.map((cond) => ({
-            ...cond,
-            excel_indicator_situation: sourceSituation,
-          }));
+          // Ajouter sourceSituation à chaque feuille (en descendant dans les groupes imbriqués)
+          const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: sourceSituation }));
           const result = { ...refCondition, conditions: conditionsWithSource };
           resolvedConditions.set(rowNum, result);
           return result;
@@ -570,12 +707,42 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       return { _ignored: true };
     }
 
+    // Référence dynamique vers un autre indicateur par excel_indicator_id (VLOOKUP) - miroir de sa condition
+    if (parsed._indicatorRefByName) {
+      const { excel_indicator_id: targetId, situation: refSituation } = parsed._indicatorRefByName;
+      const targetRow = getRowForIndicatorId(targetId, refSituation);
+      if (!targetRow) {
+        resolvedConditions.set(rowNum, { _ignored: true });
+        return { _ignored: true };
+      }
+      const refCondition = resolveConditionInSheet(targetRow, refSituation, new Set());
+      if (refCondition?._neverVisible) {
+        resolvedConditions.set(rowNum, { _neverVisible: true });
+        return { _neverVisible: true };
+      }
+      if (refCondition?.conditions?.length > 0) {
+        const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: cond.excel_indicator_situation || refSituation }));
+        const result = { ...refCondition, conditions: conditionsWithSource };
+        resolvedConditions.set(rowNum, result);
+        return result;
+      }
+      // La cible n'a aucune condition → elle est toujours visible → ce miroir l'est aussi
+      resolvedConditions.set(rowNum, { _alwaysVisible: true });
+      return { _alwaysVisible: true };
+    }
+
     if (parsed._referenceToMerge) {
       const refRowNum = extractRowNumber(parsed._referenceToMerge);
       if (refRowNum) {
         const parentCondition = resolveCondition(refRowNum, new Set(visited));
+        // Parent jamais affiché → AND avec faux → jamais affiché
+        if (parentCondition?._neverVisible) {
+          resolvedConditions.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
         if (parentCondition?.conditions && parsed.conditions) {
-          const result = { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
+          // Si le parent est un OR, on l'imbrique pour préserver (A OR B) AND C au lieu de l'aplatir.
+          const result = parentCondition.operator === "OR" ? { operator: "AND", conditions: [{ operator: "OR", conditions: parentCondition.conditions }, ...parsed.conditions] } : { operator: "AND", conditions: [...parentCondition.conditions, ...parsed.conditions] };
           resolvedConditions.set(rowNum, result);
           return result;
         }
@@ -591,10 +758,8 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       for (const { rowNum: refRowNum, negate } of parsed._andNotReferences) {
         const refCondition = resolveCondition(refRowNum, new Set(visited));
         if (refCondition?.conditions) {
-          // Ajouter les conditions avec le flag negate si nécessaire
-          for (const cond of refCondition.conditions) {
-            allConditions.push({ ...cond, negate: negate ? !cond.negate : cond.negate });
-          }
+          // Appliquer le flag negate à chaque feuille (en descendant dans les groupes imbriqués)
+          allConditions.push(...mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, negate: negate ? !cond.negate : cond.negate })));
         }
       }
       if (allConditions.length > 0) {
@@ -671,6 +836,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       for (let i = 0; i < formulaRows.length; i++) {
         const formula = formulaRows[i][10];
         if (formula && String(formula).startsWith("=")) formulasMap.set(startRow + 1 + i, String(formula));
+        // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" pour le parseur
+        if (String(formula).trim() === "0") formulasMap.set(startRow + 1 + i, "=0");
       }
       console.log(`📋 ${formulasMap.size} formules d'affichage trouvées`);
     }
@@ -707,6 +874,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           for (let i = 0; i < sheetData.formulaRows.length; i++) {
             const formula = sheetData.formulaRows[i][10];
             if (formula && String(formula).startsWith("=")) sitFormulasMap.set(sheetData.startRow + 1 + i, String(formula));
+            // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" pour le parseur
+            if (String(formula).trim() === "0") sitFormulasMap.set(sheetData.startRow + 1 + i, "=0");
           }
         }
         allFormulasMapsBySituation.set(sit, sitFormulasMap);
@@ -774,9 +943,16 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       // Vérifier si l'indicateur existe déjà (depuis le cache)
       const existingIndicator = indicatorsMap.get(row[4]);
 
+      // Détecter une formule de référence dans la cellule "valeurs possibles" (colonne G, index 6)
+      // Si présente, on stocke la référence vers l'indicateur source pour résolution dynamique au fetch
+      const possibilitiesFormula = formulaRows?.[i]?.[6];
+      const possibilitiesSourceForSituation = parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps);
+
       // Récupérer la condition d'affichage résolue pour cette situation
       const rawCondition = resolvedConditions.get(excelRowNumber) || null;
       let display_condition_for_situation = null;
+      // 0 en colonne K → jamais affiché : condition spéciale toujours fausse
+      if (rawCondition?._neverVisible) display_condition_for_situation = { conditions: [{ type: "neverVisible" }] };
       if (rawCondition && rawCondition.conditions?.length > 0) {
         display_condition_for_situation = { conditions: rawCondition.conditions };
         if (rawCondition.operator === "OR" || (rawCondition.conditions.length > 1 && rawCondition.operator)) {
@@ -852,6 +1028,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const updatedDisplayCondition = { ...existingIndicator.display_condition };
           if (situation && display_condition_for_situation) updatedDisplayCondition[situation] = display_condition_for_situation;
 
+          const updatedPossibilitiesSource = { ...(existingIndicator.value_possibilities_source || {}) };
+          if (situation) updatedPossibilitiesSource[situation] = possibilitiesSourceForSituation || undefined;
+
           const newData = {
             indicator_category_id: category?._id,
             indicator_category_name: category?.name,
@@ -860,8 +1039,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             name: row[2] || undefined,
             description: row[3] || undefined,
             is_primordial: row[14] === true || row[14] === "VRAI",
-            value_possibilities:
-              row[6] !== undefined && row[6] !== ""
+            value_possibilities: possibilitiesSourceForSituation
+              ? []
+              : row[6] !== undefined && row[6] !== ""
                 ? String(row[6])
                     .split(",")
                     .map((v) => v.trim())
@@ -875,6 +1055,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             presence_in_excel: updatedPresenceInExcel,
             excel_line_number: updatedExcelLineNumber,
             display_condition: updatedDisplayCondition,
+            value_possibilities_source: updatedPossibilitiesSource,
           };
 
           const fieldsToLog = [
@@ -947,6 +1128,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               indicator_description: newData.description,
               indicator_type: newData.value_type,
               indicator_value_possibilities: newData.value_possibilities || [],
+              indicator_value_possibilities_source: possibilitiesSourceForSituation || null,
               indicator_category_id: newData.indicator_category_id?.toString(),
               indicator_category_name: newData.indicator_category_name,
               indicator_sub_category_id: newData.indicator_sub_category_id?.toString(),
@@ -963,6 +1145,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const valueDefault = situation && valueDefaultForSituation ? { [situation]: valueDefaultForSituation } : undefined;
           const displayCondition = situation && display_condition_for_situation ? { [situation]: display_condition_for_situation } : undefined;
           const excelLineNumber = situation ? { [situation]: excelRowNumber } : undefined;
+          const possibilitiesSource = situation && possibilitiesSourceForSituation ? { [situation]: possibilitiesSourceForSituation } : undefined;
 
           const indicatorData = {
             indicator_category_id: category?._id,
@@ -973,8 +1156,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             description: row[3] || undefined,
             is_primordial: row[14] === true || row[14] === "VRAI",
             excel_indicator_id: row[4] || undefined,
-            value_possibilities:
-              row[6] !== undefined && row[6] !== ""
+            value_possibilities: possibilitiesSourceForSituation
+              ? []
+              : row[6] !== undefined && row[6] !== ""
                 ? String(row[6])
                     .split(",")
                     .map((v) => v.trim())
@@ -988,6 +1172,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             presence_in_excel: situation ? { [situation]: true } : undefined,
             excel_line_number: excelLineNumber,
             display_condition: displayCondition,
+            value_possibilities_source: possibilitiesSource,
           };
 
           indicators.push(indicatorData);
@@ -1366,7 +1551,8 @@ async function generateExcelForAllCollectivities() {
         try {
           // Dupliquer le master pour remplacer l'Excel
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
-          const fileName = `${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
+          const ownerPrefix = action.owner === "economic_actor" && action.economic_actor_name ? `${action.economic_actor_name}_` : "";
+          const fileName = `${ownerPrefix}${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           // Sync les valeurs (prev file contient init + ref + prev)
@@ -1395,7 +1581,8 @@ async function generateExcelForAllCollectivities() {
 
         try {
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
-          const fileName = `${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
+          const ownerPrefix = action.owner === "economic_actor" && action.economic_actor_name ? `${action.economic_actor_name}_` : "";
+          const fileName = `${ownerPrefix}${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           const situationYears = [
@@ -1575,8 +1762,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
@@ -1586,4 +1773,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities };
+module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities };

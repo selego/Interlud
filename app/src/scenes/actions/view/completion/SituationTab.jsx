@@ -73,6 +73,7 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
     >
       <div className="flex items-center gap-2 mb-4">
         <h3 className="font-medium text-gray-900">{indicatorValue.indicator_name}</h3>
+        {indicatorValue.indicator_description && <Tooltip content={indicatorValue.indicator_description} />}
         {indicatorValue.is_primordial && (
           <Tooltip content="Indicateur primordial : il a un fort impact sur le calcul des gains, à renseigner manuellement en priorité.">
             <FiStar className="w-3.5 h-3.5 fill-amber-400 stroke-amber-500 cursor-help" />

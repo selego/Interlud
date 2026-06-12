@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
-import toast from "react-hot-toast"
 import useStore from "@/services/store"
-import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock } from "react-icons/fi"
+import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2 } from "react-icons/fi"
 import Loader from "@/components/loader"
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
@@ -358,6 +357,24 @@ function EmissionCard({ item }) {
   )
 }
 
+function GraphsInDevelopment({ action }) {
+  const navigate = useNavigate()
+  return (
+    <div className="card-shadow p-12 flex flex-col items-center text-center">
+      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
+        <FiBarChart2 size={20} className="text-gray-400" />
+      </div>
+      <h3 className="text-base font-semibold text-[#123314] mb-1">Graphiques en cours de développement</h3>
+      <p className="text-xs text-font-secondary mb-6 leading-relaxed max-w-sm">
+        Les graphiques de cette action ne sont pas encore disponibles. En attendant, vous pouvez consulter les informations à remplir.
+      </p>
+      <button onClick={() => navigate(`/actions/${action._id}/completion`)} className="button-primary flex items-center gap-2">
+        Voir les informations à remplir <FiArrowRight size={13} />
+      </button>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 // ── Onboarding ────────────────────────────────────────────────────────────────
@@ -552,6 +569,7 @@ export default function Dashboard({ action }) {
 
   const [processedData, setProcessedData] = useState({ score: 0, indicators: {}, emissions: { indicators: {} } })
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [tab, setTab] = useState("situations")
   const [activePill, setActivePill] = useState("GES")
   const [yearFrom, setYearFrom] = useState(action.date_start ? new Date(action.date_start).getFullYear() : null)
@@ -568,11 +586,11 @@ export default function Dashboard({ action }) {
     if (!action.completion_init && !action.completion_ref && !action.completion_prev && !action.completion_expost) return
     try {
       setLoading(true)
-      const { ok, data, code } = await api.post("/excel/action_aggregation", {
+      const { ok, data } = await api.post("/excel/action_aggregation", {
         collectivity,
         action
       })
-      if (!ok) return toast.error(code || "Erreur de chargement")
+      if (!ok) return setLoadError(true)
       setProcessedData(data)
 
       const allYrs = [...new Set(Object.values(data.gains || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
@@ -582,7 +600,7 @@ export default function Dashboard({ action }) {
       const availK = Object.keys(data.gains || {}).filter((k) => data.gains[k]?.yearlyData?.length > 0)
       if (availK.length && !availK.includes(activePill)) setActivePill(availK[0])
     } catch (e) {
-      toast.error(e.code || "Erreur de chargement")
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -807,10 +825,12 @@ export default function Dashboard({ action }) {
         </div>
       </header>
 
-      {isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
+      {loadError && <GraphsInDevelopment action={action} />}
+
+      {!loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
 
       {/* ── SECTION 01 — VUE GLOBALE ─────────────────────────────────────── */}
-      {!isEmpty && (
+      {!loadError && !isEmpty && (
         <>
           <section>
             {/* Filter bar */}

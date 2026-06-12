@@ -204,8 +204,8 @@ export default function View() {
                     { value: "no_status", label: "Pas de statut" },
                     { value: "upcoming", label: "À venir" },
                     { value: "in_progress", label: "En cours" },
-                    { value: "blocked", label: "Bloqué" },
-                    { value: "completed", label: "Terminé" }
+                    { value: "blocked", label: "À l'arrêt" },
+                    { value: "completed", label: "Complété" }
                   ]}
                 />
               </div>

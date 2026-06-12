@@ -1,5 +1,13 @@
 const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
 
+// Collecte récursivement tous les excel_indicator_id des feuilles (en descendant dans les groupes imbriqués).
+const collectConditionExcelIds = (node, acc) => {
+  if (!node) return acc;
+  if (Array.isArray(node.conditions)) for (const c of node.conditions) collectConditionExcelIds(c, acc);
+  if (node.excel_indicator_id) acc.add(node.excel_indicator_id);
+  return acc;
+};
+
 const buildYearMappings = (regularActions) => {
   const mappings = {};
   const ensure = (k) => {
@@ -49,7 +57,8 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
   const ivKey = `${iv.indicator_excel_id}_${iv.situation}_${iv.year}`;
   if (visited.has(ivKey)) return false;
   visited.add(ivKey);
-  const results = iv.display_condition.conditions.map((cond) => {
+  const evalLeaf = (cond) => {
+    if (cond.type === 'neverVisible') return false;
     const targetSituation = cond.excel_indicator_situation || iv.situation;
     const possibleYears = yearMappings?.[`year_${targetSituation}`] || [];
     return possibleYears.some((year) => {
@@ -75,8 +84,61 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
       if (cond.negate) isMatch = !isMatch;
       return isMatch;
     });
-  });
-  return iv.display_condition.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+  };
+
+  // Un noeud est soit un groupe (operator + sous-conditions), soit une feuille.
+  const evalNode = (node) => {
+    if (Array.isArray(node.conditions) && node.conditions.length) {
+      const results = node.conditions.map(evalNode);
+      return node.operator === 'OR' ? results.some((r) => r) : results.every((r) => r);
+    }
+    return evalLeaf(node);
+  };
+
+  return evalNode(iv.display_condition);
 };
 
-module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator };
+// Résout dynamiquement indicator_value_possibilities pour les IVs qui pointent vers un autre indicateur.
+// Mute les IVs en place : remplace indicator_value_possibilities par la valeur courante de l'IV source.
+// Une IV source = même collectivity_id + même owner (+ economic_actor_id si applicable) + excel_indicator_id + situation.
+const resolveDynamicPossibilities = async (ivs) => {
+  const IndicatorValue = require('../models/indicator_value');
+  const refs = ivs.filter((iv) => iv.indicator_value_possibilities_source?.excel_indicator_id && iv.indicator_value_possibilities_source?.situation);
+  if (refs.length === 0) return;
+
+  const lookupGroups = new Map();
+  for (const iv of refs) {
+    const key = `${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}`;
+    if (!lookupGroups.has(key)) lookupGroups.set(key, { collectivity_id: iv.collectivity_id, owner: iv.owner, economic_actor_id: iv.economic_actor_id, excel_ids: new Set(), situations: new Set() });
+    lookupGroups.get(key).excel_ids.add(iv.indicator_value_possibilities_source.excel_indicator_id);
+    lookupGroups.get(key).situations.add(iv.indicator_value_possibilities_source.situation);
+  }
+
+  const sourceMap = new Map();
+  for (const group of lookupGroups.values()) {
+    const query = {
+      collectivity_id: group.collectivity_id,
+      owner: group.owner,
+      indicator_excel_id: { $in: [...group.excel_ids] },
+      situation: { $in: [...group.situations] },
+    };
+    if (group.economic_actor_id) query.economic_actor_id = group.economic_actor_id;
+    const sourceIVs = await IndicatorValue.find(query);
+    for (const src of sourceIVs) {
+      const mapKey = `${group.collectivity_id}|${group.owner}|${group.economic_actor_id || ''}|${src.indicator_excel_id}|${src.situation}`;
+      if (!sourceMap.has(mapKey)) sourceMap.set(mapKey, src);
+    }
+  }
+
+  for (const iv of refs) {
+    const src = iv.indicator_value_possibilities_source;
+    const mapKey = `${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}|${src.excel_indicator_id}|${src.situation}`;
+    const sourceIV = sourceMap.get(mapKey);
+    if (!sourceIV) continue;
+    const val = sourceIV.value?.[sourceIV.indicator_type];
+    if (Array.isArray(val)) iv.indicator_value_possibilities = val;
+    if (typeof val === 'string' && val !== '') iv.indicator_value_possibilities = [val];
+  }
+};
+
+module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds };

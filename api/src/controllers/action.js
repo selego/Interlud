@@ -9,7 +9,7 @@ const Log = require('../models/log');
 const Indicator = require('../models/indicator');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, readExcelDefaultValues, createFolder } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -84,6 +84,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     let query = { owner: 'collectivity', type: { $ne: 'config' } };
 
     if (req.body.collectivity_id) query.collectivity_id = req.body.collectivity_id;
+    if (req.body.collectivity_ids) query.collectivity_id = { $in: req.body.collectivity_ids };
     if (req.body.action_parent_id) query.action_parent_id = req.body.action_parent_id;
     if (req.body.status) query.status = req.body.status;
     if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
@@ -270,12 +271,14 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
             ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id, economic_actor_name: req.body.economic_actor_name } : {}),
             indicator_id: indicator._id,
             indicator_name: indicator.name,
+            indicator_description: indicator.description,
             indicator_type: indicator.value_type,
             situation,
             year,
             indicator_value_unit: indicator.value_unit,
             value_default: { [indicator.value_type]: defaultValue },
             indicator_value_possibilities: indicator.value_possibilities || [],
+            indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
             indicator_category_id: indicator.indicator_category_id,
             indicator_category_name: indicator.indicator_category_name,
             indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -358,6 +361,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           ...(isEconomicActor ? { economic_actor_id: req.body.economic_actor_id, economic_actor_name: req.body.economic_actor_name } : {}),
           indicator_id: indicator._id,
           indicator_name: indicator.name,
+          indicator_description: indicator.description,
           indicator_type: indicator.value_type,
           situation,
           year,
@@ -365,6 +369,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -502,6 +507,9 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       if (excelWrites.length > 0) await Promise.all(excelWrites);
     }
 
+    // Forcer le recalcul des formules avant de relire les défauts (sinon les défauts dépendant de AnRef peuvent être lus avant recalcul)
+    await Promise.all([calculateWorkbook(excelFileIdPrev).catch(capture), hasExpost ? calculateWorkbook(excelFileIdExpost).catch(capture) : null]);
+
     // Relire les valeurs par défaut depuis l'Excel (recalculées après écriture des années et infos collectivité)
     const [prevInitDefaults, prevRefDefaults, prevPrevDefaults, expostRefDefaults, expostExpostDefaults] = await Promise.all([
       readExcelDefaultValues(excelFileIdPrev, 'init').catch(() => new Map()),
@@ -519,12 +527,14 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       return new Map();
     };
 
-    const parseDefaultValue = (rawValue, indicatorType) => {
+    const parseDefaultValue = (rawValue, indicatorType, unit) => {
       if (rawValue === null || rawValue === undefined || rawValue === '') return null;
       if (typeof rawValue === 'string' && rawValue.startsWith('#')) return null;
       if (indicatorType === 'number') {
         const p = parseFloat(rawValue);
-        return !isNaN(p) ? p : null;
+        if (isNaN(p)) return null;
+        // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
+        return unit === '%' ? p * 100 : p;
       }
       if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
       if (indicatorType === 'checkbox')
@@ -536,7 +546,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     };
 
     // Récupérer tous les IVs des actions créées pour mettre à jour leurs valeurs par défaut
-    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionBasicDataObj._id.toString(), configActionParcTypesObj._id.toString()];
+    // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypesObj._id.toString()];
     const allIVsForDefaultUpdate = await IndicatorValue.find({
       action_id: { $in: allActionIdsForDefaultUpdate },
       indicator_excel_id: { $exists: true, $ne: null },
@@ -558,7 +569,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       const defaultsMap = getDefaultsForSituation(iv.situation, iv.year);
       if (!defaultsMap || !defaultsMap.has(iv.indicator_excel_id)) continue;
 
-      const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type);
+      const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type, iv.indicator_value_unit);
       const currentDefault = iv.value_default?.[iv.indicator_type] ?? null;
       if (JSON.stringify(newDefault) === JSON.stringify(currentDefault)) continue;
 
@@ -659,7 +670,7 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
       const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
       for (const fileId of allExcelFileIds) {
         try {
-          await graphFetch(`/sites/${siteId}/drive/items/${fileId}`, { method: 'DELETE' });
+          await graphFetch(`/sites/${siteId}/drive/items/${fileId}`, { method: 'DELETE', headers: { Prefer: 'bypass-shared-lock' } });
         } catch (e) {
           console.error(`Failed to delete Excel file ${fileId}:`, e.message);
         }
@@ -859,12 +870,14 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
               owner: action.owner,
               indicator_id: indicator._id,
               indicator_name: indicator.name,
+              indicator_description: indicator.description,
               indicator_type: indicator.value_type,
               situation,
               year: year_prev,
               indicator_value_unit: indicator.value_unit,
               value_default: { [indicator.value_type]: defaultValue },
               indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
               indicator_category_id: indicator.indicator_category_id,
               indicator_category_name: indicator.indicator_category_name,
               indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -952,6 +965,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           owner: action.owner,
           indicator_id: indicator._id,
           indicator_name: indicator.name,
+          indicator_description: indicator.description,
           indicator_type: indicator.value_type,
           situation,
           year: year_prev,
@@ -959,6 +973,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -1019,17 +1034,20 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     // Relire les valeurs par défaut depuis l'Excel et appliquer les non primordiales (après écriture des années et infos config)
     if (excelFileId) {
+      await calculateWorkbook(excelFileId).catch(capture);
       const [refDefaults, prevDefaults] = await Promise.all([
         readExcelDefaultValues(excelFileId, 'ref').catch(() => new Map()),
         readExcelDefaultValues(excelFileId, 'prev').catch(() => new Map()),
       ]);
 
-      const parseDefaultValue = (rawValue, indicatorType) => {
+      const parseDefaultValue = (rawValue, indicatorType, unit) => {
         if (rawValue === null || rawValue === undefined || rawValue === '') return null;
         if (typeof rawValue === 'string' && rawValue.startsWith('#')) return null;
         if (indicatorType === 'number') {
           const p = parseFloat(rawValue);
-          return !isNaN(p) ? p : null;
+          if (isNaN(p)) return null;
+          // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
+          return unit === '%' ? p * 100 : p;
         }
         if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
         if (indicatorType === 'checkbox')
@@ -1040,7 +1058,8 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
         return null;
       };
 
-      const actionIdsForDefaultUpdate = [action._id.toString(), configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
+      // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+      const actionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
       const allIVsForDefaultUpdate = await IndicatorValue.find({
         action_id: { $in: actionIdsForDefaultUpdate },
         indicator_excel_id: { $exists: true, $ne: null },
@@ -1056,7 +1075,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
         const defaultsMap = iv.situation === 'ref' ? refDefaults : prevDefaults;
         if (!defaultsMap || !defaultsMap.has(iv.indicator_excel_id)) continue;
 
-        const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type);
+        const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type, iv.indicator_value_unit);
         const currentDefault = iv.value_default?.[iv.indicator_type] ?? null;
         if (JSON.stringify(newDefault) === JSON.stringify(currentDefault)) continue;
 
@@ -1214,12 +1233,14 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
               owner: action.owner,
               indicator_id: indicator._id,
               indicator_name: indicator.name,
+              indicator_description: indicator.description,
               indicator_type: indicator.value_type,
               situation,
               year: year_expost,
               indicator_value_unit: indicator.value_unit,
               value_default: { [indicator.value_type]: defaultValue },
               indicator_value_possibilities: indicator.value_possibilities || [],
+              indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
               indicator_category_id: indicator.indicator_category_id,
               indicator_category_name: indicator.indicator_category_name,
               indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -1332,6 +1353,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           owner: action.owner,
           indicator_id: indicator._id,
           indicator_name: indicator.name,
+          indicator_description: indicator.description,
           indicator_type: indicator.value_type,
           situation,
           year: year_expost,
@@ -1339,6 +1361,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           indicator_value_unit: indicator.value_unit,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -1399,17 +1422,20 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
     // Relire les valeurs par défaut depuis l'Excel et appliquer les non primordiales (après écriture des années et infos config)
     if (excelFileId) {
+      await calculateWorkbook(excelFileId).catch(capture);
       const [refDefaults, expostDefaults] = await Promise.all([
         readExcelDefaultValues(excelFileId, 'ref').catch(() => new Map()),
         readExcelDefaultValues(excelFileId, 'expost').catch(() => new Map()),
       ]);
 
-      const parseDefaultValue = (rawValue, indicatorType) => {
+      const parseDefaultValue = (rawValue, indicatorType, unit) => {
         if (rawValue === null || rawValue === undefined || rawValue === '') return null;
         if (typeof rawValue === 'string' && rawValue.startsWith('#')) return null;
         if (indicatorType === 'number') {
           const p = parseFloat(rawValue);
-          return !isNaN(p) ? p : null;
+          if (isNaN(p)) return null;
+          // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
+          return unit === '%' ? p * 100 : p;
         }
         if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
         if (indicatorType === 'checkbox')
@@ -1420,7 +1446,8 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
         return null;
       };
 
-      const actionIdsForDefaultUpdate = [action._id.toString(), configActionBasicData?._id?.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
+      // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+      const actionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypes?._id?.toString()].filter(Boolean);
       const allIVsForDefaultUpdate = await IndicatorValue.find({
         action_id: { $in: actionIdsForDefaultUpdate },
         indicator_excel_id: { $exists: true, $ne: null },
@@ -1436,7 +1463,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
         const defaultsMap = iv.situation === 'ref' ? refDefaults : expostDefaults;
         if (!defaultsMap || !defaultsMap.has(iv.indicator_excel_id)) continue;
 
-        const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type);
+        const newDefault = parseDefaultValue(defaultsMap.get(iv.indicator_excel_id), iv.indicator_type, iv.indicator_value_unit);
         const currentDefault = iv.value_default?.[iv.indicator_type] ?? null;
         if (JSON.stringify(newDefault) === JSON.stringify(currentDefault)) continue;
 
@@ -1563,7 +1590,7 @@ router.post('/remove_year_previsionnel', passport.authenticate(['admin', 'user']
     if (entry.excel_file_id) {
       try {
         const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE' });
+        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE', headers: { Prefer: 'bypass-shared-lock' } });
       } catch (e) {
         console.error(`Failed to delete Excel file ${entry.excel_file_id}:`, e.message);
       }
@@ -1637,7 +1664,7 @@ router.post('/remove_year_expost', passport.authenticate(['admin', 'user'], { se
     if (entry.excel_file_id) {
       try {
         const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
-        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE' });
+        await graphFetch(`/sites/${siteId}/drive/items/${entry.excel_file_id}`, { method: 'DELETE', headers: { Prefer: 'bypass-shared-lock' } });
       } catch (e) {
         console.error(`Failed to delete Excel file ${entry.excel_file_id}:`, e.message);
       }

@@ -31,11 +31,20 @@ function validatePassword(password) {
   const schema = new passwordValidator();
   schema
     .is()
-    .min(6) // Minimum length 6
+    .min(12) // Minimum length 12
     .is()
     .max(100) // Maximum length 100
     .has()
-    .letters(); // Must have letters
+    .uppercase() // Must have uppercase letters
+    .has()
+    .lowercase() // Must have lowercase letters
+    .has()
+    .digits() // Must have digits
+    .has()
+    .symbols() // Must have symbols
+    .has()
+    .not()
+    .spaces(); // Should not have spaces
 
   return schema.validate(password);
 }

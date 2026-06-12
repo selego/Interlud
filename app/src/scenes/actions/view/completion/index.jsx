@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft, FiDownload, FiUpload, FiLoader, FiInfo, FiFilter, FiStar, FiBarChart2 } from "react-icons/fi"
-import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
-import useStore from "@/services/store"
+import { FiArrowLeft, FiLoader, FiInfo, FiFilter, FiStar, FiBarChart2 } from "react-icons/fi"
+import { shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
 import IndicatorsList from "./IndicatorsList"
@@ -15,14 +14,10 @@ const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisi
 const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
 export default function Completion({ action, onSave }) {
-  const { collectivity } = useStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(null)
   const [stats, setStats] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isExporting, setIsExporting] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
   const [showUnfilledOnly, setShowUnfilledOnly] = useState(false)
   const [showPrimordialOnly, setShowPrimordialOnly] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -85,57 +80,6 @@ export default function Completion({ action, onSave }) {
       setStats(data)
     } catch (error) {
       console.error(error)
-    }
-  }
-
-  const exportIndicatorTemplate = async () => {
-    try {
-      setIsExporting(true)
-      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: action._id, situation: currentTab?.situation, year: currentTab?.year })
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `valeurs_indicateurs_${action.name}_${SITUATION_LABELS[currentTab?.situation]}_${currentTab?.year}.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      toast.error("Erreur lors de l'export")
-    } finally {
-      setIsExporting(false)
-    }
-  }
-
-  const importIndicatorValues = async (file) => {
-    try {
-      if (!file) return
-      setIsImporting(true)
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = async () => {
-        try {
-          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", {
-            fileBase64: reader.result.split(",")[1],
-            collectivity,
-            action_id: action._id,
-            situation: currentTab?.situation,
-            year: currentTab?.year
-          })
-          if (!ok) return toast.error(code || "Erreur lors de l'import")
-          toast.success("Valeurs importées avec succès")
-          setRefreshKey((k) => k + 1)
-          fetchStats()
-        } catch (error) {
-          toast.error("Erreur lors de l'import")
-        } finally {
-          setIsImporting(false)
-        }
-      }
-    } catch (error) {
-      toast.error("Erreur lors de l'import")
-      setIsImporting(false)
     }
   }
 
@@ -257,7 +201,7 @@ export default function Completion({ action, onSave }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between border-b border-gray-200 mb-8">
+        <div className="flex items-center border-b border-gray-200 mb-8">
           <div className="flex items-center">
             {dynamicTabs.map((tab) => (
               <button
@@ -278,49 +222,12 @@ export default function Completion({ action, onSave }) {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="relative group">
-              <button
-                onClick={exportIndicatorTemplate}
-                disabled={isExporting}
-                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300"
-                title="Téléchargez le fichier Excel des indicateurs de cette action"
-              >
-                {isExporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
-                <span>Telecharger le template</span>
-              </button>
-            </div>
-
-            <div className="relative group">
-              <label
-                className={`inline-flex items-center gap-2 px-3 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 cursor-pointer ${
-                  isImporting ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-                title="Importez le fichier Excel rempli pour mettre à jour les indicateurs de cette action"
-              >
-                {isImporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiUpload className="w-4 h-4" />}
-                <span>Importer les Valeurs</span>
-                <input type="file" accept=".xlsx" className="hidden" disabled={isImporting} onChange={(e) => e.target.files[0] && importIndicatorValues(e.target.files[0])} />
-              </label>
-            </div>
-
-            <div className="relative group">
-              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors" aria-label="Information">
-                <FiInfo className="w-4 h-4" />
-              </button>
-              <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 pointer-events-none">
-                Téléchargez le template des indicateurs de cette action et ensuite importez le pour mettre à jour les indicateurs
-                <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900"></div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <IndicatorView
           action={action}
           activeSituation={currentTab?.situation}
           activeYear={currentTab?.year}
-          refreshKey={refreshKey}
           onStatsRefresh={fetchStats}
           onSavingChange={setIsSaving}
           yearMappings={stats?.yearMappingsBySituationYear?.[`${currentTab?.situation}_${currentTab?.year}`]}
@@ -339,7 +246,6 @@ function IndicatorView({
   action,
   activeSituation,
   activeYear,
-  refreshKey,
   onStatsRefresh,
   onSavingChange,
   yearMappings,
@@ -415,8 +321,7 @@ function IndicatorView({
     toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
       onSavingChange?.(true)
-      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
-      if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
+      setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {
         setConditionValuesMap((prev) => {
           const condKey = `${indicatorValue.indicator_excel_id}_${indicatorValue.situation}_${indicatorValue.year}`
@@ -439,7 +344,7 @@ function IndicatorView({
 
   useEffect(() => {
     loadData()
-  }, [action?._id, activeSituation, activeYear, refreshKey, showUnfilledOnly, showPrimordialOnly])
+  }, [action?._id, activeSituation, activeYear, showUnfilledOnly, showPrimordialOnly])
 
   useEffect(() => {
     setSelectedCategory(null)

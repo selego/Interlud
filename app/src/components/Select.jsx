@@ -39,25 +39,30 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
           }`}
         >
           {options.length > 0 ? (
-            options.map((option) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={value === option.value}
-                key={option.value}
-                onClick={() => {
-                  onChange?.(option.value)
-                  setIsOpen(false)
-                }}
-                className={`w-full text-left px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50
-                  ${value === option.value ? "bg-primary/10 text-primary" : "text-gray-900"}
-                `}
-              >
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs ${constrained ? "truncate" : "whitespace-nowrap"}`}>{option.label}</span>
-                  {value === option.value && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
-                </div>
-              </button>
+            options.map((option, index) => (
+              <React.Fragment key={option.value}>
+                {option.group && option.group !== options[index - 1]?.group && (
+                  <div className="px-4 pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">{option.group}</div>
+                )}
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === option.value}
+                  onClick={() => {
+                    onChange?.(option.value)
+                    setIsOpen(false)
+                  }}
+                  className={`w-full text-left px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50
+                    ${value === option.value ? "bg-primary/10 text-primary" : "text-gray-900"}
+                    ${option.group ? "pl-6" : ""}
+                  `}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs ${constrained ? "truncate" : "whitespace-nowrap"}`}>{option.label}</span>
+                    {value === option.value && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
+                  </div>
+                </button>
+              </React.Fragment>
             ))
           ) : (
             <div className="px-4 py-3 text-gray-500 text-sm text-center">Aucune option disponible</div>

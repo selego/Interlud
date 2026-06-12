@@ -5,9 +5,12 @@ import toast from "react-hot-toast"
 import store from "@/services/store"
 import api from "@/services/api"
 
+const validatePassword = (password) =>
+  password.length >= 12 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password) && !/\s/.test(password)
+
 export default () => {
-  const [values, setValues] = useState({ name: "", email: "", password: "", entityName: "", last_name: "", first_name: "" })
-  const [errors, setErrors] = useState({ email: "", password: "", entityName: "", first_name: "", last_name: "", acceptedTerms: "" })
+  const [values, setValues] = useState({ name: "", email: "", password: "", confirmPassword: "", entityName: "", last_name: "", first_name: "" })
+  const [errors, setErrors] = useState({ email: "", password: "", confirmPassword: "", entityName: "", first_name: "", last_name: "", acceptedTerms: "" })
   const [accountType, setAccountType] = useState("user")
   const [acceptedTerms, setAcceptedTerms] = useState(false)
 
@@ -17,6 +20,9 @@ export default () => {
   const send = async () => {
     if (!values.email) return setErrors({ ...errors, email: "Ce champ est requis" })
     if (!values.password) return setErrors({ ...errors, password: "Ce champ est requis" })
+    if (!validatePassword(values.password)) return setErrors({ ...errors, password: "Le mot de passe doit contenir au moins 12 caractères, dont une majuscule, une minuscule, un chiffre et un caractère spécial" })
+    if (!values.confirmPassword) return setErrors({ ...errors, confirmPassword: "Ce champ est requis" })
+    if (values.password !== values.confirmPassword) return setErrors({ ...errors, confirmPassword: "Les mots de passe ne correspondent pas" })
     if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
     if (!values.last_name) return setErrors({ ...errors, last_name: "Ce champ est requis" })
     if (!values.entityName && accountType === "economic_actor") return setErrors({ ...errors, entityName: "Ce champ est requis" })
@@ -171,7 +177,25 @@ export default () => {
                 placeholder="••••••••"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</p>
               {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmer le mot de passe <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+                name="confirmPassword"
+                type="password"
+                id="confirmPassword"
+                value={values.confirmPassword}
+                onChange={(e) => setValues({ ...values, confirmPassword: e.target.value })}
+                placeholder="••••••••"
+                required
+              />
+              {errors.confirmPassword && <p className="text-sm text-red-500 mt-1">{errors.confirmPassword}</p>}
             </div>
 
             <div className="mb-6">

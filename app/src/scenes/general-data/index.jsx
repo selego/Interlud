@@ -4,7 +4,7 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
-import { FiDownload, FiUpload, FiInfo, FiFilter, FiLoader } from "react-icons/fi"
+import { FiInfo, FiFilter } from "react-icons/fi"
 import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
@@ -21,9 +21,6 @@ export default function Index() {
   const [activeYear, setActiveYear] = useState(null)
   const [stats, setStats] = useState(null)
   const [isStatsLoading, setIsStatsLoading] = useState(false)
-  const [isExporting, setIsExporting] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
   const [showUnfilledOnly, setShowUnfilledOnly] = useState(true)
 
   const activeConfigAction = configActions[activeConfigIndex]
@@ -54,57 +51,6 @@ export default function Index() {
       setStats(data)
     } catch (error) {
       console.error(error)
-    }
-  }
-
-  const exportIndicatorTemplate = async () => {
-    try {
-      setIsExporting(true)
-      const response = await api.download("/indicator_value/export_indicator_values_excel", { action_id: activeConfigAction._id, situation: activeSituation, year: activeYear })
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `donnees_generales_${activeConfigAction.name}_${SITUATION_LABELS[activeSituation]}_${activeYear}.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      toast.error("Une erreur est survenue")
-    } finally {
-      setIsExporting(false)
-    }
-  }
-
-  const importIndicatorValues = async (file) => {
-    try {
-      if (!file) return
-      setIsImporting(true)
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = async () => {
-        try {
-          const { ok, code } = await api.post("/indicator_value/importIndicatorValues", {
-            fileBase64: reader.result.split(",")[1],
-            collectivity,
-            action_id: activeConfigAction._id,
-            situation: activeSituation,
-            year: activeYear
-          })
-          if (!ok) return toast.error(code || "Erreur lors de l'import")
-          toast.success("Valeurs importées avec succès")
-          setRefreshKey((k) => k + 1)
-          fetchStats(activeConfigAction._id)
-        } catch (error) {
-          toast.error("Une erreur est survenue")
-        } finally {
-          setIsImporting(false)
-        }
-      }
-    } catch (error) {
-      toast.error("Une erreur est survenue")
-      setIsImporting(false)
     }
   }
 
@@ -182,6 +128,13 @@ export default function Index() {
             </div>
           )}
 
+          {activeConfigAction?.name?.toLowerCase().includes("parc") && (
+            <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+              <FiInfo className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Toutes les données sont préremplies avec des valeurs par défaut lorsqu'elles sont disponibles. Elles peuvent être modifiées à tout moment par la collectivité elle-même.</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2 text-sm min-h-[32px]">
               <ProgressCircle percentage={globalProgress} size={20} />
@@ -223,7 +176,7 @@ export default function Index() {
           <Loader />
         ) : (
           <>
-            <div className="flex items-center justify-between border-b border-gray-200 mb-4">
+            <div className="flex items-center border-b border-gray-200 mb-4">
               <div className="flex items-center">
                 {availableSituations.map((situation) => {
                   const years = situationYears[situation] || []
@@ -251,42 +204,6 @@ export default function Index() {
                 })}
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="relative group">
-                  <button
-                    onClick={exportIndicatorTemplate}
-                    disabled={isExporting}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300"
-                    title="Téléchargez le fichier Excel des indicateurs"
-                  >
-                    {isExporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
-                    <span>Telecharger le template</span>
-                  </button>
-                </div>
-
-                <div className="relative group">
-                  <label
-                    className={`inline-flex items-center gap-2 px-3 py-2 bg-primary-green text-white rounded-lg text-sm font-medium hover:bg-primary-green/90 cursor-pointer ${
-                      isImporting ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                    title="Importez le fichier Excel rempli pour mettre à jour les indicateurs"
-                  >
-                    {isImporting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiUpload className="w-4 h-4" />}
-                    <span>Importer les Valeurs</span>
-                    <input type="file" accept=".xlsx" className="hidden" disabled={isImporting} onChange={(e) => e.target.files[0] && importIndicatorValues(e.target.files[0])} />
-                  </label>
-                </div>
-
-                <div className="relative group">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors" aria-label="Information">
-                    <FiInfo className="w-4 h-4" />
-                  </button>
-                  <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 pointer-events-none">
-                    Téléchargez le template et importez-le pour mettre à jour les indicateurs
-                    <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900"></div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {activeSituation && situationYears[activeSituation]?.length > 0 && (
@@ -329,7 +246,6 @@ export default function Index() {
               activeConfigAction={activeConfigAction}
               activeSituation={activeSituation}
               activeYear={activeYear}
-              refreshKey={refreshKey}
               onStatsRefresh={() => fetchStats(activeConfigAction._id)}
               yearMappings={stats?.yearMappingsBySituationYear?.[`${activeSituation}_${activeYear}`]}
               showUnfilledOnly={showUnfilledOnly}
@@ -343,7 +259,7 @@ export default function Index() {
   )
 }
 
-function IndicatorView({ activeConfigAction, activeSituation, activeYear, refreshKey, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly, tabTotal }) {
+function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly, tabTotal }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -403,6 +319,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
   }
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
+    toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
       if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
       if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
@@ -416,17 +333,17 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, refres
         })
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      toast.success("Valeur enregistrée avec succès")
-      onStatsRefresh()
+      if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
+      await onStatsRefresh()
+      toast.success("Valeur enregistrée", { id: "indicator-save" })
     } catch (error) {
-      toast.error("Une erreur est survenue")
+      toast.error("Une erreur est survenue", { id: "indicator-save" })
     }
   }
 
   useEffect(() => {
     loadData()
-  }, [activeConfigAction?._id, activeSituation, activeYear, refreshKey, showUnfilledOnly])
+  }, [activeConfigAction?._id, activeSituation, activeYear, showUnfilledOnly])
 
   useEffect(() => {
     setSelectedCategory(null)

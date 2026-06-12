@@ -12,7 +12,7 @@ const { updateExcelCellByIndicatorId, importSheetsToExcelFile, graphFetch, share
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
-const { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator } = require('../utils/indicators');
+const { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds } = require('../utils/indicators');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -141,13 +141,7 @@ const updateOnboardingStatus = async (action) => {
     const allIVs = await IndicatorValue.find({ action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS }, ...ownerFilter }).lean();
 
     const condExcelIds = new Set();
-    for (const iv of allIVs) {
-      if (iv.display_condition?.conditions) {
-        for (const cond of iv.display_condition.conditions) {
-          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-        }
-      }
-    }
+    for (const iv of allIVs) collectConditionExcelIds(iv.display_condition, condExcelIds);
 
     const [regularActions, condValues] = await Promise.all([
       Action.find({ collectivity_id: action.collectivity_id, type: { $ne: 'config' }, ...ownerFilter }),
@@ -204,11 +198,7 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     for (const iv of indicatorValues) {
       if (!situationYears[iv.situation]) situationYears[iv.situation] = [];
       if (iv.year != null && !situationYears[iv.situation].includes(iv.year)) situationYears[iv.situation].push(iv.year);
-      if (iv.display_condition?.conditions) {
-        for (const cond of iv.display_condition.conditions) {
-          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-        }
-      }
+      collectConditionExcelIds(iv.display_condition, condExcelIds);
     }
     for (const sit in situationYears) {
       situationYears[sit].sort((a, b) => a - b);
@@ -304,13 +294,7 @@ router.post('/check-general-data-completion', passport.authenticate(['admin', 'u
 
     // Collect and fetch condition values
     const condExcelIds = new Set();
-    for (const iv of indicatorValues) {
-      if (iv.display_condition?.conditions) {
-        for (const cond of iv.display_condition.conditions) {
-          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-        }
-      }
-    }
+    for (const iv of indicatorValues) collectConditionExcelIds(iv.display_condition, condExcelIds);
     const conditionValuesMap = new Map();
     if (condExcelIds.size > 0) {
       const condValues = await IndicatorValue.find({ collectivity_id, indicator_excel_id: { $in: [...condExcelIds] }, ...ownerFilter });
@@ -386,6 +370,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const indicatorValue = await IndicatorValue.findById(req.params.id);
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    await resolveDynamicPossibilities([indicatorValue]);
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
@@ -692,6 +677,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       .sort({ excel_line_number: 1 })
       .skip(req.body.offset || 0)
       .limit(req.body.limit || 50);
+    await resolveDynamicPossibilities(data);
     return res.status(200).send({ ok: true, data, total: await IndicatorValue.countDocuments(query) });
   } catch (error) {
     capture(error);
@@ -722,13 +708,7 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     const indicatorValues = await IndicatorValue.find(query);
     // Build conditionValuesMap and yearMappings to filter by display_condition
     const condExcelIds = new Set();
-    for (const iv of indicatorValues) {
-      if (iv.display_condition?.conditions) {
-        for (const cond of iv.display_condition.conditions) {
-          if (cond.excel_indicator_id) condExcelIds.add(cond.excel_indicator_id);
-        }
-      }
-    }
+    for (const iv of indicatorValues) collectConditionExcelIds(iv.display_condition, condExcelIds);
 
     const ownerFilter = { owner: action.owner };
     if (action.owner === 'economic_actor' && action.economic_actor_id) ownerFilter.economic_actor_id = action.economic_actor_id;

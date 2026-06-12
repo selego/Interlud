@@ -8,10 +8,10 @@ import useStore from "@/services/store"
 import Loader from "@/components/loader"
 
 const getStatusLabel = (status) => {
-  if (status === "completed") return "Terminée"
+  if (status === "completed") return "Complétée"
   if (status === "upcoming") return "À venir"
   if (status === "in_progress") return "En cours"
-  if (status === "blocked") return "Bloquée"
+  if (status === "blocked") return "À l'arrêt"
   return "Nouvelle"
 }
 
@@ -134,12 +134,12 @@ export default function List() {
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Priorité</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Pilote</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Budget</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Subventionné</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date Start</th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date End</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date de début</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date de fin</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">

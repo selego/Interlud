@@ -369,8 +369,8 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
                 { value: "no_status", label: "Pas de statut" },
                 { value: "upcoming", label: "À venir" },
                 { value: "in_progress", label: "En cours" },
-                { value: "blocked", label: "Bloqué" },
-                { value: "completed", label: "Terminé" }
+                { value: "blocked", label: "À l'arrêt" },
+                { value: "completed", label: "Complété" }
               ]}
             />
           </div>
@@ -492,13 +492,15 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               {(action.exel_files_prev || []).map(f => f.year_prev).sort((a, b) => a - b).map((year) => (
                 <span key={year} className="px-3 py-2 bg-gray-100 border rounded-lg text-sm font-medium flex items-center gap-2">
                   {year}
-                  <button
-                    onClick={() => setYearToRemovePrev(year)}
-                    className="text-gray-400 hover:text-red-600 transition-colors"
-                    aria-label={`Supprimer l'année ${year}`}
-                  >
-                    <FiTrash2 size={14} />
-                  </button>
+                  {(action.exel_files_prev || []).length > 1 && (
+                    <button
+                      onClick={() => setYearToRemovePrev(year)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                      aria-label={`Supprimer l'année ${year}`}
+                    >
+                      <FiTrash2 size={14} />
+                    </button>
+                  )}
                 </span>
               ))}
             </div>
