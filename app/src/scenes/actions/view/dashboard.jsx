@@ -794,7 +794,7 @@ export default function Dashboard({ action }) {
             </button>
             {canWrite && (
               <button onClick={() => navigate(`/actions/${action._id}/settings`)} className="button-primary flex items-center gap-2">
-                <FiPlus size={14} /> Modifier
+                <FiPlus size={14} /> Paramétrer
               </button>
             )}
           </div>
