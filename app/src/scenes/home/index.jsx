@@ -24,7 +24,7 @@ const fmtNum = (v) => {
   const abs = Math.abs(v)
   if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
   if (abs >= 10_000) return `${(v / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
-  return v.toLocaleString("fr-FR", { maximumFractionDigits: 0 })
+  return v.toLocaleString("fr-FR", { maximumFractionDigits: abs >= 100 ? 0 : abs >= 1 ? 2 : 3 })
 }
 
 const fmtSigned = (v, decimals = 1) => {
@@ -32,9 +32,63 @@ const fmtSigned = (v, decimals = 1) => {
   return `${v > 0 ? "+" : ""}${v.toLocaleString("fr-FR", { maximumFractionDigits: decimals })}`
 }
 
-// ============================================================================
-// Page
-// ============================================================================
+
+
+const ecart = (situation, reference) => (situation ? situation - reference : 0)
+
+const buildIndicators = (emissions) =>
+  Object.entries(emissions || {}).map(([key, em]) => {
+    const byYear = new Map()
+    for (const a of em.actions) for (const d of a.yearly) {
+      const acc = byYear.get(d.year) || { prev: 0, reel: 0 }
+      acc.prev += d.previsionnelle || 0
+      acc.reel += d.expost || 0
+      byYear.set(d.year, acc)
+    }
+    let cumPrev = 0
+    let cumReel = 0
+    const yearly = [...byYear.keys()].sort((a, b) => a - b).map((year) => {
+      cumPrev += byYear.get(year).prev
+      cumReel += byYear.get(year).reel
+      return { year, prev: Math.abs(cumPrev), reel: Math.abs(cumReel) }
+    })
+    const firstIdx = yearly.findIndex((d) => d.prev !== 0 || d.reel !== 0)
+    return {
+      key,
+      unit: em.unit,
+      ...(META[key] || { short: key, label: key }),
+      targetCumul: Math.abs(cumPrev),
+      realCumul: Math.abs(cumReel),
+      advancement: Math.abs(cumPrev) > 0 ? (Math.abs(cumReel) / Math.abs(cumPrev)) * 100 : 0,
+      ecartRelatif: Math.abs(cumPrev) > 0 ? ((Math.abs(cumReel) - Math.abs(cumPrev)) / Math.abs(cumPrev)) * 100 : 0,
+      yearly: firstIdx >= 0 ? yearly.slice(firstIdx) : [],
+    }
+  })
+
+const buildContributions = (em) =>
+  (em?.actions || []).map((a) => ({
+    action: a.code,
+    name: a.name,
+    ges: a.yearly.reduce((s, d) => s + ecart(d.expost, d.reference), 0),
+    ges_prev: a.yearly.reduce((s, d) => s + ecart(d.previsionnelle, d.reference), 0),
+  }))
+
+// Graphe : barres = émissions ex-post réelles par action/année, ligne = total prévisionnel par année.
+const buildEmissionChart = (em) => {
+  const actions = em?.actions || []
+  const yearSet = new Set()
+  for (const a of actions) for (const d of a.yearly) if (d.expost || d.previsionnelle) yearSet.add(d.year)
+  const years = [...yearSet].sort((a, b) => a - b)
+  return {
+    years,
+    actions: actions
+      .map((a) => ({ code: a.code, name: a.name, yearly: years.map((y) => ({ year: y, value: a.yearly.find((d) => d.year === y)?.expost || 0 })) }))
+      .filter((a) => a.yearly.some((d) => d.value > 0)),
+    prevByYear: years.map((y) => ({ year: y, value: actions.reduce((s, a) => s + (a.yearly.find((d) => d.year === y)?.previsionnelle || 0), 0) })),
+    refByYear: years.map((y) => ({ year: y, value: actions.reduce((s, a) => s + (a.yearly.find((d) => d.year === y)?.reference || 0), 0) })),
+  }
+}
+
 
 export default function Home() {
   const { collectivity } = useStore()
@@ -45,11 +99,11 @@ export default function Home() {
   const [ready, setReady] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
 
-  // Pas de fichier d'agrégation tant que la collectivité n'est pas onboardée : échec silencieux attendu.
   const fetchHomeAggregation = async () => {
     try {
       setLoadingData(true)
       const { ok, data } = await api.post("/excel/home_aggregation", { collectivity })
+      console.log(data)
       if (!ok) return
       setData(data)
     } catch (error) {
@@ -95,15 +149,15 @@ export default function Home() {
     { label: "Remplir votre première action à 100%", done: allActions.some((a) => a.status === "completed"), link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions" },
   ]
 
-  const indicators = data ? data.indicators.map((ind) => ({ ...ind, ...(META[ind.key] || { short: ind.key, label: ind.key }) })) : []
+  const indicators = data ? buildIndicators(data.emissions) : []
+  if (data) console.table((data.emissions?.GES?.actions?.[0]?.yearly || []).filter((d) => d.year >= 2020 && d.year <= 2028))
   const indicator = indicators.find((i) => i.key === activeIndicator) || indicators[0]
   const ges = indicators.find((i) => i.key === "GES") || indicator
   const advancement = ges?.advancement || 0
   const traj = indicator?.yearly || []
-  const yearInit = traj[0]?.year
   const yearExpost = [...traj].reverse().find((d) => d.reel > 0)?.year
 
-  const contributions = data ? data.actions.map((a) => ({ action: a.code, name: a.name, parent: a.group, status: a.status, ges: a.totals.GES?.real ?? 0, ges_prev: a.totals.GES?.target ?? 0 })) : []
+  const contributions = data ? buildContributions(data.emissions.GES) : []
   const topActions = [...contributions].filter((a) => a.ges < 0).sort((a, b) => a.ges - b.ges).slice(0, 5)
   const maxAction = Math.max(...contributions.map((a) => Math.abs(a.ges_prev)), 1)
   const nbRetard = indicators.filter((i) => i.ecartRelatif < 0).length
@@ -139,6 +193,8 @@ export default function Home() {
           </div>
         )}
 
+        {onboardingSteps.every((s) => s.done) && (
+        <>
         {loadingData && !data && <DashboardSkeleton />}
 
         {data && indicator && (
@@ -147,9 +203,6 @@ export default function Home() {
         <div className="rounded-[20px] p-8 mb-6 border" style={{ background: "linear-gradient(135deg, #F9FFFC 0%, #fff 60%)", borderColor: "#D9EFE3" }}>
           <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
             <div>
-              <div className={`text-[11px] font-bold uppercase tracking-[0.08em] mb-3 ${advancement >= 90 ? "text-primary-green" : advancement >= 70 ? "text-primary-orange" : "text-red-500"}`}>
-                ● Bilan {yearExpost || "—"} · Trajectoire {advancement >= 90 ? "en avance" : advancement >= 70 ? "proche de la cible" : advancement >= 50 ? "en retard modéré" : "en retard significatif"}
-              </div>
               <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
                 Vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévu,
                 soit <span className="font-bold">{fmtNum(ges.realCumul)} {ges.unit}</span> évitées sur {fmtNum(ges.targetCumul)} attendues.
@@ -194,14 +247,14 @@ export default function Home() {
         <div className="card-shadow rounded-2xl p-6 mb-6 bg-white">
           <div className="flex justify-between mb-3">
             <div>
-              <h3 className="text-[16px] font-semibold m-0 text-font-primary">Trajectoire {indicator.label}</h3>
+              <h3 className="text-[16px] font-semibold m-0 text-font-primary">Émissions {indicator.label}</h3>
               <p className="text-[12px] text-[#768776] mt-1 mb-0">
-                Gain cumulé prévu (PCAET, pointillé) vs gain mesuré ex-post décomposé par action.
+                Les barres sont des projections établies à partir des valeurs ex-post mesurées, décomposées par action. Les pointillés indiquent les trajectoires de référence et prévisionnelle.
               </p>
             </div>
             <IndicatorPicker active={activeIndicator} onChange={setActiveIndicator} indicators={indicators} />
           </div>
-          <StackedActionsChart traj={traj} unit={indicator.unit} contributions={contributions} yearInit={yearInit} yearExpost={yearExpost} />
+          <StackedActionsChart emissions={buildEmissionChart(data.emissions[indicator.key])} unit={indicator.unit} yearExpost={yearExpost} />
         </div>
         </>
         )}
@@ -235,14 +288,12 @@ export default function Home() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   )
 }
-
-// ============================================================================
-// Primitives
-// ============================================================================
 
 function DashboardSkeleton() {
   return (
@@ -384,28 +435,17 @@ function StatBlock({ value, label, color }) {
   )
 }
 
-// ============================================================================
-// StackedActionsChart — barres empilées par action + ligne PCAET pointillée
-// ============================================================================
-
-function StackedActionsChart({ traj, unit, contributions, yearInit, yearExpost }) {
+function StackedActionsChart({ emissions, unit, yearExpost }) {
   const [hover, setHover] = useState(null)
-  const totalSpan = yearExpost && yearInit ? yearExpost - yearInit : 0
 
-  const contribs = [...contributions].filter((a) => a.ges < 0).sort((a, b) => a.ges - b.ges)
+  const years = emissions?.years || []
+  const actions = [...(emissions?.actions || [])].sort((a, b) => b.yearly.reduce((s, d) => s + d.value, 0) - a.yearly.reduce((s, d) => s + d.value, 0))
+  const prevByYear = Object.fromEntries((emissions?.prevByYear || []).map((d) => [d.year, d.value]))
+  const refByYear = Object.fromEntries((emissions?.refByYear || []).map((d) => [d.year, d.value]))
 
-  const sCurve = (t) => {
-    if (t <= 0) return 0
-    if (t >= 1) return 1
-    return 0.5 - 0.5 * Math.cos(Math.PI * t)
-  }
-
-  const prevByYear = Object.fromEntries(traj.map((d) => [d.year, d.prev]))
-  const yearsHistorique = yearExpost ? traj.filter((d) => d.year <= yearExpost).map((d) => d.year) : []
-  const stackByYear = yearsHistorique.map((year) => {
-    const cumulProgress = totalSpan > 0 ? sCurve((year - yearInit) / totalSpan) : 0
-    const segments = contribs.map((a) => ({ action: a.action, name: a.name, value: Math.abs(a.ges) * cumulProgress }))
-    return { year, segments, total: segments.reduce((s, x) => s + x.value, 0), objectif: prevByYear[year] }
+  const stackByYear = years.map((year) => {
+    const segments = actions.map((a) => ({ action: a.code, name: a.name, value: a.yearly.find((d) => d.year === year)?.value || 0 }))
+    return { year, segments, total: segments.reduce((s, x) => s + x.value, 0), objectif: prevByYear[year], reference: refByYear[year] }
   })
 
   const W = 1080
@@ -414,22 +454,24 @@ function StackedActionsChart({ traj, unit, contributions, yearInit, yearExpost }
   const innerW = W - PAD.l - PAD.r
   const innerH = H - PAD.t - PAD.b
 
-  const allYears = traj.map((d) => d.year)
-  const xMin = allYears[0]
-  const xMax = allYears[allYears.length - 1]
+  const xMin = years[0]
+  const xMax = years[years.length - 1]
   const xOf = (y) => PAD.l + ((y - xMin) / (xMax - xMin || 1)) * innerW
 
-  const yMax = Math.max(...traj.map((d) => d.prev || 0), ...stackByYear.map((d) => d.total)) * 1.05 || 1
+  const yMax = Math.max(...years.map((y) => Math.max(prevByYear[y] || 0, refByYear[y] || 0)), ...stackByYear.map((d) => d.total)) * 1.05 || 1
   const yOf = (v) => PAD.t + innerH - (v / yMax) * innerH
 
-  const barW = Math.min(40, (innerW / allYears.length) * 0.7)
+  const barW = Math.min(40, (innerW / (years.length || 1)) * 0.7)
 
-  const prevPath = traj
-    .filter((d) => d.prev != null)
-    .map((d, i) => `${i === 0 ? "M" : "L"} ${xOf(d.year)} ${yOf(d.prev)}`)
-    .join(" ")
+  const prevYears = years.filter((y) => prevByYear[y] != null && prevByYear[y] > 0)
+  const prevPath = prevYears.map((y, i) => `${i === 0 ? "M" : "L"} ${xOf(y)} ${yOf(prevByYear[y])}`).join(" ")
+
+  const refYears = years.filter((y) => refByYear[y] != null && refByYear[y] > 0)
+  const refPath = refYears.map((y, i) => `${i === 0 ? "M" : "L"} ${xOf(y)} ${yOf(refByYear[y])}`).join(" ")
 
   const tickVals = Array.from({ length: 5 }, (_, i) => (yMax / 4) * i)
+
+  if (!years.length) return <div className="text-[13px] text-[#768776] py-6">Aucune donnée d'émission disponible.</div>
 
   return (
     <div className="relative">
@@ -461,12 +503,17 @@ function StackedActionsChart({ traj, unit, contributions, yearInit, yearExpost }
           )
         })}
 
-        <path d={prevPath} stroke="#56BDB8" strokeWidth={2} fill="none" strokeDasharray="6 4" />
-        {traj.filter((d) => d.prev != null).map((d) => (
-          <circle key={d.year} cx={xOf(d.year)} cy={yOf(d.prev)} r={2.5} fill="#fff" stroke="#56BDB8" strokeWidth={1.5} />
+        <path d={refPath} stroke="#9CA3AF" strokeWidth={2} fill="none" strokeDasharray="6 4" />
+        {refYears.map((y) => (
+          <circle key={y} cx={xOf(y)} cy={yOf(refByYear[y])} r={2.5} fill="#fff" stroke="#9CA3AF" strokeWidth={1.5} />
         ))}
 
-        {yearExpost && (
+        <path d={prevPath} stroke="#56BDB8" strokeWidth={2} fill="none" strokeDasharray="6 4" />
+        {prevYears.map((y) => (
+          <circle key={y} cx={xOf(y)} cy={yOf(prevByYear[y])} r={2.5} fill="#fff" stroke="#56BDB8" strokeWidth={1.5} />
+        ))}
+
+        {yearExpost && years.includes(yearExpost) && (
           <>
             <line x1={xOf(yearExpost) + barW / 2 + 4} x2={xOf(yearExpost) + barW / 2 + 4} y1={PAD.t} y2={H - PAD.b} stroke="#F59600" strokeDasharray="3 3" strokeOpacity="0.5" />
             <rect x={xOf(yearExpost) + barW / 2 - 22} y={PAD.t - 6} width={56} height={16} rx={8} fill="#F59600" />
@@ -474,7 +521,7 @@ function StackedActionsChart({ traj, unit, contributions, yearInit, yearExpost }
           </>
         )}
 
-        {allYears.filter((_, i) => i % 2 === 0).map((y) => (
+        {years.filter((_, i) => i % 2 === 0).map((y) => (
           <text key={y} x={xOf(y)} y={H - 8} fontSize={11} fill="#768776" textAnchor="middle">{y}</text>
         ))}
       </svg>
@@ -482,17 +529,24 @@ function StackedActionsChart({ traj, unit, contributions, yearInit, yearExpost }
       {hover && (
         <div className="absolute top-2 right-2 bg-white border border-[#e1e5e8] rounded-lg p-2.5 text-[11px] shadow-lg max-w-[260px]">
           <div className="font-bold mb-1.5 text-font-primary">{hover.year} · {fmtNum(hover.total)} {unit}</div>
-          {hover.segments.slice(0, 6).map((s, i) => (
+          {hover.segments.map((s, i) => ({ s, i })).filter(({ s }) => s.value > 0).slice(0, 6).map(({ s, i }) => (
             <div key={s.action} className="flex items-center gap-1.5 mb-0.5">
               <span className="w-2 h-2 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
               <span className="flex-1 text-[#768776] overflow-hidden text-ellipsis whitespace-nowrap">{s.action} · {s.name}</span>
               <span className="font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, monospace" }}>{fmtNum(s.value)}</span>
             </div>
           ))}
-          {hover.objectif != null && (
+          {hover.reference != null && (
             <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-[#e1e5e8]">
+              <span className="w-3.5" style={{ borderTop: "2px dashed #9CA3AF" }} />
+              <span className="flex-1 text-[#768776]">Référence</span>
+              <span className="font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, monospace" }}>{fmtNum(hover.reference)} {unit}</span>
+            </div>
+          )}
+          {hover.objectif != null && (
+            <div className="flex items-center gap-1.5 mt-1 pt-1">
               <span className="w-3.5" style={{ borderTop: "2px dashed #56BDB8" }} />
-              <span className="flex-1 text-[#768776]">Objectif (PCAET)</span>
+              <span className="flex-1 text-[#768776]">Prévisionnel</span>
               <span className="font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, monospace" }}>{fmtNum(hover.objectif)} {unit}</span>
             </div>
           )}
@@ -500,16 +554,20 @@ function StackedActionsChart({ traj, unit, contributions, yearInit, yearExpost }
       )}
 
       <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5 text-[10px] text-[#768776]">
-        {contribs.map((a, i) => (
-          <div key={a.action} className="flex items-center gap-1.5">
+        {actions.map((a, i) => (
+          <div key={a.code} className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
-            <span className="font-semibold text-font-primary">{a.action}</span>
+            <span className="font-semibold text-font-primary">{a.code}</span>
             <span>{a.name?.length > 28 ? a.name.slice(0, 26) + "…" : a.name}</span>
           </div>
         ))}
         <div className="flex items-center gap-1.5 ml-auto">
+          <span className="w-3.5" style={{ borderTop: "2px dashed #9CA3AF" }} />
+          <span>Référence</span>
+        </div>
+        <div className="flex items-center gap-1.5">
           <span className="w-3.5" style={{ borderTop: "2px dashed #56BDB8" }} />
-          <span>Trajectoire prévisionnelle (PCAET)</span>
+          <span>Trajectoire prévisionnelle</span>
         </div>
       </div>
     </div>

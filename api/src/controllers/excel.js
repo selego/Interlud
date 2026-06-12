@@ -265,9 +265,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
   }
 });
 
-const sumGain = (yearlyData, key) => yearlyData.reduce((s, d) => s + d[key], 0);
-// Dashboard home : indicateurs collectivité (cumul des écarts toutes actions) + totaux par action.
-// Tout est lu sur le nouvel onglet "4. Gains par action" (global-gains est obsolète).
+// Dashboard home : émissions brutes par action/année (onglet "3. Émissions par action").
+// Les gains (= écart entre deux situations d'émission) sont dérivés côté front.
 router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { collectivity } = req.body;
@@ -289,63 +288,38 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
     const siteId = await getSiteId();
 
     const actions = await Action.find({ type: { $in: ['custom', 'reference'] }, collectivity_id: collectivity._id || collectivity.id }).sort({ name: 1 });
-    const configured = actions.filter((a) => ACTION_GAINS_RANGES[a.excel_worksheetname || 'B2']);
+    const configured = actions.filter((a) => ACTION_EMISSIONS_RANGES[a.excel_worksheetname || 'B2']);
 
-    const byEmissionYear = {};
-    for (const et of EMISSION_TYPES) byEmissionYear[et] = new Map();
+    const emissionsByType = {};
+    for (const et of EMISSION_TYPES) emissionsByType[et] = [];
 
     // Une seule entrée par action (worksheet) : on lit le bloc TOTAL (colonnes E→AG, offset 4),
     // pas les instances individuelles. On dédoublonne donc par worksheet.
     const cache = {};
     const seen = new Set();
-    const results = [];
     for (const action of configured) {
       const worksheetKey = action.excel_worksheetname || 'B2';
       if (seen.has(worksheetKey)) continue;
       seen.add(worksheetKey);
       if (!cache[worksheetKey]) {
-        const start = ACTION_GAINS_RANGES[worksheetKey].dataStartRow;
-        const gainsResult = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${start}:AG${start + 40}')`);
-        cache[worksheetKey] = (gainsResult?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050);
+        const emStart = ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow;
+        const emResult = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${emStart}:AG${emStart + 40}')`);
+        cache[worksheetKey] = (emResult?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050);
       }
-      const agg = extractAggregation({ type: 'global' }, cache[worksheetKey], []);
-      const totals = {};
-      for (const [emissionType, gainData] of Object.entries(agg.gains)) {
-        totals[emissionType] = { unit: gainData.unit, real: sumGain(gainData.yearlyData, 'ecartExpostRef'), target: sumGain(gainData.yearlyData, 'ecartPrevRef') };
-        for (const d of gainData.yearlyData) {
-          const acc = byEmissionYear[emissionType].get(d.year) || { prev: 0, reel: 0 };
-          acc.prev += d.ecartPrevRef;
-          acc.reel += d.ecartExpostRef;
-          byEmissionYear[emissionType].set(d.year, acc);
-        }
+      const agg = extractAggregation({ type: 'global' }, [], cache[worksheetKey]);
+      for (const [emissionType, emData] of Object.entries(agg.emissions)) {
+        emissionsByType[emissionType].push({ code: worksheetKey, name: action.action_parent_name || action.name, yearly: emData.yearlyData });
       }
-      results.push({ _id: action._id, code: worksheetKey, name: action.action_parent_name || action.name, group: action.action_parent_name || null, status: action.status, totals });
     }
 
-    const indicators = EMISSION_TYPES.map((et) => {
-      const years = [...byEmissionYear[et].keys()].sort((a, b) => a - b);
-      let cumPrev = 0;
-      let cumReel = 0;
-      const yearly = years.map((year) => {
-        cumPrev += byEmissionYear[et].get(year).prev;
-        cumReel += byEmissionYear[et].get(year).reel;
-        return { year, prev: Math.abs(cumPrev), reel: Math.abs(cumReel) };
-      });
-      const firstIdx = yearly.findIndex((d) => d.prev !== 0 || d.reel !== 0);
-      const targetCumul = Math.abs(cumPrev);
-      const realCumul = Math.abs(cumReel);
-      return {
-        key: et,
-        unit: INDICATORS_CONFIG.find((c) => c.key === et)?.unit,
-        targetCumul,
-        realCumul,
-        advancement: targetCumul > 0 ? (realCumul / targetCumul) * 100 : 0,
-        ecartRelatif: targetCumul > 0 ? ((realCumul - targetCumul) / targetCumul) * 100 : 0,
-        yearly: firstIdx >= 0 ? yearly.slice(firstIdx) : [],
-      };
-    });
+    // Émissions brutes par indicateur : { initiale, reference, previsionnelle, expost } par action/année.
+    // Le front en dérive les gains (situation − référence) pour les indicateurs, le top 5 et le graphe.
+    const emissions = {};
+    for (const et of EMISSION_TYPES) {
+      emissions[et] = { unit: INDICATORS_CONFIG.find((c) => c.key === et)?.unit, actions: emissionsByType[et] };
+    }
 
-    res.json({ ok: true, data: { indicators, actions: results } });
+    res.json({ ok: true, data: { emissions } });
   } catch (error) {
     capture(error);
     res.json({ ok: false, data: { error: error.message } });
