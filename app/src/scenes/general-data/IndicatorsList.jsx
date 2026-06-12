@@ -1,18 +1,22 @@
 import React, { useState } from "react"
 import { FiChevronDown, FiChevronRight } from "react-icons/fi"
-import ProgressCircle from "@/components/ProgressCircle"
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 
-const calculateCompletion = (ivs) => {
-  if (!ivs || ivs.length === 0) return 0
-  return Math.round((ivs.filter(isIndicatorValueFilled).length / ivs.length) * 100)
-}
+const countRemaining = (ivs) => ivs.filter((iv) => !isIndicatorValueFilled(iv)).length
 
 const getAllCategoryIndicators = (categoryData) => {
   return [...categoryData.directIndicatorValues, ...Object.values(categoryData.subCategories).flat()]
 }
 
-export default function IndicatorsList({ displayedIndicatorValues, selectedCategory, onSelectCategory, showUnfilledOnly }) {
+function RemainingLabel({ indicatorValues }) {
+  return (
+    <span className={`text-xs font-semibold whitespace-nowrap ${countRemaining(indicatorValues) > 0 ? "text-[#5b6b66]" : "text-[#b3beba]"}`}>
+      {countRemaining(indicatorValues) > 0 ? `${countRemaining(indicatorValues)} à remplir` : "À jour"}
+    </span>
+  )
+}
+
+export default function IndicatorsList({ displayedIndicatorValues, selectedCategory, onSelectCategory }) {
   const [openCategories, setOpenCategories] = useState(new Set())
 
   const categoriesGrouped = {}
@@ -40,47 +44,35 @@ export default function IndicatorsList({ displayedIndicatorValues, selectedCateg
   const isSubCategoryActive = (categoryName, subCategoryName) => selectedCategory?.categoryName === categoryName && selectedCategory?.subCategoryName === subCategoryName
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {Object.entries(categoriesGrouped).map(([categoryName, categoryData]) => {
         return (
           <div key={categoryName}>
             <div
-              className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm font-medium ${isCategoryActive(categoryName) ? 'bg-primary-green/10 border-l-2 border-primary-green' : 'hover:bg-gray-50'}`}
+              className={`flex items-center justify-between gap-2.5 px-2.5 py-[11px] rounded-[9px] cursor-pointer transition-colors ${isCategoryActive(categoryName) ? 'bg-[#F1F4F3]' : 'hover:bg-gray-50'}`}
               onClick={() => { toggleCategory(categoryName); onSelectCategory({ categoryName }) }}
             >
-              {Object.keys(categoryData.subCategories).length > 0 ? (
-                openCategories.has(categoryName) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />
-              ) : <span className="w-4" />}
-              <span className="flex-1">{categoryName}</span>
-              {showUnfilledOnly ? (
-                <span className="text-xs text-amber-600 font-medium whitespace-nowrap">{getAllCategoryIndicators(categoryData).length} restant(s)</span>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <ProgressCircle percentage={calculateCompletion(getAllCategoryIndicators(categoryData))} size={20} />
-                  <span className="text-xs text-gray-500">{calculateCompletion(getAllCategoryIndicators(categoryData))}%</span>
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 min-w-0">
+                {Object.keys(categoryData.subCategories).length > 0 ? (
+                  openCategories.has(categoryName) ? <FiChevronDown size={14} className="shrink-0 text-[#768776]" /> : <FiChevronRight size={14} className="shrink-0 text-[#768776]" />
+                ) : null}
+                <span className="text-[13.5px] font-semibold text-[#123314] leading-tight">{categoryName}</span>
+              </div>
+              <RemainingLabel indicatorValues={getAllCategoryIndicators(categoryData)} />
             </div>
 
             {openCategories.has(categoryName) && (
-              <div className="ml-4 space-y-1">
+              <div className="ml-4 space-y-0.5">
                 {Object.entries(categoryData.subCategories).map(([subCategoryName, subIndicators]) => (
                   <div
                     key={subCategoryName}
-                    className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-xs ${
-                      isSubCategoryActive(categoryName, subCategoryName) ? 'bg-primary-green/10 border-l-2 border-primary-green' : 'hover:bg-gray-50'
+                    className={`flex items-center justify-between gap-2.5 px-2.5 py-2 rounded-[9px] cursor-pointer transition-colors ${
+                      isSubCategoryActive(categoryName, subCategoryName) ? 'bg-[#F1F4F3]' : 'hover:bg-gray-50'
                     }`}
                     onClick={() => onSelectCategory({ categoryName, subCategoryName })}
                   >
-                    <span className="flex-1 text-gray-700">{subCategoryName}</span>
-                    {showUnfilledOnly ? (
-                      <span className="text-xs text-amber-600 font-medium whitespace-nowrap">{subIndicators.length} restant(s)</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <ProgressCircle percentage={calculateCompletion(subIndicators)} size={18} />
-                        <span className="text-xs text-gray-500">{calculateCompletion(subIndicators)}%</span>
-                      </div>
-                    )}
+                    <span className="text-xs text-gray-700 leading-tight">{subCategoryName}</span>
+                    <RemainingLabel indicatorValues={subIndicators} />
                   </div>
                 ))}
               </div>

@@ -786,16 +786,11 @@ export default function Dashboard({ action }) {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0 mt-1">
-            <button
-              onClick={() => navigate(`/actions/${action._id}/completion`)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors font-medium"
-            >
-              <FiEdit size={14} /> Compléter
-            </button>
+            <button onClick={() => navigate(`/actions/${action._id}/completion`)} className="button-primary flex items-center gap-2">Compléter</button>
             {canWrite && (
-              <button onClick={() => navigate(`/actions/${action._id}/settings`)} className="button-primary flex items-center gap-2">
-                <FiPlus size={14} /> Paramétrer
-              </button>
+              <button
+                onClick={() => navigate(`/actions/${action._id}/settings`)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors font-medium">Paramétrer</button>
             )}
           </div>
         </div>

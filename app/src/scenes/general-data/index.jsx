@@ -4,7 +4,7 @@ import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
-import { FiInfo, FiFilter } from "react-icons/fi"
+import { FiInfo } from "react-icons/fi"
 import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
@@ -21,7 +21,6 @@ export default function Index() {
   const [activeYear, setActiveYear] = useState(null)
   const [stats, setStats] = useState(null)
   const [isStatsLoading, setIsStatsLoading] = useState(false)
-  const [showUnfilledOnly, setShowUnfilledOnly] = useState(true)
 
   const activeConfigAction = configActions[activeConfigIndex]
   const situationYears = stats?.situationYears || {}
@@ -153,22 +152,6 @@ export default function Index() {
                 </>
               )}
             </div>
-
-            <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
-              <button
-                onClick={() => setShowUnfilledOnly(false)}
-                className={`px-3 h-8 text-sm font-medium rounded-md transition-all ${!showUnfilledOnly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-              >
-                Tous
-              </button>
-              <button
-                onClick={() => setShowUnfilledOnly(true)}
-                className={`px-3 h-8 text-sm font-medium rounded-md transition-all inline-flex items-center gap-1.5 ${showUnfilledOnly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-              >
-                <FiFilter className="w-3.5 h-3.5" />
-                Non remplis
-              </button>
-            </div>
           </div>
         </div>
 
@@ -248,8 +231,6 @@ export default function Index() {
               activeYear={activeYear}
               onStatsRefresh={() => fetchStats(activeConfigAction._id)}
               yearMappings={stats?.yearMappingsBySituationYear?.[`${activeSituation}_${activeYear}`]}
-              showUnfilledOnly={showUnfilledOnly}
-              onToggleUnfilledOnly={() => setShowUnfilledOnly(false)}
               tabTotal={stats?.completion?.[`${activeSituation}_${activeYear}`]?.total || 0}
             />
           </>
@@ -259,7 +240,7 @@ export default function Index() {
   )
 }
 
-function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStatsRefresh, yearMappings, showUnfilledOnly, onToggleUnfilledOnly, tabTotal }) {
+function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStatsRefresh, yearMappings, tabTotal }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -306,10 +287,10 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
     try {
       const params = { action_id: activeConfigAction._id, situation: activeSituation, limit: 10000 }
       if (activeYear) params.year = activeYear
-      if (showUnfilledOnly) params.unfilled_only = true
       const { ok, data, code } = await api.post("/indicator_value/search", params)
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setIndicatorValues(data)
+      // Figé au chargement : un indicateur rempli en cours de session reste dans sa section jusqu'au prochain chargement
+      setIndicatorValues(data.map((iv) => ({ ...iv, initially_filled: isIndicatorValueFilled(iv) })))
       await Promise.all([fetchConditionValues(data), fetchEconomicActorData(data)])
     } catch (error) {
       toast.error("Une erreur est survenue")
@@ -321,8 +302,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
   const handleSaveIndicatorValue = async (indicatorValue) => {
     toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
-      if (showUnfilledOnly && isIndicatorValueFilled(indicatorValue)) setIndicatorValues((prev) => prev.filter((iv) => iv._id !== indicatorValue._id))
-      if (!showUnfilledOnly) setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
+      setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {
         setConditionValuesMap((prev) => {
           const condKey = `${indicatorValue.indicator_excel_id}_${indicatorValue.situation}_${indicatorValue.year}`
@@ -343,7 +323,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
 
   useEffect(() => {
     loadData()
-  }, [activeConfigAction?._id, activeSituation, activeYear, showUnfilledOnly])
+  }, [activeConfigAction?._id, activeSituation, activeYear])
 
   useEffect(() => {
     setSelectedCategory(null)
@@ -376,26 +356,13 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
     )
   }
 
-  if (!isLoading && showUnfilledOnly && displayedIndicatorValues.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <svg className="w-16 h-16 mb-4 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="text-lg font-medium text-gray-600">Tous les indicateurs sont remplis</p>
-        <button onClick={onToggleUnfilledOnly} className="mt-4 text-sm text-primary-green hover:underline">
-          Afficher tous les indicateurs
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col lg:flex-row gap-6">
       <div className="w-full lg:w-72 shrink-0">
         <div className="card-shadow p-4 sticky top-8 self-start">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Situation : {activeSituation ? `${SITUATION_LABELS[activeSituation]} ${activeYear || ""}` : ""}</h3>
+          <div className="flex items-baseline justify-between mb-3.5">
+            <h3 className="text-[15px] font-bold text-[#0A3641]">Catégories</h3>
+            <span className="text-xs text-[#9aa8a4]">{displayedIndicatorValues.filter((iv) => !isIndicatorValueFilled(iv)).length} à remplir</span>
           </div>
           <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
             {isLoading ? (
@@ -405,7 +372,6 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
                 displayedIndicatorValues={displayedIndicatorValues}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
-                showUnfilledOnly={showUnfilledOnly}
               />
             )}
           </div>
@@ -416,7 +382,6 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
         <SituationTab
           displayedIndicatorValues={displayedIndicatorValues}
           selectedCategory={selectedCategory}
-          activeSituation={activeSituation}
           economicActorData={economicActorData}
           onSave={handleSaveIndicatorValue}
           isViewLoading={isLoading}
