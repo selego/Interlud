@@ -552,6 +552,19 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
     }
   }
 
+  // CAS 13b: =VLOOKUP(E1116, 'Remplissage - Sit. Init.'!$E$1115:$K$1204, 7, FALSE)
+  // Variante française: =RECHERCHEV(E1116; 'Feuille'!plage; 7; FAUX)
+  // La clé est une simple référence de cellule (colonne E = excel_indicator_id de la ligne courante).
+  // On recopiera la condition d'affichage de l'indicateur portant cet ID dans la feuille référencée (miroir).
+  const vlookupCellKeyMatch = formulaContent.match(/^(?:VLOOKUP|RECHERCHEV)\s*\(\s*\$?([A-Z]+)\$?(\d+)\s*[,;]\s*(?:['']([^'']+)['']!)?\$?[A-Z]+\$?\d+\s*:\s*\$?[A-Z]+\$?\d+\s*[,;]\s*\d+\s*[,;]\s*(?:FALSE|FAUX)\s*\)$/i);
+  if (vlookupCellKeyMatch && getCellValue) {
+    const keyValue = getCellValue(parseInt(vlookupCellKeyMatch[2], 10), vlookupCellKeyMatch[1]);
+    if (keyValue !== null && keyValue !== undefined && keyValue !== "") {
+      const sourceSituation = extractSituationFromSheetName(vlookupCellKeyMatch[3]);
+      return { _indicatorRefByName: { excel_indicator_id: String(keyValue).trim(), situation: sourceSituation } };
+    }
+  }
+
   return null;
 }
 
