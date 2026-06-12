@@ -265,6 +265,67 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
   }
 });
 
+// Dashboard home : émissions brutes par action/année (onglet "3. Émissions par action").
+// Les gains (= écart entre deux situations d'émission) sont dérivés côté front.
+router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const { collectivity } = req.body;
+    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
+
+    let aggregationFileId = null;
+    if (req.user?.role === 'economic_actor') {
+      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
+      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
+      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
+      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
+    }
+    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
+
+    const siteId = await getSiteId();
+
+    const actions = await Action.find({ type: { $in: ['custom', 'reference'] }, collectivity_id: collectivity._id || collectivity.id }).sort({ name: 1 });
+    const configured = actions.filter((a) => ACTION_EMISSIONS_RANGES[a.excel_worksheetname || 'B2']);
+
+    const emissionsByType = {};
+    for (const et of EMISSION_TYPES) emissionsByType[et] = [];
+
+    // Une seule entrée par action (worksheet) : on lit le bloc TOTAL (colonnes E→AG, offset 4),
+    // pas les instances individuelles. On dédoublonne donc par worksheet.
+    const cache = {};
+    const seen = new Set();
+    for (const action of configured) {
+      const worksheetKey = action.excel_worksheetname || 'B2';
+      if (seen.has(worksheetKey)) continue;
+      seen.add(worksheetKey);
+      if (!cache[worksheetKey]) {
+        const emStart = ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow;
+        const emResult = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${emStart}:AG${emStart + 40}')`);
+        cache[worksheetKey] = (emResult?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050);
+      }
+      const agg = extractAggregation({ type: 'global' }, [], cache[worksheetKey]);
+      for (const [emissionType, emData] of Object.entries(agg.emissions)) {
+        emissionsByType[emissionType].push({ code: worksheetKey, name: action.action_parent_name || action.name, yearly: emData.yearlyData });
+      }
+    }
+
+    // Émissions brutes par indicateur : { initiale, reference, previsionnelle, expost } par action/année.
+    // Le front en dérive les gains (situation − référence) pour les indicateurs, le top 5 et le graphe.
+    const emissions = {};
+    for (const et of EMISSION_TYPES) {
+      emissions[et] = { unit: INDICATORS_CONFIG.find((c) => c.key === et)?.unit, actions: emissionsByType[et] };
+    }
+
+    res.json({ ok: true, data: { emissions } });
+  } catch (error) {
+    capture(error);
+    res.json({ ok: false, data: { error: error.message } });
+  }
+});
+
 router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { collectivity, action, date_start, date_end } = req.body;

@@ -1,897 +1,575 @@
 import React, { useState, useEffect } from "react"
-import { FiList, FiCheckCircle, FiTrendingUp, FiAlertTriangle, FiPlusCircle } from "react-icons/fi"
 import { useNavigate } from "react-router-dom"
-import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
-import Select from "@/components/Select"
-import ProgressCircle from "@/components/ProgressCircle"
-import DebouncedInput from "@/components/debounceInput"
-import Loader from "@/components/loader"
-import Modal from "@/components/modal"
 
-const getStatutBadgeClass = (statut) => {
-  if (statut === "completed") return { class: "bg-primary-green/10 text-primary-green", text: "Complétée" }
-  if (statut === "upcoming") return { class: "bg-primary-teal/10 text-primary-teal", text: "À venir" }
-  if (statut === "in_progress") return { class: "bg-primary-orange/10 text-primary-orange", text: "En cours" }
-  if (statut === "blocked") return { class: "bg-red-100 text-red-700", text: "À l'arrêt" }
-  return { class: "bg-gray-100 text-gray-700", text: "Nouvelle" }
+// ============================================================================
+// Métadonnées d'affichage par clé d'indicateur renvoyée par /excel/home_aggregation
+// ============================================================================
+
+const META = {
+  GES: { short: "GES", label: "Gaz à effet de serre" },
+  PM: { short: "PM", label: "Particules fines" },
+  NOx: { short: "NOₓ", label: "Oxydes d'azote" },
+  HC: { short: "HC", label: "Hydrocarbures" },
+  CO: { short: "CO", label: "Monoxyde de carbone" },
+  Nrj: { short: "Énergie", label: "Énergie consommée" },
 }
 
-const INDICATORS_CONFIG = [
-  { key: 'GES', label: 'GES', unit: 'tCO2e', color: '#2DAC6A' },
-  { key: 'PM', label: 'PM', unit: 'tPart', color: '#56BDB8' },
-  { key: 'HC', label: 'HC', unit: 'tHC', color: '#F59600' },
-  { key: 'NOx', label: 'NOx', unit: 'tNOx', color: '#8B5CF6' },
-  { key: 'CO', label: 'CO', unit: 'tCO', color: '#EC4899' },
-  { key: 'Énergie', label: 'Énergie', unit: 'GWh', color: '#3B82F6' },
-];
+const PALETTE = ["#0A3641", "#1A6E5A", "#2DAC6A", "#56BDB8", "#7FCEC0", "#A4DDB7", "#C8E8B6", "#E5BD7A", "#D88E5A", "#B86F4F", "#8B5E3C"]
 
-const formatGES = (value) => {
-  if (value === 0 || isNaN(value)) return '0 tCO₂e';
-  const absVal = Math.abs(value);
-  if (absVal >= 1000) return `${(value / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ktCO₂e`;
-  return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} tCO₂e`;
-};
+const fmtNum = (v) => {
+  if (v == null) return "—"
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
+  if (abs >= 10_000) return `${(v / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
+  return v.toLocaleString("fr-FR", { maximumFractionDigits: abs >= 100 ? 0 : abs >= 1 ? 2 : 3 })
+}
 
-const formatEnergie = (value) => {
-  if (value === 0 || isNaN(value)) return '0 GWh';
-  return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} GWh`;
-};
+const fmtSigned = (v, decimals = 1) => {
+  if (v == null) return "—"
+  return `${v > 0 ? "+" : ""}${v.toLocaleString("fr-FR", { maximumFractionDigits: decimals })}`
+}
 
-const SITUATION_LABELS = { init: 'Initiale', ref: 'Référence', prev: 'Prévisionnel', expost: 'Ex-post' }
+
+
+const ecart = (situation, reference) => (situation ? situation - reference : 0)
+
+const buildIndicators = (emissions) =>
+  Object.entries(emissions || {}).map(([key, em]) => {
+    const byYear = new Map()
+    for (const a of em.actions) for (const d of a.yearly) {
+      const acc = byYear.get(d.year) || { prev: 0, reel: 0 }
+      acc.prev += d.previsionnelle || 0
+      acc.reel += d.expost || 0
+      byYear.set(d.year, acc)
+    }
+    let cumPrev = 0
+    let cumReel = 0
+    const yearly = [...byYear.keys()].sort((a, b) => a - b).map((year) => {
+      cumPrev += byYear.get(year).prev
+      cumReel += byYear.get(year).reel
+      return { year, prev: Math.abs(cumPrev), reel: Math.abs(cumReel) }
+    })
+    const firstIdx = yearly.findIndex((d) => d.prev !== 0 || d.reel !== 0)
+    return {
+      key,
+      unit: em.unit,
+      ...(META[key] || { short: key, label: key }),
+      targetCumul: Math.abs(cumPrev),
+      realCumul: Math.abs(cumReel),
+      advancement: Math.abs(cumPrev) > 0 ? (Math.abs(cumReel) / Math.abs(cumPrev)) * 100 : 0,
+      ecartRelatif: Math.abs(cumPrev) > 0 ? ((Math.abs(cumReel) - Math.abs(cumPrev)) / Math.abs(cumPrev)) * 100 : 0,
+      yearly: firstIdx >= 0 ? yearly.slice(firstIdx) : [],
+    }
+  })
+
+const buildContributions = (em) =>
+  (em?.actions || []).map((a) => ({
+    action: a.code,
+    name: a.name,
+    ges: a.yearly.reduce((s, d) => s + ecart(d.expost, d.reference), 0),
+    ges_prev: a.yearly.reduce((s, d) => s + ecart(d.previsionnelle, d.reference), 0),
+  }))
+
+// Graphe : barres = émissions ex-post réelles par action/année, ligne = total prévisionnel par année.
+const buildEmissionChart = (em) => {
+  const actions = em?.actions || []
+  const yearSet = new Set()
+  for (const a of actions) for (const d of a.yearly) if (d.expost || d.previsionnelle) yearSet.add(d.year)
+  const years = [...yearSet].sort((a, b) => a - b)
+  return {
+    years,
+    actions: actions
+      .map((a) => ({ code: a.code, name: a.name, yearly: years.map((y) => ({ year: y, value: a.yearly.find((d) => d.year === y)?.expost || 0 })) }))
+      .filter((a) => a.yearly.some((d) => d.value > 0)),
+    prevByYear: years.map((y) => ({ year: y, value: actions.reduce((s, a) => s + (a.yearly.find((d) => d.year === y)?.previsionnelle || 0), 0) })),
+    refByYear: years.map((y) => ({ year: y, value: actions.reduce((s, a) => s + (a.yearly.find((d) => d.year === y)?.reference || 0), 0) })),
+  }
+}
+
 
 export default function Home() {
-  const [actions, setActions] = useState([])
+  const { collectivity } = useStore()
   const navigate = useNavigate()
-  const { collectivity, user, economicActor } = useStore()
-  const [filters, setFilters] = useState({ search: "", status: "" })
-  const [synthese, setSynthese] = useState({ actionsCreated: 0, actionsInProgress: 0, actionsCompleted: 0, actionsBlocked: 0, actionsUpcoming: 0, actionsWithoutStatus: 0 })
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [globalGains, setGlobalGains] = useState(null)
-  
-  const fetchSynthese = async () => {
+  const [activeIndicator, setActiveIndicator] = useState("GES")
+  const [data, setData] = useState(null)
+  const [allActions, setAllActions] = useState([])
+  const [ready, setReady] = useState(false)
+  const [loadingData, setLoadingData] = useState(false)
+
+  const fetchHomeAggregation = async () => {
     try {
-      const { ok, data, code } = await api.post("/dashboard/synthese", { collectivity_id: collectivity._id })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setSynthese(data)
+      setLoadingData(true)
+      const { ok, data } = await api.post("/excel/home_aggregation", { collectivity })
+      console.log(data)
+      if (!ok) return
+      setData(data)
     } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
+      console.error(error)
+    } finally {
+      setLoadingData(false)
     }
   }
 
   const fetchActions = async () => {
     try {
-      const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id, ...filters })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setActions(data)
+      const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id, limit: 1000 })
+      if (!ok) return toast.error(code || "Impossible de charger les actions")
+      setAllActions(data)
     } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
-    }
-  }
-
-  const fetchGlobalGains = async () => {
-    if (!collectivity) return;
-    try {
-      const { ok, data } = await api.post('/excel/global-gains', { collectivity: collectivity });
-      if (!ok) return console.error(data.error || "Une erreur est survenue");
-      setGlobalGains(data);
-    } catch (error) {
-      console.error(error.message || "Une erreur est survenue");
-    }
-  };
-
-  const exportExcelFile = async () => {
-    try {
-      const { ok, data, code } = await api.post("/excel/export", { fileId: user.role === "economic_actor" && economicActor ? economicActor.collectivities?.find(c => c.id === collectivity._id)?.aggregation_excel_file_id : collectivity.aggregation_excel_file_id})
-      if (!ok) return toast.error(code || "Erreur lors de l'export")
-      const link = document.createElement("a");
-      link.href = data.downloadUrl
-      link.download = data.fileName || "export.xlsx";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      toast.error(error.code || "Une erreur est survenue");
-    }
-  }
-
-  const onboardingSteps = (() => {
-    if (actions.length === 0) return null
-    const firstNonConfigAction = actions.find(a => a.type !== "config")
-    const firstActionCompletion = firstNonConfigAction ? Math.round(((firstNonConfigAction.completion_init || 0) + (firstNonConfigAction.completion_ref || 0) + (firstNonConfigAction.completion_prev || 0) + (firstNonConfigAction.excel_files_expost?.length > 0 ? (firstNonConfigAction.completion_expost || 0) : 0)) / (firstNonConfigAction.excel_files_expost?.length > 0 ? 4 : 3)): 0
-    const onboardingSource = user.role === 'economic_actor' && economicActor
-      ? economicActor.collectivities?.find(c => c.id === collectivity._id) || {}
-      : collectivity
-    return [
-      { label: "Créer votre première action", done: actions.length > 0, link: "/actions" },
-      { label: 'Remplir Données de base dans "Mes données générales"', done: !!onboardingSource?.basedata_onboarded, link: "/general-data" },
-      { label: 'Remplir Parc types dans "Mes données générales"', done: !!onboardingSource?.parc_types_onboarded, link: "/general-data" },
-      { label: "Remplir votre action", done: firstActionCompletion > 0, link: firstNonConfigAction ? `/actions/${firstNonConfigAction._id}/dashboard` : "/actions" },
-    ]
-  })()
-
-  useEffect(() => {
-    if ((user.collectivities.length === 0 || !user.collectivities.some((c) => c.status === "approved")) && user.role !== "admin") return navigate("/collectivity/join", { replace: true })
-    if (!collectivity) return
-    fetchActions()
-    fetchSynthese()
-    fetchGlobalGains()
-  }, [collectivity, filters])
-
-  if (!collectivity) return <Loader />
-
-  const isOnboarded = onboardingSteps !== null && onboardingSteps.every(s => s.done)
-
-  if (!isOnboarded && actions.length === 0) {
-    return (
-      <div className="">
-        <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
-          <div className="mb-8">
-            <h1 className="text-font-primary text-4xl">
-              Tableau de bord <span className="font-bold text-primary-green">{collectivity.name}</span>
-            </h1>
-          </div>
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 rounded-full bg-primary-green/10 flex items-center justify-center mb-6">
-              <svg className="w-8 h-8 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Créez votre première action</h2>
-            <p className="text-gray-500 text-center max-w-md mb-8">
-              Commencez par créer une action pour initialiser les données de votre collectivité.
-            </p>
-            <button
-              onClick={() => navigate("/actions")}
-              className="button-primary px-6 py-3 flex items-center gap-2"
-            >
-              Créer une action
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="">
-      <div className="relative z-10 max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-8">
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-font-primary text-4xl">
-                Tableau de bord <span className="font-bold text-primary-green">{collectivity.name}</span>
-              </h1>
-            </div>
-            {isOnboarded && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={ exportExcelFile }
-                  className="button-primary"
-                >
-                  Export Excel
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {isOnboarded && <MisconfiguredActionsBanner collectivity={collectivity} />}
-
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
-          <div className="xl:col-span-8">
-            {!isOnboarded ? (
-              <div className="h-full rounded-2xl p-6 text-white shadow-lg" style={{ background: 'linear-gradient(135deg, #2DAC6A 0%, #1D7E4F 100%)' }}>
-                <h3 className="text-lg font-bold mb-4 text-white">Bienvenue ! Voici les étapes pour démarrer</h3>
-                <div className="space-y-3">
-                  {(onboardingSteps || []).map((step, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors ${step.done ? 'bg-white/10' : 'bg-white/20 hover:bg-white/25 cursor-pointer'}`}
-                      onClick={() => !step.done && navigate(step.link)}
-                    >
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${step.done ? 'bg-white' : 'border-2 border-white/60'}`}>
-                        {step.done && (
-                          <svg className="w-4 h-4 text-primary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                      <span className={`text-sm font-medium ${step.done ? 'line-through opacity-70' : ''}`}>
-                        {step.label}
-                      </span>
-                      {!step.done && (
-                        <svg className="w-4 h-4 ml-auto opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <>
-                {globalGains && <KeyIndicatorsCard globalGains={globalGains} />}
-                {!globalGains && (
-                  <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
-                    <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          <div className="xl:col-span-4">
-            <ActionsDistribution synthese={synthese} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-12">
-           <div className="xl:col-span-6 relative">
-            {isOnboarded ? (
-              <>
-                {globalGains && <EvolutionChart globalGains={globalGains} />}
-                {!globalGains && (
-                  <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
-                    <p className="text-gray-500 text-sm">Aucune donnée disponible pour le moment</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <LockedChart />
-            )}
-           </div>
-           <div className="xl:col-span-6 relative">
-            {isOnboarded ? (
-              <ActionContributionSection collectivity={collectivity} />
-            ) : (
-              <LockedChart />
-            )}
-           </div>
-        </div>
-
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <h2 className="font-bold text-font-primary text-3xl">Toutes les actions</h2>
-              <div className="relative">
-                <DebouncedInput
-                  type="text"
-                  placeholder="Rechercher une action..."
-                  debounce={500}
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                  className="pl-10 pr-4 py-2 input-primary text-sm w-96"
-                />
-                <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Select
-                value={filters.status}
-                onChange={(value) => setFilters({ ...filters, status: value })}
-                options={[
-                  { value: "", label: "Tous les statuts" },
-                  { value: "completed", label: "Complétée" },
-                  { value: "in_progress", label: "À compléter" },
-                  { value: "upcoming", label: "En attente" },
-                  { value: "blocked", label: "À l'arrêt" },
-                  { value: "no_status", label: "Sans statut" }
-                ]}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {actions.length === 0 ? (
-              <div className="col-span-full">
-                <div className="flex flex-col items-center justify-center gap-4 text-center py-8">
-                  <div className="text-lg font-semibold text-gray-700">Aucune action dans cette collectivité</div>
-                  <p className="text-sm text-gray-500">Ajoutez des actions depuis la page actions.</p>
-                  <button
-                    onClick={() => navigate("/actions")}
-                    className="button-primary px-5 py-3 flex items-center gap-2"
-                  >
-                    <span>Voir les actions</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {actions.map((action) => (
-                  <CardAction key={action._id} action={action} />
-                ))}
-
-                <div
-                  className="h-full card-shadow rounded-2xl border-2 border-dashed border-primary-green/60 hover:border-primary-green bg-white p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center"
-                  onClick={() => navigate(`/actions`)}
-                >
-                  <div className="flex flex-col items-center gap-3 mb-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
-                      <div className="w-7 h-7 rounded-md bg-primary-green"></div>
-                      <div className="w-7 h-7 rounded-md ring-2 ring-primary-green"></div>
-                      <div className="w-7 h-7 rounded-md bg-primary-green"></div>
-                    </div>
-                    <div className="text-primary-green text-xl leading-none tracking-widest">...</div>
-                  </div>
-                  <p className="text-base font-semibold text-primary-green">Voir toutes les actions</p>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-      <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
-    </div>
-  )
-}
-
-function KeyIndicatorsCard({ globalGains }) {
-  if (!globalGains) return <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[300px]"><Loader /></div>;
-
-  return (
-    <div className="h-full rounded-2xl p-8 text-white relative overflow-hidden flex flex-col justify-between shadow-lg" style={{ background: 'linear-gradient(135deg, #2DAC6A 0%, #1D7E4F 100%)' }}>
-      <div className="absolute top-0 right-0 w-96 h-96 bg-white opacity-5 rounded-full transform translate-x-1/3 -translate-y-1/3 pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-black opacity-5 rounded-full transform -translate-x-1/3 translate-y-1/3 pointer-events-none"></div>
-
-      <div className="relative z-10">
-        <h3 className="text-green-50 text-base font-medium mb-1 opacity-90">GES évités (mesuré) • Évolution cumulée</h3>
-        
-        <div className="mt-4 mb-6">
-          <div className="text-6xl font-bold tracking-tight mb-4">
-            {formatGES(globalGains.gesData.evolutionCumuleeReel).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
-            <span className="text-3xl font-medium ml-2 opacity-80">
-               {globalGains.gesData.evolutionCumuleeReel >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
-            </span>
-          </div>
-          
-          <div className="inline-flex items-center bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/10">
-            <span className="text-2xl mr-2">✈️</span>
-            <span className="text-sm font-medium">
-              Équivalent à <strong className="text-white">{Math.round((globalGains.gesData.evolutionCumuleeReel / 250)*2).toLocaleString('fr-FR')} vols transatlantiques évités</strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative z-10 grid grid-cols-3 gap-8 border-t border-white/20 pt-6">
-        <div>
-          <p className="text-green-100 text-sm mb-1 opacity-80">Taux d'avancement de la trajectoire GES</p>
-          <p className="text-2xl font-bold">{globalGains.avancementTrajectoire.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} <span className="text-base font-medium opacity-80">%</span></p>
-        </div>
-        <div>
-          <p className="text-green-100 text-sm mb-1 opacity-80">Écart entre gains prévisionnels et réels</p>
-          <p className={`text-2xl font-bold ${globalGains.gesData.ecartAbsolu < 0 ? 'text-red-300' : 'text-green-300'}`}>
-            {globalGains.gesData.ecartAbsolu > 0 ? '+' : ''}{formatGES(globalGains.gesData.ecartAbsolu).replace(' tCO₂e', '').replace(' ktCO₂e', '').replace(' MtCO₂e', '')}
-             <span className="text-base font-medium opacity-80 ml-1">
-               {Math.abs(globalGains.gesData.ecartAbsolu) >= 1000 ? 'ktCO₂e' : 'tCO₂e'}
-            </span>
-          </p>
-        </div>
-        <div>
-          <p className="text-green-100 text-sm mb-1 opacity-80">Énergie économisée</p>
-          <p className="text-2xl font-bold">{formatEnergie(globalGains.energieData.evolutionCumuleeReel).replace(' GWh', '')} <span className="text-base font-medium opacity-80">GWh</span></p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ActionsDistribution({ synthese }) {
-  const total = synthese.actionsCreated || 0;
-  
-  const pieData = [
-    { name: "Complétées", value: synthese.actionsCompleted || 0, color: "#2DAC6A" },
-    { name: "En progression", value: synthese.actionsInProgress || 0, color: "#F59600" },
-    { name: "À venir", value: synthese.actionsUpcoming || 0, color: "#56BDB8" },
-    { name: "Sans statut", value: synthese.actionsWithoutStatus || 0, color: "#9CA3AF" },
-    { name: "À l'arrêt", value: synthese.actionsBlocked || 0, color: "#EE4B2B" }
-  ].filter(d => d.value > 0);
-
-  const displayData = pieData.length > 0 ? pieData : [{ name: "Aucune", value: 1, color: "#E5E7EB" }];
-
-  return (
-    <div className="h-full card-shadow p-6 flex flex-col">
-      <h3 className="font-bold text-font-primary text-lg mb-4">Répartition des actions</h3>
-
-      <div className="flex-1 flex items-center">
-        <div className="flex flex-col gap-2 mr-4">
-          {pieData.map((item, index) => (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-              <span className="text-gray-600 whitespace-nowrap">{item.name}</span>
-              <span className="font-semibold text-gray-900">
-                {total > 0 ? Math.round((item.value / total) * 100) : 0}%
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex-1 relative h-[160px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={displayData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={70}
-                paddingAngle={4}
-                dataKey="value"
-              >
-                {displayData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                ))}
-              </Pie>
-              <Tooltip
-                wrapperStyle={{ zIndex: 1000 }}
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length && pieData.length > 0) {
-                    return (
-                      <div className="bg-white border border-gray-100 rounded-lg p-2 shadow-xl">
-                        <p className="font-bold text-xs mb-1">{payload[0].name}</p>
-                        <p className="text-xs text-gray-600">
-                          <span className="font-bold text-sm" style={{color: payload[0].payload.color}}>{payload[0].value}</span> actions
-                        </p>
-                      </div>
-                    )
-                  }
-                  return null
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-2xl font-bold text-gray-900">{synthese.actionsCreated}</span>
-            <span className="text-xs text-gray-500 font-medium">Total</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function EvolutionChart({ globalGains }) {
-  const [selectedIndicator, setSelectedIndicator] = useState('GES');
-  
-  if (!globalGains) return <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]"><Loader /></div>;
-  
-  const selectedIndex = INDICATORS_CONFIG.findIndex(c => c.key === selectedIndicator);
-  
-  const evolutionData =  globalGains.indicators[selectedIndex].yearlyPrev.map((item, i) => ({year: item.year, previsionnel: item.value, reel:  globalGains.indicators[selectedIndex].yearlyReel[i]?.value || 0 }));
-
-  return (
-    <div className="h-full card-shadow p-6 flex flex-col">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h3 className="font-bold text-font-primary text-xl">Évolution {selectedIndicator} ({ globalGains.indicators[selectedIndex].unit})</h3>
-          <p className="text-sm text-gray-500 mt-1">Impact de la charte sur la collectivité</p>
-        </div>
-        
-        <div className="flex bg-gray-100 rounded-lg p-1">
-          {INDICATORS_CONFIG.map((config) => (
-             <button
-               key={config.key}
-               onClick={() => setSelectedIndicator(config.key)}
-               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                 selectedIndicator === config.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-               }`}
-             >
-               {config.label}
-             </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={evolutionData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-            <XAxis 
-              dataKey="year" 
-              axisLine={false} 
-              tickLine={false} 
-              tick={{ fontSize: 12, fill: '#6B7280' }} 
-              dy={10}
-            />
-            <YAxis 
-              axisLine={false} 
-              tickLine={false} 
-              tick={{ fontSize: 12, fill: '#6B7280' }} 
-              tickFormatter={(v) => {
-                if (v >= 1000) return `${(v/1000).toFixed(0)}k`;
-                return v;
-              }}
-            />
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (active && payload && payload.length) {
-                  return (
-                    <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-xl">
-                      <p className="font-bold text-sm mb-2">{label}</p>
-                      {payload.map((entry, index) => (
-                        <div key={index} className="flex items-center gap-2 text-sm mb-1">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                          <span className="text-gray-600">{entry.name}:</span>
-                          <span className="font-semibold">{entry.value.toLocaleString('fr-FR')} { globalGains.indicators[selectedIndex].unit}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-            <Legend 
-               verticalAlign="bottom" 
-               height={36} 
-               iconType="circle"
-               formatter={(value, entry) => <span className="text-sm text-gray-600 ml-2">{value}</span>}
-            />
-            <Line
-              type="monotone"
-              dataKey="reel"
-              name="Mesuré (réel cumulé)"
-              stroke="#2DAC6A"
-              strokeWidth={3}
-              dot={{ fill: '#2DAC6A', r: 4, strokeWidth: 2, stroke: '#fff' }}
-              activeDot={{ r: 6, strokeWidth: 0 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="previsionnel"
-              name="Trajectoire prévisionnelle"
-              stroke="#86EFAC"
-              strokeWidth={3}
-              strokeDasharray="4 4"
-              dot={false}
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  )
-}
-
-function CardAction({ action }) {
-  const navigate = useNavigate()
-  const statutBadge = getStatutBadgeClass(action.status)
-  const completion = Math.round(((action.completion_init || 0) + (action.completion_ref || 0) + (action.completion_prev || 0) + (action.excel_files_expost?.length > 0 ? (action.completion_expost || 0) : 0)) / (action.excel_files_expost?.length > 0 ? 4 : 3))
-
-  return (
-    <div key={action._id} className="card-shadow p-6 h-full flex flex-col" onClick={() => navigate(`/actions/${action._id}/dashboard`)}>
-      <div className="mb-3">
-        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${statutBadge.class}`}>{statutBadge.text}</span>
-      </div>
-
-      <h3 className="font-bold text-font-primary text-lg mb-2 truncate">{action.name}</h3>
-      <p className="text-sm text-gray-500 mb-3 line-clamp-2">{action.description}</p>
-
-      <div className="mt-auto pt-3 flex items-center justify-between">
-        <button className="text-sm text-primary-orange font-semibold border-b border-primary-orange">Voir l'action</button>
-        <div className="flex items-center gap-1">
-          <ProgressCircle percentage={completion} size={20} />
-          <span className="text-xs text-gray-600">
-            Complétée à <strong>{completion}%</strong>
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
-
-const AddActionModal = ({ isOpen, onClose, collectivity }) => {
-    const navigate = useNavigate()
-    const [selectedActionId, setSelectedActionId] = useState("")
-    const [isCustomVersion, setIsCustomVersion] = useState(false)
-    const [customName, setCustomName] = useState("")
-    const [actions, setActions] = useState([])
-
-    const fetchActions = async () => {
-      try {
-        const { ok, data } = await api.post("/action/search", { type: "global" })
-        if (!ok) return toast.error(data.code || "Une erreur est survenue")
-        setActions(data)
-      } catch (error) {
-        toast.error(error || "Une erreur est survenue")
-      }
-    }
-
-    useEffect(() => {
-        fetchActions()
-    }, [isOpen])
-
-    const createAction = async () => {
-      try {
-        if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
-        if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
-
-        const selectedAction = actions.find(a => a._id === selectedActionId)
-        const payload = {
-          action_parent_id: selectedActionId,
-          action_parent_name: selectedAction.name,
-          name: isCustomVersion ? customName : selectedAction.name,
-          type: isCustomVersion ? "custom" : "reference",
-          collectivity_id: collectivity._id,
-          collectivity_name: collectivity.name
-        }
-
-        const { ok, data, code } = await api.post("/action/", payload)
-        if (!ok) return toast.error(code || "Une erreur est survenue")
-        navigate(`/actions/${data._id}/settings`)
-      } catch (error) {
-        toast.error(error || "Une erreur est survenue")
-      }
-    }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Ajouter une action</h2>
-        </div>
-
-        {/* Action Selection */}
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Choisissez parmi les actions disponibles <span className="text-red-500">*</span>
-          </label>
-          <Select
-            options={actions.map(action => ({ value: action._id, label: action.name}))}
-            value={selectedActionId}
-            onChange={(value) => setSelectedActionId(value)}
-            placeholder="Sélectionner une action"
-            constrained={true}
-          />
-        </div>
-
-        {selectedActionId && (
-          <div className="mb-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <div className="relative flex items-center">
-                <input
-                  type="checkbox"
-                  checked={isCustomVersion}
-                  onChange={(e) => setIsCustomVersion(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-4 h-4 border-2 border-gray-300 peer-checked:bg-[#2DAC6A] peer-checked:border-[#2DAC6A] flex items-center justify-center transition-all">
-                  {isCustomVersion && (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              <span className="text-sm text-gray-700">
-                Créer une version personnalisée de cette action
-              </span>
-            </label>
-          </div>
-        )}
-
-        {/* Custom Name Input */}
-        {isCustomVersion && (
-          <div className="mb-6 animate-fadeIn">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nom de votre action personnalisée <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Entrez un nom personnalisé"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-              autoFocus
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              Cette action sera basée sur "{actions.find(a => a._id === selectedActionId)?.name}" avec les mêmes indicateurs
-            </p>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3">
-          <button onClick={createAction} className="button-primary">
-            Créer
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-function ActionContributionSection({ collectivity }) {
-  const [actionGains, setActionGains] = useState([]);
-  const [collectivityActions, setCollectivityActions] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const fetchActionGains = async () => {
-    if (!collectivity) return;
-    try {
-      setIsLoading(true);
-      const { ok, data, code } = await api.post('/excel/action-contribution', { collectivity: collectivity });
-      if (!ok) return toast.error(code || "Une erreur est survenue");
-      setActionGains(data);
-    } catch (error) {
-      toast.error(error.code || "Une erreur est survenue");
+      toast.error(error.code || "Impossible de charger les actions")
     } finally {
-      setIsLoading(false);
+      setReady(true)
     }
-  };
-
-  const fetchCollectivityActions = async () => {
-    if (!collectivity) return;
-    try {
-      const { ok, data } = await api.post("/action/search", { collectivity_id: collectivity._id });
-      if (!ok) return toast.error(data.code || "Une erreur est survenue");
-      setCollectivityActions(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  // useEffect(() => {
-  //   fetchActionGains();
-  //   fetchCollectivityActions();
-  // }, [collectivity]);
-
-  if (isLoading) {
-    return (
-      <div className="h-full card-shadow p-6 flex items-center justify-center min-h-[400px]">
-        <Loader />
-      </div>
-    );
   }
 
-  const filteredGains = actionGains.filter(gain => {
-    return collectivityActions.some(action => action.excel_worksheetname === gain.action);
-  }).map(gain => {
-    const action = collectivityActions.find(a => a.excel_worksheetname === gain.action);
-    return {...gain, displayName: action ? action.name : gain.action
-    };
-  });
-
-
-  return (
-    <div className="h-full card-shadow p-6 flex flex-col">
-      <div className="mb-6">
-        <h3 className="font-bold text-font-primary text-xl">Contribution des actions</h3>
-        <p className="text-sm text-gray-500 mt-1">Part de chaque action dans les GES évités</p>
-      </div>
-
-      <div className="flex-1 space-y-4">
-        {filteredGains.length < 2 ? (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-            Il faut au moins 2 actions liées à la charte InTerLUD+ pour afficher les contributions
-          </div>
-        ) : (
-          filteredGains.slice(0, 4).map((action, index) => {
-            const totalReduction = filteredGains.reduce((acc, curr) => acc + Math.abs(curr.ges), 0);
-            return (
-              <div key={index} className={`flex flex-col gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors`}>
-                <div className="font-bold text-gray-900 text-sm truncate" title={action.displayName}>
-                  {action.displayName}
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex-1 h-6 bg-gray-100 rounded flex overflow-hidden relative">
-                     <div
-                       className={`h-full ${action.ges < 0 ? 'bg-[#2DAC6A]' : 'bg-[#EF4444]'}`}
-                       style={{ width: `${Math.min((Math.abs(action.ges) /  Math.max(...filteredGains.map(a => Math.abs(a.ges)), 1)) * 100, 100)}%` }}
-                     />
-                     <span className="absolute inset-0 flex items-center px-2 text-xs font-medium text-gray-700 drop-shadow-sm">
-                       {action.ges > 0 ? '+' : ''}{formatGES(action.ges)}
-                     </span>
-                  </div>
-
-                  <div className={`w-14 text-right text-sm font-bold ${action.ges < 0 ? 'text-[#2DAC6A]' : 'text-[#EF4444]'}`}>
-                    {(totalReduction > 0 ? (Math.abs(action.ges) / totalReduction) * 100 : 0).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-function MisconfiguredActionsBanner({ collectivity }) {
-  const [incompleteActions, setIncompleteActions] = useState([])
-  const navigate = useNavigate()
-
   useEffect(() => {
-    if (!collectivity?._id) return
-    const fetchData = async () => {
-      try {
-        const { ok, data, code } = await api.post("/indicator_value/check-general-data-completion", { collectivity_id: collectivity._id })
-        if (!ok) return toast.error(code || "Une erreur est survenue")
-        setIncompleteActions(data)
-      } catch (error) {
-        toast.error(error.code || "Une erreur est survenue")
-      }
+    if (!collectivity) return
+    setReady(false)
+    setData(null)
+    setAllActions([])
+    setLoadingData(true)
+    const load = async () => {
+      await fetchActions()
+      await fetchHomeAggregation()
     }
-    fetchData()
-  }, [collectivity?._id])
+    load()
+  }, [collectivity])
 
-  if (incompleteActions.length === 0) return null
+  if (!collectivity || !ready) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-lg text-gray-600">Chargement…</div>
+    </div>
+  )
+
+  const onboardingSteps = [
+    { label: "Créer votre première action", done: allActions.length > 0, link: "/actions" },
+    { label: "Remplir votre première action à 100%", done: allActions.some((a) => a.status === "completed"), link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions" },
+  ]
+
+  const indicators = data ? buildIndicators(data.emissions) : []
+  if (data) console.table((data.emissions?.GES?.actions?.[0]?.yearly || []).filter((d) => d.year >= 2020 && d.year <= 2028))
+  const indicator = indicators.find((i) => i.key === activeIndicator) || indicators[0]
+  const ges = indicators.find((i) => i.key === "GES") || indicator
+  const advancement = ges?.advancement || 0
+  const traj = indicator?.yearly || []
+  const yearExpost = [...traj].reverse().find((d) => d.reel > 0)?.year
+
+  const contributions = data ? buildContributions(data.emissions.GES) : []
+  const topActions = [...contributions].filter((a) => a.ges < 0).sort((a, b) => a.ges - b.ges).slice(0, 5)
+  const maxAction = Math.max(...contributions.map((a) => Math.abs(a.ges_prev)), 1)
+  const nbRetard = indicators.filter((i) => i.ecartRelatif < 0).length
 
   return (
-    <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
-      <div className="flex items-start gap-3">
-        <FiAlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-        <div className="flex-1">
-          <h3 className="font-semibold text-amber-800 text-sm mb-2">Données générales incomplètes</h3>
-          <p className="text-sm text-amber-700 mb-3">
-            Certaines actions ont des données générales associées non remplies. Merci de compléter les données générales pour que les calculs soient corrects.
-          </p>
-          <div className="space-y-3">
-            {incompleteActions.map(({ actionName, items }) => (
-              <div key={actionName}>
-                <div className="font-semibold text-amber-900 text-sm">{actionName}</div>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {items.map((item, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs">
-                      {item.configActionName} — {SITUATION_LABELS[item.situation]} {item.year}
-                      <span className="font-semibold">({item.completion}%)</span>
-                    </span>
-                  ))}
+    <div className="bg-white">
+      <div className="relative z-10 max-w-[1280px] mx-auto px-8 py-8" style={{ fontFamily: "'Source Sans Pro', sans-serif" }}>
+        {/* Header */}
+        <div className="mb-5">
+          <h1 className="text-font-primary text-4xl">
+            Tableau de bord <span className="font-bold text-primary-green">{collectivity.name}</span>
+          </h1>
+        </div>
+
+        {/* Onboarding */}
+        {!onboardingSteps.every((s) => s.done) && (
+          <div className="card-shadow rounded-2xl p-5 mb-6 bg-white border border-[#D9EFE3]">
+            <SectionLabel sub="Quelques étapes pour bien démarrer">Pour bien démarrer</SectionLabel>
+            <div className="flex flex-col gap-2">
+              {onboardingSteps.map((step, i) => (
+                <button
+                  key={i}
+                  onClick={() => navigate(step.link)}
+                  className="flex items-center gap-3 text-left px-2 py-2 rounded-lg hover:bg-[#F9FFFC] transition-colors cursor-pointer"
+                >
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${step.done ? "bg-primary-green text-white" : "border-2 border-[#D9EFE3] text-[#9CA3AF]"}`}>
+                    {step.done ? "✓" : i + 1}
+                  </span>
+                  <span className={`text-[14px] ${step.done ? "line-through text-[#9CA3AF]" : "text-font-primary font-medium"}`}>{step.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {onboardingSteps.every((s) => s.done) && (
+        <>
+        {loadingData && !data && <DashboardSkeleton />}
+
+        {data && indicator && (
+        <>
+        {/* Hero narratif */}
+        <div className="rounded-[20px] p-8 mb-6 border" style={{ background: "linear-gradient(135deg, #F9FFFC 0%, #fff 60%)", borderColor: "#D9EFE3" }}>
+          <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
+            <div>
+              <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
+                Vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévu,
+                soit <span className="font-bold">{fmtNum(ges.realCumul)} {ges.unit}</span> évitées sur {fmtNum(ges.targetCumul)} attendues.
+              </h2>
+              <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
+                <strong className="text-font-primary">{nbRetard} indicateur{nbRetard > 1 ? "s" : ""} sur {indicators.length}</strong> sont en retard sur leur cible cumulée.
+              </p>
+            </div>
+            <div className="flex justify-center">
+              <ProgressDonut value={advancement} size={200} stroke={20} label="de la cible" sub="atteinte" color={advancement >= 90 ? "#2DAC6A" : advancement >= 70 ? "#F59600" : "#FB6B69"} />
+            </div>
+          </div>
+        </div>
+
+        {/* Indicateurs */}
+        <div className="mb-6">
+          <SectionLabel sub="Cliquez pour explorer la trajectoire d'un indicateur">
+            Que disent les indicateurs ?
+          </SectionLabel>
+          <div className="grid grid-cols-3 gap-3.5">
+            {indicators.map((ind) => (
+              <button
+                key={ind.key}
+                onClick={() => setActiveIndicator(ind.key)}
+                className={`bg-white rounded-[14px] p-4 text-left cursor-pointer transition-all ${activeIndicator === ind.key ? "border-2 border-primary-green" : "border border-[#e1e5e8] hover:border-primary-green/40"}`}
+              >
+                <div className="flex justify-between mb-2">
+                  <span className="text-[13px] font-semibold text-font-primary">{ind.label}</span>
+                  <DeltaPill value={ind.ecartRelatif} suffix="%" size="sm" />
                 </div>
-              </div>
+                <div className="text-[13px] text-[#768776] leading-[1.4]">
+                  Réalisé <strong className="text-font-primary font-bold">{fmtNum(ind.realCumul)} {ind.unit}</strong>
+                  {" "}vs cible <strong className="text-font-primary">{fmtNum(ind.targetCumul)}</strong>
+                  {ind.ecartRelatif > 0 ? " · objectif dépassé" : ` · ${Math.round(ind.advancement)}% de la cible`}
+                </div>
+              </button>
             ))}
           </div>
-          <button
-            onClick={() => navigate("/general-data")}
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-900 transition-colors"
-          >
-            Compléter les données générales
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
         </div>
+
+        {/* Trajectoire */}
+        <div className="card-shadow rounded-2xl p-6 mb-6 bg-white">
+          <div className="flex justify-between mb-3">
+            <div>
+              <h3 className="text-[16px] font-semibold m-0 text-font-primary">Émissions {indicator.label}</h3>
+              <p className="text-[12px] text-[#768776] mt-1 mb-0">
+                Les barres sont des projections établies à partir des valeurs ex-post mesurées, décomposées par action. Les pointillés indiquent les trajectoires de référence et prévisionnelle.
+              </p>
+            </div>
+            <IndicatorPicker active={activeIndicator} onChange={setActiveIndicator} indicators={indicators} />
+          </div>
+          <StackedActionsChart emissions={buildEmissionChart(data.emissions[indicator.key])} unit={indicator.unit} yearExpost={yearExpost} />
+        </div>
+        </>
+        )}
+
+        {/* Bas — 2 colonnes */}
+        <div className="grid grid-cols-[2fr_1fr] gap-5 mb-8">
+          <div className="card-shadow rounded-2xl p-6 bg-white">
+            <SectionLabel sub="Classement par gain GES réel — cumulé sur la période">
+              Top 5 actions contributrices
+            </SectionLabel>
+            {topActions.length ? (
+              <div>
+                {topActions.map((a) => (
+                  <ActionBar key={a.action} action={a} max={maxAction} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-[13px] text-[#768776] py-6">Aucune action contributrice pour l'instant.</div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <div className="card-shadow rounded-2xl p-6 bg-white">
+              <SectionLabel>Portefeuille d'actions</SectionLabel>
+              <div className="grid grid-cols-2 gap-3">
+                <StatBlock value={allActions.length} label="Actions totales" />
+                <StatBlock value={allActions.filter((a) => a.status === "in_progress").length} label="En cours" color="#F59600" />
+                <StatBlock value={allActions.filter((a) => a.status === "completed").length} label="Terminées" color="#2DAC6A" />
+                <StatBlock value={allActions.filter((a) => a.status === "blocked").length} label="Bloquées" color="#FB6B69" />
+              </div>
+            </div>
+          </div>
+        </div>
+        </>
+        )}
       </div>
     </div>
   )
 }
 
-function LockedChart() {
+function DashboardSkeleton() {
   return (
-    <div className="relative h-full">
-      <div className="card-shadow rounded-2xl p-6 min-h-[400px] bg-gray-50 filter blur-[5px] pointer-events-none select-none">
-        <div className="h-4 w-40 bg-gray-200 rounded mb-2"></div>
-        <div className="h-3 w-28 bg-gray-100 rounded mb-6"></div>
-        <div className="flex items-end gap-3 h-48 mt-4">
-          {[40, 65, 50, 80, 60, 75, 45, 90, 55, 70].map((h, i) => (
-            <div key={i} className="flex-1 bg-gray-200 rounded-t" style={{ height: `${h}%` }}></div>
-          ))}
+    <div className="animate-pulse">
+      {/* Hero */}
+      <div className="rounded-[20px] p-8 mb-6 border border-[#D9EFE3] bg-[#F9FFFC]">
+        <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
+          <div className="space-y-3">
+            <div className="h-3 w-48 bg-[#D9EFE3] rounded" />
+            <div className="h-6 w-full max-w-[560px] bg-[#E5EDE9] rounded" />
+            <div className="h-6 w-3/4 bg-[#E5EDE9] rounded" />
+            <div className="h-4 w-1/2 bg-[#EAF0ED] rounded" />
+          </div>
+          <div className="flex justify-center">
+            <div className="w-[200px] h-[200px] rounded-full bg-[#E5EDE9]" />
+          </div>
         </div>
       </div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg px-6 py-4 text-center max-w-xs">
-          <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          <p className="text-gray-700 font-semibold text-sm">Complétez les situations d'une action pour accéder au tableau de bord</p>
-        </div>
+
+      {/* Cartes indicateurs */}
+      <div className="grid grid-cols-3 gap-3.5 mb-6">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="bg-white rounded-[14px] p-4 border border-[#e1e5e8] space-y-3">
+            <div className="h-4 w-2/3 bg-[#E5EDE9] rounded" />
+            <div className="h-3 w-full bg-[#EAF0ED] rounded" />
+            <div className="h-3 w-4/5 bg-[#EAF0ED] rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Graphique */}
+      <div className="card-shadow rounded-2xl p-6 mb-6 bg-white">
+        <div className="h-4 w-56 bg-[#E5EDE9] rounded mb-2" />
+        <div className="h-3 w-80 bg-[#EAF0ED] rounded mb-6" />
+        <div className="h-64 w-full bg-[#F1F4F2] rounded-xl" />
       </div>
     </div>
   )
 }
 
+function SectionLabel({ children, sub, right }) {
+  return (
+    <div className="flex items-baseline justify-between mb-3.5">
+      <div>
+        <div className="text-[11px] font-semibold text-[#768776] uppercase tracking-[0.06em]">{children}</div>
+        {sub && <div className="text-[12px] text-[#9CA3AF] mt-1">{sub}</div>}
+      </div>
+      {right}
+    </div>
+  )
+}
+
+function ProgressDonut({ value, size = 140, stroke = 14, label, sub, color = "#2DAC6A" }) {
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const dash = (Math.max(0, Math.min(100, value)) / 100) * c
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#D9EFE3" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${dash} ${c - dash}`} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-[28px] font-bold text-font-primary leading-none">
+          {Math.round(value)}<span className="text-[16px] text-[#768776]">%</span>
+        </div>
+        {label && <div className="text-[10px] text-[#768776] mt-1.5 uppercase tracking-[0.06em] font-semibold">{label}</div>}
+        {sub && <div className="text-[10px] text-[#9CA3AF] mt-0.5">{sub}</div>}
+      </div>
+    </div>
+  )
+}
+
+function DeltaPill({ value, suffix = "%", size = "md" }) {
+  const isNeutral = Math.abs(value) < 1
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md font-semibold ${isNeutral ? "bg-gray-100 text-gray-500" : value > 0 ? "bg-primary-green/10 text-primary-green" : "bg-red-50 text-red-600"} ${size === "sm" ? "text-[10px]" : "text-[11px]"} ${size === "sm" ? "px-1.5 py-0.5" : "px-2 py-[3px]"}`}
+      style={{ fontFamily: "ui-monospace, SF Mono, monospace" }}
+    >
+      <span style={{ fontSize: size === "sm" ? 8 : 9 }}>{isNeutral ? "→" : value > 0 ? "▲" : "▼"}</span>
+      {fmtSigned(value)}{suffix}
+    </span>
+  )
+}
+
+function IndicatorPicker({ active, onChange, indicators }) {
+  return (
+    <div className="inline-flex gap-1 p-1 bg-[#F1F4F2] rounded-[10px] border border-[#e1e5e8]">
+      {indicators.map((ind) => (
+        <button
+          key={ind.key}
+          onClick={() => onChange(ind.key)}
+          className={`px-3 py-1.5 rounded-[7px] text-[12px] font-semibold cursor-pointer transition-all ${active === ind.key ? "bg-white text-font-primary shadow-sm" : "bg-transparent text-[#768776] hover:text-font-primary"}`}
+        >
+          {ind.short}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ActionBar({ action, max }) {
+  const performance = action.ges_prev !== 0 ? (action.ges / action.ges_prev) * 100 : 0
+  const isDegradation = action.ges > 0
+  return (
+    <div className="w-full py-2.5 border-b border-[#e1e5e8] last:border-b-0">
+      <div className="flex justify-between items-baseline mb-1.5">
+        <div className="flex gap-2 items-baseline min-w-0">
+          <span className="text-[11px] font-semibold text-[#768776]" style={{ fontFamily: "ui-monospace, SF Mono, monospace" }}>{action.action}</span>
+          <span className="text-[13px] font-medium text-font-primary truncate">{action.name}</span>
+        </div>
+        <div className="shrink-0 text-[12px] font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, SF Mono, monospace" }}>
+          {fmtNum(Math.abs(action.ges))} <span className="text-[#768776] font-normal">tCO₂e</span>
+        </div>
+      </div>
+      <div className="relative h-2 bg-[#F1F4F2] rounded-full overflow-hidden">
+        <div className="absolute top-0 left-0 h-full rounded-full bg-[#D2EDEC]" style={{ width: `${Math.min((Math.abs(action.ges_prev) / max) * 100, 100)}%` }} />
+        <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${Math.min((Math.abs(action.ges) / max) * 100, 100)}%`, background: isDegradation ? "#FB6B69" : "#2DAC6A", opacity: isDegradation ? 0.85 : 1 }} />
+      </div>
+      <div className="flex justify-between mt-1 text-[10px] text-[#9CA3AF]">
+        <span>Cible : {fmtNum(Math.abs(action.ges_prev))} tCO₂e</span>
+        <span className={`font-semibold ${isDegradation ? "text-red-600" : performance > 100 ? "text-primary-green" : "text-primary-orange"}`}>
+          {isDegradation ? "Dégradation" : `${Math.round(performance)}% de la cible`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function StatBlock({ value, label, color }) {
+  return (
+    <div className="py-2.5">
+      <div className="text-[26px] font-bold leading-none" style={{ color: color || "#123314", fontFamily: "ui-monospace, SF Mono, monospace" }}>
+        {value}
+      </div>
+      <div className="text-[11px] text-[#768776] mt-1 font-medium">{label}</div>
+    </div>
+  )
+}
+
+function StackedActionsChart({ emissions, unit, yearExpost }) {
+  const [hover, setHover] = useState(null)
+
+  const years = emissions?.years || []
+  const actions = [...(emissions?.actions || [])].sort((a, b) => b.yearly.reduce((s, d) => s + d.value, 0) - a.yearly.reduce((s, d) => s + d.value, 0))
+  const prevByYear = Object.fromEntries((emissions?.prevByYear || []).map((d) => [d.year, d.value]))
+  const refByYear = Object.fromEntries((emissions?.refByYear || []).map((d) => [d.year, d.value]))
+
+  const stackByYear = years.map((year) => {
+    const segments = actions.map((a) => ({ action: a.code, name: a.name, value: a.yearly.find((d) => d.year === year)?.value || 0 }))
+    return { year, segments, total: segments.reduce((s, x) => s + x.value, 0), objectif: prevByYear[year], reference: refByYear[year] }
+  })
+
+  const W = 1080
+  const H = 320
+  const PAD = { t: 16, r: 28, b: 28, l: 60 }
+  const innerW = W - PAD.l - PAD.r
+  const innerH = H - PAD.t - PAD.b
+
+  const xMin = years[0]
+  const xMax = years[years.length - 1]
+  const xOf = (y) => PAD.l + ((y - xMin) / (xMax - xMin || 1)) * innerW
+
+  const yMax = Math.max(...years.map((y) => Math.max(prevByYear[y] || 0, refByYear[y] || 0)), ...stackByYear.map((d) => d.total)) * 1.05 || 1
+  const yOf = (v) => PAD.t + innerH - (v / yMax) * innerH
+
+  const barW = Math.min(40, (innerW / (years.length || 1)) * 0.7)
+
+  const prevYears = years.filter((y) => prevByYear[y] != null && prevByYear[y] > 0)
+  const prevPath = prevYears.map((y, i) => `${i === 0 ? "M" : "L"} ${xOf(y)} ${yOf(prevByYear[y])}`).join(" ")
+
+  const refYears = years.filter((y) => refByYear[y] != null && refByYear[y] > 0)
+  const refPath = refYears.map((y, i) => `${i === 0 ? "M" : "L"} ${xOf(y)} ${yOf(refByYear[y])}`).join(" ")
+
+  const tickVals = Array.from({ length: 5 }, (_, i) => (yMax / 4) * i)
+
+  if (!years.length) return <div className="text-[13px] text-[#768776] py-6">Aucune donnée d'émission disponible.</div>
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
+        {tickVals.map((v, i) => (
+          <g key={i}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={yOf(v)} y2={yOf(v)} stroke="rgba(0,0,0,0.05)" strokeDasharray={i === 0 ? "" : "2 3"} />
+            <text x={PAD.l - 6} y={yOf(v) + 3} fontSize={10} fill="#768776" textAnchor="end">{fmtNum(v)}</text>
+          </g>
+        ))}
+
+        {stackByYear.map((d) => {
+          let yCursor = yOf(0)
+          return (
+            <g key={d.year} onMouseEnter={() => setHover(d)} onMouseLeave={() => setHover(null)} style={{ cursor: "pointer" }}>
+              {d.segments.map((seg, i) => {
+                const h = (seg.value / yMax) * innerH
+                if (h < 0.5) return null
+                const yTop = yCursor - h
+                const rect = (
+                  <rect key={seg.action} x={xOf(d.year) - barW / 2} y={yTop} width={barW} height={h}
+                    fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={0.6}
+                    opacity={hover && hover.year !== d.year ? 0.35 : 1} />
+                )
+                yCursor = yTop
+                return rect
+              })}
+            </g>
+          )
+        })}
+
+        <path d={refPath} stroke="#9CA3AF" strokeWidth={2} fill="none" strokeDasharray="6 4" />
+        {refYears.map((y) => (
+          <circle key={y} cx={xOf(y)} cy={yOf(refByYear[y])} r={2.5} fill="#fff" stroke="#9CA3AF" strokeWidth={1.5} />
+        ))}
+
+        <path d={prevPath} stroke="#56BDB8" strokeWidth={2} fill="none" strokeDasharray="6 4" />
+        {prevYears.map((y) => (
+          <circle key={y} cx={xOf(y)} cy={yOf(prevByYear[y])} r={2.5} fill="#fff" stroke="#56BDB8" strokeWidth={1.5} />
+        ))}
+
+        {yearExpost && years.includes(yearExpost) && (
+          <>
+            <line x1={xOf(yearExpost) + barW / 2 + 4} x2={xOf(yearExpost) + barW / 2 + 4} y1={PAD.t} y2={H - PAD.b} stroke="#F59600" strokeDasharray="3 3" strokeOpacity="0.5" />
+            <rect x={xOf(yearExpost) + barW / 2 - 22} y={PAD.t - 6} width={56} height={16} rx={8} fill="#F59600" />
+            <text x={xOf(yearExpost) + barW / 2 + 6} y={PAD.t + 5} fontSize={10} fontWeight={600} textAnchor="middle" fill="#fff">{yearExpost}</text>
+          </>
+        )}
+
+        {years.filter((_, i) => i % 2 === 0).map((y) => (
+          <text key={y} x={xOf(y)} y={H - 8} fontSize={11} fill="#768776" textAnchor="middle">{y}</text>
+        ))}
+      </svg>
+
+      {hover && (
+        <div className="absolute top-2 right-2 bg-white border border-[#e1e5e8] rounded-lg p-2.5 text-[11px] shadow-lg max-w-[260px]">
+          <div className="font-bold mb-1.5 text-font-primary">{hover.year} · {fmtNum(hover.total)} {unit}</div>
+          {hover.segments.map((s, i) => ({ s, i })).filter(({ s }) => s.value > 0).slice(0, 6).map(({ s, i }) => (
+            <div key={s.action} className="flex items-center gap-1.5 mb-0.5">
+              <span className="w-2 h-2 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
+              <span className="flex-1 text-[#768776] overflow-hidden text-ellipsis whitespace-nowrap">{s.action} · {s.name}</span>
+              <span className="font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, monospace" }}>{fmtNum(s.value)}</span>
+            </div>
+          ))}
+          {hover.reference != null && (
+            <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-[#e1e5e8]">
+              <span className="w-3.5" style={{ borderTop: "2px dashed #9CA3AF" }} />
+              <span className="flex-1 text-[#768776]">Référence</span>
+              <span className="font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, monospace" }}>{fmtNum(hover.reference)} {unit}</span>
+            </div>
+          )}
+          {hover.objectif != null && (
+            <div className="flex items-center gap-1.5 mt-1 pt-1">
+              <span className="w-3.5" style={{ borderTop: "2px dashed #56BDB8" }} />
+              <span className="flex-1 text-[#768776]">Prévisionnel</span>
+              <span className="font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, monospace" }}>{fmtNum(hover.objectif)} {unit}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5 text-[10px] text-[#768776]">
+        {actions.map((a, i) => (
+          <div key={a.code} className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
+            <span className="font-semibold text-font-primary">{a.code}</span>
+            <span>{a.name?.length > 28 ? a.name.slice(0, 26) + "…" : a.name}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="w-3.5" style={{ borderTop: "2px dashed #9CA3AF" }} />
+          <span>Référence</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3.5" style={{ borderTop: "2px dashed #56BDB8" }} />
+          <span>Trajectoire prévisionnelle</span>
+        </div>
+      </div>
+    </div>
+  )
+}
