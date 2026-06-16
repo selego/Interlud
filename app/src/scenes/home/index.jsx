@@ -146,7 +146,7 @@ export default function Home() {
 
   const onboardingSteps = [
     { label: "Créer votre première action", done: allActions.length > 0, link: "/actions" },
-    { label: "Remplir votre première action à 100%", done: allActions.some((a) => a.status === "completed"), link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions" },
+    { label: "Remplir votre première action B2 à 100%", done: allActions.some((a) => a.status === "completed"), link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions" },
   ]
 
   const indicators = data ? buildIndicators(data.emissions) : []
