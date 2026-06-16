@@ -266,15 +266,6 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, on
     setSelectedCategory(null)
   }, [action?._id, activeSituation, activeYear])
 
-  useEffect(() => {
-    if (displayedIndicatorValues.length > 0) {
-      const firstCat = displayedIndicatorValues[0]?.indicator_category_name
-      if (firstCat && (!selectedCategory || !displayedIndicatorValues.some((iv) => iv.indicator_category_name === selectedCategory.categoryName))) {
-        setSelectedCategory({ categoryName: firstCat })
-      }
-    }
-  }, [displayedIndicatorValues.length])
-
   if (isLoading && !indicatorValues.length) return <Loader />
 
   if (!isLoading && tabTotal === 0) {
@@ -297,10 +288,6 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, on
     <div className="flex flex-col lg:flex-row gap-6">
       <div className="w-full lg:w-72 shrink-0">
         <div className="card-shadow p-4 sticky top-8 self-start">
-          <div className="flex items-baseline justify-between mb-3.5">
-            <h3 className="text-[15px] font-bold text-[#0A3641]">Catégories</h3>
-            <span className="text-xs text-[#9aa8a4]">{displayedIndicatorValues.filter((iv) => !isIndicatorValueFilled(iv)).length} à remplir</span>
-          </div>
           <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
             {isLoading ? (
               <Loader size="small" />

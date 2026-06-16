@@ -45,6 +45,14 @@ export default function IndicatorsList({ displayedIndicatorValues, selectedCateg
 
   return (
     <div className="space-y-0.5">
+      <div
+        className={`flex items-center justify-between gap-2.5 px-2.5 py-[11px] rounded-[9px] cursor-pointer transition-colors ${!selectedCategory ? 'bg-[#F1F4F3]' : 'hover:bg-gray-50'}`}
+        onClick={() => onSelectCategory(null)}
+      >
+        <span className="text-[13.5px] font-semibold text-[#123314] leading-tight">Toutes les catégories</span>
+        <RemainingLabel indicatorValues={displayedIndicatorValues} />
+      </div>
+
       {Object.entries(categoriesGrouped).map(([categoryName, categoryData]) => {
         return (
           <div key={categoryName}>
