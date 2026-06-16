@@ -1,48 +1,15 @@
 {
-  "totalFiles": 199,
-  "extractedAt": "2026-06-12T11:40:45.931Z",
+  "totalFiles": 202,
+  "extractedAt": "2026-06-16T07:51:01.412Z",
   "files": [
     {
-      "id": "01IBL4ADINU4IHVT5F5VHJ4QYJUXWJL37A",
-      "name": "C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2028.xlsx",
-      "path": "Bordeaux Métropole/C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2028.xlsx",
-      "size": 3200596,
-      "sizeFormatted": "3.05 MB",
-      "lastModified": "2026-06-10T13:52:41Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B7A10A70D-A5CF-4EED-9E43-09A5EC95EFE0%7D&file=C4%20-%20Encouragez%20les%20livraisons%20silencieuses%20en%20horaire%20d%C3%A9cal%C3%A9_Prev2028.xlsx&action=default&mobileredirect=true",
-      "createdBy": "Axel Vuillaume",
-      "lastModifiedBy": "Application SharePoint"
-    },
-    {
-      "id": "01IBL4ADMMAEWKDRGXNFCZ3Q7RPV2RN4Y2",
-      "name": "Déployer des micro-hubs logistiques sur l'espace public_Expost2030_V17.xlsx",
-      "path": "Bordeaux Métropole/Déployer des micro-hubs logistiques sur l'espace public_Expost2030_V17.xlsx",
-      "size": 3273468,
-      "sizeFormatted": "3.12 MB",
-      "lastModified": "2026-06-10T14:21:33Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BA12C018C-D7C4-4569-9DC3-F17D7516F31A%7D&file=D%C3%A9ployer%20des%20micro-hubs%20logistiques%20sur%20l%27espace%20public_Expost2030_V17.xlsx&action=default&mobileredirect=true",
-      "createdBy": "Axel Vuillaume",
-      "lastModifiedBy": "Axel Vuillaume"
-    },
-    {
-      "id": "01IBL4ADKUCGYB27HLFNDIO454PR2V6G3Z",
-      "name": "Déployer des micro-hubs logistiques sur l'espace public_Prev2031.xlsx",
-      "path": "Bordeaux Métropole/Déployer des micro-hubs logistiques sur l'espace public_Prev2031.xlsx",
-      "size": 3093683,
-      "sizeFormatted": "2.95 MB",
-      "lastModified": "2026-06-10T10:22:08Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B1DB01154-EB7C-462B-8773-BC7C755F1B79%7D&file=D%C3%A9ployer%20des%20micro-hubs%20logistiques%20sur%20l%27espace%20public_Prev2031.xlsx&action=default&mobileredirect=true",
-      "createdBy": "Axel Vuillaume",
-      "lastModifiedBy": "Axel Vuillaume"
-    },
-    {
-      "id": "01IBL4ADN7A6HDGWYBNJDZZKLEBZNJGPMS",
-      "name": "Déployer des micro-hubs logistiques sur l'espace public_Prev2031_V17.xlsx",
-      "path": "Bordeaux Métropole/Déployer des micro-hubs logistiques sur l'espace public_Prev2031_V17.xlsx",
-      "size": 3279186,
-      "sizeFormatted": "3.13 MB",
-      "lastModified": "2026-05-20T09:12:00Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B338E07BF-015B-476A-9CA9-640E5A933D92%7D&file=D%C3%A9ployer%20des%20micro-hubs%20logistiques%20sur%20l%27espace%20public_Prev2031_V17.xlsx&action=default&mobileredirect=true",
+      "id": "01IBL4ADISUQIR7DJKHZC3XDQL5SRIU75X",
+      "name": "Bordeaux Métropole - Aggregation.xlsx",
+      "path": "Bordeaux Métropole/Bordeaux Métropole - Aggregation.xlsx",
+      "size": 1528444,
+      "sizeFormatted": "1.46 MB",
+      "lastModified": "2026-06-15T08:18:10Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B1F11A412-2A8D-453E-BB8E-0BECA28A7FB7%7D&file=Bordeaux%20M%C3%A9tropole%20-%20Aggregation.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
       "lastModifiedBy": "Application SharePoint"
     },
@@ -1136,15 +1103,37 @@
       "lastModifiedBy": "Application SharePoint"
     },
     {
+      "id": "01IBL4ADNYS63JOIBE2BFJSMC6HIOA2GTE",
+      "name": "B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2030.xlsx",
+      "path": "Communauté de communes de l'Est Guyanais/B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2030.xlsx",
+      "size": 3198468,
+      "sizeFormatted": "3.05 MB",
+      "lastModified": "2026-06-15T15:26:10Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B97B697B8-2420-4AD0-9930-5E3A1C0D1A64%7D&file=B2%20-%20Am%C3%A9liorez%20l%E2%80%99efficacit%C3%A9%20de%20vos%20aires%20de%20livraisons_Prev2030.xlsx&action=default&mobileredirect=true",
+      "createdBy": "Axel Vuillaume",
+      "lastModifiedBy": "Application SharePoint"
+    },
+    {
+      "id": "01IBL4ADN4PNI6K6W7EVA2K2JGWRC7X5OC",
+      "name": "C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2029.xlsx",
+      "path": "Communauté de communes de l'Est Guyanais/C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2029.xlsx",
+      "size": 3204414,
+      "sizeFormatted": "3.06 MB",
+      "lastModified": "2026-06-15T15:27:06Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BE5517BBC-DF7A-4125-A569-26B445FBF5C2%7D&file=C4%20-%20Encouragez%20les%20livraisons%20silencieuses%20en%20horaire%20d%C3%A9cal%C3%A9_Prev2029.xlsx&action=default&mobileredirect=true",
+      "createdBy": "Axel Vuillaume",
+      "lastModifiedBy": "Application SharePoint"
+    },
+    {
       "id": "01IBL4ADOWRJU4ZZMEKVCKKFZ65PB34BM5",
       "name": "Communauté de communes de l'Est Guyanais - Aggregation.xlsx",
       "path": "Communauté de communes de l'Est Guyanais/Communauté de communes de l'Est Guyanais - Aggregation.xlsx",
-      "size": 1528755,
+      "size": 1527905,
       "sizeFormatted": "1.46 MB",
-      "lastModified": "2026-06-12T11:23:57Z",
+      "lastModified": "2026-06-15T15:23:33Z",
       "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BCC698AD6-84E5-4455-A517-3EEBC3BE059D%7D&file=Communaut%C3%A9%20de%20communes%20de%20l%27Est%20Guyanais%20-%20Aggregation.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
-      "lastModifiedBy": "Axel Vuillaume"
+      "lastModifiedBy": "Application SharePoint"
     },
     {
       "id": "01IBL4ADKCVYTHD3DR5NG2POL7FHWKKFCA",
@@ -1422,13 +1411,13 @@
       "lastModifiedBy": "Application SharePoint"
     },
     {
-      "id": "01IBL4ADJNNDHXEYC6IZAZTWEBP5NSU2UD",
+      "id": "01IBL4ADOHBPQMF6NPIJA3NWGBUA6DBHOL",
       "name": "B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2028.xlsx",
       "path": "Saint-Etienne Métropole/B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2028.xlsx",
-      "size": 3208077,
+      "size": 3207083,
       "sizeFormatted": "3.06 MB",
-      "lastModified": "2026-06-12T08:32:51Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B72CF682D-5E60-4146-99D8-817F5B2A6A83%7D&file=B2%20-%20Am%C3%A9liorez%20l%E2%80%99efficacit%C3%A9%20de%20vos%20aires%20de%20livraisons_Prev2028.xlsx&action=default&mobileredirect=true",
+      "lastModified": "2026-06-15T08:06:15Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BC2E00BC7-AFF9-4142-B6D8-C1A03C309DCB%7D&file=B2%20-%20Am%C3%A9liorez%20l%E2%80%99efficacit%C3%A9%20de%20vos%20aires%20de%20livraisons_Prev2028.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
       "lastModifiedBy": "Application SharePoint"
     },
@@ -1444,24 +1433,46 @@
       "lastModifiedBy": "Application SharePoint"
     },
     {
-      "id": "01IBL4ADIEVYXMTMV3OJGJERBUBGCR56RS",
-      "name": "B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2030_V20.xlsx",
-      "path": "Saint-Etienne Métropole/B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2030_V20.xlsx",
-      "size": 3209204,
+      "id": "01IBL4ADOIFCRJ5W744NB2HSVFMAM7KNKD",
+      "name": "B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2032.xlsx",
+      "path": "Saint-Etienne Métropole/B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2032.xlsx",
+      "size": 3206638,
       "sizeFormatted": "3.06 MB",
-      "lastModified": "2026-06-12T08:32:51Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BC92EAE04-BBB2-4C72-9244-3409851EFA32%7D&file=B2%20-%20Am%C3%A9liorez%20l%E2%80%99efficacit%C3%A9%20de%20vos%20aires%20de%20livraisons_Prev2030_V20.xlsx&action=default&mobileredirect=true",
+      "lastModified": "2026-06-15T08:06:15Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B9EA228C8-FCDB-43E3-A3CA-A56019F53543%7D&file=B2%20-%20Am%C3%A9liorez%20l%E2%80%99efficacit%C3%A9%20de%20vos%20aires%20de%20livraisons_Prev2032.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
       "lastModifiedBy": "Application SharePoint"
     },
     {
-      "id": "01IBL4ADIGCRG7VGF24BAJWAX5LWSHSMZP",
-      "name": "B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2032.xlsx",
-      "path": "Saint-Etienne Métropole/B2 - Améliorez l’efficacité de vos aires de livraisons_Prev2032.xlsx",
-      "size": 3208623,
+      "id": "01IBL4ADLKAJTFH4TPLJD3ETNMMEOGRPCJ",
+      "name": "B4 - Améliorez la logistique de vos chantiers et la desserte des commerces environnants_Prev2027.xlsx",
+      "path": "Saint-Etienne Métropole/B4 - Améliorez la logistique de vos chantiers et la desserte des commerces environnants_Prev2027.xlsx",
+      "size": 3207515,
       "sizeFormatted": "3.06 MB",
-      "lastModified": "2026-06-12T08:32:52Z",
-      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BFA4D1406-BA98-40E0-9B02-FD5DA479332F%7D&file=B2%20-%20Am%C3%A9liorez%20l%E2%80%99efficacit%C3%A9%20de%20vos%20aires%20de%20livraisons_Prev2032.xlsx&action=default&mobileredirect=true",
+      "lastModified": "2026-06-15T13:57:46Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B5366026A-6FF2-475A-B24D-AC611C68BC49%7D&file=B4%20-%20Am%C3%A9liorez%20la%20logistique%20de%20vos%20chantiers%20et%20la%20desserte%20des%20commerces%20environnants_Prev2027.xlsx&action=default&mobileredirect=true",
+      "createdBy": "Axel Vuillaume",
+      "lastModifiedBy": "Application SharePoint"
+    },
+    {
+      "id": "01IBL4ADIPSM7MBLVMYRA3K5WLUCSOGQZ4",
+      "name": "C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2030.xlsx",
+      "path": "Saint-Etienne Métropole/C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2030.xlsx",
+      "size": 3199956,
+      "sizeFormatted": "3.05 MB",
+      "lastModified": "2026-06-15T16:20:38Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BC03E930F-ACAE-41C4-B576-CBA0A4E3433C%7D&file=C4%20-%20Encouragez%20les%20livraisons%20silencieuses%20en%20horaire%20d%C3%A9cal%C3%A9_Prev2030.xlsx&action=default&mobileredirect=true",
+      "createdBy": "Axel Vuillaume",
+      "lastModifiedBy": "Application SharePoint"
+    },
+    {
+      "id": "01IBL4ADNPZJ5M676NINBJKZVABO6SJWTT",
+      "name": "C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2032.xlsx",
+      "path": "Saint-Etienne Métropole/C4 - Encouragez les livraisons silencieuses en horaire décalé_Prev2032.xlsx",
+      "size": 3204831,
+      "sizeFormatted": "3.06 MB",
+      "lastModified": "2026-06-15T16:20:15Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BCF7ACAAF-CD7F-4243-9566-A00BBD24DA73%7D&file=C4%20-%20Encouragez%20les%20livraisons%20silencieuses%20en%20horaire%20d%C3%A9cal%C3%A9_Prev2032.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
       "lastModifiedBy": "Application SharePoint"
     },
@@ -1469,9 +1480,9 @@
       "id": "01IBL4ADJ7FPFL4W3RBVCZJ53XAWAPOJRM",
       "name": "Saint-Etienne Métropole - Aggregation.xlsx",
       "path": "Saint-Etienne Métropole/Saint-Etienne Métropole - Aggregation.xlsx",
-      "size": 1518782,
-      "sizeFormatted": "1.45 MB",
-      "lastModified": "2026-06-12T10:56:04Z",
+      "size": 1526481,
+      "sizeFormatted": "1.46 MB",
+      "lastModified": "2026-06-15T16:21:27Z",
       "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BBECA2B3F-715B-450D-94F7-770580F7262C%7D&file=Saint-Etienne%20M%C3%A9tropole%20-%20Aggregation.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
       "lastModifiedBy": "Application SharePoint"
@@ -2104,6 +2115,17 @@
       "lastModifiedBy": "Axel Vuillaume"
     },
     {
+      "id": "01IBL4ADMKIGKUGW4EBFAKXZIHHFNHVXEN",
+      "name": "Calcul des actions_V23.xlsx",
+      "path": "Calcul des actions_V23.xlsx",
+      "size": 3359896,
+      "sizeFormatted": "3.20 MB",
+      "lastModified": "2026-06-16T07:49:17Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B4395418A-845B-4009-ABE5-07395A7ADC8D%7D&file=Calcul%20des%20actions_V23.xlsx&action=default&mobileredirect=true",
+      "createdBy": "Axel Vuillaume",
+      "lastModifiedBy": "Axel Vuillaume"
+    },
+    {
       "id": "01IBL4ADPAL7ZE5OYO3FHL7HPW7KR6J7YJ",
       "name": "Calcul des actions_vide_V12.xlsx",
       "path": "Calcul des actions_vide_V12.xlsx",
@@ -2188,6 +2210,17 @@
       "sizeFormatted": "3.11 MB",
       "lastModified": "2026-06-12T11:38:11Z",
       "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7BD1BE35E0-0D62-48C2-AC93-5E903C3EFDCA%7D&file=Calcul%20des%20actions_vide_V22.xlsx&action=default&mobileredirect=true",
+      "createdBy": "Axel Vuillaume",
+      "lastModifiedBy": "Axel Vuillaume"
+    },
+    {
+      "id": "01IBL4ADMEECYH5XLWUBEKOV5J3RGN6PTW",
+      "name": "Calcul des actions_vide_V23.xlsx",
+      "path": "Calcul des actions_vide_V23.xlsx",
+      "size": 3261746,
+      "sizeFormatted": "3.11 MB",
+      "lastModified": "2026-06-16T07:50:37Z",
+      "webUrl": "https://selegobv.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B7EB02084-76DD-48A0-A757-A9DC4CDF3E76%7D&file=Calcul%20des%20actions_vide_V23.xlsx&action=default&mobileredirect=true",
       "createdBy": "Axel Vuillaume",
       "lastModifiedBy": "Axel Vuillaume"
     }

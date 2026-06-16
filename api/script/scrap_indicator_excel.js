@@ -10,7 +10,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADJHP7ORRNDOMREZVCQPBE4I2QZZ"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADMEECYH5XLWUBEKOV5J3RGN6PTW"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -345,8 +345,12 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
     return null;
   }
 
-  // CAS 5: IF(ISNUMBER(SEARCH...)) - contains simple
+  // CAS 5: IF(ISNUMBER(SEARCH...)) [* $K$xxx] - contains simple, avec miroir d'héritage optionnel
   if (/IF\s*\(\s*ISNUMBER\s*\(\s*SEARCH/i.test(formulaContent)) {
+    // Facteur "* cellule" final (ex: "* $K$1114") = AND avec la condition du parent → _referenceToMerge
+    const tailRef = formulaContent.match(/\)\s*\*\s*(\$?[A-Z]+\$?\d+)\s*$/);
+    const withTail = (condition) => (tailRef ? { _referenceToMerge: tailRef[1], conditions: [condition] } : { conditions: [condition] });
+
     // D'abord essayer avec une chaîne littérale: SEARCH("texte", $F$123) ou SEARCH("texte", 'Feuille'!$F$123)
     const literalMatch = formulaContent.match(/SEARCH\s*\(\s*"([^"]+)"\s*,\s*(?:['']([^'']+)['']!)?\$?([A-Z]+)\$?(\d+)/i);
     if (literalMatch) {
@@ -358,7 +362,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
       if (sourceIndicatorId) {
         const condition = { type: "contains", excel_indicator_id: sourceIndicatorId, value: literalMatch[1] };
         if (sourceSituation) condition.excel_indicator_situation = sourceSituation;
-        return { conditions: [condition] };
+        return withTail(condition);
       }
     }
 
@@ -384,7 +388,7 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
             value: String(searchValue).trim(),
           };
           if (sourceSituation) condition.excel_indicator_situation = sourceSituation;
-          return { conditions: [condition] };
+          return withTail(condition);
         }
       }
     }
@@ -1774,8 +1778,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      // await generateExcelForAllCollectivities();
+      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
