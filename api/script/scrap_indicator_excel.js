@@ -1547,6 +1547,7 @@ async function generateExcelForAllCollectivities() {
 
   let totalFiles = 0;
   let totalValues = 0;
+  const oldFileIdsToDelete = [];
 
   for (const collectivity of collectivities) {
     if (!collectivity.sharepoint_folder_id) {
@@ -1563,6 +1564,8 @@ async function generateExcelForAllCollectivities() {
       for (let idx = 0; idx < (action.exel_files_prev || []).length; idx++) {
         const prevFile = action.exel_files_prev[idx];
         if (!prevFile.excel_file_id) continue;
+
+        const oldFileId = prevFile.excel_file_id;
 
         try {
           // Dupliquer le master pour remplacer l'Excel
@@ -1582,6 +1585,7 @@ async function generateExcelForAllCollectivities() {
 
           // Mettre à jour le excel_file_id dans l'action
           action.exel_files_prev[idx].excel_file_id = newFileId;
+          if (oldFileId !== newFileId) oldFileIdsToDelete.push(oldFileId);
           totalFiles++;
           totalValues += updated;
           console.log(`   ✅ ${fileName} : ${updated} valeurs`);
@@ -1594,6 +1598,8 @@ async function generateExcelForAllCollectivities() {
       for (let idx = 0; idx < (action.excel_files_expost || []).length; idx++) {
         const expostFile = action.excel_files_expost[idx];
         if (!expostFile.excel_file_id) continue;
+
+        const oldFileId = expostFile.excel_file_id;
 
         try {
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
@@ -1610,6 +1616,7 @@ async function generateExcelForAllCollectivities() {
           const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
 
           action.excel_files_expost[idx].excel_file_id = newFileId;
+          if (oldFileId !== newFileId) oldFileIdsToDelete.push(oldFileId);
           totalFiles++;
           totalValues += updated;
           console.log(`   ✅ ${fileName} : ${updated} valeurs`);
@@ -1621,6 +1628,21 @@ async function generateExcelForAllCollectivities() {
       // Sauvegarder l'action avec les nouveaux excel_file_id
       await action.save();
     }
+  }
+
+  // Supprimer les anciens fichiers Excel remplacés
+  if (oldFileIdsToDelete.length > 0) {
+    console.log(`\n🗑️ Suppression de ${oldFileIdsToDelete.length} ancien(s) fichier(s) Excel...`);
+    let deleted = 0;
+    for (const oldFileId of oldFileIdsToDelete) {
+      try {
+        await graphFetch(`/sites/${siteId}/drive/items/${oldFileId}`, { method: "DELETE", headers: { Prefer: "bypass-shared-lock" } });
+        deleted++;
+      } catch (error) {
+        console.error(`   ❌ Suppression de l'ancien fichier ${oldFileId}:`, error.message);
+      }
+    }
+    console.log(`🗑️ ${deleted}/${oldFileIdsToDelete.length} ancien(s) fichier(s) supprimé(s)`);
   }
 
   console.log(`\n🎉 Régénération terminée : ${totalFiles} fichiers Excel, ${totalValues} valeurs synchronisées`);
@@ -1778,8 +1800,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
