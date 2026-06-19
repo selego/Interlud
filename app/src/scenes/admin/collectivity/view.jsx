@@ -33,6 +33,7 @@ export default function View() {
 
     const handleSave = async () => {
       try {
+        if (collectivity.siren && collectivity.siren.length !== 9) return toast.error("Le SIREN doit contenir 9 chiffres")
         const { ok, data, code } = await api.put(`/collectivity/${id}`, collectivity);
         if (!ok) return toast.error(code || "Une erreur est survenue")
         toast.success("Collectivité sauvegardée !")
@@ -97,9 +98,11 @@ export default function View() {
             <div>
               <label className="block text-sm font-semibold mb-2">Département</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                placeholder="Numéro du département (ex : 75)"
                 value={collectivity.department || ""}
-                onChange={(e) => setCollectivity({ ...collectivity, department: e.target.value })}
+                onChange={(e) => setCollectivity({ ...collectivity, department: e.target.value.replace(/\D/g, "") })}
                 className="w-full input-primary"
               />
             </div>
@@ -107,9 +110,11 @@ export default function View() {
             <div>
               <label className="block text-sm font-semibold mb-2">SIREN</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                placeholder="9 chiffres"
                 value={collectivity.siren || ""}
-                onChange={(e) => setCollectivity({ ...collectivity, siren: e.target.value })}
+                onChange={(e) => setCollectivity({ ...collectivity, siren: e.target.value.replace(/\D/g, "").slice(0, 9) })}
                 className="w-full input-primary"
               />
             </div>
