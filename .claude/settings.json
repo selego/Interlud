@@ -1,4 +1,27 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Agent",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "TodoWrite",
+      "mcp__claude_ai_Accounting",
+      "mcp__claude_ai_HubSpot",
+      "mcp__claude_ai_PubMed",
+      "mcp__claude_ai_Google_Drive__read_file_content"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git push --force*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -30,9 +53,5 @@
         ]
       }
     ]
-  },
-  "permissions": {
-    "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "WebFetch", "WebSearch", "NotebookEdit", "TodoWrite", "mcp__claude_ai_Accounting", "mcp__claude_ai_HubSpot", "mcp__claude_ai_PubMed"],
-    "deny": ["Bash(git push*)", "Bash(git push --force*)"]
   }
 }
