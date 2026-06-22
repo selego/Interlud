@@ -570,10 +570,7 @@ export default function Dashboard({ action }) {
   const [processedData, setProcessedData] = useState({ score: 0, indicators: {}, emissions: { indicators: {} } })
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const [tab, setTab] = useState("situations")
   const [activePill, setActivePill] = useState("GES")
-  const [yearFrom, setYearFrom] = useState(action.date_start ? new Date(action.date_start).getFullYear() : null)
-  const [yearTo, setYearTo] = useState(action.date_end ? new Date(action.date_end).getFullYear() : null)
 
   const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
   const isEco = user.role === "economic_actor" && action.owner === "economic_actor" && user.economic_actor_id === action.economic_actor_id
@@ -630,55 +627,11 @@ export default function Dashboard({ action }) {
   const activeLabel = INDICATORS.find((i) => i.key === active)?.label || active
   const activeUnit = processedData.gains?.[active]?.unit || INDICATORS.find((i) => i.key === active)?.unit || ""
 
-  const allYears = [...new Set(Object.values(processedData.gains || {}).flatMap((ind) => ind.yearlyData?.map((d) => d.year) ?? []))].sort((a, b) => a - b)
-
-  const periodMin = allYears[0] ?? new Date().getFullYear()
-  const periodMax = allYears.at(-1) ?? new Date().getFullYear()
-  const periodYears = Array.from({ length: periodMax - periodMin + 1 }, (_, i) => periodMin + i)
-
-  // ── Derived: section 01 gains ─────────────────────────────────────────────
-
-  const indData = processedData.gains?.[active]
-
-  // Full year range spanning the selected period (includes years with no data → null entries in charts)
-  const periodStart = yearFrom ?? allYears[0]
-  const periodEnd = yearTo ?? allYears.at(-1)
-  const periodRange = periodStart && periodEnd ? Array.from({ length: periodEnd - periodStart + 1 }, (_, i) => periodStart + i) : allYears
-
-  // filteredYearlyData: only actual data rows within the period (used for KPI calculations)
-  const filteredYearlyData = (indData?.yearlyData ?? []).filter((d) => d.year >= periodStart && d.year <= periodEnd)
-
-  // heroData: covers every year in the period; null for years with no data (keeps x-axis continuous)
-  const gainsByYear = new Map((indData?.yearlyData ?? []).map((d) => [d.year, d]))
-  const heroData = periodRange.map((year) => {
-    const d = gainsByYear.get(year)
-    if (!d) return { year, gainPrevu: null, gainRealise: null, pct: null }
-    const prev = d.ecartPrevRef !== 0 ? Math.abs(d.ecartPrevRef) : null
-    const real = d.ecartExpostRef !== 0 ? Math.abs(d.ecartExpostRef) : null
-    return { year, gainPrevu: prev, gainRealise: real, pct: prev && real ? Math.round((real / prev) * 100) : null }
-  })
-
-  const latestD = [...filteredYearlyData].reverse().find((d) => d.ecartExpostRef !== 0)
-  const latestGain = latestD ? Math.abs(latestD.ecartExpostRef) : null
-  const latestPct = latestD && latestD.ecartPrevRef !== 0 ? Math.round((Math.abs(latestD.ecartExpostRef) / Math.abs(latestD.ecartPrevRef)) * 100) : null
-  const latestYear = latestD?.year ?? null
-
-  const cumulGain = filteredYearlyData.reduce((s, d) => s + (d.ecartExpostRef !== 0 ? Math.abs(d.ecartExpostRef) : 0), 0)
-
-  const latestIdx = filteredYearlyData.findIndex((d) => d.year === latestYear)
-  const prevD = latestIdx > 0 ? filteredYearlyData[latestIdx - 1] : null
-  const prevGainAbs = prevD?.ecartExpostRef !== 0 ? Math.abs(prevD?.ecartExpostRef ?? 0) : null
-  const gainTendance = latestGain != null && prevGainAbs != null ? latestGain - prevGainAbs : null
-
-  // ── Derived: section 01 trajectories ─────────────────────────────────────
-
-  // trajData: covers every year in the period; null for years with no data
-  const trajRaw = processedData.emissions?.[active]?.yearlyData ?? []
-  const trajByYear = new Map(trajRaw.map((d) => [d.year, d]))
-  const trajData = periodRange.map((year) => trajByYear.get(year) ?? { year, initiale: null, reference: null, previsionnelle: null, expost: null })
-  const trajUnit = processedData.emissions?.[active]?.unit || ""
 
   // ── Derived: section 01 émissions par situation ──────────────────────────
+
+  const trajByYear = new Map((processedData.emissions?.[active]?.yearlyData ?? []).map((d) => [d.year, d]))
+  const trajUnit = processedData.emissions?.[active]?.unit || ""
 
   const situationGroups = buildSituationGroups(action)
   const hydrateBar = (bar) => {
@@ -708,10 +661,6 @@ export default function Dashboard({ action }) {
 
   // ── Derived: section 02 (niveaux d'émissions absolus) ───────────────────
 
-  // selYear: last year with ex-post data — used only for trajectory reference line
-  const selYear =
-    allYears.filter((y) => Object.values(processedData.gains || {}).some((ind) => ind.yearlyData?.find((d) => d.year === y)?.ecartExpostRef !== 0)).at(-1) ?? allYears.at(-1)
-
   const emissionProfile = availKeys.map((key) => {
     const emData = processedData.emissions?.[key]?.yearlyData ?? []
     const unit = processedData.emissions?.[key]?.unit || INDICATORS.find((i) => i.key === key)?.unit || ""
@@ -733,33 +682,6 @@ export default function Dashboard({ action }) {
 
   const gesProfile = emissionProfile.find((p) => p.key === "GES") ?? emissionProfile[0]
 
-  // ── Tooltip renderers (closures) ──────────────────────────────────────────
-
-  const gainsTooltip = ({ active: a, payload, label }) => {
-    if (!a || !payload?.length) return null
-    const entry = heroData.find((d) => d.year === label)
-    return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-4 text-xs space-y-2">
-        <div className="font-bold text-[#111] text-sm">Année {label}</div>
-        {payload.map((p) => (
-          <div key={p.dataKey} className="flex items-center justify-between gap-6">
-            <span className="text-gray-500">{p.name}</span>
-            <span className="font-semibold text-[#333] tabular-nums">{p.value != null ? `${fmtNum(p.value)} ${activeUnit}` : "—"}</span>
-          </div>
-        ))}
-        {entry?.pct != null && (
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-6">
-            <span className="text-gray-400">Atteinte objectif</span>
-            <span className="font-bold tabular-nums" style={{ color: barFill(entry.pct) }}>
-              {capPct(entry.pct)}%
-            </span>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
@@ -830,24 +752,6 @@ export default function Dashboard({ action }) {
           <section>
             {/* Filter bar */}
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-white shadow-sm mb-7 flex-wrap">
-              <div className="flex bg-gray-100 rounded-lg p-0.5">
-                {[
-                  { k: "gains", l: "Gains réalisés" },
-                  { k: "traj", l: "Trajectoires" },
-                  { k: "situations", l: "Émissions par situation" }
-                ].map((t) => (
-                  <button
-                    key={t.k}
-                    onClick={() => setTab(t.k)}
-                    className={`px-4 py-2 text-sm rounded-md font-medium transition-all whitespace-nowrap ${t.k === tab ? "bg-white shadow-sm text-[#111]" : "text-gray-500 hover:text-gray-700"}`}
-                  >
-                    {t.l}
-                  </button>
-                ))}
-              </div>
-
-              <div className="h-5 w-px bg-gray-200 mx-1" />
-
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500 whitespace-nowrap">Polluant</span>
                 <select value={active} onChange={(e) => setActivePill(e.target.value)} className="input-primary !py-2 !pl-3 text-sm cursor-pointer font-medium">
@@ -858,147 +762,8 @@ export default function Dashboard({ action }) {
                   ))}
                 </select>
               </div>
-
-              <div className="h-5 w-px bg-gray-200 mx-1" />
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 whitespace-nowrap">Période</span>
-                <select value={yearFrom ?? ""} onChange={(e) => setYearFrom(parseInt(e.target.value))} className="input-primary !py-2 !pl-3 text-sm cursor-pointer">
-                  {periodYears
-                    .filter((y) => !yearTo || y <= yearTo - 1)
-                    .map((y) => (
-                      <option key={y} value={y}>
-                        {y}
-                      </option>
-                    ))}
-                </select>
-                <span className="text-gray-300">→</span>
-                <select value={yearTo ?? ""} onChange={(e) => setYearTo(parseInt(e.target.value))} className="input-primary !py-2 !pl-3 text-sm cursor-pointer">
-                  {periodYears
-                    .filter((y) => !yearFrom || y >= yearFrom + 1)
-                    .map((y) => (
-                      <option key={y} value={y}>
-                        {y}
-                      </option>
-                    ))}
-                </select>
-              </div>
             </div>
 
-            {/* Tab: Gains */}
-            {tab === "gains" && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <KpiCard
-                    label={`Gain réalisé en ${latestYear ?? "—"}`}
-                    value={fmtNum(latestGain)}
-                    unit={`${activeUnit} / an`}
-                    pct={latestPct}
-                    ctx1={latestD ? `Réduction ex-post vs. référence — objectif : ${fmtNum(Math.abs(latestD.ecartPrevRef))} ${activeUnit}` : "Aucune donnée ex-post disponible"}
-                  />
-                  <KpiCard
-                    label="Gain cumulé"
-                    value={fmtNum(cumulGain)}
-                    unit={`${activeUnit} total`}
-                    ctx1={`Cumul des réductions sur ${filteredYearlyData.length} an${filteredYearlyData.length > 1 ? "s" : ""}, de ${yearFrom ?? allYears[0] ?? "—"} à ${yearTo ?? allYears.at(-1) ?? "—"}.`}
-                  />
-                </div>
-
-                <div className="card-shadow p-6">
-                  <div className="flex items-start justify-between mb-6 gap-4">
-                    <div>
-                      <h3 className="text-base font-semibold text-[#111]">Gains annuels réalisés vs. objectif</h3>
-                      <p className="text-sm text-gray-500 mt-0.5">Chaque barre représente la réduction effective. La ligne pointillée indique l'objectif prévisionnel.</p>
-                    </div>
-                    <div className="flex gap-5 flex-wrap justify-end shrink-0">
-                      {[
-                        { color: "#2DAC6A", label: "≥ 80% objectif" },
-                        { color: "#F59600", label: "50–80%" },
-                        { color: "#E24B4A", label: "< 50%" },
-                        { color: "#C8C8C8", label: "Objectif prévu", dash: true }
-                      ].map((l) => (
-                        <div key={l.label} className="flex items-center gap-1.5 text-xs text-gray-500">
-                          {l.dash ? (
-                            <div className="w-5 flex-shrink-0 border-t-2 border-dashed" style={{ borderColor: l.color }} />
-                          ) : (
-                            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: l.color }} />
-                          )}
-                          {l.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="h-[280px]">
-                    {heroData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={heroData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-                          <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#C0C0C0" }} />
-                          <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
-                          <Tooltip content={gainsTooltip} />
-                          <Bar dataKey="gainRealise" name="Gain réalisé" radius={[3, 3, 0, 0]} maxBarSize={40}>
-                            {heroData.map((entry, i) => (
-                              <Cell key={i} fill={barFill(entry.pct)} />
-                            ))}
-                          </Bar>
-                          <Line type="monotone" dataKey="gainPrevu" name="Objectif prévu" stroke="#C8C8C8" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <ChartEmpty />
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Trajectoires */}
-            {tab === "traj" && (
-              <div className="card-shadow p-6">
-                <div className="flex items-center gap-5 mb-6 flex-wrap">
-                  <h3 className="text-base font-semibold text-[#111]">Trajectoires d'émissions</h3>
-                  <div className="flex gap-5 ml-auto">
-                    {TRAJ_SERIES.map((s) => (
-                      <div key={s.key} className="flex items-center gap-2 text-xs text-gray-500">
-                        <div className="w-5 flex-shrink-0" style={{ borderTop: `2px ${s.dash ? "dashed" : "solid"} ${s.color}` }} />
-                        {s.label}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="h-[320px]">
-                  {trajData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={trajData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
-                        <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#C0C0C0" }} interval="preserveStartEnd" />
-                        <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
-                        <Tooltip
-                          formatter={(v, name) => [`${fmtNum(v)} ${trajUnit}`, TRAJ_SERIES.find((s) => s.key === name)?.label || name]}
-                          labelFormatter={(l) => `Année ${l}`}
-                          contentStyle={{ fontSize: 12, border: "1px solid #f0f0f0", borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                        />
-                        <ReferenceLine
-                          x={selYear}
-                          stroke="#2DAC6A"
-                          strokeWidth={1.5}
-                          strokeDasharray="5 3"
-                          label={{ value: String(selYear), position: "insideTopRight", fontSize: 10, fill: "#2DAC6A" }}
-                        />
-                        <Line type="monotone" dataKey="initiale" stroke="#8B5E3C" strokeWidth={1.5} dot={false} />
-                        <Line type="monotone" dataKey="reference" stroke="#C4903A" strokeWidth={1.5} dot={false} />
-                        <Line type="monotone" dataKey="previsionnelle" stroke="#A3B84B" strokeWidth={2} strokeDasharray="5 3" dot={false} />
-                        <Line type="monotone" dataKey="expost" stroke="#2DAC6A" strokeWidth={2.5} dot={false} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <ChartEmpty />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Émissions par situation */}
-            {tab === "situations" && (
               <div className="space-y-6">
                 <div className="card-shadow p-6">
                   <div className="flex items-center gap-5 mb-6 flex-wrap">
@@ -1254,7 +1019,6 @@ export default function Dashboard({ action }) {
                   </div>
                 </div>
               </div>
-            )}
           </section>
 
           {/* ── SECTION 02 — NIVEAUX D'ÉMISSIONS ───────────────────────────── */}
