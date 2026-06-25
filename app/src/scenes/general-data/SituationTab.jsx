@@ -109,7 +109,7 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#D9EFE3] text-[#2DAC6A] text-xs font-bold">✓</span>
             <h3 className="text-base font-bold text-[#1B7A47] m-0">Déjà renseignés</h3>
             <span className="text-xs font-semibold px-2.5 py-[3px] rounded-full bg-[#D9EFE3] text-[#1B7A47]">{groupDone.length}</span>
-            <span className="ml-auto text-[13px] font-semibold text-[#768776]">{doneCollapsed ? "Afficher ▾" : "Masquer ▴"}</span>
+            <span className="text-[13px] font-semibold text-[#768776]">{doneCollapsed ? "Afficher ▾" : "Masquer ▴"}</span>
           </div>
           {!doneCollapsed && (
             <div className="flex flex-col gap-[11px]">
