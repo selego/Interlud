@@ -114,7 +114,10 @@ const GAIN_LABELS = {
  */
 function buildGainBars(action, situationChartData) {
   const gains = []
-  const getVal = (type, year) => situationChartData.find((b) => b.type === type && b.year === year)?.value
+  const getVal = (type, year) => {
+    const v = situationChartData.find((b) => b.type === type && b.year === year)?.value
+    return v == null ? v : Math.round(v)
+  }
 
   const initVal = action.year_init != null ? getVal("init", action.year_init) : null
 
@@ -438,22 +441,20 @@ function OnboardingContent({ action, onStart }) {
           </div>
         </div>
 
-        {hasExpost && (
-          <div className="card-shadow p-5 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: "#2DAC6A18", color: "#2DAC6A" }}>
-                Étape 4
-              </span>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-0.5 rounded-full shrink-0 self-stretch bg-[#2DAC6A]" />
-              <div>
-                <div className="text-sm font-semibold text-[#123314] mb-1">Ex-post</div>
-                <div className="text-xs text-font-secondary leading-relaxed">Mesurez les résultats réels après mise en œuvre.</div>
-              </div>
+        <div className="card-shadow p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: "#2DAC6A18", color: "#2DAC6A" }}>
+              Étape 4
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <div className="w-0.5 rounded-full shrink-0 self-stretch bg-[#2DAC6A]" />
+            <div>
+              <div className="text-sm font-semibold text-[#123314] mb-1">Ex-post</div>
+              <div className="text-xs text-font-secondary leading-relaxed">Mesurez les résultats réels après mise en œuvre.</div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* ── Blurred fake dashboard + overlay — même pattern que LockedChart du home ── */}
@@ -753,7 +754,7 @@ export default function Dashboard({ action }) {
             {/* Filter bar */}
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-white shadow-sm mb-7 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 whitespace-nowrap">Polluant</span>
+                <span className="text-sm text-gray-500 whitespace-nowrap">Impact</span>
                 <select value={active} onChange={(e) => setActivePill(e.target.value)} className="input-primary !py-2 !pl-3 text-sm cursor-pointer font-medium">
                   {availKeys.map((k) => (
                     <option key={k} value={k}>

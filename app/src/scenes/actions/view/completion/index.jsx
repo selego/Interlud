@@ -2,28 +2,41 @@ import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft, FiLoader, FiBarChart2 } from "react-icons/fi"
+import { FiArrowLeft, FiLoader, FiBarChart2, FiPlus, FiCalendar, FiInfo } from "react-icons/fi"
 import { shouldDisplayIndicatorFromMap, fetchConditionValuesMap, isIndicatorValueFilled } from "@/utils/indicatorHelpers"
+import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
+import Modal from "@/components/modal"
+import Select from "@/components/Select"
 import IndicatorsList from "./IndicatorsList"
 import SituationTab from "./SituationTab"
 
 const HIDDEN_INDICATOR_IDS = ["AnneeRempl", "AnRef", "ActionsAutres", "ActionsCharte"]
 const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisionnel", expost: "Ex-post" }
+const SITUATION_DESCRIPTIONS = {
+  init: "État des lieux au démarrage de l'action, avant toute mise en œuvre.",
+  ref: "Année de référence servant de base de comparaison pour mesurer les évolutions.",
+  prev: "Projection des résultats attendus de l'action sur les années à venir.",
+  expost: "Évaluation des résultats réels constatés après la mise en œuvre de l'action.",
+}
 const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
 export default function Completion({ action, onSave }) {
   const navigate = useNavigate()
+  const { user } = useStore()
+  const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
 
   const [activeSituation, setActiveSituation] = useState(null)
   const [activeYear, setActiveYear] = useState(null)
   const [stats, setStats] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isAddYearOpen, setIsAddYearOpen] = useState(false)
 
   const situationYears = stats?.situationYears || {}
-  const availableSituations = SITUATION_ORDER.filter((s) => situationYears[s]?.length > 0)
+  // Pour un admin, prev et expost sont toujours affichés afin de pouvoir créer la première année directement depuis cet écran
+  const availableSituations = SITUATION_ORDER.filter((s) => situationYears[s]?.length > 0 || (isAdmin && (s === "prev" || s === "expost")))
 
   const getSituationProgress = (situation, year) => {
     if (!stats?.completion) return 0
@@ -48,9 +61,10 @@ export default function Completion({ action, onSave }) {
 
   useEffect(() => {
     if (availableSituations.length > 0) {
-      if (!activeSituation || !situationYears[activeSituation]) {
-        setActiveSituation(availableSituations[0])
-        setActiveYear(situationYears[availableSituations[0]]?.[0])
+      if (!activeSituation || !availableSituations.includes(activeSituation)) {
+        const defaultSituation = availableSituations.includes("init") ? "init" : availableSituations[0]
+        setActiveSituation(defaultSituation)
+        setActiveYear(situationYears[defaultSituation]?.[0])
       } else if (activeYear && !situationYears[activeSituation]?.includes(activeYear)) {
         setActiveYear(situationYears[activeSituation]?.[0])
       }
@@ -126,6 +140,12 @@ export default function Completion({ action, onSave }) {
                 >
                   <div className="flex items-center gap-2">
                     {SITUATION_LABELS[situation]}
+                    <span className="group/tip relative inline-flex items-center">
+                      <FiInfo className="w-3.5 h-3.5 text-gray-400 hover:text-primary-green" />
+                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-56 -translate-x-1/2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-normal leading-snug text-white text-left opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
+                        {SITUATION_DESCRIPTIONS[situation]}
+                      </span>
+                    </span>
                     <div className="flex items-center gap-1 text-xs text-gray-600">
                       <ProgressCircle percentage={totalProgress} size={16} />
                       <span>{totalProgress}%</span>
@@ -137,7 +157,7 @@ export default function Completion({ action, onSave }) {
           </div>
         </div>
 
-        {activeSituation && situationYears[activeSituation]?.length > 0 && (
+        {situationYears[activeSituation]?.length > 0 && (
           <div className="flex items-center gap-2 mb-6">
             {situationYears[activeSituation].map((year) => (
               <button
@@ -154,9 +174,49 @@ export default function Completion({ action, onSave }) {
                 </div>
               </button>
             ))}
+            {isAdmin && (activeSituation === "prev" || activeSituation === "expost") && (
+              <button
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-full border border-dashed border-gray-300 text-gray-500 hover:border-primary-green hover:text-primary-green transition-all"
+                onClick={() => setIsAddYearOpen(true)}
+              >
+                <FiPlus className="w-4 h-4" />
+                Ajouter une année
+              </button>
+            )}
           </div>
         )}
 
+        {isAddYearOpen && (
+          <AddYearModal
+            action={action}
+            situation={activeSituation}
+            existingYears={situationYears[activeSituation] || []}
+            onClose={() => setIsAddYearOpen(false)}
+            onAdded={async (year) => {
+              setIsAddYearOpen(false)
+              await fetchStats()
+              setActiveYear(year)
+            }}
+          />
+        )}
+
+        {(activeSituation === "prev" || activeSituation === "expost") && !(situationYears[activeSituation]?.length > 0) ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary-green/10 text-primary-green mb-5">
+              <FiCalendar className="w-8 h-8" />
+            </div>
+            <p className="text-lg font-semibold text-gray-800">
+              Aucune année {activeSituation === "prev" ? "prévisionnelle" : "ex-post"}
+            </p>
+            <p className="text-sm text-gray-500 mt-1 mb-6 max-w-md">
+              Créez une première année {activeSituation === "prev" ? "prévisionnelle" : "ex-post"} pour commencer à renseigner les indicateurs de cette situation.
+            </p>
+            <button onClick={() => setIsAddYearOpen(true)} className="button-primary inline-flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Créer une année {activeSituation === "prev" ? "prévisionnelle" : "ex-post"}
+            </button>
+          </div>
+        ) : (
         <IndicatorView
           action={action}
           activeSituation={activeSituation}
@@ -166,6 +226,7 @@ export default function Completion({ action, onSave }) {
           yearMappings={stats?.yearMappingsBySituationYear?.[`${activeSituation}_${activeYear}`]}
           tabTotal={stats?.completion?.[`${activeSituation}_${activeYear}`]?.total || 0}
         />
+        )}
       </div>
     </div>
   )
@@ -312,5 +373,91 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, on
         />
       </div>
     </div>
+  )
+}
+
+function AddYearModal({ action, situation, existingYears, onClose, onAdded }) {
+  const [newYear, setNewYear] = useState("")
+  const [isAdding, setIsAdding] = useState(false)
+  const [seconds, setSeconds] = useState(0)
+
+  useEffect(() => {
+    if (!isAdding) return
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [isAdding])
+
+  const handleAdd = async () => {
+    if (!newYear) return toast.error("Veuillez sélectionner une année")
+    try {
+      setIsAdding(true)
+      const endpoint = situation === "prev" ? "/action/add_year_previsionnel" : "/action/add_year_expost"
+      const yearField = situation === "prev" ? "year_prev" : "year_expost"
+      const { ok, code } = await api.post(endpoint, { action_id: action._id, [yearField]: parseInt(newYear) })
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      toast.success(situation === "prev" ? "Situation prévisionnelle ajoutée" : "Situation ex-post ajoutée")
+      await onAdded(parseInt(newYear))
+    } catch (error) {
+      toast.error("Une erreur est survenue")
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  return (
+    <Modal isOpen={true} onClose={() => { if (!isAdding) onClose() }} className="max-w-md">
+      <div className="p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-6">
+          {situation === "prev" ? "Ajouter une situation prévisionnelle" : "Ajouter une situation ex-post"}
+        </h2>
+        {isAdding ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-5">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-primary-green border-t-transparent animate-spin"></div>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-gray-800 mb-1">Création en cours...</p>
+              <p className="text-sm text-gray-500 mb-3">
+                {seconds < 10
+                  ? "Préparation des fichiers des indicateurs"
+                  : seconds < 25
+                  ? "Préparation des moteurs de calcul"
+                  : seconds < 40
+                  ? "Génerations des valeurs par défaut"
+                  : seconds < 60
+                  ? "Application des valeurs par défaut"
+                  : seconds < 80
+                  ? "Création du dashboard"
+                  : seconds < 100
+                  ? "Finalisation de la création"
+                  : "Finalisation et vérification des résultats"}
+              </p>
+              <p className="text-xs text-gray-400">Cette opération peut prendre plusieurs minutes</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                {situation === "prev" ? "Année prévisionnelle" : "Année ex-post"} <span className="text-red-500">*</span>
+              </label>
+              <Select
+                options={Array.from({ length: 30 }, (_, i) => new Date().getFullYear() + i)
+                  .filter((year) => !existingYears.includes(year))
+                  .map((year) => ({ value: year.toString(), label: year.toString() }))}
+                value={newYear}
+                onChange={(value) => setNewYear(value)}
+                placeholder="Sélectionner une année"
+                constrained={true}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={handleAdd} className="button-primary">Créer</button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   )
 }

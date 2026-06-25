@@ -105,6 +105,7 @@ function UserInfoTab({ user, setUser }) {
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setUser(data)
       toast.success("Utilisateur mis à jour")
+      navigate("/collectivity")
     } catch (e) {
       console.log(e)
       toast.error("Une erreur est survenue")

@@ -6,6 +6,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
+import { FiInfo } from "react-icons/fi"
 
 const getStatusLabel = (status) => {
   if (status === "completed") return "Complétée"
@@ -26,7 +27,7 @@ export default function List() {
   const navigate = useNavigate()
   const [actions, setActions] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [filters, setFilters] = useState({ is_subsidized_by_program: "", pilote: "", budget_min: "", budget_max: "" })
+  const [filters, setFilters] = useState({ pilote: "", budget_min: "", budget_max: "" })
   const { collectivity, user } = useStore()
 
 
@@ -48,17 +49,29 @@ export default function List() {
     fetchActions()
   }, [collectivity, filters])
 
-  // if ( actions.length === 0 ) return (
-  //   <div className="p-8"> 
-  //     <div className="flex justify-between items-center mb-6">
-  //       <h1 className="text-3xl font-bold">Liste des Actions</h1>
-  //     </div>
-
-  //     <div className="flex items-center justify-center">
-  //       <div className="text-lg text-gray-600">Aucune action dans cette collectivité</div>
-  //     </div>
-  //   </div>
-  // )
+  if (actions.length === 0)
+    return (
+      <div className="p-8">
+        <h1 className="text-3xl font-bold mb-8">Liste des Actions</h1>
+        <div className="flex flex-col items-center justify-center text-center bg-gradient-to-b from-green-50 to-white border border-gray-100 rounded-2xl py-20 px-6 card-shadow">
+          <div className="w-20 h-20 bg-primary-green rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-green-200">
+            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-3">Créez votre première action</h2>
+          <p className="text-base text-gray-500 mb-8 max-w-md">
+            Vous n'avez pas encore d'action dans cette collectivité. Lancez-vous et commencez à suivre vos mesures environnementales.
+          </p>
+          {(isAdmin || user.role === "economic_actor") && (
+            <button onClick={() => setIsModalOpen(true)} className="button-primary text-base px-6 py-3">
+              Créer ma première action
+            </button>
+          )}
+        </div>
+        <AddActionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} collectivity={collectivity} />
+      </div>
+    )
 
   return (
     <div className="p-8">
@@ -83,19 +96,6 @@ export default function List() {
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6">
-        <div className="w-48">
-          <Select
-            value={filters.is_subsidized_by_program}
-            onChange={(value) => setFilters((prev) => ({ ...prev, is_subsidized_by_program: value }))}
-            placeholder="Subventionné ?"
-            constrained={true}
-            options={[
-              { value: "", label: "Subventionné ?" },
-              { value: true, label: "Oui" },
-              { value: false, label: "Non" },
-            ]}
-          />
-        </div>
         <div className="w-48">
           <Select
             value={filters.pilote}
@@ -203,7 +203,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const navigate = useNavigate()
     const { user } = useStore()
     const [selectedActionId, setSelectedActionId] = useState("")
-    const [isCustomVersion, setIsCustomVersion] = useState(false)
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
@@ -237,7 +236,6 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         setLoadingSeconds(0)
         if (!collectivity?._id) return toast.error("Collectivité non trouvée")
         if (!selectedActionId) return toast.error("Veuillez sélectionner une action")
-        if (isCustomVersion && !customName.trim()) return toast.error("Veuillez entrer un nom pour votre action personnalisée")
         if (!year.init) return toast.error("Veuillez sélectionner une année initiale")
         if (!year.prev) return toast.error("Veuillez sélectionner une année prévisionnelle")
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
@@ -246,8 +244,8 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         const payload = {
           action_parent_id: selectedActionId,
           action_parent_name: selectedAction.name,
-          name: isCustomVersion ? customName : selectedAction.name,
-          type: isCustomVersion ? "custom" : "reference",
+          name: customName.trim() ? customName.trim() : selectedAction.name,
+          type: customName.trim() ? "custom" : "reference",
           collectivity_id: collectivity._id,
           collectivity_name: collectivity.name,
           year_init: parseInt(year.init),
@@ -355,8 +353,14 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           <div className="mb-6">
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
                   Année initiale <span className="text-red-500">*</span>
+                  <span className="group/tip relative inline-flex items-center">
+                    <FiInfo className="w-3.5 h-3.5 text-gray-400 hover:text-primary-green" />
+                    <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-normal leading-snug text-white text-left opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
+                      Année de référence à partir de laquelle l'action est suivie (état des lieux de départ).
+                    </span>
+                  </span>
                 </label>
                 <input
                   type="number"
@@ -368,8 +372,14 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
                   Année prévisionnelle <span className="text-red-500">*</span>
+                  <span className="group/tip relative inline-flex items-center">
+                    <FiInfo className="w-3.5 h-3.5 text-gray-400 hover:text-primary-green" />
+                    <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-normal leading-snug text-white text-left opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
+                      Année cible visée pour la mise en œuvre de l'action et l'atteinte des objectifs prévus.
+                    </span>
+                  </span>
                 </label>
                 <input
                   type="number"
@@ -409,46 +419,18 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
               </div>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <div className="relative flex items-center">
-                <input
-                  type="checkbox"
-                  checked={isCustomVersion}
-                  onChange={(e) => setIsCustomVersion(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-4 h-4 border-2 border-gray-300 peer-checked:bg-[#2DAC6A] peer-checked:border-[#2DAC6A] flex items-center justify-center transition-all">
-                  {isCustomVersion && (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              <span className="text-sm text-gray-700">
-                Créer une version personnalisée de cette action
-              </span>
-            </label>
-          </div>
-        )}
-
-        {/* Custom Name Input */}
-        {isCustomVersion && (
-          <div className="mb-6 animate-fadeIn">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nom de votre action personnalisée <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Entrez un nom personnalisé"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-              autoFocus
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              Cette action sera basée sur "{actions.find(a => a._id === selectedActionId)?.name}" avec les mêmes indicateurs
-            </p>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Nom personnalisé (optionnel)
+              </label>
+              <input
+                type="text"
+                placeholder="Entrez un nom personnalisé"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+              />
+            </div>
           </div>
         )}
 

@@ -58,7 +58,7 @@ const Select = ({ options = [], value = "", onChange, className = "", placeholde
                   `}
                 >
                   <div className="flex items-center gap-3">
-                    <span className={`text-xs ${constrained ? "truncate" : "whitespace-nowrap"}`}>{option.label}</span>
+                    <span className={`text-xs ${constrained ? "whitespace-normal break-words" : "whitespace-nowrap"}`}>{option.label}</span>
                     {value === option.value && <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />}
                   </div>
                 </button>
