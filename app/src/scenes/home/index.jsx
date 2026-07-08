@@ -133,7 +133,7 @@ export default function Home() {
     setLoadingData(true)
     const load = async () => {
       await fetchActions()
-      await fetchHomeAimage.pngggregation()
+      await fetchHomeAggregation()
     }
     load()
   }, [collectivity])
