@@ -1,26 +1,26 @@
 [
   {
-    "situation": "expost",
-    "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 1676,
-    "excelIndicatorId": "ELUTourneeTCCyclolog",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2127,
+    "excelIndicatorId": "ELUPrévApproReportFluvial",
     "reason": "non parsée",
-    "formula": "=IF(ISNUMBER(SEARCH('Remplissage - Sit. Expost'!$F$127,$F$2129)),1,0)"
+    "formula": "=IF($F$2132 = R2127, 1,0)"
   },
   {
-    "situation": "expost",
-    "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 1677,
-    "excelIndicatorId": "ELUTourneeDistCyclolog",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2128,
+    "excelIndicatorId": "ELUPrévApproOptiPL",
     "reason": "non parsée",
-    "formula": "=(IF(ISNUMBER(SEARCH('Remplissage - Sit. Expost'!$F$127,$F$2129)),1,0))*(IF(ISNUMBER(SEARCH(\"La distance totale parcourue\",#REF!)),1,0))"
+    "formula": "=IF($F$2132 = R2128, 1,0)"
   },
   {
-    "situation": "expost",
-    "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 1678,
-    "excelIndicatorId": "ELUTourneeNbCyclolog",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2129,
+    "excelIndicatorId": "ELUPrévApproOptiVUL",
     "reason": "non parsée",
-    "formula": "=(IF(ISNUMBER(SEARCH('Remplissage - Sit. Expost'!$F$127,$F$2129)),1,0))*(IF(ISNUMBER(SEARCH(\"La distance moyenne d'un trajet et le nombre de trajets\",#REF!)),1,0))"
+    "formula": "=IF($F$2132 = R2129, 1,0)"
   }
 ]

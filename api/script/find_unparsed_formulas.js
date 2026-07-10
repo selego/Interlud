@@ -10,7 +10,7 @@ const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas } = require
 // (héritage de la condition d'un parent) que le parse a silencieusement perdu.
 
 //V22
-const masterFileId = "01IBL4ADMEECYH5XLWUBEKOV5J3RGN6PTW";
+const masterFileId = "01IBL4ADLKXXB27RAO4RFL5UPQX7NJ3M7R";
 
 const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -98,8 +98,8 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
         const content = formula.substring(1).trim();
         const hasCellFactor = /\)\s*\*\s*\$?[A-Z]+\$?\d+/i.test(content) || /^\$?[A-Z]+\$?\d+\s*\*/i.test(content);
         if (!hasCellFactor) continue;
-        const parsed = parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps);
-        if (parsed?._referenceToMerge) continue;
+        const parsed = parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps, allSheetsData);
+        if (parsed?._referenceToMerge || parsed?._referencesToAnd) continue;
         unparsed.push({ situation, worksheetName, rowNum, excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A", reason: 'parse partiel (facteur "* cellule" perdu)', formula });
       }
     }
