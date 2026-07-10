@@ -14,7 +14,7 @@ const SITUATION_LABELS = { init: "Initiale", ref: "Référence", prev: "Prévisi
 const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
 export default function Index() {
-  const { collectivity } = useStore()
+  const { collectivity, user } = useStore()
   const [configActions, setConfigActions] = useState([])
   const [activeConfigIndex, setActiveConfigIndex] = useState(0)
   const [activeSituation, setActiveSituation] = useState(null)
@@ -37,7 +37,7 @@ export default function Index() {
       if (!collectivity?._id) return
       const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id, type: "config" })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setConfigActions(data)
+      setConfigActions(user?.role === "economic_actor" ? data.filter((ca) => ca.name !== "Données de base") : data)
     } catch (error) {
       toast.error("Une erreur est survenue")
     }
