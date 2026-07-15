@@ -10,7 +10,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADLKXXB27RAO4RFL5UPQX7NJ3M7R"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADMCUEX55HWJBZC2DESDFFJL3Q6B"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -1093,6 +1093,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
         }
       }
 
+      // Colonne L "Affichage acteurs économiques" : 0 → masqué, sinon (1 ou vide) → affiché
+      const display_acteureco_for_situation = String(row[11]).trim() !== "0";
+
       let category = null;
       let subCategory = null;
       let action = null;
@@ -1122,8 +1125,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
         }
       }
 
-      if (row[12] !== "") {
-        action = actionsMap.get(row[12]);
+      if (row[13] !== "") {
+        action = actionsMap.get(row[13]);
         if (!action) continue;
       }
 
@@ -1161,6 +1164,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const updatedDisplayCondition = { ...existingIndicator.display_condition };
           if (situation && display_condition_for_situation) updatedDisplayCondition[situation] = display_condition_for_situation;
 
+          const updatedDisplayActeureco = { ...existingIndicator.display_acteureco };
+          if (situation) updatedDisplayActeureco[situation] = display_acteureco_for_situation;
+
           const updatedPossibilitiesSource = { ...(existingIndicator.value_possibilities_source || {}) };
           if (situation) updatedPossibilitiesSource[situation] = possibilitiesSourceForSituation || undefined;
 
@@ -1171,7 +1177,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             indicator_sub_category_name: subCategory?.name,
             name: row[2] || undefined,
             description: row[3] || undefined,
-            is_primordial: row[14] === true || row[14] === "VRAI",
+            is_primordial: row[15] === true || row[15] === "VRAI",
             value_possibilities: possibilitiesSourceForSituation
               ? []
               : row[6] !== undefined && row[6] !== ""
@@ -1188,6 +1194,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             presence_in_excel: updatedPresenceInExcel,
             excel_line_number: updatedExcelLineNumber,
             display_condition: updatedDisplayCondition,
+            display_acteureco: updatedDisplayActeureco,
             value_possibilities_source: updatedPossibilitiesSource,
           };
 
@@ -1206,6 +1213,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             "is_primordial",
             "presence_in_excel",
             "display_condition",
+            "display_acteureco",
           ];
 
           fieldsToLog.forEach((field) => {
@@ -1270,6 +1278,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               is_primordial: newData.is_primordial,
               excel_line_number: excelRowNumber,
               display_condition: display_condition_for_situation,
+              display_acteureco: display_acteureco_for_situation,
             },
           });
         }
@@ -1287,7 +1296,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             indicator_sub_category_name: subCategory?.name,
             name: row[2] || undefined,
             description: row[3] || undefined,
-            is_primordial: row[14] === true || row[14] === "VRAI",
+            is_primordial: row[15] === true || row[15] === "VRAI",
             excel_indicator_id: row[4] || undefined,
             value_possibilities: possibilitiesSourceForSituation
               ? []
@@ -1305,6 +1314,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             presence_in_excel: situation ? { [situation]: true } : undefined,
             excel_line_number: excelLineNumber,
             display_condition: displayCondition,
+            display_acteureco: situation ? { [situation]: display_acteureco_for_situation } : undefined,
             value_possibilities_source: possibilitiesSource,
           };
 

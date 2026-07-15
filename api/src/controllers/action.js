@@ -295,6 +295,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
             indicator_excel_id: indicator.excel_indicator_id,
             excel_line_number: indicator.excel_line_number?.[situation],
             is_primordial: indicator.is_primordial,
+            display_acteureco: indicator.display_acteureco?.[situation] ?? true,
           };
 
           if (configAction.name === 'Parc types') {
@@ -381,6 +382,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           indicator_sub_category_name: indicator.indicator_sub_category_name,
           indicator_excel_id: indicator.excel_indicator_id,
           is_primordial: indicator.is_primordial,
+          display_acteureco: indicator.display_acteureco?.[situation] ?? true,
         };
         if (indicator.is_primordial === false) {
           indicatorValue.value = { [indicator.value_type]: defaultValue };
@@ -896,6 +898,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
               indicator_excel_id: indicator.excel_indicator_id,
               excel_line_number: indicator.excel_line_number?.[situation],
               is_primordial: indicator.is_primordial,
+              display_acteureco: indicator.display_acteureco?.[situation] ?? true,
             };
 
             if (configAction.name === 'Parc types') iv.value = { [indicator.value_type]: defaultValue };
@@ -990,6 +993,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           indicator_sub_category_name: indicator.indicator_sub_category_name,
           indicator_excel_id: indicator.excel_indicator_id,
           is_primordial: indicator.is_primordial,
+          display_acteureco: indicator.display_acteureco?.[situation] ?? true,
         };
 
         // Ajouter les champs spécifiques aux acteurs économiques
@@ -1260,6 +1264,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
               indicator_excel_id: indicator.excel_indicator_id,
               excel_line_number: indicator.excel_line_number?.[situation],
               is_primordial: indicator.is_primordial,
+              display_acteureco: indicator.display_acteureco?.[situation] ?? true,
             };
 
             if (configAction.name === 'Parc types') iv.value = { [indicator.value_type]: defaultValue };
@@ -1379,6 +1384,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           indicator_sub_category_name: indicator.indicator_sub_category_name,
           indicator_excel_id: indicator.excel_indicator_id,
           is_primordial: indicator.is_primordial,
+          display_acteureco: indicator.display_acteureco?.[situation] ?? true,
         };
 
         // Ajouter les champs spécifiques aux acteurs économiques

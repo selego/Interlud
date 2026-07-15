@@ -78,6 +78,12 @@ const Schema = new mongoose.Schema(
       prev: displayConditionForSituation,
       expost: displayConditionForSituation,
     },
+    display_acteureco: {
+      init: { type: Boolean, default: true },
+      ref: { type: Boolean, default: true },
+      prev: { type: Boolean, default: true },
+      expost: { type: Boolean, default: true },
+    },
   },
   { timestamps: true },
 );

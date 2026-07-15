@@ -54,6 +54,7 @@ const Schema = new mongoose.Schema(
       operator: { type: String, enum: ['AND', 'OR'] },
       conditions: [conditionNode],
     },
+    display_acteureco: { type: Boolean, default: true },
     situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'], trim: true },
     year: { type: Number, trim: true },
     value_source: { type: String, trim: true },
