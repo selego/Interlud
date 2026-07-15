@@ -169,7 +169,6 @@ const updateOnboardingStatus = async (action) => {
     } else {
       if (isComplete) await Collectivity.updateOne({ _id: action.collectivity_id }, { $set: { [field]: true } });
     }
-    await Action.updateOne({ _id: action._id }, { $set: { status: isComplete ? 'completed' : 'in_progress' } });
   } catch (e) {
     capture(e);
   }

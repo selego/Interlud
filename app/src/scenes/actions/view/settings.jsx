@@ -385,6 +385,27 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               />
             </div>
           ) : null}
+          <div className="md:col-span-3">
+            <label className="block text-sm font-semibold mb-2">Taux de remplissage</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { key: "completion_init", label: "Initiale" },
+                { key: "completion_ref", label: "Référence" },
+                { key: "completion_prev", label: "Prévisionnelle" },
+                { key: "completion_expost", label: "Ex-post" },
+              ].map((s) => (
+                <div key={s.key} className="border rounded-xl p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-600">{s.label}</span>
+                    <span className="text-sm font-semibold">{action[s.key] ?? 0}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary-green rounded-full" style={{ width: `${action[s.key] ?? 0}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -30,7 +30,6 @@ const computeActionCompletion = async (actionId) => {
 
   const situations = ['init', 'ref', 'prev', 'expost'];
   const update = {};
-  const visibleValues = [];
 
   for (const situation of situations) {
     const values = indicatorValues.filter((iv) => iv.situation === situation);
@@ -45,12 +44,7 @@ const computeActionCompletion = async (actionId) => {
     }
     const filled = displayed.filter(isIndicatorValueFilled).length;
     update[`completion_${situation}`] = Math.round((filled / displayed.length) * 100);
-    visibleValues.push(...displayed);
   }
-
-  const allFilled = visibleValues.length > 0 && visibleValues.every(isIndicatorValueFilled);
-  if (allFilled) update.status = 'completed';
-  else if (action.status === 'no_status') update.status = 'in_progress';
 
   await Action.updateOne({ _id: actionId }, { $set: update });
 };
