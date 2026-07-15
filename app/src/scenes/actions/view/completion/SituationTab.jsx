@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { FiStar } from "react-icons/fi"
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import IndicatorValueInput from "./IndicatorValueInput"
@@ -34,6 +34,10 @@ const STATE_STYLES = {
 
 export default function SituationTab({ displayedIndicatorValues, selectedCategory, economicActorData, onSave, isViewLoading }) {
   const [doneCollapsed, setDoneCollapsed] = useState(true)
+
+  useEffect(() => {
+    if (!isViewLoading) setDoneCollapsed(displayedIndicatorValues.some(iv => !iv.initially_filled))
+  }, [isViewLoading])
 
   if (isViewLoading) {
     return (

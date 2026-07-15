@@ -186,6 +186,7 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
     if (req.user.role === 'economic_actor') {
       matchQuery.economic_actor_id = req.user.economic_actor_id;
       matchQuery.owner = 'economic_actor';
+      matchQuery.display_acteureco = { $ne: false };
     }
 
     // Parallel: fetch indicator values + config action at the same time
@@ -659,6 +660,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.user.role === 'economic_actor') {
       query.economic_actor_id = req.user.economic_actor_id;
       query.owner = 'economic_actor';
+      query.display_acteureco = { $ne: false };
     }
 
     if (req.body.unfilled_only) {

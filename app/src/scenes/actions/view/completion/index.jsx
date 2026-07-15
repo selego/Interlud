@@ -35,7 +35,6 @@ export default function Completion({ action, onSave }) {
   const [isAddYearOpen, setIsAddYearOpen] = useState(false)
 
   const situationYears = stats?.situationYears || {}
-  // Pour un admin, prev et expost sont toujours affichés afin de pouvoir créer la première année directement depuis cet écran
   const availableSituations = SITUATION_ORDER.filter((s) => situationYears[s]?.length > 0 || (isAdmin && (s === "prev" || s === "expost")))
 
   const getSituationProgress = (situation, year) => {
@@ -60,6 +59,7 @@ export default function Completion({ action, onSave }) {
   }, [action._id, action.collectivity_id])
 
   useEffect(() => {
+    if (!stats) return
     if (availableSituations.length > 0) {
       if (!activeSituation || !availableSituations.includes(activeSituation)) {
         const defaultSituation = availableSituations.includes("init") ? "init" : availableSituations[0]
