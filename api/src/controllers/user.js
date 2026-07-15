@@ -358,6 +358,134 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
     const obj = req.body;
     const exist = await UserObject.findOne({ email: obj.email });
 
+    if (obj.economic_actor) {
+      if (exist) {
+        if (exist.economic_actor_id === obj.economic_actor._id) {
+          return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_MEMBER });
+        }
+
+        exist.economic_actor_id = obj.economic_actor._id;
+        exist.economic_actor_name = obj.economic_actor.name;
+        if (exist.role !== 'admin') exist.role = 'economic_actor';
+        for (const col of obj.economic_actor.collectivities || []) {
+          if (!exist.collectivities?.some((c) => c.id === col.id)) {
+            exist.collectivities.push({ id: col.id, name: col.name, role: 'economic_actor', status: 'approved' });
+          }
+        }
+        await exist.save();
+
+        const addedBodyHTML = `
+        <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Nouvel acteur économique</h1>
+          </div>
+          <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Bonjour${exist.name ? ` ${exist.name}` : ''},</p>
+            <p style="font-size: 16px; margin-bottom: 20px;">
+              Vous avez été ajouté à l'acteur économique <strong>${obj.economic_actor.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+            </p>
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${config.APP_URL}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
+                Accéder à la plateforme
+              </a>
+            </div>
+            <p style="font-size: 16px; margin-bottom: 0;">
+              Cordialement,<br>
+              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+            </p>
+          </div>
+          <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 12px; color: #768776; margin: 0;">
+              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+            </p>
+          </div>
+        </div>
+      `;
+
+        await brevo.sendEmail(addedBodyHTML, {
+          subject: `Vous avez été ajouté à ${obj.economic_actor.name} sur InTerLUD+`,
+          sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+          to: [{ email: exist.email }],
+        });
+
+        return res.status(200).send({ data: exist, ok: true });
+      }
+
+      obj.created_at = new Date();
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365); // 1 an
+      obj.invitation_token = token;
+      obj.invitation_token_expires = expires;
+      obj.invitation_sent_at = new Date();
+      obj.role = 'economic_actor';
+      obj.economic_actor_id = obj.economic_actor._id;
+      obj.economic_actor_name = obj.economic_actor.name;
+      obj.collectivities = (obj.economic_actor.collectivities || []).map((col) => ({
+        id: col.id,
+        name: col.name,
+        role: 'economic_actor',
+        status: 'approved',
+      }));
+
+      let cta = `${config.APP_URL}/auth/invite?token=${token}`;
+
+      const bodyHTML = `
+        <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
+          <!-- Bandeau blanc avec les logos -->
+          ${emailLogoBanner()}
+
+          <!-- En-tête avec dégradé vert Interlud (background-color de repli pour Outlook) -->
+          <div style="background-color: #2DAC6A; background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre votre acteur économique</h1>
+          </div>
+
+          <!-- Corps du message -->
+          <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Bonjour,</p>
+
+            <p style="font-size: 16px; margin-bottom: 20px;">
+              Vous avez été invité à rejoindre <strong>${obj.economic_actor.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+            </p>
+
+            <p style="font-size: 16px; margin-bottom: 30px;">
+              InTerLUD+ est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
+            </p>
+
+            <!-- Bouton CTA -->
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${cta}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
+                Accepter l'invitation
+              </a>
+            </div>
+
+            <p style="font-size: 16px; margin-bottom: 10px;">Une question ? Notre équipe est à votre disposition pour vous accompagner.</p>
+
+            <p style="font-size: 16px; margin-bottom: 0;">
+              Cordialement,<br>
+              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+            </p>
+          </div>
+
+          <!-- Pied de page -->
+          <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
+            <p style="font-size: 12px; color: #768776; margin: 0;">
+              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+            </p>
+          </div>
+      </div>
+      `;
+
+      await brevo.sendEmail(bodyHTML, {
+        subject: `Invitation à rejoindre ${obj.economic_actor.name} sur InTerLUD+`,
+        sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
+        to: [{ email: obj.email }],
+      });
+
+      const user = await UserObject.create(obj);
+      return res.status(200).send({ data: user, ok: true });
+    }
+
     if (exist) {
       if (exist.collectivities?.some((c) => c.id === obj.collectivity._id)) {
         return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_MEMBER });

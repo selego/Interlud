@@ -194,6 +194,10 @@ export default function Header() {
             text: "Gérer ma collectivité",
             linkProps: { to: "/collectivity" }
           },
+          user.role === "economic_actor" && {
+            text: "Mon acteur économique",
+            linkProps: { to: "/economic-actor" }
+          },
           {
             text: "Mes Actions",
             linkProps: { to: "/actions" }

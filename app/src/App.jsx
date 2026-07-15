@@ -16,6 +16,7 @@ import Notification from "@/scenes/notification"
 import GeneralData from "@/scenes/general-data"
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
+import EconomicActor from "@/scenes/economic-actor"
 import NotFound from "@/scenes/not-found"
 import Conditions from "@/scenes/confidentiality/conditions"
 import Politique from "@/scenes/confidentiality/politique"
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/recherche" element={<div>Page de recherche</div>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/collectivity/*" element={<Collectivity />} />
+          <Route path="/economic-actor" element={<EconomicActor />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/admin/action/*" element={<AdminAction />} />
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
