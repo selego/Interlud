@@ -3,7 +3,7 @@ const environment = getEnvironment()
 let apiURL = ""
 if (environment === "development") apiURL = "http://localhost:8080"
 if (environment === "production") {
-  apiURL = "https://interlud-api.cleverapps.io"
+  apiURL = "https://api.evalud.green"
 }
 
 const SENTRY_URL = process.env.SENTRY_URL
