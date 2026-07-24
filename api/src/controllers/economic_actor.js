@@ -8,6 +8,9 @@ const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const { duplicateExcelFile } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
+const { pickFields } = require('../utils');
+
+const ECONOMIC_ACTOR_UPDATABLE_FIELDS = ['name', 'description', 'collectivities'];
 
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -56,7 +59,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const actor = await EconomicActor.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const actor = await EconomicActor.findByIdAndUpdate(req.params.id, pickFields(req.body, ECONOMIC_ACTOR_UPDATABLE_FIELDS), { new: true });
     if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: actor });
   } catch (error) {

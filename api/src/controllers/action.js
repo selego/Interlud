@@ -11,6 +11,21 @@ const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder, createWorkbookSession, closeWorkbookSession } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
+const { pickFields } = require('../utils');
+
+const ACTION_UPDATABLE_FIELDS = [
+  'type', 'excel_worksheetname', 'exel_files_prev', 'excel_files_expost',
+  'year_init', 'year_ref', 'year_prev', 'year_expost', 'instance_number',
+  'action_parent_id', 'action_parent_name', 'name', 'description', 'status', 'owner',
+  'collectivity_id', 'collectivity_name', 'action_collectivity_id',
+  'economic_actor_id', 'economic_actor_name',
+  'blocked_reason', 'step_description', 'date_start', 'date_end',
+  'budget_costs', 'budget_description', 'financial_aid', 'financial_aid_description',
+  'pilote', 'pilote_description', 'partners', 'partners_description',
+  'priority', 'is_subsidized_by_program', 'related_initiatives', 'comment',
+  'attached_documents', 'custom_fields',
+  'completion_init', 'completion_ref', 'completion_prev', 'completion_expost',
+];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -29,6 +44,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    const updates = pickFields(req.body, ACTION_UPDATABLE_FIELDS);
+
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
     action.last_modif_by_email = req.user.email;
@@ -36,9 +53,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     await action.save();
 
     const logs = [];
-    for (const field of Object.keys(req.body)) {
-      if (['updatedAt', '__v', 'createdAt', '_id', 'last_modif_by_name', 'last_modif_date', 'last_modif_by_id'].includes(field)) continue;
-      let newValue = req.body[field];
+    for (const field of Object.keys(updates)) {
+      let newValue = updates[field];
       const originalValue = action[field];
 
       if (originalValue instanceof Date && typeof newValue === 'string') newValue = new Date(newValue);
@@ -69,7 +85,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       logs.push(log);
     }
 
-    action.set(req.body);
+    action.set(updates);
     await action.save();
     if (logs.length > 0) await Log.insertMany(logs);
     return res.status(200).send({ ok: true, data: action });

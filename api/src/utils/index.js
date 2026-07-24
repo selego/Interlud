@@ -52,8 +52,18 @@ function validatePassword(password) {
 
 const BREVO_TEMPLATES = {};
 
+function pickFields(obj, allowed) {
+  if (!obj || typeof obj !== 'object') return {};
+  const out = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) out[key] = obj[key];
+  }
+  return out;
+}
+
 module.exports = {
   uploadToS3FromBuffer,
   validatePassword,
+  pickFields,
   BREVO_TEMPLATES,
 };
