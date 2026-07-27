@@ -15,6 +15,7 @@ export default () => {
 
   const send = async () => {
     try {
+      if (values.password !== values.password1) return toast.error("Les deux mots de passe ne correspondent pas")
       const { token } = queryString.parse(location.search)
       const res = await api.post("/user/forgot_password_reset", { ...values, token })
       if (!res.ok) throw res
@@ -40,10 +41,6 @@ export default () => {
               send()
             }}
           >
-            <div className="border border-gray-200 bg-gray-50 text-gray-500 text-sm p-3 rounded-lg mb-6">
-              Format : minimum 6 caractères, dont au moins une lettre.
-            </div>
-
             <div className="mb-6">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                 Nouveau mot de passe
@@ -59,6 +56,7 @@ export default () => {
                 placeholder="••••••••"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</p>
             </div>
 
             <div className="mb-6">

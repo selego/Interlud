@@ -146,14 +146,14 @@ router.post('/forgot_password', async (req, res) => {
 
     await brevo.sendEmail(
       `<div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-      <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Réinitialisation de votre mot de passe</h1>
+      <div style="background-color: #2DAC6A; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Réinitialisation de votre mot de passe</h1>
       </div>
       <div style="padding: 40px 30px; background: #F9FFFC;">
         <p style="margin: 0 0 16px;">Bonjour ${obj.name},</p>
         <p style="margin: 0 0 16px;">Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour en définir un nouveau :</p>
         <div style="text-align: center; margin: 32px 0;">
-          <a href="${config.APP_URL}/auth/reset?token=${token}" style="display: inline-block; background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 14px 32px; border-radius: 30px;">Réinitialiser mon mot de passe</a>
+          <a href="${config.APP_URL}/auth/reset?token=${token}" style="display: inline-block; background-color: #2DAC6A; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 14px 32px; border-radius: 30px;">Réinitialiser mon mot de passe</a>
         </div>
         <p style="margin: 0 0 8px; font-size: 14px; color: #768776;">Ce lien est valable pendant 2 heures.</p>
         <p style="margin: 0; font-size: 14px; color: #768776;">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail.</p>
@@ -376,7 +376,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 
         const addedBodyHTML = `
         <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+          <div style="background-color: #2DAC6A; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
             <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Nouvel acteur économique</h1>
           </div>
           <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
@@ -501,7 +501,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 
       const addedBodyHTML = `
         <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-          <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+          <div style="background-color: #2DAC6A; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
             <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Nouvelle collectivité</h1>
           </div>
           <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
@@ -766,7 +766,7 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
       if (admin.notifications_email !== false) {
         const bodyHTML = `
           <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
-            <div style="background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <div style="background-color: #2DAC6A; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
               <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Demande d'accès</h1>
             </div>
 
