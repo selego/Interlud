@@ -102,7 +102,7 @@ export default function Home() {
   useEffect(() => {
     if (user?.role !== "user") return
     if (user.collectivities?.some((c) => c.status === "approved")) return
-    navigate("/collectivity/join")
+    navigate("/collectivity/join", { replace: true })
   }, [user])
 
   const fetchHomeAggregation = async () => {
