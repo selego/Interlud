@@ -91,13 +91,19 @@ const buildEmissionChart = (em) => {
 
 
 export default function Home() {
-  const { collectivity } = useStore()
+  const { user, collectivity } = useStore()
   const navigate = useNavigate()
   const [activeIndicator, setActiveIndicator] = useState("GES")
   const [data, setData] = useState(null)
   const [allActions, setAllActions] = useState([])
   const [ready, setReady] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
+
+  useEffect(() => {
+    if (user?.role !== "user") return
+    if (user.collectivities?.some((c) => c.status === "approved")) return
+    navigate("/collectivity/join", { replace: true })
+  }, [user])
 
   const fetchHomeAggregation = async () => {
     try {

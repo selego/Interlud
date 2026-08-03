@@ -15,6 +15,7 @@ const ERROR_CODES = require('../utils/errorCodes');
 const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
+const joptimiz = require('../services/joptimiz');
 const { capture } = require('../services/sentry');
 
 // 1 year
@@ -115,6 +116,49 @@ router.post('/logout', async (_, res) => {
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+router.get('/sso/joptimiz', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+
+    if (!code) {
+      const newState = crypto.randomBytes(16).toString('hex');
+      res.cookie('joptimiz_state', newState, { maxAge: 600000, httpOnly: true, secure: config.ENVIRONMENT !== 'development', sameSite: 'lax' });
+      return res.redirect(joptimiz.getAuthorizationUrl(newState));
+    }
+
+    if (!state || state !== req.cookies.joptimiz_state) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
+    res.clearCookie('joptimiz_state');
+
+    const tokenData = await joptimiz.exchangeCode(code);
+    if (!tokenData.access_token) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
+
+    const userinfo = await joptimiz.getUserInfo(tokenData.access_token);
+    const email = (userinfo.email || '').trim();
+    if (!email) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
+
+    let user = await UserObject.findOne({ email });
+    if (!user) user = await UserObject.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      user = await UserObject.create({
+        email: email.toLowerCase(),
+        name: userinfo.name || `${userinfo.firstname || userinfo.given_name || ''} ${userinfo.lastname || userinfo.family_name || ''}`.trim(),
+        role: 'user',
+      });
+    }
+
+    user.set({ last_login_at: Date.now() });
+    await user.save();
+
+    const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
+    res.cookie('jwt', token, cookieOptions());
+
+    return res.redirect(config.APP_URL);
+  } catch (error) {
+    capture(error);
+    return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.SERVER_ERROR)}`);
   }
 });
 
