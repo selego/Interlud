@@ -1,13 +1,21 @@
-import React, { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import React, { useState, useEffect } from "react"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import store from "@/services/store"
 import toast from "react-hot-toast"
 import api from "@/services/api"
+import { apiURL } from "@/config"
 
 export default () => {
   const [values, setValues] = useState({ email: "", password: "" })
   const { user, setUser, setCollectivity, setActionRights, setEconomicActor } = store()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  useEffect(() => {
+    if (!searchParams.get("sso_error")) return
+    toast.error(searchParams.get("sso_error"))
+    setSearchParams({}, { replace: true })
+  }, [])
 
   const login = async () => {
     try {
@@ -92,6 +100,14 @@ export default () => {
               <span className="px-2 bg-white text-gray-500">Ou</span>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => (window.location.href = `${apiURL}/user/sso/joptimiz`)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
+          >
+            Se connecter avec Joptimiz
+          </button>
 
           <div className="text-center">
             <p className="text-sm text-gray-600">
