@@ -116,7 +116,7 @@ function buildGainBars(action, situationChartData) {
   const gains = []
   const getVal = (type, year) => {
     const v = situationChartData.find((b) => b.type === type && b.year === year)?.value
-    return v == null ? v : Math.round(v)
+    return v == null ? v : Math.round(v * 10) / 10
   }
 
   const initVal = action.year_init != null ? getVal("init", action.year_init) : null
@@ -207,12 +207,12 @@ const fmtNum = (v) => {
   const abs = Math.abs(v)
   if (abs >= 1_000_000) return `${(abs / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`
   if (abs >= 1_000) return `${(abs / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
-  return Math.round(abs).toLocaleString("fr-FR")
+  return abs.toLocaleString("fr-FR", { maximumFractionDigits: 1 })
 }
 
 const fmtSigned = (v) => {
   if (v == null) return "—"
-  const r = Math.round(v)
+  const r = Math.round(v * 10) / 10
   if (r === 0) return "0"
   return (r > 0 ? "+" : "−") + fmtNum(Math.abs(r))
 }
@@ -637,9 +637,10 @@ export default function Dashboard({ action }) {
   const situationGroups = buildSituationGroups(action)
   const hydrateBar = (bar) => {
     const yearRow = trajByYear.get(bar.year)
-    const value = yearRow ? yearRow[bar.dataKey] : null
+    const raw = yearRow ? yearRow[bar.dataKey] : null
+    const value = raw == null ? null : Math.round(raw * 10) / 10
     const fill = bar.type === "ref" && bar.linkedType ? SITUATION_COLORS[bar.linkedType] : SITUATION_COLORS[bar.type]
-    return { ...bar, value, fill }
+    return { ...bar, value, raw, fill }
   }
   // Each chart row = one group (a category with up to 2 bars that touch via barGap=0)
   const situationChartData = situationGroups.map((group, gi) => {
@@ -654,7 +655,7 @@ export default function Dashboard({ action }) {
     }
   })
   const situationBarsFlat = situationGroups.flat().map(hydrateBar)
-  const hasSituationValues = situationBarsFlat.some((d) => d.value != null && d.value !== 0)
+  const hasSituationValues = situationBarsFlat.some((d) => d.raw != null && d.raw !== 0)
 
   // ── Derived: section 01 gains par situation ────────────────────────────────
 
