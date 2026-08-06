@@ -49,6 +49,7 @@ function RadioInput({ value, onChange, options, className }) {
         options={options?.map(opt => ({ value: opt, label: opt })) || []}
         placeholder="Sélectionner une option"
         className="text-gray-900 truncate"
+        constrained
       />
     </div>
   )
