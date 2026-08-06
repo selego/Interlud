@@ -93,11 +93,12 @@ const writeAggregationTargets = async (action, targets, siteId) => {
   if (!aggregationFileId) return;
 
   const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
-  const inputResult = await graphFetch(`${inputSheetPath}/usedRange`);
+  // IDs en colonne D — plage fixe pour ne pas dépendre du point de départ de la usedRange
+  const inputResult = await graphFetch(`${inputSheetPath}/range(address='D1:D10000')`);
   const inputRows = inputResult.values || [];
   const idRowMap = new Map();
   for (let i = 0; i < inputRows.length; i++) {
-    const id = inputRows[i][1];
+    const id = inputRows[i][0];
     if (id) idRowMap.set(String(id).trim(), i + 1);
   }
 

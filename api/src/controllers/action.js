@@ -750,23 +750,22 @@ router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false,
         if (aggregationFileId) {
           const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
           const sheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
-          const usedRange = await graphFetch(`${sheetPath}/usedRange`);
-          const rows = usedRange.values || [];
-          const startRow = parseInt(usedRange.address?.match(/\d+/)?.[0] || 1);
+          // IDs en colonne D — plage fixe pour ne pas dépendre du point de départ de la usedRange
+          const idRows = (await graphFetch(`${sheetPath}/range(address='D1:D10000')`)).values || [];
           const col = String.fromCharCode(72 + (action.instance_number || 1));
-          const colIdx = col.charCodeAt(0) - (usedRange.address?.match(/([A-Z]+)/)?.[1] || 'A').charCodeAt(0);
 
           const matched = new Set();
-          for (let i = 0; i < rows.length; i++) {
-            if (rows[i][1] && String(rows[i][1]).trim().startsWith(`${action.excel_worksheetname}-`)) matched.add(i);
+          for (let i = 0; i < idRows.length; i++) {
+            if (idRows[i][0] && String(idRows[i][0]).trim().startsWith(`${action.excel_worksheetname}-`)) matched.add(i + 1);
           }
 
           if (matched.size > 0) {
             const min = Math.min(...matched);
             const max = Math.max(...matched);
-            const values = Array.from({ length: max - min + 1 }, (_, i) => [matched.has(min + i) ? '' : (rows[min + i]?.[colIdx] ?? '')]);
+            const existing = (await graphFetch(`${sheetPath}/range(address='${col}${min}:${col}${max}')`)).values || [];
+            const values = Array.from({ length: max - min + 1 }, (_, i) => [matched.has(min + i) ? '' : (existing[i]?.[0] ?? '')]);
 
-            await graphFetch(`${sheetPath}/range(address='${col}${startRow + min}:${col}${startRow + max}')`, {
+            await graphFetch(`${sheetPath}/range(address='${col}${min}:${col}${max}')`, {
               method: 'PATCH',
               body: JSON.stringify({ values }),
             });
@@ -1572,17 +1571,16 @@ const clearAggregationRows = async (action, sitLabel, year) => {
 
   const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
   const sheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
-  const usedRange = await graphFetch(`${sheetPath}/usedRange`);
-  const rows = usedRange.values || [];
-  const startRow = parseInt(usedRange.address?.match(/\d+/)?.[0] || 1);
+  // IDs en colonne D — plage fixe pour ne pas dépendre du point de départ de la usedRange
+  const idRows = (await graphFetch(`${sheetPath}/range(address='D1:D10000')`)).values || [];
   const col = String.fromCharCode(72 + (action.instance_number || 1));
   const prefix = `${action.excel_worksheetname}-`;
   const suffix = `-${sitLabel}-${year}`;
 
-  for (let i = 0; i < rows.length; i++) {
-    const id = rows[i][1] ? String(rows[i][1]).trim() : '';
+  for (let i = 0; i < idRows.length; i++) {
+    const id = idRows[i][0] ? String(idRows[i][0]).trim() : '';
     if (!id.startsWith(prefix) || !id.endsWith(suffix)) continue;
-    await graphFetch(`${sheetPath}/range(address='${col}${startRow + i}')`, {
+    await graphFetch(`${sheetPath}/range(address='${col}${i + 1}')`, {
       method: 'PATCH',
       body: JSON.stringify({ values: [['']] }),
     }).catch((e) => console.error('[clearAggregationRows]', e.message));
