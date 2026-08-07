@@ -5,7 +5,7 @@ const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
-const { createFolder, duplicateExcelFile } = require('../services/microsoftGraph');
+const { createFolder, duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -77,8 +77,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     const collectivity = await Collectivity.create(req.body);
     collectivity.sharepoint_folder_id = await createFolder(collectivity.name);
 
-    const AGGREGATION_TEMPLATE_FILE_ID = '01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV';
-    collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, AGGREGATION_TEMPLATE_FILE_ID);
+    collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
 
     await collectivity.save();
 
