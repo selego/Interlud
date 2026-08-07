@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import useStore from "@/services/store"
-import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2 } from "react-icons/fi"
+import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2, FiLoader } from "react-icons/fi"
 import Loader from "@/components/loader"
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
@@ -564,6 +564,43 @@ function OnboardingContent({ action, onStart }) {
   )
 }
 
+// Bandeau affiché tant que la synchro Excel différée de l'action n'est pas terminée, puis recharge les graphs
+function SyncPendingBanner({ action, onSynced }) {
+  const [pending, setPending] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    let wasPending = false
+    const poll = async () => {
+      try {
+        const { ok, data } = await api.get(`/indicator_value/sync_status/${action._id}`)
+        if (cancelled || !ok) return
+        setPending(data.pending)
+        if (data.pending) {
+          wasPending = true
+          setTimeout(poll, 3000)
+          return
+        }
+        if (wasPending) onSynced?.()
+      } catch (error) {
+        // bandeau purement informatif : on ignore les erreurs de statut
+      }
+    }
+    poll()
+    return () => {
+      cancelled = true
+    }
+  }, [action._id])
+
+  if (!pending) return null
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+      <FiLoader className="w-4 h-4 animate-spin shrink-0" />
+      Mise à jour des graphiques en cours suite aux dernières modifications, les données seront actualisées automatiquement...
+    </div>
+  )
+}
+
 export default function Dashboard({ action }) {
   const { userActionRights, user, collectivity } = useStore()
   const navigate = useNavigate()
@@ -687,6 +724,7 @@ export default function Dashboard({ action }) {
 
   return (
     <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
+      <SyncPendingBanner action={action} onSynced={load} />
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header>
         <div className="flex items-center gap-2 mb-4">
