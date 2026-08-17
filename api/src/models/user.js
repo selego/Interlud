@@ -6,7 +6,7 @@ const MODELNAME = 'user';
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
-    email: { type: String, required: true, unique: true, trim: true },
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
     password: { type: String, default: 'Interlud2025' },
     role: { type: String, enum: ['user', 'admin', 'economic_actor'], default: 'user' },
     password_reset_token: { type: String, default: '' },

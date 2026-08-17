@@ -46,7 +46,7 @@ const cookieOptions = () => {
 
 router.post('/signin', async (req, res) => {
   let { password, email } = req.body;
-  email = (email || '').trim();
+  email = (email || '').trim().toLowerCase();
 
   if (!email || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
 
