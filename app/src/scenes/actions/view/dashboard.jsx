@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import useStore from "@/services/store"
-import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2, FiLoader } from "react-icons/fi"
+import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2 } from "react-icons/fi"
 import Loader from "@/components/loader"
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
@@ -564,10 +564,8 @@ function OnboardingContent({ action, onStart }) {
   )
 }
 
-// Bandeau affiché tant que la synchro Excel différée de l'action n'est pas terminée, puis recharge les graphs
-function SyncPendingBanner({ action, onSynced }) {
-  const [pending, setPending] = useState(false)
-
+// Poller invisible : surveille la synchro Excel différée de l'action, puis recharge les graphs
+function SyncPendingPoller({ action, onSynced, onPendingChange }) {
   useEffect(() => {
     let cancelled = false
     let wasPending = false
@@ -575,7 +573,7 @@ function SyncPendingBanner({ action, onSynced }) {
       try {
         const { ok, data } = await api.get(`/indicator_value/sync_status/${action._id}`)
         if (cancelled || !ok) return
-        setPending(data.pending)
+        onPendingChange?.(data.pending)
         if (data.pending) {
           wasPending = true
           setTimeout(poll, 3000)
@@ -583,7 +581,7 @@ function SyncPendingBanner({ action, onSynced }) {
         }
         if (wasPending) onSynced?.()
       } catch (error) {
-        // bandeau purement informatif : on ignore les erreurs de statut
+        // statut purement informatif : on ignore les erreurs
       }
     }
     poll()
@@ -592,11 +590,34 @@ function SyncPendingBanner({ action, onSynced }) {
     }
   }, [action._id])
 
-  if (!pending) return null
+  return null
+}
+
+// Placeholder affiché à la place des graphiques pendant le recalcul suite aux nouvelles valeurs
+function SyncRecalcLoader() {
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-      <FiLoader className="w-4 h-4 animate-spin shrink-0" />
-      Mise à jour des graphiques en cours suite aux dernières modifications, les données seront actualisées automatiquement...
+    <div className="card-shadow p-12 flex flex-col items-center text-center">
+      <style>{`@keyframes syncBarPulse { 0%, 100% { transform: scaleY(0.25); opacity: 0.4 } 50% { transform: scaleY(1); opacity: 1 } }`}</style>
+      <div className="flex items-end gap-2 h-20 mb-6" aria-hidden="true">
+        {[
+          { color: SITUATION_COLORS.init, delay: "0s" },
+          { color: SITUATION_COLORS.ref, delay: "0.15s" },
+          { color: SITUATION_COLORS.prev, delay: "0.3s" },
+          { color: SITUATION_COLORS.expost, delay: "0.45s" },
+          { color: SITUATION_COLORS.prev, delay: "0.6s" },
+          { color: SITUATION_COLORS.ref, delay: "0.75s" }
+        ].map((b, i) => (
+          <div
+            key={i}
+            className="w-4 h-full rounded-t"
+            style={{ background: b.color, transformOrigin: "bottom", animation: `syncBarPulse 1.4s ease-in-out ${b.delay} infinite` }}
+          />
+        ))}
+      </div>
+      <h3 className="text-base font-semibold text-[#123314] mb-1">Recalcul des graphiques en cours</h3>
+      <p className="text-xs text-font-secondary leading-relaxed max-w-sm">
+        Vos nouvelles valeurs sont en train d'être intégrées. Les graphiques s'actualiseront automatiquement dans quelques instants.
+      </p>
     </div>
   )
 }
@@ -607,6 +628,7 @@ export default function Dashboard({ action }) {
 
   const [processedData, setProcessedData] = useState({ score: 0, indicators: {}, emissions: { indicators: {} } })
   const [loading, setLoading] = useState(false)
+  const [syncPending, setSyncPending] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [activePill, setActivePill] = useState("GES")
 
@@ -722,7 +744,7 @@ export default function Dashboard({ action }) {
 
   return (
     <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
-      <SyncPendingBanner action={action} onSynced={load} />
+      <SyncPendingPoller action={action} onSynced={load} onPendingChange={setSyncPending} />
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header>
         <div className="flex items-center gap-2 mb-4">
@@ -780,14 +802,16 @@ export default function Dashboard({ action }) {
         </div>
       </header>
 
-      {loading && <Loader />}
+      {syncPending && <SyncRecalcLoader />}
 
-      {!loading && loadError && <GraphsInDevelopment action={action} />}
+      {loading && !syncPending && <Loader />}
 
-      {!loading && !loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
+      {!loading && !syncPending && loadError && <GraphsInDevelopment action={action} />}
+
+      {!loading && !syncPending && !loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
 
       {/* ── SECTION 01 — VUE GLOBALE ─────────────────────────────────────── */}
-      {!loading && !loadError && !isEmpty && (
+      {!loading && !syncPending && !loadError && !isEmpty && (
         <>
           <section>
             {/* Filter bar */}

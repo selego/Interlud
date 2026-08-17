@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
-import { FiArrowLeft, FiLoader, FiBarChart2, FiPlus, FiCalendar, FiInfo } from "react-icons/fi"
+import { FiArrowLeft, FiBarChart2, FiPlus, FiCalendar, FiInfo } from "react-icons/fi"
 import { shouldDisplayIndicatorFromMap, fetchConditionValuesMap, isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
@@ -31,7 +31,6 @@ export default function Completion({ action, onSave }) {
   const [activeYear, setActiveYear] = useState(null)
   const [stats, setStats] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
   const [isAddYearOpen, setIsAddYearOpen] = useState(false)
 
   const situationYears = stats?.situationYears || {}
@@ -111,11 +110,10 @@ export default function Completion({ action, onSave }) {
                   onSave?.()
                   navigate(`/actions/${action._id}/dashboard`)
                 }}
-                disabled={isSaving}
-                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                title={isSaving ? "Enregistrement en cours…" : "Visualiser les graphiques de cette action"}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300"
+                title="Visualiser les graphiques de cette action"
               >
-                {isSaving ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiBarChart2 className="w-4 h-4" />}
+                <FiBarChart2 className="w-4 h-4" />
                 <span>Visualiser mes graphs</span>
               </button>
             </div>
@@ -222,7 +220,6 @@ export default function Completion({ action, onSave }) {
           activeSituation={activeSituation}
           activeYear={activeYear}
           onStatsRefresh={fetchStats}
-          onSavingChange={setIsSaving}
           yearMappings={stats?.yearMappingsBySituationYear?.[`${activeSituation}_${activeYear}`]}
           tabTotal={stats?.completion?.[`${activeSituation}_${activeYear}`]?.total || 0}
         />
@@ -232,7 +229,7 @@ export default function Completion({ action, onSave }) {
   )
 }
 
-function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, onSavingChange, yearMappings, tabTotal }) {
+function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, yearMappings, tabTotal }) {
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -297,7 +294,6 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, on
     const mySaveId = saveCounterRef.current
     toast.loading("Enregistrement...", { id: "indicator-save" })
     try {
-      onSavingChange?.(true)
       setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {
         setConditionValuesMap((prev) => {
@@ -322,8 +318,6 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, on
       toast.success("Valeur enregistrée, dashboard à jour", { id: "indicator-save" })
     } catch (error) {
       toast.error("Une erreur est survenue", { id: "indicator-save" })
-    } finally {
-      if (mySaveId === saveCounterRef.current) onSavingChange?.(false)
     }
   }
 
