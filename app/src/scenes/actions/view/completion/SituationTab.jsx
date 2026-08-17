@@ -8,7 +8,7 @@ import Loader from "@/components/loader"
 const STATE_STYLES = {
   prio: {
     accent: "#F59600",
-    tagText: "Prioritaire",
+    tagText: "Primordiale",
     tagBg: "#FFF3E0",
     tagColor: "#B45309",
     inputClass: "!border-[1.5px] !border-[#F59600] !bg-[#FFFBF5] placeholder:!text-[#C2410C]",
@@ -80,7 +80,7 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#FFF3E0] text-[#F59600] text-[13px]">
               <FiStar className="w-3.5 h-3.5 fill-[#F59600] stroke-[#F59600]" />
             </span>
-            <h3 className="text-base font-bold text-[#B45309] m-0">À remplir en priorité</h3>
+            <h3 className="text-base font-bold text-[#B45309] m-0">Données primordiales</h3>
             <span className="text-xs font-semibold px-2.5 py-[3px] rounded-full bg-[#FFF3E0] text-[#B45309]">{groupPrio.length} restant(s)</span>
           </div>
           <div className="bg-[#FFFBF5] border border-[#FCE6C8] rounded-[14px] px-[13px] pt-[11px] pb-[13px] flex flex-col gap-[11px]">

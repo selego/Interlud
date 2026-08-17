@@ -8,7 +8,7 @@ import Loader from "@/components/loader"
 const STATE_STYLES = {
   prio: {
     accent: "#F59600",
-    tagText: "Prioritaire",
+    tagText: "Primordiale",
     tagBg: "#FFF3E0",
     tagColor: "#B45309",
     inputClass: "!border-[1.5px] !border-[#F59600] !bg-[#FFFBF5] placeholder:!text-[#C2410C]",
