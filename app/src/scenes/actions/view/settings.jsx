@@ -95,7 +95,7 @@ export default function Settings({ action: initialAction, onSave }) {
           Historique de l'Action
         </button>
 
-        <button
+        {/* <button
           className={`px-6 py-3 text-sm font-semibold transition-all flex items-center gap-2 ${
             activeTab === "indicators" ? "text-primary-green border-b-2 border-primary-green" : "text-gray-500 hover:text-primary-green"
           }`}
@@ -103,7 +103,7 @@ export default function Settings({ action: initialAction, onSave }) {
         >
           <FiList size={16} />
           Liste des Indicateurs
-        </button>
+        </button> */}
       </div>
 
 
@@ -412,12 +412,12 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
       <div className="pt-6 mt-6 border-t border-light-border px-6">
         <h2 className="text-lg font-semibold mb-4">Type et référence</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+          {/* <div>
             <label className="block text-sm font-semibold mb-2">Type</label>
             <div className="w-full input-primary bg-gray-50">
               {action.type || "Aucun type"}
             </div>
-          </div>
+          </div> */}
           <div>
             <label className="block text-sm font-semibold mb-2">Parent Action liée</label>
             <div className="w-full input-primary bg-gray-50">
@@ -425,7 +425,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             </div>
           </div>
         </div>
-
+{/* 
         <div className="flex items-center justify-between border rounded-xl p-4 bg-gray-50 mt-4">
           <label className="flex items-center gap-3">
             <input
@@ -436,7 +436,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             />
             <span className="text-sm font-medium text-gray-800">Subventionné par le programme</span>
           </label>
-        </div>
+        </div> */}
       </div>
 
       <div className="pt-6 mt-6 border-t border-light-border px-6">
