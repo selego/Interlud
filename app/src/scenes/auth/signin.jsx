@@ -26,7 +26,7 @@ export default () => {
       if (userActionRights) setActionRights(userActionRights)
       if (collectivity) setCollectivity(collectivity)
       if (economicActor) setEconomicActor(economicActor)
-      localStorage.setItem("selectedCollectivityId", collectivity._id)
+      if (collectivity && !localStorage.getItem("selectedCollectivityId")) localStorage.setItem("selectedCollectivityId", collectivity._id)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
     }

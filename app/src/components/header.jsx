@@ -176,7 +176,6 @@ export default function Header() {
       setCollectivity(null)
       setEconomicActor(null)
       setActionRights([])
-      localStorage.removeItem("selectedCollectivityId")
       navigate("/auth")
     } catch (error) {
       console.log(error)
