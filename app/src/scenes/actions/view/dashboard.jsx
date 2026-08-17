@@ -1017,7 +1017,7 @@ export default function Dashboard({ action }) {
                             }}
                             interval={0}
                           />
-                          <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} />
+                          <YAxis tick={{ fontSize: 11, fill: "#C0C0C0" }} tickFormatter={fmtAxis} width={52} padding={{ bottom: 24 }} />
                           <ReferenceLine y={0} stroke="#E0E0E0" strokeWidth={1} />
                           <Tooltip
                             content={({ active: a, payload }) => {
