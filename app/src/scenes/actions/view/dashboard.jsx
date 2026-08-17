@@ -654,8 +654,6 @@ export default function Dashboard({ action }) {
         <p className="text-sm text-gray-500">Vous n'avez pas les droits pour accéder à cette action.</p>
       </div>
     )
-  if (loading) return <Loader />
-
   const isEmpty = action.completion_init !== 100 || action.completion_ref !== 100 || action.completion_prev !== 100 || (action.excel_files_expost?.length > 0 && action.completion_expost !== 100)
 
   // ── Derived: shared ───────────────────────────────────────────────────────
@@ -782,12 +780,14 @@ export default function Dashboard({ action }) {
         </div>
       </header>
 
-      {loadError && <GraphsInDevelopment action={action} />}
+      {loading && <Loader />}
 
-      {!loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
+      {!loading && loadError && <GraphsInDevelopment action={action} />}
+
+      {!loading && !loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
 
       {/* ── SECTION 01 — VUE GLOBALE ─────────────────────────────────────── */}
-      {!loadError && !isEmpty && (
+      {!loading && !loadError && !isEmpty && (
         <>
           <section>
             {/* Filter bar */}
