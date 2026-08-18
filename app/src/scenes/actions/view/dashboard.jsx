@@ -720,13 +720,16 @@ export default function Dashboard({ action }) {
 
   // ── Derived: section 02 (niveaux d'émissions absolus) ───────────────────
 
+  // Mêmes années que les graphs : uniquement les horizons réellement renseignés sur l'action
+  const filledExpostYears = [...new Set((action.excel_files_expost?.length ? action.excel_files_expost.map((e) => e.year_expost) : [action.year_expost]).filter(Boolean))].sort((a, b) => a - b)
+
   const emissionProfile = availKeys.map((key) => {
     const emData = processedData.emissions?.[key]?.yearlyData ?? []
     const unit = processedData.emissions?.[key]?.unit || INDICATORS.find((i) => i.key === key)?.unit || ""
     const ind = INDICATORS.find((i) => i.key === key)
 
-    const firstRow = emData.find((d) => d.initiale > 0)
-    const latestRow = [...emData].reverse().find((d) => d.expost > 0)
+    const firstRow = action.year_init ? emData.find((d) => d.year === action.year_init && d.initiale > 0) : null
+    const latestRow = [...filledExpostYears].reverse().map((y) => emData.find((d) => d.year === y && d.expost > 0)).find(Boolean)
 
     const initiale = firstRow?.initiale ?? null
     const startYear = firstRow?.year ?? null
