@@ -17,7 +17,8 @@ const leafCondition = {
   negate: { type: Boolean, default: false },
 };
 
-const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND', 'OR'] }, conditions: [leafCondition] };
+// Les sous-conditions sont en Mixed pour autoriser une imbrication de profondeur arbitraire (OR → AND → OR...).
+const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND', 'OR'] }, conditions: [mongoose.Schema.Types.Mixed] };
 
 const displayConditionForSituation = { operator: { type: String, enum: ['AND', 'OR'] }, conditions: [conditionNode] };
 

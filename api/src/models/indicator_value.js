@@ -11,8 +11,9 @@ const leafCondition = {
   negate: { type: Boolean, default: false },
 };
 
-// Un noeud est soit une feuille, soit un groupe (operator + sous-conditions de feuilles) permettant (A OR B) AND C.
-const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND', 'OR'] }, conditions: [leafCondition] };
+// Un noeud est soit une feuille, soit un groupe (operator + sous-conditions) permettant (A OR B) AND C.
+// Les sous-conditions sont en Mixed pour autoriser une imbrication de profondeur arbitraire (OR → AND → OR...).
+const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND', 'OR'] }, conditions: [mongoose.Schema.Types.Mixed] };
 
 const Schema = new mongoose.Schema(
   {

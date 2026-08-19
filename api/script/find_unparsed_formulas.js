@@ -10,7 +10,7 @@ const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas } = require
 // (héritage de la condition d'un parent) que le parse a silencieusement perdu.
 
 //V22
-const masterFileId = "01IBL4ADMCUEX55HWJBZC2DESDFFJL3Q6B";
+const masterFileId = "01IBL4ADI4VFLIRFUH7NEK242NIAVCGY5K";
 
 const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -19,7 +19,7 @@ const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Expost", situation: "expost" },
 ];
 
-const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20 };
+const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 };
 
 (async () => {
   try {
@@ -99,7 +99,7 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
         const hasCellFactor = /\)\s*\*\s*\$?[A-Z]+\$?\d+/i.test(content) || /^\$?[A-Z]+\$?\d+\s*\*/i.test(content);
         if (!hasCellFactor) continue;
         const parsed = parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps, allSheetsData);
-        if (parsed?._referenceToMerge || parsed?._referencesToAnd) continue;
+        if (parsed?._referenceToMerge || parsed?._referencesToAnd || parsed?._factorsToAnd) continue;
         unparsed.push({ situation, worksheetName, rowNum, excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A", reason: 'parse partiel (facteur "* cellule" perdu)', formula });
       }
     }

@@ -10,7 +10,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADMCUEX55HWJBZC2DESDFFJL3Q6B"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADI4VFLIRFUH7NEK242NIAVCGY5K"; // ID du fichier master Excel
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -85,6 +85,49 @@ function extractIfFactors(content) {
   return factors;
 }
 
+// Découpe une expression sur un séparateur au niveau 0 de parenthèses (hors chaînes entre guillemets).
+// Ex: splitTopLevel('K1 * IF(A,B,C) * ($F$2=$R$2)', ["*"]) → ['K1 ', ' IF(A,B,C) ', ' ($F$2=$R$2)']
+function splitTopLevel(text, separators) {
+  const parts = [];
+  let depth = 0;
+  let inQuotes = false;
+  let current = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    if (!inQuotes && ch === "(") depth++;
+    if (!inQuotes && ch === ")") depth--;
+    if (!inQuotes && depth === 0 && separators.includes(ch)) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+}
+
+// Retire les parenthèses englobantes équilibrées: "(IF(...))" → "IF(...)"
+function stripOuterParens(text) {
+  let t = text.trim();
+  while (t.startsWith("(") && t.endsWith(")")) {
+    let depth = 0;
+    let wrapsAll = true;
+    for (let i = 0; i < t.length - 1; i++) {
+      if (t[i] === "(") depth++;
+      if (t[i] === ")") depth--;
+      if (depth === 0) {
+        wrapsAll = false;
+        break;
+      }
+    }
+    if (!wrapsAll) return t;
+    t = t.substring(1, t.length - 1).trim();
+  }
+  return t;
+}
+
 // Applique fn à chaque feuille d'un arbre de conditions, en préservant la structure des groupes (OR/AND imbriqués).
 // Indispensable depuis l'introduction des groupes : appliquer une transfo (situation, negate) via un .map() plat
 // la poserait sur le noeud-groupe (ignoré à l'évaluation) au lieu des feuilles.
@@ -156,9 +199,158 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
     if (!sheetData) return null;
     const rowIndex = rowNum - sheetData.startRow - 1;
     if (rowIndex < 0 || rowIndex >= sheetData.dataRows.length) return null;
-    const colIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20 }[column.toUpperCase()];
+    const colIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 }[column.toUpperCase()];
     if (colIndex === undefined) return null;
     return sheetData.dataRows[rowIndex][colIndex];
+  };
+
+  // Référence de cellule avec préfixe de feuille optionnel: $K$1416, K1416, 'Remplissage - Sit. Init.'!$F$18
+  const CELL_RE = /^(?:'([^']+)'!)?\$?([A-Z]{1,3})\$?(\d+)$/i;
+
+  // Négation d'une condition feuille (les groupes OR ne sont pas négables → null)
+  const negateConditionNode = (node) => {
+    if (!node) return null;
+    if (node.conditions) return null;
+    if (node.type === "isEmpty") return { ...node, type: "notEmpty" };
+    if (node.type === "notEmpty") return { ...node, type: "isEmpty" };
+    return { ...node, negate: !node.negate };
+  };
+
+  // Parse une comparaison en une condition feuille (ou un groupe OR pour SEARCH sur une plage).
+  // Formes: cell="lit", cell="", cell=cell2 (valeur lue), cell >/>=/</<= n, ISNUMBER(SEARCH(lit|cell|plage, cell)), ISBLANK(cell)
+  // Les préfixes de feuille sont acceptés des deux côtés et posent excel_indicator_situation.
+  const parseComparisonNode = (rawText) => {
+    const text = stripOuterParens(rawText);
+
+    const isnumberMatch = text.match(/^ISNUMBER\s*\(\s*SEARCH\s*\(([\s\S]*)\)\s*\)$/i);
+    if (isnumberMatch) {
+      const args = splitTopLevel(isnumberMatch[1], [",", ";"]).map((a) => a.trim());
+      if (args.length !== 2) return null;
+      const target = args[1].match(CELL_RE);
+      if (!target) return null;
+      const targetId = getRowToIndicatorMapForSituation(target[1]).get(parseInt(target[3], 10));
+      if (!targetId) return null;
+      const targetSituation = extractSituationFromSheetName(target[1]);
+      const makeContains = (value) => {
+        const c = { type: "contains", excel_indicator_id: targetId, value };
+        if (targetSituation) c.excel_indicator_situation = targetSituation;
+        return c;
+      };
+      const literal = args[0].match(/^"([^"]*)"$/);
+      if (literal) return literal[1] === "" ? null : makeContains(literal[1]);
+      // SEARCH sur une plage verticale ($S2259:$S2262) → contient l'UNE des valeurs de la plage (OR)
+      const rangeMatch = args[0].match(/^\$?([A-Z]{1,3})\$?(\d+)\s*:\s*\$?([A-Z]{1,3})\$?(\d+)$/i);
+      if (rangeMatch && rangeMatch[1].toUpperCase() === rangeMatch[3].toUpperCase() && getCellValue) {
+        const from = parseInt(rangeMatch[2], 10);
+        const to = parseInt(rangeMatch[4], 10);
+        if (to < from || to - from > 100) return null;
+        const values = [];
+        for (let r = from; r <= to; r++) {
+          const v = getCellValue(r, rangeMatch[1]);
+          if (v !== null && v !== undefined && String(v).trim() !== "") values.push(String(v).trim());
+        }
+        if (values.length === 0) return null;
+        if (values.length === 1) return makeContains(values[0]);
+        return { operator: "OR", conditions: values.map(makeContains) };
+      }
+      const cellArg = args[0].match(CELL_RE);
+      if (cellArg) {
+        const v = getCellValueForSheet(cellArg[1], parseInt(cellArg[3], 10), cellArg[2]);
+        if (v === null || v === undefined || String(v).trim() === "") return null;
+        return makeContains(String(v).trim());
+      }
+      return null;
+    }
+
+    const isBlankMatch = text.match(/^ISBLANK\s*\(\s*(?:'([^']+)'!)?\$?([A-Z]{1,3})\$?(\d+)\s*\)$/i);
+    if (isBlankMatch) {
+      const id = getRowToIndicatorMapForSituation(isBlankMatch[1]).get(parseInt(isBlankMatch[3], 10));
+      if (!id) return null;
+      const c = { type: "isEmpty", excel_indicator_id: id, value: null };
+      const sit = extractSituationFromSheetName(isBlankMatch[1]);
+      if (sit) c.excel_indicator_situation = sit;
+      return c;
+    }
+
+    const numCompare = text.match(/^(?:'([^']+)'!)?\$?([A-Z]{1,3})\$?(\d+)\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/i);
+    if (numCompare) {
+      const id = getRowToIndicatorMapForSituation(numCompare[1]).get(parseInt(numCompare[3], 10));
+      if (!id) return null;
+      const typeMap = { ">": "greaterThan", "<": "lessThan", ">=": "greaterOrEqual", "<=": "lessOrEqual" };
+      const c = { type: typeMap[numCompare[4]], excel_indicator_id: id, value: parseFloat(numCompare[5]) };
+      const sit = extractSituationFromSheetName(numCompare[1]);
+      if (sit) c.excel_indicator_situation = sit;
+      return c;
+    }
+
+    const eqParts = splitTopLevel(text, ["="]);
+    if (eqParts.length !== 2) return null;
+    const left = eqParts[0].trim().match(CELL_RE);
+    if (!left) return null;
+    const makeCondition = (indicatorCell, condition) => {
+      const sit = extractSituationFromSheetName(indicatorCell[1]);
+      if (sit) condition.excel_indicator_situation = sit;
+      return condition;
+    };
+    const right = eqParts[1].trim();
+    if (right === '""' || right.match(/^"([^"]*)"$/)) {
+      const id = getRowToIndicatorMapForSituation(left[1]).get(parseInt(left[3], 10));
+      if (!id) return null;
+      if (right === '""') return makeCondition(left, { type: "isEmpty", excel_indicator_id: id, value: null });
+      return makeCondition(left, { type: "equals", excel_indicator_id: id, value: right.match(/^"([^"]*)"$/)[1] });
+    }
+    const rightCell = right.match(CELL_RE);
+    if (rightCell) {
+      // La colonne F porte la valeur saisie de l'indicateur : c'est elle le membre "indicateur",
+      // l'autre cellule est le littéral à figer. Ex: IF($V2053=$F$1728,1,0) → indicateur F1728, littéral V2053.
+      let indicatorCell = left;
+      let literalCell = rightCell;
+      if (left[2].toUpperCase() !== "F" && rightCell[2].toUpperCase() === "F") {
+        indicatorCell = rightCell;
+        literalCell = left;
+      }
+      const id = getRowToIndicatorMapForSituation(indicatorCell[1]).get(parseInt(indicatorCell[3], 10));
+      if (!id) return null;
+      const v = getCellValueForSheet(literalCell[1], parseInt(literalCell[3], 10), literalCell[2]);
+      if (v === null || v === undefined || String(v).trim() === "") return null;
+      return makeCondition(indicatorCell, { type: "equals", excel_indicator_id: id, value: String(v).trim() });
+    }
+    return null;
+  };
+
+  // Parse récursivement IF(comparaison, 1|0|IF(...), 0|1|IF(...)) en liste de conditions (AND implicite),
+  // en gérant les mélanges littéral/cellules et les branches inversées (vrai=0 → négation).
+  // Ex: IF($F$1419 = "Non", 0, IF($F$1416 = $H$1416, 0, 1)) → [F1419≠"Non", F1416≠H1416]
+  const parseIfTree = (rawText) => {
+    const text = stripOuterParens(rawText);
+    const ifMatch = text.match(/^IF\s*\(([\s\S]*)\)$/i);
+    if (!ifMatch) return null;
+    const args = splitTopLevel(ifMatch[1], [",", ";"]).map((a) => a.trim());
+    if (args.length !== 3) return null;
+    const condition = parseComparisonNode(args[0]);
+    if (!condition) return null;
+    // Branche → liste de conditions AND-ées avec la condition d'entrée (négée pour la branche "faux"),
+    // ou branche "morte" pour 0 (jamais affiché par ce chemin)
+    const parseBranch = (branchText, prefixCondition) => {
+      if (branchText === "0") return { dead: true };
+      if (!prefixCondition) return null;
+      if (branchText === "1") return { conditions: [prefixCondition] };
+      if (/^\(?\s*IF\s*\(/i.test(branchText)) {
+        const nested = parseIfTree(branchText);
+        return nested ? { conditions: [prefixCondition, ...nested] } : null;
+      }
+      return null;
+    };
+    const trueBranch = parseBranch(args[1], condition);
+    const falseBranch = parseBranch(args[2], negateConditionNode(condition));
+    if (!trueBranch || !falseBranch) return null;
+    if (trueBranch.dead && falseBranch.dead) return null;
+    if (falseBranch.dead) return trueBranch.conditions;
+    if (trueBranch.dead) return falseBranch.conditions;
+    // Les deux branches sont vivantes → OR entre (cond AND brancheVrai) et (NON cond AND brancheFaux)
+    // Ex: IF($F$1724=$S$1724, IF(ISNUMBER(SEARCH($S1807,$F$1725)),1,0), 1)
+    const wrapAnd = (conditions) => (conditions.length === 1 ? conditions[0] : { operator: "AND", conditions });
+    return [{ operator: "OR", conditions: [wrapAnd(trueBranch.conditions), wrapAnd(falseBranch.conditions)] }];
   };
 
   // Parse récursivement =IF(cellA = cellB, 1|0|IF(...), 0|1) en une liste de conditions equals (AND implicite).
@@ -271,6 +463,59 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
         { refRowNum: parseInt(refProductMatch[4], 10), situation: extractSituationFromSheetName(refProductMatch[3]) },
       ],
     };
+  }
+
+  // CAS 1d: produit générique de facteurs — réf(s) de condition (±feuille) × IF(...) × (a=b) × constante.
+  // Ex: ='Remplissage - Sit. Init.'!K1732*IF($F$1420=$R$1420,1,0)
+  // Ex: =IF($F$1419 = "Non", 0, IF($F$1416 = $H$1416, 0, 1))* $K$1416
+  // Ex: =IF($F$1724=$R$1724,0,1)*$K$1714*IF($F$1714=$S$1714,1,0)
+  // Ex: = 1 * 'Remplissage - Sit. Init.'!$K$1416
+  // N'est retenu que si TOUS les facteurs sont compris; sinon on laisse la main aux cas suivants.
+  // Les produits composés uniquement d'IF restent sur le CAS 4 (comportement historique préservé).
+  const topFactors = splitTopLevel(formulaContent, ["*"]).map((factor) => stripOuterParens(factor));
+  if (topFactors.length >= 2 && !topFactors.some((factor) => factor === "") && !topFactors.every((factor) => /^IF\s*\(/i.test(factor))) {
+    const refs = [];
+    const conditions = [];
+    let neverVisible = false;
+    let allParsed = true;
+    for (const factor of topFactors) {
+      if (/^-?\d+(?:\.\d+)?$/.test(factor)) {
+        // Constante: 0 → jamais affiché, non nulle → facteur neutre
+        if (parseFloat(factor) === 0) neverVisible = true;
+        continue;
+      }
+      const refMatch = factor.match(CELL_RE);
+      if (refMatch) {
+        refs.push({ raw: factor, refRowNum: parseInt(refMatch[3], 10), situation: extractSituationFromSheetName(refMatch[1]) });
+        continue;
+      }
+      if (/^IF\s*\(/i.test(factor)) {
+        const ifConditions = parseIfTree(factor);
+        if (!ifConditions) {
+          allParsed = false;
+          break;
+        }
+        conditions.push(...ifConditions);
+        continue;
+      }
+      const comparison = parseComparisonNode(factor);
+      if (comparison) {
+        conditions.push(comparison);
+        continue;
+      }
+      allParsed = false;
+      break;
+    }
+    if (allParsed) {
+      if (neverVisible) return { _neverVisible: true };
+      if (refs.length === 0 && conditions.length > 0) return { operator: conditions.length > 1 ? "AND" : undefined, conditions };
+      if (refs.length === 1 && conditions.length > 0 && !refs[0].situation) return { _referenceToMerge: refs[0].raw, conditions };
+      if (refs.length === 1 && conditions.length === 0 && refs[0].situation) return { _interSheetReference: true, refRowNum: refs[0].refRowNum, excel_indicator_situation: refs[0].situation };
+      if (refs.length === 1 && conditions.length === 0) return { _reference: refs[0].raw };
+      if (refs.length > 0) return { _factorsToAnd: { refs: refs.map(({ refRowNum, situation }) => ({ refRowNum, situation })), conditions } };
+      // Que des constantes non nulles → toujours affiché
+      return { _alwaysVisible: true };
+    }
   }
 
   // CAS 2: IF(OR(...)) - OR
@@ -640,6 +885,22 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
     }
   }
 
+  // CAS 14: =INDEX('Feuille'!$B$1115:$K$1204, R1620*2-1, 10) - miroir dynamique de condition.
+  // La ligne cible dans la plage est calculée depuis une cellule (v ou v*2-1) et la colonne extraite
+  // doit être la colonne K (condition d'affichage) : début B + offset 10 - 1 = K.
+  const indexMatch = formulaContent.match(/^INDEX\s*\(\s*(?:'([^']+)'!)?\$?([A-Z])\$?(\d+)\s*:\s*\$?[A-Z]\$?\d+\s*[,;]\s*\$?([A-Z]+)\$?(\d+)(\s*\*\s*2\s*-\s*1)?\s*[,;]\s*(\d+)\s*\)$/i);
+  if (indexMatch && getCellValue) {
+    const targetColumn = String.fromCharCode(indexMatch[2].toUpperCase().charCodeAt(0) + parseInt(indexMatch[7], 10) - 1);
+    const cellValue = Number(getCellValue(parseInt(indexMatch[5], 10), indexMatch[4]));
+    if (targetColumn === "K" && !isNaN(cellValue) && cellValue > 0) {
+      const rowInRange = indexMatch[6] ? cellValue * 2 - 1 : cellValue;
+      const refRowNum = parseInt(indexMatch[3], 10) + rowInRange - 1;
+      const sourceSituation = extractSituationFromSheetName(indexMatch[1]);
+      if (sourceSituation) return { _interSheetReference: true, refRowNum, excel_indicator_situation: sourceSituation };
+      return { _reference: `K${refRowNum}` };
+    }
+  }
+
   return null;
 }
 
@@ -692,12 +953,14 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
     // Parser la formule de la feuille cible
     const formula = targetFormulasMap.get(rowNum);
     if (!formula) {
-      situationCache.set(rowNum, null);
-      return null;
+      // Pas de formule en colonne K (littéral non nul ou cellule vide, les 0 littéraux étant normalisés en "=0")
+      // → la ligne référencée est toujours affichée → facteur/miroir neutre
+      situationCache.set(rowNum, { _alwaysVisible: true });
+      return { _alwaysVisible: true };
     }
 
     // Créer getCellValue pour la feuille cible
-    const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20 };
+    const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 };
     const targetGetCellValue = (r, column) => {
       const rowIndex = r - targetSheetData.startRow - 1;
       if (rowIndex < 0 || rowIndex >= targetSheetData.dataRows.length) return null;
@@ -755,15 +1018,74 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       return result;
     }
 
+    // Résoudre les produits génériques réfs × conditions dans la feuille cible → AND
+    if (parsed._factorsToAnd) {
+      const result = resolveReferencesToAnd(
+        parsed._factorsToAnd.refs.map((r) => ({ ...r, situation: r.situation || targetSituation })),
+        null,
+        parsed._factorsToAnd.conditions,
+      );
+      situationCache.set(rowNum, result);
+      return result;
+    }
+
+    // Référence inter-feuilles depuis la feuille cible → résoudre dans la feuille source (chaînes de miroirs)
+    if (parsed._interSheetReference) {
+      const { refRowNum, excel_indicator_situation: sourceSituation } = parsed;
+      if (refRowNum && sourceSituation) {
+        const refCondition = resolveConditionInSheet(refRowNum, sourceSituation, new Set(visited));
+        if (refCondition?._neverVisible) {
+          situationCache.set(rowNum, { _neverVisible: true });
+          return { _neverVisible: true };
+        }
+        if (refCondition?._alwaysVisible) {
+          situationCache.set(rowNum, { _alwaysVisible: true });
+          return { _alwaysVisible: true };
+        }
+        if (refCondition?.conditions) {
+          const result = { ...refCondition, conditions: mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: cond.excel_indicator_situation || sourceSituation })) };
+          situationCache.set(rowNum, result);
+          return result;
+        }
+      }
+      situationCache.set(rowNum, null);
+      return null;
+    }
+
+    // Référence dynamique par excel_indicator_id (VLOOKUP) dans la feuille cible → miroir de sa condition
+    if (parsed._indicatorRefByName) {
+      const { excel_indicator_id: targetId, situation: refSituation } = parsed._indicatorRefByName;
+      const mirrorSituation = refSituation || targetSituation;
+      const targetRow = getRowForIndicatorId(targetId, mirrorSituation);
+      if (!targetRow) {
+        situationCache.set(rowNum, null);
+        return null;
+      }
+      const refCondition = resolveConditionInSheet(targetRow, mirrorSituation, new Set(visited));
+      if (refCondition?._neverVisible) {
+        situationCache.set(rowNum, { _neverVisible: true });
+        return { _neverVisible: true };
+      }
+      if (refCondition?.conditions?.length > 0) {
+        const result = { ...refCondition, conditions: mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: cond.excel_indicator_situation || mirrorSituation })) };
+        situationCache.set(rowNum, result);
+        return result;
+      }
+      // La cible n'a aucune condition → toujours visible → miroir neutre
+      situationCache.set(rowNum, { _alwaysVisible: true });
+      return { _alwaysVisible: true };
+    }
+
     // Pour les autres cas, retourner le résultat parsé
     situationCache.set(rowNum, parsed);
     return parsed;
   }
 
-  // Résout un marqueur _referencesToAnd (produit de deux cellules de condition = AND des deux conditions).
+  // Résout un marqueur _referencesToAnd ou _factorsToAnd (produit de cellules de condition = AND des conditions,
+  // extraConditions étant les conditions directes issues des facteurs IF/comparaisons de la formule).
   // Un côté sans formule est un littéral non nul (les 0 littéraux sont normalisés en "=0") → toujours visible,
   // donc facteur neutre. resolveSide(refRowNum) résout un côté sans préfixe de feuille (feuille courante).
-  function resolveReferencesToAnd(references, resolveSide) {
+  function resolveReferencesToAnd(references, resolveSide, extraConditions = []) {
     const groups = [];
     for (const { refRowNum, situation } of references) {
       const sideFormulasMap = situation ? allFormulasMapsBySituation?.get(situation) : formulasMap;
@@ -783,6 +1105,7 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
       }
       groups.push(...conditions);
     }
+    groups.push(...extraConditions);
     if (groups.length === 0) return { _alwaysVisible: true };
     if (groups.length === 1 && groups[0].operator === "OR") return { operator: "OR", conditions: groups[0].conditions };
     return { operator: groups.length > 1 ? "AND" : undefined, conditions: groups };
@@ -796,6 +1119,11 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
 
     const parsed = parseCache.get(rowNum);
     if (!parsed) {
+      // Ligne référencée sans formule en colonne K (littéral non nul ou vide) → toujours affichée → facteur neutre
+      if (!formulasMap.has(rowNum)) {
+        resolvedConditions.set(rowNum, { _alwaysVisible: true });
+        return { _alwaysVisible: true };
+      }
       resolvedConditions.set(rowNum, null);
       return null;
     }
@@ -820,9 +1148,14 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
           resolvedConditions.set(rowNum, { _neverVisible: true });
           return { _neverVisible: true };
         }
+        if (refCondition?._alwaysVisible) {
+          resolvedConditions.set(rowNum, { _alwaysVisible: true });
+          return { _alwaysVisible: true };
+        }
         if (refCondition?.conditions) {
-          // Ajouter sourceSituation à chaque feuille (en descendant dans les groupes imbriqués)
-          const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: sourceSituation }));
+          // Ajouter sourceSituation à chaque feuille (en descendant dans les groupes imbriqués),
+          // sans écraser la situation des feuilles déjà rattachées à une autre feuille (chaînes de miroirs)
+          const conditionsWithSource = mapConditionLeaves(refCondition.conditions, (cond) => ({ ...cond, excel_indicator_situation: cond.excel_indicator_situation || sourceSituation }));
           const result = { ...refCondition, conditions: conditionsWithSource };
           resolvedConditions.set(rowNum, result);
           return result;
@@ -836,6 +1169,13 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
     // Résoudre les produits de deux références de condition (=$K$a * K_b, ='Feuille'!$K$a * 'Feuille'!K_b) → AND
     if (parsed._referencesToAnd) {
       const result = resolveReferencesToAnd(parsed._referencesToAnd, (refRowNum) => resolveCondition(refRowNum, new Set(visited)));
+      resolvedConditions.set(rowNum, result);
+      return result;
+    }
+
+    // Résoudre les produits génériques réfs × conditions (CAS 1d) → AND
+    if (parsed._factorsToAnd) {
+      const result = resolveReferencesToAnd(parsed._factorsToAnd.refs, (refRowNum) => resolveCondition(refRowNum, new Set(visited)), parsed._factorsToAnd.conditions);
       resolvedConditions.set(rowNum, result);
       return result;
     }
@@ -976,7 +1316,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     }
 
     // Fonction pour lire une valeur de cellule depuis les données Excel
-    const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20 };
+    const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 };
     const getCellValue = (rowNum, column) => {
       const rowIndex = rowNum - startRow - 1; // Convertir numéro de ligne Excel en index dans dataRows
       if (rowIndex < 0 || rowIndex >= dataRows.length) return null;
@@ -1928,7 +2268,7 @@ if (require.main === module) {
       await syncIndicatorsToExistingActions();
 
       // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      // await generateExcelForAllCollectivities();
+      await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {

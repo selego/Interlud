@@ -1,26 +1,106 @@
 [
   {
-    "situation": "prev",
-    "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2127,
-    "excelIndicatorId": "ELUPrévApproReportFluvial",
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1793,
+    "excelIndicatorId": "EComRéfRemplCat1RécupDist",
     "reason": "non parsée",
-    "formula": "=IF($F$2132 = R2127, 1,0)"
+    "formula": "='Remplissage - Sit. Init.'!#REF!*IF($F$1420=$R$1420,1,0)"
+  },
+  {
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1794,
+    "excelIndicatorId": "EComRéfRemplCat2RécupDist",
+    "reason": "non parsée",
+    "formula": "='Remplissage - Sit. Init.'!#REF!*IF($F$1420=$R$1420,1,0)"
+  },
+  {
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1795,
+    "excelIndicatorId": "EComRéfRemplCat3RécupDist",
+    "reason": "non parsée",
+    "formula": "='Remplissage - Sit. Init.'!#REF!*IF($F$1420=$R$1420,1,0)"
+  },
+  {
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1796,
+    "excelIndicatorId": "EComRéfRemplCat4RécupDist",
+    "reason": "non parsée",
+    "formula": "='Remplissage - Sit. Init.'!#REF!*IF($F$1420=$R$1420,1,0)"
+  },
+  {
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1805,
+    "excelIndicatorId": "FretTCRéfRemplFretCat1",
+    "reason": "non parsée",
+    "formula": "='Remplissage - Sit. Init.'!$K$2204:$K$2248"
   },
   {
     "situation": "prev",
     "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2128,
-    "excelIndicatorId": "ELUPrévApproOptiPL",
+    "rowNum": 2950,
+    "excelIndicatorId": "EComRéfRemplCat1RécupDist",
     "reason": "non parsée",
-    "formula": "=IF($F$2132 = R2128, 1,0)"
+    "formula": "='Remplissage - Sit. Init.'!#REF!"
   },
   {
     "situation": "prev",
     "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2129,
-    "excelIndicatorId": "ELUPrévApproOptiVUL",
+    "rowNum": 2951,
+    "excelIndicatorId": "EComRéfRemplCat2RécupDist",
     "reason": "non parsée",
-    "formula": "=IF($F$2132 = R2129, 1,0)"
+    "formula": "='Remplissage - Sit. Init.'!#REF!"
+  },
+  {
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2952,
+    "excelIndicatorId": "EComRéfRemplCat3RécupDist",
+    "reason": "non parsée",
+    "formula": "='Remplissage - Sit. Init.'!#REF!"
+  },
+  {
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2953,
+    "excelIndicatorId": "EComRéfRemplCat4RécupDist",
+    "reason": "non parsée",
+    "formula": "='Remplissage - Sit. Init.'!#REF!"
+  },
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2608,
+    "excelIndicatorId": "EComExpostRemplCat1RécupDist",
+    "reason": "ignorée (référence inter-feuilles non résolue)",
+    "formula": "='Remplissage - Sit. Prev.'!K2950"
+  },
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2609,
+    "excelIndicatorId": "EComExpostRemplCat2RécupDist",
+    "reason": "ignorée (référence inter-feuilles non résolue)",
+    "formula": "='Remplissage - Sit. Prev.'!K2951"
+  },
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2610,
+    "excelIndicatorId": "EComExpostRemplCat3RécupDist",
+    "reason": "ignorée (référence inter-feuilles non résolue)",
+    "formula": "='Remplissage - Sit. Prev.'!K2952"
+  },
+  {
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2611,
+    "excelIndicatorId": "EComExpostRemplCat4RécupDist",
+    "reason": "ignorée (référence inter-feuilles non résolue)",
+    "formula": "='Remplissage - Sit. Prev.'!K2953"
   }
 ]
