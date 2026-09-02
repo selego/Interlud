@@ -19,7 +19,8 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { message, user_id, user_name, user_email, redirect, read_at } = req.body;
+    const notification = await Notification.findByIdAndUpdate(req.params.id, { message, user_id, user_name, user_email, redirect, read_at }, { new: true });
     if (!notification) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: notification });
   } catch (error) {
@@ -48,8 +49,9 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.title || !req.body.message || !req.body.user_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const notification = await Notification.create(req.body);
+    const { message, user_id, user_name, user_email, redirect, read_at } = req.body;
+    if (!req.body.title || !message || !user_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const notification = await Notification.create({ message, user_id, user_name, user_email, redirect, read_at });
 
     return res.status(200).send({ ok: true, data: notification });
   } catch (error) {

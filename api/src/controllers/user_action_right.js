@@ -7,7 +7,8 @@ const { capture } = require('../services/sentry');
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const userActionRight = await UserActionRight.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { user_id, user_name, collectivity_id, collectivity_name, action_id, action_name, description, can_read, can_write } = req.body;
+    const userActionRight = await UserActionRight.findByIdAndUpdate(req.params.id, { user_id, user_name, collectivity_id, collectivity_name, action_id, action_name, description, can_read, can_write }, { new: true });
     if (!userActionRight) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: userActionRight });
   } catch (error) {
@@ -34,7 +35,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const userActionRight = await UserActionRight.create(req.body);
+    const { user_id, user_name, collectivity_id, collectivity_name, action_id, action_name, description, can_read, can_write } = req.body;
+    const userActionRight = await UserActionRight.create({ user_id, user_name, collectivity_id, collectivity_name, action_id, action_name, description, can_read, can_write });
 
     return res.status(200).send({ ok: true, data: userActionRight });
   } catch (error) {

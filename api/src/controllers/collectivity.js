@@ -21,7 +21,8 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const collectivity = await Collectivity.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { name, description, department, population, siren, year, area, basedata_onboarded, parc_types_onboarded } = req.body;
+    const collectivity = await Collectivity.findByIdAndUpdate(req.params.id, { name, description, department, population, siren, year, area, basedata_onboarded, parc_types_onboarded }, { new: true });
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     return res.status(200).send({ ok: true, data: collectivity });
   } catch (error) {
@@ -70,11 +71,12 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const existingCollectivity = await Collectivity.findOne({ name: req.body.name });
+    const { name, description, department, population, siren, year, area, basedata_onboarded, parc_types_onboarded } = req.body;
+    if (!name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const existingCollectivity = await Collectivity.findOne({ name });
     if (existingCollectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.COLLECTIVITY_ALREADY_EXISTS });
 
-    const collectivity = await Collectivity.create(req.body);
+    const collectivity = await Collectivity.create({ name, description, department, population, siren, year, area, basedata_onboarded, parc_types_onboarded });
     collectivity.sharepoint_folder_id = await createFolder(collectivity.name);
 
     collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);

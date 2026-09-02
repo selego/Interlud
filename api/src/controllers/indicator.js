@@ -24,20 +24,23 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
     const oldIndicator = await Indicator.findById(req.params.id);
     if (!oldIndicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    const { name, description, value_unit, value_type, excel_indicator_id, value_possibilities, value_default, indicator_category_id, indicator_category_name, indicator_sub_category_id, indicator_sub_category_name, linked_action_id, linked_action_name, is_primordial, presence_in_excel, excel_line_number, display_condition } = req.body;
+    const body = { name, description, value_unit, value_type, excel_indicator_id, value_possibilities, value_default, indicator_category_id, indicator_category_name, indicator_sub_category_id, indicator_sub_category_name, linked_action_id, linked_action_name, is_primordial, presence_in_excel, excel_line_number, display_condition };
+
     const logs = [];
-    
-    for (const field of Object.keys(req.body)) {
+
+    for (const field of Object.keys(body)) {
       if (["updatedAt", "__v", "createdAt", "_id"].includes(field)) continue;
-      let newValue = req.body[field];
+      let newValue = body[field];
       const originalValue = oldIndicator[field];
       if (originalValue instanceof Date && typeof newValue === 'string')  newValue = new Date(newValue);
-      
+
       if (JSON.stringify(newValue) === JSON.stringify(originalValue)) continue;
 
       let logType = typeof newValue;
       if (newValue instanceof Date) logType = 'date';
       if (Array.isArray(newValue)) logType = 'array';
-      
+
       logs.push(new Log({
         model_name: "indicator",
         name: oldIndicator.name,
@@ -53,14 +56,14 @@ router.put("/:id", passport.authenticate(["admin", "user"], { session: false, fa
 
     if (logs.length > 0) await Log.insertMany(logs);
 
-    const indicator = await Indicator.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const indicator = await Indicator.findByIdAndUpdate(req.params.id, body, { new: true });
     res.status(200).send({ ok: true, data: indicator });
-    
-    if (oldIndicator.value_type !== req.body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(req.body.value_possibilities)) {
+
+    if (oldIndicator.value_type !== body.value_type || JSON.stringify(oldIndicator.value_possibilities) !== JSON.stringify(body.value_possibilities)) {
       IndicatorValue.updateMany(
         { indicator_id: req.params.id }, 
         { 
-          $set: { indicator_type: req.body.value_type, indicator_value_possibilities: req.body.value_possibilities, value: null } 
+          $set: { indicator_type: body.value_type, indicator_value_possibilities: body.value_possibilities, value: null }
         }
       ).catch(error => { capture(error)});
     }
@@ -90,8 +93,9 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
 
 router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
-    const indicator = await Indicator.create( req.body );
+    const { name, description, value_unit, value_type, excel_indicator_id, value_possibilities, value_default, indicator_category_id, indicator_category_name, indicator_sub_category_id, indicator_sub_category_name, linked_action_id, linked_action_name, is_primordial, presence_in_excel, excel_line_number, display_condition } = req.body;
+    if (!name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const indicator = await Indicator.create({ name, description, value_unit, value_type, excel_indicator_id, value_possibilities, value_default, indicator_category_id, indicator_category_name, indicator_sub_category_id, indicator_sub_category_name, linked_action_id, linked_action_name, is_primordial, presence_in_excel, excel_line_number, display_condition });
 
     await Log.create({
       model_name: "indicator",
