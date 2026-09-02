@@ -17,6 +17,7 @@ const formatDate = dateString => {
 const formatValue = value => {
   if (value === null || value === undefined || value === "") return "vide"
   if (typeof value === "object") return JSON.stringify(value)
+  if (typeof value === "number") return value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })
   return String(value)
 }
 

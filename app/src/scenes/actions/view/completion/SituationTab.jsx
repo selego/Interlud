@@ -187,7 +187,7 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
             ) : (
               <>
                 <p className="text-[13px] text-[#5b6b66] truncate max-w-[20em]" title={Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}>
-                  {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : indicatorValue.value_default[indicatorValue.indicator_type]}
+                  {Array.isArray(indicatorValue.value_default[indicatorValue.indicator_type]) ? indicatorValue.value_default[indicatorValue.indicator_type].join(', ') : typeof indicatorValue.value_default[indicatorValue.indicator_type] === "number" ? indicatorValue.value_default[indicatorValue.indicator_type].toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : indicatorValue.value_default[indicatorValue.indicator_type]}
                 </p>
                 <Tooltip content="Appliquer cette valeur">
                   <button

@@ -282,7 +282,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
             </p>
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => navigate("/general-data")}
+                onClick={() => navigate("/general-data?tab=parc")}
                 className="w-full px-4 py-2 rounded-lg border-2 border-primary-green text-primary-green text-sm font-semibold hover:bg-green-50 transition-colors"
               >
                 Voir mes données parc type

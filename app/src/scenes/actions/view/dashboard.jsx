@@ -1065,7 +1065,7 @@ export default function Dashboard({ action }) {
                                   x={x + width / 2}
                                   y={value >= 0 ? y - 6 : y + 18}
                                   textAnchor="middle"
-                                  fill={d.pct >= 0 ? "#2DAC6A" : "#E24B4A"}
+                                  fill={d.pct >= 0 ? "#E24B4A" : "#2DAC6A"}
                                   fontSize={11}
                                   fontWeight={700}
                                 >

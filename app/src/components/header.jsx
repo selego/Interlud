@@ -195,7 +195,7 @@ export default function Header() {
             linkProps: { to: "/collectivity" }
           },
           user.role === "economic_actor" && {
-            text: "Mon acteur économique",
+            text: "Mon organisation",
             linkProps: { to: "/economic-actor" }
           },
           {

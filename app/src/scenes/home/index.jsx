@@ -152,7 +152,11 @@ export default function Home() {
 
   const onboardingSteps = [
     { label: "Créer votre première action", done: allActions.length > 0, link: "/actions" },
-    { label: "Remplir votre première action B2 à 100% (situation ex-post comprise)", done: allActions.some((a) => a.completion_expost === 100), link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions" },
+    {
+      label: "Remplir une action à 100 %",
+      done: allActions.some((a) => a.completion_init === 100 && a.completion_ref === 100 && a.completion_prev === 100 && (!a.excel_files_expost?.length || a.completion_expost === 100)),
+      link: allActions[0] ? `/actions/${allActions[0]._id}/completion` : "/actions"
+    },
   ]
 
   const indicators = data ? buildIndicators(data.emissions) : []

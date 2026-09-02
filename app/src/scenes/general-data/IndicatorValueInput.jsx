@@ -20,7 +20,7 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
     return (
       <DebounceInput
         type="number"
-        value={value ?? ""}
+        value={typeof value === "number" ? Math.round(value * 10) / 10 : value ?? ""}
         onChange={(e) => onChange(Number(e.target.value))}
         placeholder="Valeur numérique"
         debounce={1000}

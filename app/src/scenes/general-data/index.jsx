@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
@@ -15,6 +16,7 @@ const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
 export default function Index() {
   const { collectivity, user } = useStore()
+  const [searchParams] = useSearchParams()
   const [configActions, setConfigActions] = useState([])
   const [activeConfigIndex, setActiveConfigIndex] = useState(0)
   const [activeSituation, setActiveSituation] = useState(null)
@@ -37,7 +39,12 @@ export default function Index() {
       if (!collectivity?._id) return
       const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id, type: "config" })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      setConfigActions(user?.role === "economic_actor" ? data.filter((ca) => ca.name !== "Données de base") : data)
+      const actions = user?.role === "economic_actor" ? data.filter((ca) => ca.name !== "Données de base") : data
+      setConfigActions(actions)
+      if (searchParams.get("tab") === "parc") {
+        const parcIndex = actions.findIndex((ca) => ca.name?.toLowerCase().includes("parc"))
+        if (parcIndex !== -1) setActiveConfigIndex(parcIndex)
+      }
     } catch (error) {
       toast.error("Une erreur est survenue")
     }
