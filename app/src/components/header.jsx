@@ -5,6 +5,7 @@ import useStore from "@/services/store"
 import toast from "react-hot-toast"
 import { FiChevronDown, FiCheck } from "react-icons/fi"
 import Logo from "@/assets/primary_logo.png"
+import EvaludLogo from "@/assets/evalud-logo.svg"
 import Select from "@/components/Select"
 import DebounceInput from "@/components/debounceInput"
 
@@ -283,9 +284,12 @@ export default function Header() {
                   </p>
                 </div>
                 <div className="fr-header__operator">
-                  <Link to="/" title="Accueil - InTerLUD" className="flex items-center">
+                  <Link to="/" title="Accueil - InTerLUD" className="flex items-center gap-4">
                     <span className="inline-block align-middle">
-                      <img src={Logo} alt="logo" className="h-8 object-contain" />
+                      <img src={Logo} alt="logo InTerLUD+" className="h-8 object-contain" />
+                    </span>
+                    <span className="inline-block align-middle">
+                      <img src={EvaludLogo} alt="logo évaLUD" className="h-8 object-contain" />
                     </span>
                   </Link>
                 </div>

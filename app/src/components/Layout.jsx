@@ -1,6 +1,7 @@
 import React from "react"
 import background_element from "@/assets/background_element.png"
 import Logo from "@/assets/primary_logo.png"
+import EvaludLogo from "@/assets/evalud-logo.svg"
 import FullBanner from "@/assets/Bandeau-complet-BAT.svg"
 import Header from "@/components/header"
 import FaqWidget from "@/components/FaqWidget"
@@ -58,7 +59,10 @@ export default function Layout({ children }) {
           <div className="grid grid-cols-1 md:grid-cols-6 gap-8 mb-5">
             {/* Logo et description */}
             <div className="col-span-4 flex-shrink-0 max-w-2xl">
-              <img src={Logo} alt="Logo InTerLUD" className="h-8 mb-3" />
+              <div className="flex items-center gap-4 mb-3">
+                <img src={Logo} alt="Logo InTerLUD" className="h-8" />
+                <img src={EvaludLogo} alt="Logo évaLUD" className="h-8" />
+              </div>
               <p className="text-sm font-bold text-gray-600 ml-2">À propos</p>
               <p className="text-xs text-gray-600 leading-relaxed ml-2">
                 Le Programme Interlud+ vise le déploiement, par les collectivités territoriales et les acteurs économiques, d’actions volontaires sur le transport de marchandises

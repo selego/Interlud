@@ -1405,6 +1405,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     const bulkUpdateOps = [];
     const logsToCreate = [];
     const indicatorValueUpdates = new Map(); // Map<indicator_id, updateData> pour mettre à jour les IndicatorValues
+    const changedLinkIndicatorIds = []; // Indicateurs dont l'action liée a changé : leurs IVs sont invalides (mauvais rattachement) et seront supprimées puis recréées par la sync
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -1600,6 +1601,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
 
           bulkUpdateOps.push({ updateOne: { filter: { _id: existingIndicator._id }, update: { $set: newData } } });
 
+          if ((existingIndicator.linked_action_id?.toString() || "") !== (action?._id?.toString() || "")) changedLinkIndicatorIds.push(existingIndicator._id.toString());
+
           // Stocker la mise à jour avec clé composite indicatorId|situation pour cibler les bons indicator_values
           indicatorValueUpdates.set(`${existingIndicator._id.toString()}|${situation}`, {
             indicator_id: existingIndicator._id.toString(),
@@ -1695,6 +1698,11 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     if (bulkUpdateOps.length > 0) {
       await Indicator.bulkWrite(bulkUpdateOps);
       console.log(`✅ ${bulkUpdateOps.length} indicateurs mis à jour`);
+    }
+
+    if (changedLinkIndicatorIds.length > 0) {
+      const result = await IndicatorValue.deleteMany({ indicator_id: { $in: changedLinkIndicatorIds } });
+      console.log(`🗑️ ${result.deletedCount} indicator_values supprimés (${changedLinkIndicatorIds.length} indicateurs ont changé d'action liée, la sync recréera les IVs au bon endroit)`);
     }
 
     if (indicatorValueUpdates.size > 0) {
@@ -1836,7 +1844,7 @@ async function syncIndicatorsToExistingActions() {
 
   // --- Indicateurs liés à une action (linked_action_id) ---
   for (const action of userActions) {
-    if (!action.action_parent_id || !action.year_init || !action.year_prev || !action.year_expost) continue;
+    if (!action.action_parent_id || !action.year_init || !action.year_prev) continue;
 
     const actionIndicators = linkedByParent.get(action.action_parent_id?.toString());
     if (!actionIndicators || actionIndicators.length === 0) continue;
@@ -1845,9 +1853,9 @@ async function syncIndicatorsToExistingActions() {
       { situation: "init", year: action.year_init },
       { situation: "ref", year: action.year_prev },
       { situation: "prev", year: action.year_prev },
-      { situation: "expost", year: action.year_expost },
     ];
-    if (action.year_expost !== action.year_prev) situationYearPairs.push({ situation: "ref", year: action.year_expost });
+    if (action.year_expost) situationYearPairs.push({ situation: "expost", year: action.year_expost });
+    if (action.year_expost && action.year_expost !== action.year_prev) situationYearPairs.push({ situation: "ref", year: action.year_expost });
 
     const actionId = action._id.toString();
 
