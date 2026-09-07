@@ -11,6 +11,7 @@ const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder, createWorkbookSession, closeWorkbookSession, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
+const { isPercentUnit } = require('../utils/indicators');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -540,7 +541,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
         const p = parseFloat(rawValue);
         if (isNaN(p)) return null;
         // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
-        return unit === '%' ? p * 100 : p;
+        return isPercentUnit(unit) ? p * 100 : p;
       }
       if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
       if (indicatorType === 'checkbox')
@@ -1055,7 +1056,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           const p = parseFloat(rawValue);
           if (isNaN(p)) return null;
           // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
-          return unit === '%' ? p * 100 : p;
+          return isPercentUnit(unit) ? p * 100 : p;
         }
         if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
         if (indicatorType === 'checkbox')
@@ -1446,7 +1447,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           const p = parseFloat(rawValue);
           if (isNaN(p)) return null;
           // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
-          return unit === '%' ? p * 100 : p;
+          return isPercentUnit(unit) ? p * 100 : p;
         }
         if (indicatorType === 'text' || indicatorType === 'radio') return String(rawValue).trim() || null;
         if (indicatorType === 'checkbox')

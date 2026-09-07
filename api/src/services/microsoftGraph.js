@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs');
+const { isPercentUnit } = require('../utils/indicators');
 
 const tenantId = process.env.TENANT_ID;
 const clientId = process.env.CLIENT_ID;
@@ -136,7 +137,7 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
   const rowNumber = startRow + rowIndex;
 
-  if (unit === '%' && typeof value === 'number') value = value / 100;
+  if (isPercentUnit(unit) && typeof value === 'number') value = value / 100;
   const cellValue = Array.isArray(value) ? value.join(', ') : value;
   await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/range(address='F${rowNumber}')`, {
     method: 'PATCH',
@@ -168,7 +169,7 @@ async function updateExcelCellsBatch(fileId, updates, situation, sessionId = nul
     .map((u) => {
       const rowIndex = indicatorRowMap.get(String(u.excel_indicator_id).trim());
       if (rowIndex === undefined) return null;
-      const v = u.unit === '%' && typeof u.value === 'number' ? u.value / 100 : u.value;
+      const v = isPercentUnit(u.unit) && typeof u.value === 'number' ? u.value / 100 : u.value;
       const cellValue = Array.isArray(v) ? v.join(', ') : (v ?? '');
       return { rowIndex, cellValue };
     })

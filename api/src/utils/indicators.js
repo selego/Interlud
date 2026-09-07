@@ -1,5 +1,8 @@
 const HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte'];
 
+// Unité pourcentage dès que la chaîne contient '%' ('%', '% du PTAC'…) : Excel stocke ces valeurs en fraction (0.36 pour 36%)
+const isPercentUnit = (unit) => typeof unit === 'string' && unit.includes('%');
+
 // Collecte récursivement tous les excel_indicator_id des feuilles (en descendant dans les groupes imbriqués).
 const collectConditionExcelIds = (node, acc) => {
   if (!node) return acc;
@@ -141,4 +144,4 @@ const resolveDynamicPossibilities = async (ivs) => {
   }
 };
 
-module.exports = { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds };
+module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds };

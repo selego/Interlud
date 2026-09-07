@@ -1,5 +1,6 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const { graphFetch, duplicateExcelFile } = require("../src/services/microsoftGraph");
+const { isPercentUnit } = require("../src/utils/indicators");
 const Indicator = require("../src/models/indicator");
 const IndicatorValue = require("../src/models/indicator_value");
 const IndicatorCategory = require("../src/models/indicator_category");
@@ -1528,7 +1529,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           if (valueType === "number") {
             const parsedValue = parseFloat(defaultValueRaw);
             // Excel stocke les % en fraction (0.36 pour 36%) : même conversion que l'API (parseDefaultValue / import)
-            const isPercent = String(row[8] ?? "").trim() === "%";
+            const isPercent = isPercentUnit(row[8]);
             valueDefaultForSituation = { [valueType]: !isNaN(parsedValue) ? (isPercent ? parsedValue * 100 : parsedValue) : undefined };
           }
           if (valueType === "text") valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
@@ -1796,7 +1797,7 @@ function formatIndicatorValue(indicatorValue) {
   if (Array.isArray(val) && val.length === 0) return null;
   if (Array.isArray(val)) return val.join(", ");
   // Excel stocke les % en fraction : même conversion que updateExcelCellsBatch côté API
-  if (indicatorValue.indicator_value_unit === "%" && typeof val === "number") return String(val / 100);
+  if (isPercentUnit(indicatorValue.indicator_value_unit) && typeof val === "number") return String(val / 100);
   return String(val);
 }
 

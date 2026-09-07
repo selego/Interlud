@@ -13,7 +13,7 @@ const { enqueueCellUpdate, enqueueAggregation, isSyncPending } = require('../ser
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
-const { HIDDEN_IDS, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds } = require('../utils/indicators');
+const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds } = require('../utils/indicators');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -740,7 +740,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       let convertedValue = data.value;
       if (indicatorType === 'number') {
         convertedValue = isNaN(parseFloat(convertedValue)) ? null : parseFloat(convertedValue);
-        if (indicator.value_unit === '%' && convertedValue != null) convertedValue = convertedValue * 100;
+        if (isPercentUnit(indicator.value_unit) && convertedValue != null) convertedValue = convertedValue * 100;
       }
       if (indicatorType === 'checkbox') {
         const strValue = convertedValue != null ? String(convertedValue) : '';

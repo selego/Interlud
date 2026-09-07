@@ -1,5 +1,8 @@
 import api from "@/services/api"
 
+// Unité pourcentage dès que la chaîne contient "%" ("%", "% du PTAC"…)
+export const isPercentUnit = (unit) => typeof unit === "string" && unit.includes("%")
+
 export const isIndicatorValueFilled = (indicatorValue) => {
   const val = indicatorValue.value?.[indicatorValue.indicator_type]
   if (indicatorValue.indicator_type === "checkbox") return Array.isArray(val) && val.length > 0

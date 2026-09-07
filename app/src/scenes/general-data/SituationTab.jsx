@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { FiStar } from "react-icons/fi"
-import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
+import { isIndicatorValueFilled, isPercentUnit } from "@/utils/indicatorHelpers"
 import IndicatorValueInput from "./IndicatorValueInput"
 import Loader from "@/components/loader"
 
@@ -132,7 +132,7 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
   let aggregatedValue = null
   if (filledEAValues.length >= 3 && indicatorValue.indicator_type === 'number') {
     const numbers = filledEAValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined)
-    if (numbers.length > 0) aggregatedValue = indicatorValue.indicator_value_unit === '%' ? numbers.reduce((a, b) => a + b, 0) / numbers.length : numbers.reduce((a, b) => a + b, 0)
+    if (numbers.length > 0) aggregatedValue = isPercentUnit(indicatorValue.indicator_value_unit) ? numbers.reduce((a, b) => a + b, 0) / numbers.length : numbers.reduce((a, b) => a + b, 0)
   }
 
   return (
