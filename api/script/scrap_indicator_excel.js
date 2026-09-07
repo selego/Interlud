@@ -108,6 +108,26 @@ function splitTopLevel(text, separators) {
   return parts;
 }
 
+// Vrai si le texte est un unique appel de fonction dont la parenthèse fermante est le dernier caractère.
+// Ex: "IF(a,b,c)" → true ; "IF(a,b,c)*IF(d,e,f)" → false (la 1re parenthèse se ferme avant la fin).
+function isSingleCall(text) {
+  const start = text.indexOf("(");
+  if (start === -1) return false;
+  let depth = 0;
+  let inQuotes = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    if (inQuotes) continue;
+    if (ch === "(") depth++;
+    if (ch === ")") {
+      depth--;
+      if (depth === 0) return i === text.length - 1;
+    }
+  }
+  return false;
+}
+
 // Retire les parenthèses englobantes équilibrées: "(IF(...))" → "IF(...)"
 function stripOuterParens(text) {
   let t = text.trim();
@@ -207,10 +227,14 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
   // Référence de cellule avec préfixe de feuille optionnel: $K$1416, K1416, 'Remplissage - Sit. Init.'!$F$18
   const CELL_RE = /^(?:'([^']+)'!)?\$?([A-Z]{1,3})\$?(\d+)$/i;
 
-  // Négation d'une condition feuille (les groupes OR ne sont pas négables → null)
+  // Négation d'une condition. Groupes : De Morgan (NOT(OR(a,b)) = AND(NOT a, NOT b)), null si une feuille n'est pas négable.
   const negateConditionNode = (node) => {
     if (!node) return null;
-    if (node.conditions) return null;
+    if (node.conditions) {
+      const negated = node.conditions.map(negateConditionNode);
+      if (negated.some((n) => !n)) return null;
+      return { operator: node.operator === "OR" ? "AND" : "OR", conditions: negated };
+    }
     if (node.type === "isEmpty") return { ...node, type: "notEmpty" };
     if (node.type === "notEmpty") return { ...node, type: "isEmpty" };
     return { ...node, negate: !node.negate };
@@ -221,6 +245,15 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
   // Les préfixes de feuille sont acceptés des deux côtés et posent excel_indicator_situation.
   const parseComparisonNode = (rawText) => {
     const text = stripOuterParens(rawText);
+
+    // OR(a, b, ...) / AND(a, b, ...) → groupe de conditions. null si un membre n'est pas compris.
+    const logicalMatch = text.match(/^(OR|AND)\s*\(([\s\S]*)\)$/i);
+    if (logicalMatch && isSingleCall(text)) {
+      const members = splitTopLevel(logicalMatch[2], [",", ";"]).map((m) => parseComparisonNode(m.trim()));
+      if (members.length === 0 || members.some((m) => !m)) return null;
+      if (members.length === 1) return members[0];
+      return { operator: logicalMatch[1].toUpperCase(), conditions: members };
+    }
 
     const isnumberMatch = text.match(/^ISNUMBER\s*\(\s*SEARCH\s*\(([\s\S]*)\)\s*\)$/i);
     if (isnumberMatch) {
@@ -324,8 +357,10 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
   const parseIfTree = (rawText) => {
     const text = stripOuterParens(rawText);
     const ifMatch = text.match(/^IF\s*\(([\s\S]*)\)$/i);
-    if (!ifMatch) return null;
+    if (!ifMatch || !isSingleCall(text)) return null;
     const args = splitTopLevel(ifMatch[1], [",", ";"]).map((a) => a.trim());
+    // IF sans branche "sinon" → Excel renvoie FALSE, soit 0 (jamais affiché par ce chemin)
+    if (args.length === 2) args.push("0");
     if (args.length !== 3) return null;
     const condition = parseComparisonNode(args[0]);
     if (!condition) return null;
@@ -515,6 +550,19 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
       if (refs.length > 0) return { _factorsToAnd: { refs: refs.map(({ refRowNum, situation }) => ({ refRowNum, situation })), conditions } };
       // Que des constantes non nulles → toujours affiché
       return { _alwaysVisible: true };
+    }
+  }
+
+  // CAS 1e: formule = un seul IF(...) structuré (IF imbriqués, OR/AND, IF sans branche "sinon").
+  // Tenté avant les cas regex (CAS 2 à 9) qui ne lisent que des fragments et perdent les IF imbriqués.
+  // Ex: =IF(OR(ISNUMBER(SEARCH("C1",$F$18)),ISNUMBER(SEARCH("C1",$F$17))),IF($F$1294=$H$1294,IF($F$1295=$H$1295,IF(ISNUMBER(SEARCH(T1300,$F$1296)),1,0),1),0))
+  // Si non compris (null), on laisse la main aux cas suivants (comportement historique préservé).
+  if (/^IF\s*\(/i.test(formulaContent)) {
+    const ifConditions = parseIfTree(formulaContent);
+    if (ifConditions) {
+      // Un seul groupe → on le remonte à la racine (même forme que le CAS 2 historique)
+      if (ifConditions.length === 1 && ifConditions[0].operator) return { operator: ifConditions[0].operator, conditions: ifConditions[0].conditions };
+      return { operator: ifConditions.length > 1 ? "AND" : undefined, conditions: ifConditions };
     }
   }
 
@@ -1479,7 +1527,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
         if (defaultValueRaw !== undefined && valueType) {
           if (valueType === "number") {
             const parsedValue = parseFloat(defaultValueRaw);
-            valueDefaultForSituation = { [valueType]: !isNaN(parsedValue) ? parsedValue : undefined };
+            // Excel stocke les % en fraction (0.36 pour 36%) : même conversion que l'API (parseDefaultValue / import)
+            const isPercent = String(row[8] ?? "").trim() === "%";
+            valueDefaultForSituation = { [valueType]: !isNaN(parsedValue) ? (isPercent ? parsedValue * 100 : parsedValue) : undefined };
           }
           if (valueType === "text") valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
           if (valueType === "radio") valueDefaultForSituation = { [valueType]: String(defaultValueRaw).trim() || undefined };
@@ -1745,6 +1795,8 @@ function formatIndicatorValue(indicatorValue) {
   if (val === undefined || val === null) return null;
   if (Array.isArray(val) && val.length === 0) return null;
   if (Array.isArray(val)) return val.join(", ");
+  // Excel stocke les % en fraction : même conversion que updateExcelCellsBatch côté API
+  if (indicatorValue.indicator_value_unit === "%" && typeof val === "number") return String(val / 100);
   return String(val);
 }
 
@@ -2276,7 +2328,7 @@ if (require.main === module) {
       await syncIndicatorsToExistingActions();
 
       // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {

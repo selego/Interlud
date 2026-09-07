@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import DebounceInput from "@/components/debounceInput"
+import NumberInput from "@/components/NumberInput"
 import Select from "@/components/Select"
 
 export default function IndicatorValueInput({ value, indicatorType, options, onChange, className = "" }) {
@@ -18,10 +19,9 @@ export default function IndicatorValueInput({ value, indicatorType, options, onC
 
   if (indicatorType === "number") {
     return (
-      <DebounceInput
-        type="number"
+      <NumberInput
         value={typeof value === "number" ? Math.round(value * 10) / 10 : value ?? ""}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={onChange}
         placeholder="Valeur numérique"
         debounce={1000}
         className={`text-gray-900 font-bold ${className}`}
