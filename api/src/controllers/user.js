@@ -489,11 +489,11 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
             <p style="font-size: 16px; margin-bottom: 20px;">Bonjour,</p>
 
             <p style="font-size: 16px; margin-bottom: 20px;">
-              Vous avez été invité à rejoindre <strong>${obj.economic_actor.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+              Vous avez été invité à rejoindre <strong>${obj.economic_actor.name}</strong> sur la plateforme <strong>EVALUD</strong>.
             </p>
 
             <p style="font-size: 16px; margin-bottom: 30px;">
-              InTerLUD+ est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
+              EVALUD est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
             </p>
 
             <!-- Bouton CTA -->
@@ -507,21 +507,21 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 
             <p style="font-size: 16px; margin-bottom: 0;">
               Cordialement,<br>
-              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+              <strong style="color: #2DAC6A;">L'équipe EVALUD</strong>
             </p>
           </div>
 
           <!-- Pied de page -->
           <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
             <p style="font-size: 12px; color: #768776; margin: 0;">
-              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+              © ${new Date().getFullYear()} EVALUD - Plateforme de pilotage territorial
             </p>
           </div>
       </div>
       `;
 
       await brevo.sendEmail(bodyHTML, {
-        subject: `Invitation à rejoindre ${obj.economic_actor.name} sur InTerLUD+`,
+        subject: `Invitation à rejoindre Evalud, du Programme InTerLUD+`,
         sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
         to: [{ email: obj.email }],
       });
@@ -613,11 +613,11 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
             <p style="font-size: 16px; margin-bottom: 20px;">Bonjour,</p>
 
             <p style="font-size: 16px; margin-bottom: 20px;">
-              Vous avez été invité à rejoindre <strong>${obj.collectivity.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+              Vous avez été invité à rejoindre <strong>${obj.collectivity.name}</strong> sur la plateforme <strong>EVALUD</strong>.
             </p>
             
             <p style="font-size: 16px; margin-bottom: 30px;">
-              InTerLUD+ est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
+              EVALUD est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
             </p>
 
             <!-- Bouton CTA -->
@@ -631,21 +631,21 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
             
             <p style="font-size: 16px; margin-bottom: 0;">
               Cordialement,<br>
-              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+              <strong style="color: #2DAC6A;">L'équipe EVALUD</strong>
             </p>
           </div>
           
           <!-- Pied de page -->
           <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
             <p style="font-size: 12px; color: #768776; margin: 0;">
-              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+              © ${new Date().getFullYear()} EVALUD - Plateforme de pilotage territorial
             </p>
           </div>
       </div>
       `;
 
     await brevo.sendEmail(bodyHTML, {
-      subject: `Invitation à rejoindre ${obj.collectivity.name} sur InTerLUD+`,
+      subject: `Invitation à rejoindre Evalud, du Programme InTerLUD+`,
       sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
       to: [{ email: obj.email }],
     });
@@ -673,7 +673,7 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
     user.invitation_sent_at = new Date();
     await user.save();
 
-    const collectivityName = user.collectivities?.[0]?.name || 'InTerLUD+';
+    const collectivityName = user.collectivities?.[0]?.name || 'EVALUD';
     let cta = `${config.APP_URL}/auth/invite?token=${token}`;
 
     const bodyHTML = `
@@ -695,7 +695,7 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
             </p>
             
             <p style="font-size: 16px; margin-bottom: 30px;">
-              InTerLUD+ est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
+              EVALUD est une plateforme collaborative qui vous permet de piloter et suivre vos actions territoriales en faveur de la transition écologique et économique.
             </p>
 
             <!-- Bouton CTA -->
@@ -709,21 +709,21 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
             
             <p style="font-size: 16px; margin-bottom: 0;">
               Cordialement,<br>
-              <strong style="color: #2DAC6A;">L'équipe InTerLUD+</strong>
+              <strong style="color: #2DAC6A;">L'équipe EVALUD</strong>
             </p>
           </div>
           
           <!-- Pied de page -->
           <div style="text-align: center; padding: 20px; background: #F5F5F5; border-radius: 0 0 8px 8px;">
             <p style="font-size: 12px; color: #768776; margin: 0;">
-              © ${new Date().getFullYear()} InTerLUD+ - Plateforme de pilotage territorial
+              © ${new Date().getFullYear()} EVALUD - Plateforme de pilotage territorial
             </p>
           </div>
       </div>
       `;
 
     await brevo.sendEmail(bodyHTML, {
-      subject: `Invitation à rejoindre ${collectivityName} sur InTerLUD+`,
+      subject: `Invitation à rejoindre Evalud, du Programme InTerLUD+`,
       sender: { name: 'InTerLUD+', email: 'interlud@selego.co' },
       to: [{ email: user.email }],
     });
