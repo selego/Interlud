@@ -9,7 +9,8 @@ import Loader from "@/components/loader"
 
 const Invite = () => {
   const [values, setValues] = useState({ email: "", password: "", name: "" })
-  const [errors, setErrors] = useState({ email: "", password: "", name: "" })
+  const [errors, setErrors] = useState({ email: "", password: "", name: "", acceptedTerms: "" })
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [invalidToken, setInvalidToken] = useState(false)
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
@@ -40,6 +41,7 @@ const Invite = () => {
     if (!values.email) return setErrors({ ...errors, email: "Ce champ est requis" })
     if (!values.password) return setErrors({ ...errors, password: "Ce champ est requis" })
     if (!values.name) return setErrors({ ...errors, name: "Ce champ est requis" })
+    if (!acceptedTerms) return setErrors({ ...errors, acceptedTerms: "Vous devez accepter les conditions d'utilisation" })
     if (!validator.isEmail(values?.email)) return toast.error("Adresse e-mail invalide")
 
     setLoading(true)
@@ -162,6 +164,33 @@ const Invite = () => {
                 required
               />
               {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
+            </div>
+
+            <div className="mb-6">
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 mr-3 h-4 w-4 border-gray-300 rounded focus:ring-primary-green"
+                  style={{ accentColor: "#2DAC6A" }}
+                  checked={acceptedTerms}
+                  onChange={(e) => {
+                    setAcceptedTerms(e.target.checked)
+                    if (errors.acceptedTerms) setErrors({ ...errors, acceptedTerms: "" })
+                  }}
+                />
+                <span className="text-sm text-gray-700">
+                  J'accepte les{" "}
+                  <Link to="/conditions" className="text-primary-green hover:underline" target="_blank">
+                    conditions d'utilisation
+                  </Link>
+                  {" "}et la{" "}
+                  <Link to="/politique" className="text-primary-green hover:underline" target="_blank">
+                    politique de confidentialité
+                  </Link>
+                  {" "}<span className="text-red-500">*</span>
+                </span>
+              </label>
+              {errors.acceptedTerms && <p className="text-sm text-red-500 mt-1 ml-7">{errors.acceptedTerms}</p>}
             </div>
 
             <button type="submit" className="button-primary w-full" disabled={loading}>
