@@ -34,7 +34,7 @@ const cursorAfter = (formatted, count) => {
 }
 
 // Champ numérique avec séparateur de milliers affiché pendant la saisie.
-// `value` est un nombre (ou ""), `onChange` reçoit un nombre après le délai de debounce.
+// `value` est un nombre (ou ""), `onChange` reçoit un nombre après le délai de debounce, ou null si le champ est vidé.
 export default function NumberInput({ value = "", onChange, placeholder = "", className = "", debounce = 400 }) {
   const [inputValue, setInputValue] = useState(fromValue(value))
   const inputRef = useRef(null)
@@ -46,8 +46,10 @@ export default function NumberInput({ value = "", onChange, placeholder = "", cl
 
   useEffect(() => {
     const raw = cleanRaw(inputValue)
-    const parsed = parse(raw)
-    if (Number.isNaN(parsed) || parsed === value) return
+    if (raw === "-") return
+    // Champ vide → null (et non 0 : Number("") vaut 0, ce qui remplissait les champs vides au montage)
+    const parsed = raw === "" ? null : parse(raw)
+    if (Number.isNaN(parsed) || parsed === (value === "" ? null : value)) return
     const timeoutId = setTimeout(() => onChange?.(parsed), debounce)
     return () => clearTimeout(timeoutId)
   }, [inputValue, debounce])
