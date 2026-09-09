@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { FiChevronDown, FiChevronRight } from "react-icons/fi"
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 
@@ -18,6 +18,11 @@ function RemainingLabel({ indicatorValues }) {
 
 export default function IndicatorsList({ displayedIndicatorValues, selectedCategory, onSelectCategory }) {
   const [openCategories, setOpenCategories] = useState(new Set())
+
+  // Ouvre la catégorie sélectionnée (ex: sélection par défaut au chargement)
+  useEffect(() => {
+    if (selectedCategory?.categoryName) setOpenCategories(prev => new Set(prev).add(selectedCategory.categoryName))
+  }, [selectedCategory?.categoryName])
 
   const categoriesGrouped = {}
   for (const iv of displayedIndicatorValues) {
@@ -45,14 +50,6 @@ export default function IndicatorsList({ displayedIndicatorValues, selectedCateg
 
   return (
     <div className="space-y-0.5">
-      <div
-        className={`flex items-center justify-between gap-2.5 px-2.5 py-[11px] rounded-[9px] cursor-pointer transition-colors ${!selectedCategory ? 'bg-[#F1F4F3]' : 'hover:bg-gray-50'}`}
-        onClick={() => onSelectCategory(null)}
-      >
-        <span className="text-[13.5px] font-semibold text-[#123314] leading-tight">Toutes les catégories</span>
-        <RemainingLabel indicatorValues={displayedIndicatorValues} />
-      </div>
-
       {Object.entries(categoriesGrouped).map(([categoryName, categoryData]) => {
         return (
           <div key={categoryName}>

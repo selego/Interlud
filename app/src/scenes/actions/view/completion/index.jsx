@@ -329,6 +329,12 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
     setSelectedCategory(null)
   }, [action?._id, activeSituation, activeYear])
 
+  // Sélectionne la première catégorie par défaut (plus de vue "Toutes les catégories")
+  useEffect(() => {
+    if (isLoading || selectedCategory || displayedIndicatorValues.length === 0) return
+    setSelectedCategory({ categoryName: displayedIndicatorValues[0].indicator_category_name, subCategoryName: displayedIndicatorValues[0].indicator_sub_category_name || undefined })
+  }, [isLoading, selectedCategory, displayedIndicatorValues.length])
+
   if (isLoading && !indicatorValues.length) return <Loader />
 
   if (!isLoading && tabTotal === 0) {
