@@ -7,7 +7,7 @@ const clientSecret = process.env.CLIENT_SECRET;
 const sharePointSiteName = 'selegobv';
 const masterExcelFileId = '01IBL4ADPZ6PQFBANVRVCIUFDTUJYQK277';
 // Agrégation résultats charte_V4.xlsx
-const aggregationTemplateFileId = '01IBL4ADJQVH5U3IOUZJEZ3A3VVPXX6YFK';
+const aggregationTemplateFileId = '01IBL4ADL22SG3FED7PBDKCYVASV4UFHVG';
 
 const WORKSHEETS = {
   init: 'Remplissage - Sit. Init.',
