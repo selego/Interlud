@@ -101,20 +101,17 @@ const shouldDisplayIndicator = (iv, yearMappings, conditionValuesMap, visited = 
   return evalNode(iv.display_condition);
 };
 
-// Résout dynamiquement indicator_value_possibilities pour les IVs qui pointent vers un autre indicateur.
-// Mute les IVs en place : remplace indicator_value_possibilities par la valeur courante de l'IV source.
-// Une IV source = même collectivity_id + même owner (+ economic_actor_id si applicable) + excel_indicator_id + situation.
-const resolveDynamicPossibilities = async (ivs) => {
+// Charge les IVs sources référencées par `getSource(iv)` = { excel_indicator_id, situation }.
+// Retourne une fonction (iv) => IV source ou null. Une IV source = même collectivity_id + même owner (+ economic_actor_id si applicable)
+// + excel_indicator_id + situation ; à égalité, on préfère l'IV de la même action (indicateurs d'action non partagés entre instances).
+const buildSourceLookup = async (refs, getSource) => {
   const IndicatorValue = require('../models/indicator_value');
-  const refs = ivs.filter((iv) => iv.indicator_value_possibilities_source?.excel_indicator_id && iv.indicator_value_possibilities_source?.situation);
-  if (refs.length === 0) return;
-
   const lookupGroups = new Map();
   for (const iv of refs) {
     const key = `${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}`;
     if (!lookupGroups.has(key)) lookupGroups.set(key, { collectivity_id: iv.collectivity_id, owner: iv.owner, economic_actor_id: iv.economic_actor_id, excel_ids: new Set(), situations: new Set() });
-    lookupGroups.get(key).excel_ids.add(iv.indicator_value_possibilities_source.excel_indicator_id);
-    lookupGroups.get(key).situations.add(iv.indicator_value_possibilities_source.situation);
+    lookupGroups.get(key).excel_ids.add(getSource(iv).excel_indicator_id);
+    lookupGroups.get(key).situations.add(getSource(iv).situation);
   }
 
   const sourceMap = new Map();
@@ -129,14 +126,28 @@ const resolveDynamicPossibilities = async (ivs) => {
     const sourceIVs = await IndicatorValue.find(query);
     for (const src of sourceIVs) {
       const mapKey = `${group.collectivity_id}|${group.owner}|${group.economic_actor_id || ''}|${src.indicator_excel_id}|${src.situation}`;
-      if (!sourceMap.has(mapKey)) sourceMap.set(mapKey, src);
+      if (!sourceMap.has(mapKey)) sourceMap.set(mapKey, []);
+      sourceMap.get(mapKey).push(src);
     }
   }
 
+  return (iv) => {
+    const src = getSource(iv);
+    const candidates = sourceMap.get(`${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}|${src.excel_indicator_id}|${src.situation}`);
+    if (!candidates) return null;
+    return candidates.find((c) => String(c.action_id) === String(iv.action_id)) || candidates[0];
+  };
+};
+
+// Résout dynamiquement indicator_value_possibilities pour les IVs qui pointent vers un autre indicateur.
+// Mute les IVs en place : remplace indicator_value_possibilities par la valeur courante de l'IV source.
+const resolveDynamicPossibilities = async (ivs) => {
+  const refs = ivs.filter((iv) => iv.indicator_value_possibilities_source?.excel_indicator_id && iv.indicator_value_possibilities_source?.situation);
+  if (refs.length === 0) return;
+  const findSource = await buildSourceLookup(refs, (iv) => iv.indicator_value_possibilities_source);
+
   for (const iv of refs) {
-    const src = iv.indicator_value_possibilities_source;
-    const mapKey = `${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}|${src.excel_indicator_id}|${src.situation}`;
-    const sourceIV = sourceMap.get(mapKey);
+    const sourceIV = findSource(iv);
     if (!sourceIV) continue;
     const val = sourceIV.value?.[sourceIV.indicator_type];
     if (Array.isArray(val)) iv.indicator_value_possibilities = val;
@@ -144,4 +155,45 @@ const resolveDynamicPossibilities = async (ivs) => {
   }
 };
 
-module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds };
+const isEmptyValue = (val) => val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0);
+
+// Résout dynamiquement value_default pour les IVs dont la colonne H du master référence la valeur d'un autre indicateur
+// (ex : défaut ref/prev/expost = valeur saisie en init). Mute les IVs en place.
+// Nombre : défaut = valeur × factor + offset, ou valeur × (1 + évolution/100) quand growth_source pointe vers un indicateur d'évolution en %.
+const resolveDynamicDefaults = async (ivs) => {
+  const refs = ivs.filter((iv) => iv.indicator_value_default_source?.excel_indicator_id && iv.indicator_value_default_source?.situation);
+  if (refs.length === 0) return;
+  const findSource = await buildSourceLookup(refs, (iv) => iv.indicator_value_default_source);
+  const growthRefs = refs.filter((iv) => iv.indicator_value_default_source.growth_source?.excel_indicator_id);
+  const findGrowth = growthRefs.length > 0 ? await buildSourceLookup(growthRefs, (iv) => iv.indicator_value_default_source.growth_source) : () => null;
+
+  for (const iv of refs) {
+    const sourceIV = findSource(iv);
+    if (!sourceIV) continue;
+    const val = sourceIV.value?.[sourceIV.indicator_type];
+    if (isEmptyValue(val)) {
+      iv.value_default = { [iv.indicator_type]: null };
+      continue;
+    }
+    // Types incompatibles entre source et cible : on garde le défaut statique
+    if (iv.indicator_type === 'number' && typeof val !== 'number') continue;
+    if (iv.indicator_type === 'checkbox' && !Array.isArray(val)) continue;
+    if ((iv.indicator_type === 'text' || iv.indicator_type === 'radio') && typeof val !== 'string') continue;
+    if (iv.indicator_type !== 'number') {
+      iv.value_default = { [iv.indicator_type]: val };
+      continue;
+    }
+
+    const { factor, offset, growth_source } = iv.indicator_value_default_source;
+    let result = val * (factor || 1) + (offset || 0);
+    if (growth_source?.excel_indicator_id) {
+      // Évolution non saisie → Excel lit 0 → défaut = valeur source
+      const growthIV = findGrowth(iv);
+      const growth = growthIV?.value?.number;
+      if (typeof growth === 'number') result = val * (1 + (isPercentUnit(growthIV.indicator_value_unit) ? growth / 100 : growth));
+    }
+    iv.value_default = { number: result };
+  }
+};
+
+module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, collectConditionExcelIds };

@@ -13,7 +13,7 @@ const { enqueueCellUpdate, enqueueAggregation, isSyncPending } = require('../ser
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
-const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, collectConditionExcelIds } = require('../utils/indicators');
+const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, collectConditionExcelIds } = require('../utils/indicators');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -265,6 +265,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     await resolveDynamicPossibilities([indicatorValue]);
+    await resolveDynamicDefaults([indicatorValue]);
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
@@ -535,6 +536,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       .skip(req.body.offset || 0)
       .limit(req.body.limit || 50);
     await resolveDynamicPossibilities(data);
+    await resolveDynamicDefaults(data);
     return res.status(200).send({ ok: true, data, total: await IndicatorValue.countDocuments(query) });
   } catch (error) {
     capture(error);
@@ -563,6 +565,7 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     if (req.body.year) query.year = req.body.year;
 
     const indicatorValues = await IndicatorValue.find(query);
+    await resolveDynamicDefaults(indicatorValues);
     // Build conditionValuesMap and yearMappings to filter by display_condition
     const condExcelIds = new Set();
     for (const iv of indicatorValues) collectConditionExcelIds(iv.display_condition, condExcelIds);

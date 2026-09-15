@@ -191,6 +191,65 @@ function parsePossibilitiesFormula(formula, currentSituation, rowToIndicatorMap,
   return null;
 }
 
+// Formule de la colonne H (valeur par défaut) référençant la VALEUR (colonne F) d'un autre indicateur → source dynamique résolue au fetch.
+// Formes gérées :
+//   ='Feuille'!F123          =F123          ='Feuille'!F123*0.8          ='Feuille'!F123+0.05  (offset ×100 si l'indicateur est en %)
+//   ='Feuille'!F123*(1+'Feuille2'!F456)     où F456 est un indicateur d'évolution en %  → growth_source
+//   =INDEX('Feuille'!$F$a:$F$b, R123*n±k)   où R est un compteur de catégorie (valeur constante lue dans la feuille courante)
+// Toute autre forme (VLOOKUP Parcs types, IF, référence à G ou H…) → null : le défaut reste statique.
+function parseDefaultSourceFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, targetUnit = null) {
+  if (!formula || typeof formula !== "string") return null;
+  const f = formula.trim();
+  if (!f.startsWith("=")) return null;
+  const content = f.substring(1).trim();
+
+  const resolveTarget = (sheetName, rowNum) => {
+    const sourceSituation = sheetName ? extractSituationFromSheetName(sheetName) : currentSituation;
+    if (!sourceSituation) return null;
+    const targetMap = sheetName ? allRowToIndicatorMaps?.get(sourceSituation) : rowToIndicatorMap;
+    const excelIndicatorId = targetMap?.get(rowNum);
+    if (!excelIndicatorId) return null;
+    return { excel_indicator_id: excelIndicatorId, situation: sourceSituation };
+  };
+
+  const refMatch = content.match(/^(?:['']([^'']+)['']!)?\$?F\$?(\d+)(?:\s*\*\s*(\d+(?:\.\d+)?))?(?:\s*([+-])\s*(\d+(?:\.\d+)?))?$/i);
+  if (refMatch) {
+    const target = resolveTarget(refMatch[1], parseInt(refMatch[2], 10));
+    if (!target) return null;
+    if (refMatch[3] && parseFloat(refMatch[3]) !== 1) target.factor = parseFloat(refMatch[3]);
+    if (refMatch[4]) {
+      // Excel stocke les % en fraction (0.05 pour 5 points) : même conversion que les valeurs
+      const offset = (refMatch[4] === "-" ? -1 : 1) * parseFloat(refMatch[5]) * (isPercentUnit(targetUnit) ? 100 : 1);
+      if (offset !== 0) target.offset = offset;
+    }
+    return target;
+  }
+
+  const growthMatch = content.match(/^(?:['']([^'']+)['']!)?\$?F\$?(\d+)\s*\*\s*\(\s*1\s*\+\s*(?:['']([^'']+)['']!)?\$?F\$?(\d+)\s*\)$/i);
+  if (growthMatch) {
+    const target = resolveTarget(growthMatch[1], parseInt(growthMatch[2], 10));
+    const growth = resolveTarget(growthMatch[3], parseInt(growthMatch[4], 10));
+    if (!target || !growth) return null;
+    target.growth_source = growth;
+    return target;
+  }
+
+  const indexMatch = content.match(/^INDEX\(\s*(?:['']([^'']+)['']!)?\$?F\$?(\d+)\s*:\s*\$?F\$?(\d+)\s*[,;]\s*(?:['']([^'']+)['']!)?\$?R\$?(\d+)\s*\*\s*(\d+)\s*(?:([+-])\s*(\d+))?\s*\)$/i);
+  if (indexMatch) {
+    // Le compteur R doit être dans la feuille courante
+    if (indexMatch[4] && extractSituationFromSheetName(indexMatch[4]) !== currentSituation) return null;
+    const rValue = parseFloat(getCellValue?.(parseInt(indexMatch[5], 10), "R"));
+    if (isNaN(rValue)) return null;
+    const position = rValue * parseInt(indexMatch[6], 10) + (indexMatch[7] ? (indexMatch[7] === "-" ? -1 : 1) * parseInt(indexMatch[8], 10) : 0);
+    const rangeStart = parseInt(indexMatch[2], 10);
+    const targetRow = rangeStart + position - 1;
+    if (targetRow < rangeStart || targetRow > parseInt(indexMatch[3], 10)) return null;
+    return resolveTarget(indexMatch[1], targetRow);
+  }
+
+  return null;
+}
+
 function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allRowToIndicatorMaps = null, allSheetsData = null) {
   if (!formula || typeof formula !== "string") return null;
 
@@ -1455,6 +1514,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     const logsToCreate = [];
     const indicatorValueUpdates = new Map(); // Map<indicator_id, updateData> pour mettre à jour les IndicatorValues
     const changedLinkIndicatorIds = []; // Indicateurs dont l'action liée a changé : leurs IVs sont invalides (mauvais rattachement) et seront supprimées puis recréées par la sync
+    let dynamicDefaultCount = 0;
+    const staticDefaultFormulas = []; // Formules colonne H non reconnues : le défaut reste statique
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -1470,6 +1531,13 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       // Si présente, on stocke la référence vers l'indicateur source pour résolution dynamique au fetch
       const possibilitiesFormula = formulaRows?.[i]?.[6];
       const possibilitiesSourceForSituation = parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps);
+
+      // Détecter une formule de défaut dynamique dans la cellule "valeur par défaut" (colonne H, index 7)
+      // Si elle référence la valeur d'un autre indicateur, on stocke la source pour résolution au fetch et on vide le défaut statique
+      const defaultFormula = formulaRows?.[i]?.[7];
+      const defaultSourceForSituation = parseDefaultSourceFormula(defaultFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, row[8]);
+      if (defaultSourceForSituation) dynamicDefaultCount++;
+      if (!defaultSourceForSituation && typeof defaultFormula === "string" && defaultFormula.startsWith("=")) staticDefaultFormulas.push(defaultFormula);
 
       // Récupérer la condition d'affichage résolue pour cette situation
       const rawCondition = resolvedConditions.get(excelRowNumber) || null;
@@ -1542,6 +1610,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             valueDefaultForSituation = { [valueType]: checkboxValues.length > 0 ? checkboxValues : undefined };
           }
         }
+        if (defaultSourceForSituation && valueType) valueDefaultForSituation = { [valueType]: null };
 
         if (existingIndicator) {
           const updatedValueDefault = { ...existingIndicator.value_default };
@@ -1561,6 +1630,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
 
           const updatedPossibilitiesSource = { ...(existingIndicator.value_possibilities_source || {}) };
           if (situation) updatedPossibilitiesSource[situation] = possibilitiesSourceForSituation || undefined;
+
+          const updatedDefaultSource = { ...(existingIndicator.value_default_source || {}) };
+          if (situation) updatedDefaultSource[situation] = defaultSourceForSituation || undefined;
 
           const newData = {
             indicator_category_id: category?._id,
@@ -1588,6 +1660,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             display_condition: updatedDisplayCondition,
             display_acteureco: updatedDisplayActeureco,
             value_possibilities_source: updatedPossibilitiesSource,
+            value_default_source: updatedDefaultSource,
           };
 
           const fieldsToLog = [
@@ -1664,6 +1737,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               indicator_type: newData.value_type,
               indicator_value_possibilities: newData.value_possibilities || [],
               indicator_value_possibilities_source: possibilitiesSourceForSituation || null,
+              indicator_value_default_source: defaultSourceForSituation || null,
+              // Défaut dynamique : le défaut statique figé à la création n'a plus de sens, il est résolu au fetch
+              ...(defaultSourceForSituation && newData.value_type ? { value_default: { [newData.value_type]: null } } : {}),
               indicator_category_id: newData.indicator_category_id?.toString(),
               indicator_category_name: newData.indicator_category_name,
               indicator_sub_category_id: newData.indicator_sub_category_id?.toString(),
@@ -1682,6 +1758,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const displayCondition = situation && display_condition_for_situation ? { [situation]: display_condition_for_situation } : undefined;
           const excelLineNumber = situation ? { [situation]: excelRowNumber } : undefined;
           const possibilitiesSource = situation && possibilitiesSourceForSituation ? { [situation]: possibilitiesSourceForSituation } : undefined;
+          const defaultSource = situation && defaultSourceForSituation ? { [situation]: defaultSourceForSituation } : undefined;
 
           const indicatorData = {
             indicator_category_id: category?._id,
@@ -1710,6 +1787,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             display_condition: displayCondition,
             display_acteureco: situation ? { [situation]: display_acteureco_for_situation } : undefined,
             value_possibilities_source: possibilitiesSource,
+            value_default_source: defaultSource,
           };
 
           indicators.push(indicatorData);
@@ -1739,6 +1817,13 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     }
     if (newSubCategories.size > 0) {
       console.log(`✅ ${newSubCategories.size} nouvelles sous-catégories créées`);
+    }
+
+    console.log(`📋 Défauts dynamiques (colonne H) : ${dynamicDefaultCount} résolus, ${staticDefaultFormulas.length} formules gardées en défaut statique`);
+    if (staticDefaultFormulas.length > 0) {
+      const shapes = new Map();
+      for (const f of staticDefaultFormulas) shapes.set(f.replace(/\d+/g, "N"), (shapes.get(f.replace(/\d+/g, "N")) || 0) + 1);
+      for (const [shape, count] of [...shapes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`   ⚠️ ${count} × ${shape.slice(0, 110)}`);
     }
 
     if (indicators.length > 0) {
@@ -1936,6 +2021,7 @@ async function syncIndicatorsToExistingActions() {
           is_primordial: indicator.is_primordial || false,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -2013,6 +2099,7 @@ async function syncIndicatorsToExistingActions() {
           is_primordial: indicator.is_primordial || false,
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
+          indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -2292,6 +2379,7 @@ if (require.main === module) {
             updateUnset[`excel_line_number.${sit}`] = "";
             updateUnset[`display_condition.${sit}`] = "";
             updateUnset[`value_default.${sit}`] = "";
+            updateUnset[`value_default_source.${sit}`] = "";
           }
 
           partialBulkOps.push({
@@ -2329,7 +2417,7 @@ if (require.main === module) {
       await syncIndicatorsToExistingActions();
 
       // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      await generateExcelForAllCollectivities();
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
@@ -2339,4 +2427,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities };
+module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities, parseDefaultSourceFormula };
