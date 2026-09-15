@@ -312,7 +312,16 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
 
     const siteId = await getSiteId();
 
-    const actions = await Action.find({ type: { $in: ['custom', 'reference'] }, collectivity_id: collectivity._id || collectivity.id }).sort({ name: 1 });
+    // Même filtrage owner que parent_action_aggregation : un acteur économique ne voit que ses actions,
+    // une collectivité ne voit que les siennes (les actions d'acteurs ont aussi un collectivity_id).
+    const query = { type: { $in: ['custom', 'reference'] }, collectivity_id: collectivity._id || collectivity.id };
+    if (req.user?.role === 'economic_actor') {
+      query.owner = 'economic_actor';
+      query.economic_actor_id = req.user.economic_actor_id;
+    } else {
+      query.owner = 'collectivity';
+    }
+    const actions = await Action.find(query).sort({ name: 1 });
     const configured = actions.filter((a) => a.excel_worksheetname && ACTION_EMISSIONS_RANGES[a.excel_worksheetname]);
 
     const emissionsByType = {};
