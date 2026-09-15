@@ -329,18 +329,24 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
 
     // Une seule entrée par action (worksheet) : on lit le bloc TOTAL (colonnes E→AQ, offset 4),
     // pas les instances individuelles. On dédoublonne donc par worksheet.
-    const cache = {};
+    // Une seule requête Graph pour tous les blocs : chaque appel sans session recharge le classeur
+    // côté SharePoint (~6s), donc on lit la plage complète puis on découpe en mémoire.
+    const starts = Object.values(ACTION_EMISSIONS_RANGES).map((r) => r.dataStartRow);
+    const firstRow = Math.min(...starts);
+    const lastRow = Math.max(...starts) + 40;
+    let allRows = [];
+    if (configured.length) {
+      const emResult = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${firstRow}:AQ${lastRow}')`);
+      allRows = emResult?.values || [];
+    }
+    const blockRows = (start) => allRows.slice(start - firstRow, start - firstRow + 41).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050);
+
     const seen = new Set();
     for (const action of configured) {
       const worksheetKey = action.excel_worksheetname;
       if (seen.has(worksheetKey)) continue;
       seen.add(worksheetKey);
-      if (!cache[worksheetKey]) {
-        const emStart = ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow;
-        const emResult = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${emStart}:AQ${emStart + 40}')`);
-        cache[worksheetKey] = (emResult?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050);
-      }
-      const agg = extractAggregation({ type: 'global' }, [], cache[worksheetKey]);
+      const agg = extractAggregation({ type: 'global' }, [], blockRows(ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow));
       for (const [emissionType, emData] of Object.entries(agg.emissions)) {
         emissionsByType[emissionType].push({ code: worksheetKey, name: action.action_parent_name || action.name, yearly: emData.yearlyData });
       }
