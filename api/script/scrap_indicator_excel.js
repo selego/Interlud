@@ -1653,8 +1653,10 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             value_default: updatedValueDefault,
             value_unit: row[8] || undefined,
             value_type: valueType,
-            linked_action_id: action?._id,
-            linked_action_name: action?.name,
+            // null explicite : avec undefined, Mongoose ignore le champ dans le $set et un indicateur détaché (colonne N vide)
+            // reste lié en base → détecté "changé d'action" à chaque passage, IVs supprimées puis recréées au mauvais endroit
+            linked_action_id: action?._id ?? null,
+            linked_action_name: action?.name ?? null,
             presence_in_excel: updatedPresenceInExcel,
             excel_line_number: updatedExcelLineNumber,
             display_condition: updatedDisplayCondition,
