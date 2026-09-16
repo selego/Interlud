@@ -196,4 +196,63 @@ const resolveDynamicDefaults = async (ivs) => {
   }
 };
 
-module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, collectConditionExcelIds };
+// Résout dynamiquement indicator_name pour les IVs dont le titre (colonne C du master) référence la valeur d'autres indicateurs
+// (ex : titre ref affichant la catégorie choisie en init). Mute les IVs en place : remplace les marqueurs {i} du template
+// par la valeur de la source i. Source vide → marqueur remplacé par '' (Excel afficherait 0). Source introuvable → titre inchangé.
+const formatNameValue = (val) => {
+  if (isEmptyValue(val)) return '';
+  if (Array.isArray(val)) return val.join(', ');
+  return String(val);
+};
+
+const resolveDynamicNames = async (ivs) => {
+  const refs = ivs.filter((iv) => iv.indicator_name_source?.template && iv.indicator_name_source.sources?.length > 0);
+  if (refs.length === 0) return;
+  // Une IV peut avoir plusieurs sources : on aplatit en pseudo-refs (contexte de l'IV + une source) pour réutiliser buildSourceLookup
+  const flat = [];
+  const pseudoRef = (iv, src) => ({ collectivity_id: iv.collectivity_id, owner: iv.owner, economic_actor_id: iv.economic_actor_id, action_id: iv.action_id, src });
+  for (const iv of refs) {
+    for (const src of iv.indicator_name_source.sources) {
+      if (!src?.excel_indicator_id || !src?.situation) continue;
+      flat.push(pseudoRef(iv, src));
+      if (src.factor_source?.excel_indicator_id && src.factor_source?.situation) flat.push(pseudoRef(iv, src.factor_source));
+    }
+  }
+  if (flat.length === 0) return;
+  const findSource = await buildSourceLookup(flat, (r) => r.src);
+  // Valeur numérique d'une IV pour un produit : les % sont stockés en points (36 pour 36 %) → fraction
+  const numericOperand = (sourceIV) => {
+    const val = sourceIV.value?.[sourceIV.indicator_type];
+    if (typeof val !== 'number') return null;
+    return isPercentUnit(sourceIV.indicator_value_unit) ? val / 100 : val;
+  };
+
+  for (const iv of refs) {
+    const values = [];
+    let missing = false;
+    for (const src of iv.indicator_name_source.sources) {
+      const sourceIV = findSource(pseudoRef(iv, src));
+      if (!sourceIV) {
+        missing = true;
+        break;
+      }
+      if (!src.factor_source?.excel_indicator_id) {
+        values.push(formatNameValue(sourceIV.value?.[sourceIV.indicator_type]));
+        continue;
+      }
+      const factorIV = findSource(pseudoRef(iv, src.factor_source));
+      if (!factorIV) {
+        missing = true;
+        break;
+      }
+      const a = numericOperand(sourceIV);
+      const b = numericOperand(factorIV);
+      // Un opérande non saisi → rien d'affiché (Excel afficherait 0)
+      values.push(a === null || b === null ? '' : String(Math.round(a * b * 100) / 100));
+    }
+    if (missing) continue;
+    iv.indicator_name = iv.indicator_name_source.template.replace(/\{(\d+)\}/g, (m, i) => (values[Number(i)] !== undefined ? values[Number(i)] : m));
+  }
+};
+
+module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, resolveDynamicNames, collectConditionExcelIds };

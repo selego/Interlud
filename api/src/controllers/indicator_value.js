@@ -13,7 +13,7 @@ const { enqueueCellUpdate, enqueueAggregation, isSyncPending } = require('../ser
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
-const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, collectConditionExcelIds } = require('../utils/indicators');
+const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, resolveDynamicNames, collectConditionExcelIds } = require('../utils/indicators');
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -266,6 +266,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
     await resolveDynamicPossibilities([indicatorValue]);
     await resolveDynamicDefaults([indicatorValue]);
+    await resolveDynamicNames([indicatorValue]);
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
     capture(error);
@@ -537,6 +538,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       .limit(req.body.limit || 50);
     await resolveDynamicPossibilities(data);
     await resolveDynamicDefaults(data);
+    await resolveDynamicNames(data);
     return res.status(200).send({ ok: true, data, total: await IndicatorValue.countDocuments(query) });
   } catch (error) {
     capture(error);

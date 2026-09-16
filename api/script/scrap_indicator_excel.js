@@ -250,6 +250,104 @@ function parseDefaultSourceFormula(formula, currentSituation, rowToIndicatorMap,
   return null;
 }
 
+// Formule de la colonne C (titre) concaténant du texte et des cellules → titre dynamique résolu au fetch.
+// Forme gérée : ="texte" & X123 & "texte" … où chaque cellule est :
+//   - une saisie F (même feuille ou 'Remplissage - Sit. X'!F123) → source dynamique {excel_indicator_id, situation}
+//   - une cellule auxiliaire (R, S, T…) dont la formule est une simple référence → suivie récursivement (S1721 → 'Init'!S1419 → F1419)
+//   - toute autre cellule (constante, INDEX 'Parcs types'…) → sa valeur calculée est figée dans le template (indépendante des saisies)
+//   - un produit de deux saisies F1418*F1422 → source avec factor_source (valeur × facteur, résolu au fetch)
+// Retourne { template, sources } avec des marqueurs {0}, {1}… ; null si aucune source (titre statique) ou forme non reconnue (SUM, IF…).
+// getCell(situation, rowNum, column) → { value, formula } | null
+function parseNameFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps, getCell) {
+  if (!formula || typeof formula !== "string") return null;
+  const f = formula.trim();
+  if (!f.startsWith("=")) return null;
+  const content = f.substring(1).trim();
+
+  // Tokenisation sur & hors guillemets
+  const tokens = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      current += ch;
+    } else if (ch === "&" && !inQuotes) {
+      tokens.push(current.trim());
+      current = "";
+    } else current += ch;
+  }
+  tokens.push(current.trim());
+  if (inQuotes) return null;
+
+  const cellRefRegex = /^(?:['']([^'']+)['']!)?\$?([A-Z]{1,2})\$?(\d+)$/i;
+  const productRegex = /^((?:[''](?:[^'']+)['']!)?\$?[A-Z]{1,2}\$?\d+)\s*\*\s*((?:[''](?:[^'']+)['']!)?\$?[A-Z]{1,2}\$?\d+)$/i;
+  const resolveSituation = (sheetName, fallback) => (sheetName ? extractSituationFromSheetName(sheetName) : fallback);
+
+  // Suit une cellule : retourne { source } (saisie F), { literal } (valeur figée) ou null (impossible à résoudre)
+  const resolveCell = (situation, column, rowNum, depth, visited) => {
+    const key = `${situation}|${column}|${rowNum}`;
+    if (depth > 5 || visited.has(key)) return null;
+    visited.add(key);
+    if (column === "F") {
+      const map = situation === currentSituation ? rowToIndicatorMap : allRowToIndicatorMaps?.get(situation);
+      const excelIndicatorId = map?.get(rowNum);
+      if (!excelIndicatorId) return null;
+      return { source: { excel_indicator_id: excelIndicatorId, situation } };
+    }
+    const cell = getCell?.(situation, rowNum, column);
+    if (!cell) return null;
+    const cellFormula = typeof cell.formula === "string" ? cell.formula.trim() : "";
+    if (cellFormula.startsWith("=")) {
+      const m = cellFormula.substring(1).trim().match(cellRefRegex);
+      if (m) {
+        const targetSituation = resolveSituation(m[1], situation);
+        // Référence simple vers une feuille de remplissage → on suit la chaîne
+        if (targetSituation) return resolveCell(targetSituation, m[2].toUpperCase(), parseInt(m[3], 10), depth + 1, visited);
+      }
+    }
+    // Constante ou formule indépendante des saisies (INDEX 'Parcs types'…) : valeur calculée figée
+    return { literal: cell.value === null || cell.value === undefined ? "" : String(cell.value) };
+  };
+
+  let template = "";
+  const sources = [];
+  for (const token of tokens) {
+    if (token === "") return null;
+    if (token.startsWith('"') && token.endsWith('"') && token.length >= 2) {
+      template += token.slice(1, -1).replace(/""/g, '"');
+      continue;
+    }
+    // Produit de deux cellules : chaque opérande doit mener à une saisie F
+    const productMatch = token.match(productRegex);
+    if (productMatch) {
+      const operands = [productMatch[1], productMatch[2]].map((ref) => {
+        const om = ref.match(cellRefRegex);
+        const situation = om && resolveSituation(om[1], currentSituation);
+        return situation ? resolveCell(situation, om[2].toUpperCase(), parseInt(om[3], 10), 0, new Set()) : null;
+      });
+      if (!operands[0]?.source || !operands[1]?.source) return null;
+      template += `{${sources.length}}`;
+      sources.push({ ...operands[0].source, factor_source: operands[1].source });
+      continue;
+    }
+    const m = token.match(cellRefRegex);
+    if (!m) return null;
+    const situation = resolveSituation(m[1], currentSituation);
+    if (!situation) return null;
+    const resolved = resolveCell(situation, m[2].toUpperCase(), parseInt(m[3], 10), 0, new Set());
+    if (!resolved) return null;
+    if (resolved.literal !== undefined) template += resolved.literal;
+    if (resolved.source) {
+      template += `{${sources.length}}`;
+      sources.push(resolved.source);
+    }
+  }
+  if (sources.length === 0) return null;
+  return { template, sources };
+}
+
 function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allRowToIndicatorMaps = null, allSheetsData = null) {
   if (!formula || typeof formula !== "string") return null;
 
@@ -1433,6 +1531,17 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       return dataRows[rowIndex][colIndex];
     };
 
+    // Lit valeur + formule d'une cellule de n'importe quelle feuille de remplissage (titres dynamiques inter-feuilles)
+    const getSheetCell = (sit, rowNum, column) => {
+      const sheet = sit === situation && !allSheetsData?.has(sit) ? { dataRows, formulaRows, startRow } : allSheetsData?.get(sit);
+      if (!sheet) return null;
+      const rowIndex = rowNum - sheet.startRow - 1;
+      if (rowIndex < 0 || rowIndex >= sheet.dataRows.length) return null;
+      const colIndex = columnToIndex[column.toUpperCase()];
+      if (colIndex === undefined) return null;
+      return { value: sheet.dataRows[rowIndex][colIndex], formula: sheet.formulaRows?.[rowIndex]?.[colIndex] };
+    };
+
     // Construire les maps pour toutes les feuilles (pour résoudre les références inter-feuilles)
     const allRowToIndicatorMaps = new Map();
     const allFormulasMapsBySituation = new Map();
@@ -1516,6 +1625,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     const changedLinkIndicatorIds = []; // Indicateurs dont l'action liée a changé : leurs IVs sont invalides (mauvais rattachement) et seront supprimées puis recréées par la sync
     let dynamicDefaultCount = 0;
     const staticDefaultFormulas = []; // Formules colonne H non reconnues : le défaut reste statique
+    let dynamicNameCount = 0;
+    const staticNameFormulas = []; // Formules colonne C référençant une saisie F mais non reconnues : le titre reste statique
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -1538,6 +1649,12 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       const defaultSourceForSituation = parseDefaultSourceFormula(defaultFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, row[8]);
       if (defaultSourceForSituation) dynamicDefaultCount++;
       if (!defaultSourceForSituation && typeof defaultFormula === "string" && defaultFormula.startsWith("=")) staticDefaultFormulas.push(defaultFormula);
+
+      // Détecter un titre dynamique dans la cellule "titre" (colonne C, index 2) : texte concaténé avec la valeur d'autres indicateurs
+      const nameFormula = formulaRows?.[i]?.[2];
+      const nameSourceForSituation = parseNameFormula(nameFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getSheetCell);
+      if (nameSourceForSituation) dynamicNameCount++;
+      if (!nameSourceForSituation && typeof nameFormula === "string" && /(^|[^A-Z])\$?F\$?\d+/.test(nameFormula.replace(/"[^"]*"/g, ""))) staticNameFormulas.push(nameFormula);
 
       // Récupérer la condition d'affichage résolue pour cette situation
       const rawCondition = resolvedConditions.get(excelRowNumber) || null;
@@ -1634,6 +1751,9 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const updatedDefaultSource = { ...(existingIndicator.value_default_source || {}) };
           if (situation) updatedDefaultSource[situation] = defaultSourceForSituation || undefined;
 
+          const updatedNameSource = { ...(existingIndicator.name_source || {}) };
+          if (situation) updatedNameSource[situation] = nameSourceForSituation || undefined;
+
           const newData = {
             indicator_category_id: category?._id,
             indicator_category_name: category?.name,
@@ -1663,6 +1783,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             display_acteureco: updatedDisplayActeureco,
             value_possibilities_source: updatedPossibilitiesSource,
             value_default_source: updatedDefaultSource,
+            name_source: updatedNameSource,
           };
 
           const fieldsToLog = [
@@ -1740,6 +1861,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
               indicator_value_possibilities: newData.value_possibilities || [],
               indicator_value_possibilities_source: possibilitiesSourceForSituation || null,
               indicator_value_default_source: defaultSourceForSituation || null,
+              indicator_name_source: nameSourceForSituation || null,
               // Défaut dynamique : le défaut statique figé à la création n'a plus de sens, il est résolu au fetch
               ...(defaultSourceForSituation && newData.value_type ? { value_default: { [newData.value_type]: null } } : {}),
               indicator_category_id: newData.indicator_category_id?.toString(),
@@ -1761,6 +1883,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
           const excelLineNumber = situation ? { [situation]: excelRowNumber } : undefined;
           const possibilitiesSource = situation && possibilitiesSourceForSituation ? { [situation]: possibilitiesSourceForSituation } : undefined;
           const defaultSource = situation && defaultSourceForSituation ? { [situation]: defaultSourceForSituation } : undefined;
+          const nameSource = situation && nameSourceForSituation ? { [situation]: nameSourceForSituation } : undefined;
 
           const indicatorData = {
             indicator_category_id: category?._id,
@@ -1790,6 +1913,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             display_acteureco: situation ? { [situation]: display_acteureco_for_situation } : undefined,
             value_possibilities_source: possibilitiesSource,
             value_default_source: defaultSource,
+            name_source: nameSource,
           };
 
           indicators.push(indicatorData);
@@ -1825,6 +1949,13 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     if (staticDefaultFormulas.length > 0) {
       const shapes = new Map();
       for (const f of staticDefaultFormulas) shapes.set(f.replace(/\d+/g, "N"), (shapes.get(f.replace(/\d+/g, "N")) || 0) + 1);
+      for (const [shape, count] of [...shapes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`   ⚠️ ${count} × ${shape.slice(0, 110)}`);
+    }
+
+    console.log(`📋 Titres dynamiques (colonne C) : ${dynamicNameCount} résolus, ${staticNameFormulas.length} formules référençant une saisie gardées en titre statique`);
+    if (staticNameFormulas.length > 0) {
+      const shapes = new Map();
+      for (const f of staticNameFormulas) shapes.set(f.replace(/"[^"]*"/g, '"…"').replace(/\d+/g, "N"), (shapes.get(f.replace(/"[^"]*"/g, '"…"').replace(/\d+/g, "N")) || 0) + 1);
       for (const [shape, count] of [...shapes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`   ⚠️ ${count} × ${shape.slice(0, 110)}`);
     }
 
@@ -2024,6 +2155,7 @@ async function syncIndicatorsToExistingActions() {
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
+          indicator_name_source: indicator.name_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -2102,6 +2234,7 @@ async function syncIndicatorsToExistingActions() {
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
+          indicator_name_source: indicator.name_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
           indicator_sub_category_id: indicator.indicator_sub_category_id,
@@ -2429,4 +2562,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities, parseDefaultSourceFormula };
+module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities, parseDefaultSourceFormula, parseNameFormula };

@@ -35,6 +35,22 @@ const Schema = new mongoose.Schema(
     economic_actor_name: { type: String, trim: true },
     indicator_id: { type: String, trim: true },
     indicator_name: { type: String, trim: true },
+    // Si défini, indicator_name est résolu dynamiquement au fetch : les marqueurs {0}, {1}… du template
+    // sont remplacés par la valeur des IVs sources (ex : titre ref affichant la catégorie choisie en init)
+    indicator_name_source: {
+      template: { type: String },
+      sources: [
+        {
+          excel_indicator_id: { type: String },
+          situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+          // Si défini, la valeur affichée = valeur × valeur du facteur (titre "Sur les N×P colis…") ; les opérandes en % sont divisés par 100
+          factor_source: {
+            excel_indicator_id: { type: String },
+            situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+          },
+        },
+      ],
+    },
     indicator_description: { type: String, trim: true },
     indicator_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
     indicator_value_possibilities: { type: Array, default: [] },

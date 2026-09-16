@@ -35,9 +35,27 @@ const defaultSource = {
   },
 };
 
+// Titre dynamique : la colonne C du master concatène du texte et la valeur (colonne F) d'autres indicateurs.
+// template contient des marqueurs {0}, {1}… remplacés au fetch par la valeur des sources correspondantes.
+const nameSource = {
+  template: { type: String },
+  sources: [
+    {
+      excel_indicator_id: { type: String },
+      situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+      // Si défini, la valeur affichée = valeur × valeur du facteur (titre "Sur les N×P colis…") ; les opérandes en % sont divisés par 100
+      factor_source: {
+        excel_indicator_id: { type: String },
+        situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+      },
+    },
+  ],
+};
+
 const Schema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
+    name_source: { init: nameSource, ref: nameSource, prev: nameSource, expost: nameSource },
     description: { type: String, trim: true },
     value_unit: { type: String, trim: true },
     value_type: { type: String, enum: ['number', 'text', 'radio', 'checkbox'], trim: true },
