@@ -24,6 +24,7 @@ import Faq from "@/scenes/faq"
 import Contact from "@/scenes/contact"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
+import RgpdModal from "@/components/RgpdModal"
 
 import useStore from "@/services/store"
 import api from "@/services/api"
@@ -185,6 +186,7 @@ const UserLayout = () => {
 
   return (
     <Layout>
+      <RgpdModal />
       <Outlet />
     </Layout>
   )

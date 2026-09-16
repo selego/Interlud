@@ -30,6 +30,7 @@ const Schema = new mongoose.Schema(
     last_login_at: { type: Date },
     notifications_email: { type: Boolean, default: true },
     notifications_push: { type: Boolean, default: true },
+    rgpd_accepted_at: { type: Date },
   },
   { timestamps: true },
 );

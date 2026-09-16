@@ -2,14 +2,11 @@ const express = require('express');
 const passport = require('passport');
 const router = express.Router();
 const { capture } = require('../services/sentry');
-const { graphFetch, getSiteId, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
+const { graphFetchWithSession, getSiteId, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
 const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
-
-// Old ranges kept for action-contribution endpoint
-const AGGREGATION_WORKSHEET = 'Agrégation';
 
 const GAINS_WORKSHEET = '4. Gains par action';
 const EMISSIONS_WORKSHEET = '3. Émissions par action';
@@ -63,138 +60,6 @@ const parseNumber = (val) => {
   }
   return 0;
 };
-
-router.post('/global-gains', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const { collectivity } = req.body;
-    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
-
-    let aggregationFileId = null;
-    if (req.user?.role === 'economic_actor') {
-      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
-      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
-      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
-    }
-    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
-      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
-    }
-    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
-
-    const siteId = await getSiteId();
-
-    const result = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='B7:K39')`);
-    const allValues = result.values || [];
-
-    const gainsPrevisionnels = allValues.slice(6, 13).map((row) => row.slice(0, 9));
-    const gainsReels = allValues.slice(16, 23).map((row) => row.slice(0, 10));
-    const ecart = allValues.slice(26, 33).map((row) => row.slice(1, 4));
-
-    const yearStartIndex = gainsPrevisionnels[0]?.findIndex((h) => /^\d{4}$/.test(String(h)));
-    const years = yearStartIndex >= 0 && gainsPrevisionnels[0] ? gainsPrevisionnels[0].slice(yearStartIndex) : [];
-
-    const getIndicatorData = (indicatorIndex) => {
-      const prevRow = gainsPrevisionnels[indicatorIndex + 1] || [];
-      const reelRow = gainsReels[indicatorIndex + 1] || [];
-      const ecartRow = ecart[indicatorIndex + 1] || [];
-
-      const evolRelIndex = gainsPrevisionnels[0]?.findIndex((h) => String(h).toLowerCase().includes('evolution relative') || String(h).toLowerCase().includes('évolution relative'));
-      const evolCumIndex = gainsPrevisionnels[0]?.findIndex((h) => String(h).toLowerCase().includes('evolution cumulée') || String(h).toLowerCase().includes('évolution cumulée') || String(h).toLowerCase().includes('evolution cumul'));
-
-      const relIdx = evolRelIndex >= 0 ? evolRelIndex : 2;
-      const cumIdx = evolCumIndex >= 0 ? evolCumIndex : 3;
-      const yearIdx = yearStartIndex >= 0 ? yearStartIndex : 4;
-
-      return {
-        label: INDICATORS_CONFIG[indicatorIndex]?.label || prevRow[0],
-        unit: INDICATORS_CONFIG[indicatorIndex]?.unit,
-        evolutionRelativePrev: Math.abs(parseNumber(prevRow[relIdx])),
-        evolutionRelativeReel: Math.abs(parseNumber(reelRow[relIdx])),
-        evolutionCumuleePrev: Math.abs(parseNumber(prevRow[cumIdx])),
-        evolutionCumuleeReel: Math.abs(parseNumber(reelRow[cumIdx])),
-        yearlyPrev: years.map((year, i) => ({ year: String(year), value: Math.abs(parseNumber(prevRow[yearIdx + i])) })),
-        yearlyReel: years.map((year, i) => ({ year: String(year), value: Math.abs(parseNumber(reelRow[yearIdx + i])) })),
-        ecartAbsolu: parseNumber(ecartRow[1]),
-        ecartRelatif: parseNumber(ecartRow[2]),
-      };
-    };
-
-    const indicators = [0, 1, 2, 3, 4, 5].map((index) => getIndicatorData(index));
-    const gesData = indicators[0];
-    const energieData = indicators[5];
-    const avancementTrajectoire = gesData.evolutionCumuleePrev > 0 ? (gesData.evolutionCumuleeReel / gesData.evolutionCumuleePrev) * 100 : 0;
-
-    res.json({ ok: true, data: { gesData, energieData, avancementTrajectoire, indicators } });
-  } catch (error) {
-    capture(error);
-    res.json({ ok: false, data: { error: error.message } });
-  }
-});
-
-router.post('/action-contribution', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
-  try {
-    const { collectivity } = req.body;
-    if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
-
-    let aggregationFileId = null;
-    if (req.user?.role === 'economic_actor') {
-      const economicActor = await EconomicActor.findById(req.user.economic_actor_id);
-      if (!economicActor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      const actorCollectivity = economicActor.collectivities.find((c) => c.id === (collectivity._id || collectivity.id));
-      if (!actorCollectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      aggregationFileId = actorCollectivity.aggregation_excel_file_id;
-    }
-    if (!aggregationFileId && req.user?.role !== 'economic_actor') {
-      aggregationFileId = (await Collectivity.findById(collectivity._id || collectivity.id))?.aggregation_excel_file_id;
-    }
-    if (!aggregationFileId) return res.json({ ok: false, data: { error: 'No aggregation Excel file configured' } });
-
-    const siteId = await getSiteId();
-    const result = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(AGGREGATION_WORKSHEET)}/range(address='C40:H300')`);
-
-    const values = result.values || [];
-    const actionGains = [];
-
-    const targetActions = ['B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C9'];
-
-    for (let i = 0; i < values.length; i++) {
-      const row = values[i];
-      if (!row || !row[0]) continue;
-
-      const potentialActionName = String(row[0]).trim();
-
-      if (targetActions.includes(potentialActionName)) {
-        if (i + 4 < values.length) {
-          const gesRow = values[i + 4];
-          if (String(gesRow[0]).trim() !== 'GES') continue;
-          const gesValue =
-            parseFloat(
-              String(gesRow[3] || 0)
-                .replace(/tCO2e/gi, '')
-                .replace(/\s/g, '')
-                .replace(',', '.'),
-            ) || 0;
-
-          const gesPrev =
-            parseFloat(
-              String(gesRow[1] || 0)
-                .replace(/tCO2e/gi, '')
-                .replace(/\s/g, '')
-                .replace(',', '.'),
-            ) || 0;
-          actionGains.push({ action: potentialActionName, ges: gesValue, ges_prev: gesPrev, type: gesValue <= 0 ? 'gain' : 'degradation' });
-        }
-      }
-    }
-
-    actionGains.sort((a, b) => Math.abs(b.ges) - Math.abs(a.ges));
-    res.json({ ok: true, data: actionGains });
-  } catch (error) {
-    capture(error);
-    res.json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
-  }
-});
 
 const extractAggregation = (action, gainsYearRows, emYearRows) => {
   let processedData = { score: 0, gains: {}, emissions: {} };
@@ -278,8 +143,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     const endCol = action.type === 'global' ? 'AS' : INSTANCE_END_COL[action.instance_number];
 
     const [gainsResult, emResult] = await Promise.all([
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:${endCol}${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:${endCol}${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
     ]);
 
     const toYearRows = (r) => (r?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050 && (!date_start || year >= new Date(date_start).getFullYear()) && (!date_end || year <= new Date(date_end).getFullYear()));
@@ -336,7 +201,7 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
     const lastRow = Math.max(...starts) + 40;
     let allRows = [];
     if (configured.length) {
-      const emResult = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${firstRow}:AQ${lastRow}')`);
+      const emResult = await graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${firstRow}:AQ${lastRow}')`);
       allRows = emResult?.values || [];
     }
     const blockRows = (start) => allRows.slice(start - firstRow, start - firstRow + 41).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050);
@@ -392,8 +257,8 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     const siteId = await getSiteId();
 
     const [gainsResult, emResult] = await Promise.all([
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
     ]);
 
     const toYearRows = (r) => (r?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050 && (!date_start || year >= new Date(date_start).getFullYear()) && (!date_end || year <= new Date(date_end).getFullYear()));
@@ -448,8 +313,8 @@ router.post('/compare_actions', passport.authenticate(['admin', 'user'], { sessi
     const siteId = await getSiteId();
 
     const [gainsResult, emResult] = await Promise.all([
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
-      graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(GAINS_WORKSHEET)}/range(address='A${ACTION_GAINS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_GAINS_RANGES[worksheetKey].dataStartRow + 40}')`),
+      graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(EMISSIONS_WORKSHEET)}/range(address='A${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow}:FU${ACTION_EMISSIONS_RANGES[worksheetKey].dataStartRow + 40}')`),
     ]);
 
     const toYearRows = (r) => (r?.values || []).map((row, i) => ({ year: 2010 + i, row })).filter(({ year }) => year <= 2050 && (!date_start || year >= new Date(date_start).getFullYear()) && (!date_end || year <= new Date(date_end).getFullYear()));

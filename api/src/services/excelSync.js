@@ -1,12 +1,12 @@
 const Action = require('../models/action');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { graphFetch, getSiteId, updateExcelCellsBatch, calculateWorkbook, createWorkbookSession, closeWorkbookSession } = require('./microsoftGraph');
+const { getSiteId, updateExcelCellsBatch, graphFetchWithSession } = require('./microsoftGraph');
 const { capture } = require('./sentry');
 
 // Synchro Excel différée : les modifs d'indicateurs sont accumulées puis écrites en une passe,
 // pour éviter de rejouer tout le pipeline SharePoint (écriture cellule + recalcul + agrégation) à chaque champ modifié.
-const DEBOUNCE_MS = 5000;
+const DEBOUNCE_MS = 2000;
 // Plafond : si les modifs s'enchaînent sans pause, on flush quand même au bout de ce délai
 const MAX_WAIT_MS = 30000;
 
@@ -85,7 +85,7 @@ const writeAggregationTargets = async (action, targets) => {
   const siteId = await getSiteId();
   const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
   // IDs en colonne D — plage fixe pour ne pas dépendre du point de départ de la usedRange
-  const inputResult = await graphFetch(`${inputSheetPath}/range(address='D1:D10000')`);
+  const inputResult = await graphFetchWithSession(aggregationFileId, `${inputSheetPath}/range(address='D1:D10000')`);
   const inputRows = inputResult.values || [];
   const idRowMap = new Map();
   for (let i = 0; i < inputRows.length; i++) {
@@ -99,21 +99,18 @@ const writeAggregationTargets = async (action, targets) => {
     targetsByFile.get(t.sourceFileId).push(t);
   }
 
-  // Recalcul + lecture de la feuille Agrégation de chaque fichier source, en parallèle et sous session workbook
-  // (la session garantit que la lecture voit l'état recalculé, et évite le coût d'une session éphémère par appel)
+  // Recalcul + lecture de la feuille Agrégation de chaque fichier source, en parallèle et sous session
+  // workbook cachée (la session garantit que la lecture voit l'état recalculé, et sa réutilisation
+  // entre flushs évite le rechargement à froid du classeur par SharePoint à chaque appel)
   const rowsByFile = new Map();
   await Promise.all(
     [...targetsByFile.keys()].map(async (sourceFileId) => {
-      let sessionId = null;
       try {
-        sessionId = await createWorkbookSession(sourceFileId);
-        await calculateWorkbook(sourceFileId, sessionId).catch(() => {});
-        const result = await graphFetch(`/sites/${siteId}/drive/items/${sourceFileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange`, sessionId ? { headers: { 'workbook-session-id': sessionId } } : {});
+        await graphFetchWithSession(sourceFileId, `/sites/${siteId}/drive/items/${sourceFileId}/workbook/application/calculate`, { method: 'POST', body: JSON.stringify({ calculationType: 'Recalculate' }) }).catch(() => {});
+        const result = await graphFetchWithSession(sourceFileId, `/sites/${siteId}/drive/items/${sourceFileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange`);
         rowsByFile.set(sourceFileId, result.values || []);
       } catch (e) {
         capture(e);
-      } finally {
-        await closeWorkbookSession(sourceFileId, sessionId).catch(() => {});
       }
     }),
   );
@@ -136,21 +133,19 @@ const writeAggregationTargets = async (action, targets) => {
   }
   if (cellWrites.size === 0) return;
 
-  // Écriture par plages de lignes consécutives : un PATCH par plage au lieu d'un par cellule
+  // Un seul PATCH couvrant toute la plage min→max : chaque écriture déclenche un recalcul complet du
+  // classeur (~1.8s mesuré), et les cellules cibles sont dispersées (une ligne par type d'émission,
+  // espacées de 164) — 6 à 18 PATCH séparés coûtaient 11 à 33s, la plage entière ~4.5s.
+  // Les cellules intermédiaires sont relues et réécrites à l'identique via `formulas` (préserve une
+  // éventuelle formule ; pour une constante, formulas == valeur).
   const agregCol = getAggregationCol(action.instance_number);
-  const runs = [];
-  for (const rowNum of [...cellWrites.keys()].sort((a, b) => a - b)) {
-    if (runs.length > 0 && rowNum === runs[runs.length - 1].end + 1) {
-      runs[runs.length - 1].end = rowNum;
-      continue;
-    }
-    runs.push({ start: rowNum, end: rowNum });
-  }
-  for (const run of runs) {
-    const values = [];
-    for (let r = run.start; r <= run.end; r++) values.push([cellWrites.get(r)]);
-    await graphFetch(`${inputSheetPath}/range(address='${agregCol}${run.start}:${agregCol}${run.end}')`, { method: 'PATCH', body: JSON.stringify({ values }) });
-  }
+  const minRow = Math.min(...cellWrites.keys());
+  const maxRow = Math.max(...cellWrites.keys());
+  const rangeAddress = `${agregCol}${minRow}:${agregCol}${maxRow}`;
+  const current = await graphFetchWithSession(aggregationFileId, `${inputSheetPath}/range(address='${rangeAddress}')?$select=formulas`);
+  const formulas = [];
+  for (let r = minRow; r <= maxRow; r++) formulas.push([cellWrites.has(r) ? cellWrites.get(r) : (current.formulas?.[r - minRow]?.[0] ?? '')]);
+  await graphFetchWithSession(aggregationFileId, `${inputSheetPath}/range(address='${rangeAddress}')`, { method: 'PATCH', body: JSON.stringify({ formulas }) });
 };
 
 let pendingCells = new Map(); // `${fileId}|${situation}` -> Map<excelIndicatorId, { excel_indicator_id, value, unit }>
@@ -178,6 +173,7 @@ const startFlush = () => {
 };
 
 const flush = async (cells, aggregations) => {
+  const startedAt = Date.now();
   const updatesByFile = new Map();
   for (const [key, updates] of cells) {
     const [fileId, situation] = key.split('|');
@@ -187,16 +183,8 @@ const flush = async (cells, aggregations) => {
 
   await Promise.all(
     [...updatesByFile.entries()].map(async ([fileId, groups]) => {
-      let sessionId = null;
-      try {
-        sessionId = await createWorkbookSession(fileId);
-        // catch par groupe : l'échec d'une situation ne doit pas sauter les autres
-        for (const group of groups) await updateExcelCellsBatch(fileId, group.updates, group.situation, sessionId).catch(capture);
-      } catch (e) {
-        capture(e);
-      } finally {
-        await closeWorkbookSession(fileId, sessionId).catch(() => {});
-      }
+      // Session cachée gérée par updateExcelCellsBatch — catch par groupe : l'échec d'une situation ne doit pas sauter les autres
+      for (const group of groups) await updateExcelCellsBatch(fileId, group.updates, group.situation).catch(capture);
     }),
   );
 
@@ -213,6 +201,7 @@ const flush = async (cells, aggregations) => {
       if (![...pendingAggregations.keys()].some((k) => k.startsWith(`${agg.actionId}|`))) pendingSyncActionIds.delete(agg.actionId);
     }
   }
+  console.log(`[excelSync] flush terminé en ${Date.now() - startedAt}ms — ${updatesByFile.size} fichier(s) action, ${aggregations.size} agrégation(s)`);
 };
 
 // Enregistre une valeur de cellule à écrire dans un fichier Excel d'action (colonne F de la feuille de la situation).

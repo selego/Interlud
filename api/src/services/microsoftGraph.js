@@ -123,6 +123,80 @@ async function closeWorkbookSession(fileId, sessionId) {
 
 const sessionHeaders = (sessionId) => (sessionId ? { headers: { 'workbook-session-id': sessionId } } : {});
 
+// --- Cache de sessions workbook ---
+// Chaque appel Graph sans session force SharePoint à recharger le classeur à froid (~6s mesurés,
+// contre ~0.3s sous session). On garde donc une session persistante par fichier, maintenue en vie
+// par un ping léger (SharePoint les expire après ~5 min d'inactivité) et fermée après une longue
+// période sans usage réel. Cache en mémoire process : suppose une instance API unique (comme le debounce excelSync).
+const SESSION_KEEPALIVE_MS = 4 * 60 * 1000;
+const SESSION_IDLE_EVICT_MS = 30 * 60 * 1000;
+const MAX_CACHED_SESSIONS = 30;
+const _sessions = new Map(); // fileId -> { promise: Promise<sessionId|null>, lastUsedAt }
+
+const evictCachedSession = (fileId) => {
+  const entry = _sessions.get(fileId);
+  if (!entry) return;
+  _sessions.delete(fileId);
+  entry.promise.then((sessionId) => closeWorkbookSession(fileId, sessionId)).catch(() => {});
+};
+
+// La promesse est stockée dès le premier appel pour dédupliquer les créations concurrentes.
+// En cas d'échec de création, résout null : l'appelant retombe sur un appel sans session (lent mais fonctionnel).
+const getCachedSession = (fileId) => {
+  const cached = _sessions.get(fileId);
+  if (cached) {
+    cached.lastUsedAt = Date.now();
+    return cached.promise;
+  }
+  if (_sessions.size >= MAX_CACHED_SESSIONS) {
+    const oldest = [..._sessions.entries()].sort((a, b) => a[1].lastUsedAt - b[1].lastUsedAt)[0];
+    evictCachedSession(oldest[0]);
+  }
+  const entry = { lastUsedAt: Date.now() };
+  entry.promise = createWorkbookSession(fileId).catch(() => {
+    _sessions.delete(fileId);
+    return null;
+  });
+  _sessions.set(fileId, entry);
+  return entry.promise;
+};
+
+// Appel Graph sous session cachée. Sur échec (session expirée ou invalidée côté SharePoint),
+// recrée la session et rejoue l'appel une fois — les écritures de cellules étant des valeurs
+// absolues (jamais incrémentales), un rejeu est sans danger.
+async function graphFetchWithSession(fileId, endpoint, options = {}) {
+  const withSession = (sid) => graphFetch(endpoint, { ...options, headers: { ...options.headers, ...(sid ? { 'workbook-session-id': sid } : {}) } });
+  const sessionId = await getCachedSession(fileId);
+  if (!sessionId) return withSession(null);
+  try {
+    return await withSession(sessionId);
+  } catch (e) {
+    _sessions.delete(fileId);
+    return withSession(await getCachedSession(fileId));
+  }
+}
+
+// Keep-alive : un GET léger par session active pour éviter l'expiration (~5 min d'inactivité côté SharePoint)
+setInterval(async () => {
+  for (const [fileId, entry] of [..._sessions.entries()]) {
+    if (Date.now() - entry.lastUsedAt > SESSION_IDLE_EVICT_MS) {
+      evictCachedSession(fileId);
+      continue;
+    }
+    try {
+      const sessionId = await entry.promise;
+      if (!sessionId) {
+        _sessions.delete(fileId);
+        continue;
+      }
+      const siteId = await getSiteId();
+      await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/application`, { headers: { 'workbook-session-id': sessionId } });
+    } catch (e) {
+      _sessions.delete(fileId);
+    }
+  }
+}, SESSION_KEEPALIVE_MS).unref();
+
 async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, situation, unit = null, sessionId = null) {
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
@@ -147,14 +221,16 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
 }
 
 // Update multiple cells in batch - updates is array of { excel_indicator_id, value, unit? }
+// Sans sessionId explicite, passe par la session cachée du fichier (rejeu automatique si expirée)
 async function updateExcelCellsBatch(fileId, updates, situation, sessionId = null) {
   if (!updates || updates.length === 0) return;
 
   const worksheetName = WORKSHEETS[situation];
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
+  const fetchWb = (endpoint, options = {}) => (sessionId ? graphFetch(endpoint, { ...options, ...sessionHeaders(sessionId) }) : graphFetchWithSession(fileId, endpoint, options));
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`, sessionHeaders(sessionId));
+  const usedRange = await fetchWb(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
   const rows = usedRange.values || [];
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
@@ -191,10 +267,9 @@ async function updateExcelCellsBatch(fileId, updates, situation, sessionId = nul
   }
 
   // Update the range in one call
-  await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
+  await fetchWb(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/range(address='F${startRow + minRowIndex}:F${startRow + maxRowIndex}')`, {
     method: 'PATCH',
     body: JSON.stringify({ values: rangeValues }),
-    ...sessionHeaders(sessionId),
   });
 }
 
@@ -424,4 +499,6 @@ module.exports = {
   readExcelDefaultValues,
   createWorkbookSession,
   closeWorkbookSession,
+  getCachedSession,
+  graphFetchWithSession,
 };
