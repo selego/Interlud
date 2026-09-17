@@ -85,6 +85,7 @@ export default function List() {
           <tr>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nom</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Organisation</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Rôle</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Dernière connexion</th>
@@ -97,6 +98,7 @@ export default function List() {
               <tr key={user._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/collectivity/${user._id}`)}>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.name || "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{user.economic_actor_name || "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">
                   <span className={`px-2 py-1 rounded-full text-xs font-semibold ${ROLE_COLORS[collectivityData?.role || "user"]}`}>
                     {ROLE_LABELS[collectivityData?.role || "user"]}
