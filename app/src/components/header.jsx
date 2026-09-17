@@ -216,6 +216,10 @@ export default function Header() {
           text: "Gestion Administrateur",
           menuItems: [
             {
+              linkProps: { to: "/admin/suivi" },
+              text: "Suivi des collectivités"
+            },
+            {
               linkProps: { to: "/admin/collectivity" },
               text: "Collectivités"
             },

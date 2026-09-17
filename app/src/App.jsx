@@ -16,6 +16,7 @@ import Notification from "@/scenes/notification"
 import GeneralData from "@/scenes/general-data"
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
+import AdminSuivi from "@/scenes/admin/suivi"
 import EconomicActor from "@/scenes/economic-actor"
 import NotFound from "@/scenes/not-found"
 import Conditions from "@/scenes/confidentiality/conditions"
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
           <Route path="/admin/economic-actors/*" element={<AdminEconomicActors />} />
+          <Route path="/admin/suivi" element={<AdminSuivi />} />
           <Route path="/general-data" element={<GeneralData />} />
         </Route>
         <Route path="*" element={<NotFound />} />
