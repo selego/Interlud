@@ -65,18 +65,22 @@ const Schema = new mongoose.Schema(
       init: {
         excel_indicator_id: { type: String },
         situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+        extra_values: { type: [String], default: undefined }, // valeurs fixes ajoutées à la liste résolue (ex : "Aucun")
       },
       ref: {
         excel_indicator_id: { type: String },
         situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+        extra_values: { type: [String], default: undefined }, // valeurs fixes ajoutées à la liste résolue (ex : "Aucun")
       },
       prev: {
         excel_indicator_id: { type: String },
         situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+        extra_values: { type: [String], default: undefined }, // valeurs fixes ajoutées à la liste résolue (ex : "Aucun")
       },
       expost: {
         excel_indicator_id: { type: String },
         situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
+        extra_values: { type: [String], default: undefined }, // valeurs fixes ajoutées à la liste résolue (ex : "Aucun")
       },
     },
     value_default_source: { init: defaultSource, ref: defaultSource, prev: defaultSource, expost: defaultSource },

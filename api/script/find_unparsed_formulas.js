@@ -1,16 +1,18 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const fs = require("fs");
 const path = require("path");
-const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas } = require("./scrap_indicator_excel");
+const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossibilitiesFormula, parseDefaultSourceFormula, parseNameFormula, loadLookupSheets, LOOKUP_SHEET_NAMES } = require("./scrap_indicator_excel");
 
 // Lecture seule : ce script ne se connecte PAS à Mongo et n'écrit RIEN en base.
-// Il reprend le master Excel et liste toutes les formules d'affichage (colonne K)
-// que le parser de scrap_indicator_excel.js ne sait pas interpréter,
-// ainsi que les parses PARTIELS : formules contenant un facteur "* cellule"
-// (héritage de la condition d'un parent) que le parse a silencieusement perdu.
+// Il reprend le master Excel et rejoue TOUS les parsers de formules de scrap_indicator_excel.js,
+// avec les mêmes critères que createIndicatorsFromExcel, pour lister ce qui ne serait pas pris en compte :
+//   - colonne C  (titre)              → parseNameFormula          : formule référençant une saisie F mais non reconnue (titre gardé statique)
+//   - colonne G  (valeurs possibles)  → parsePossibilitiesFormula : formule référençant une saisie F d'une feuille Remplissage mais non reconnue (liste gardée statique)
+//   - colonne H  (valeur par défaut)  → parseDefaultSourceFormula : formule référençant une saisie F d'une feuille Remplissage mais non reconnue (défaut gardé statique)
+//   - colonne K  (affichage)          → resolveAllFormulas        : non parsée, ignorée (inter-feuilles) ou parse partiel ("* cellule" perdu)
 
 //V22
-const masterFileId = "01IBL4ADL22SG3FED7PBDKCYVASV4UFHVG";
+const masterFileId = "01IBL4ADJSAPGFGPLDDZCZXBGMLGMP7I37";
 
 const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -19,7 +21,14 @@ const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Expost", situation: "expost" },
 ];
 
+const TYPES = ["titre", "valeurs possibles", "défaut", "affichage"];
+
 const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 };
+
+const isFormula = (f) => typeof f === "string" && f.trim().startsWith("=");
+// Vrai si la formule (hors chaînes) référence une saisie F de la feuille courante ou d'une feuille 'Remplissage - Sit. X'
+// (exclut 'Parcs types'!F12, les références à G/H/R…, les VLOOKUP sans F, etc.)
+const referencesValueCell = (f) => [...f.replace(/"[^"]*"/g, "").matchAll(/(?:['']([^'']+)['']!)?\$?([A-Z]{1,3})\$?\d+/gi)].some((m) => m[2].toUpperCase() === "F" && (!m[1] || m[1].startsWith("Remplissage")));
 
 (async () => {
   try {
@@ -36,9 +45,10 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
         startRow: data.address?.match(/[A-Z]+(\d+):/i) ? parseInt(data.address.match(/[A-Z]+(\d+):/i)[1], 10) : 1,
       });
     }
+    const lookupSheets = await loadLookupSheets(masterFileId, LOOKUP_SHEET_NAMES);
     console.log("✅ Toutes les feuilles chargées!\n");
 
-    // Étape 2 : construire les maps ligne→indicateur et ligne→formule pour chaque situation
+    // Étape 2 : construire les maps ligne→indicateur et ligne→formule (colonne K) pour chaque situation
     const allRowToIndicatorMaps = new Map();
     const allFormulasMapsBySituation = new Map();
     for (const [sit, sheetData] of allSheetsData) {
@@ -61,34 +71,70 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
       allFormulasMapsBySituation.set(sit, formulasMap);
     }
 
-    // Étape 3 : rejouer la résolution par situation et collecter les formules non prises en compte
+    // Lit valeur + formule d'une cellule de n'importe quelle feuille (même signature que getSheetCell dans scrap_indicator_excel.js)
+    const getSheetCell = (sit, rowNum, column) => {
+      const sheet = allSheetsData.get(sit);
+      if (!sheet) return null;
+      const rowIndex = rowNum - sheet.startRow - 1;
+      if (rowIndex < 0 || rowIndex >= sheet.dataRows.length) return null;
+      const colIndex = columnToIndex[column.toUpperCase()];
+      if (colIndex === undefined) return null;
+      return { value: sheet.dataRows[rowIndex][colIndex], formula: sheet.formulaRows?.[rowIndex]?.[colIndex] };
+    };
+
+    // Étape 3 : rejouer chaque parser par situation et collecter les formules non prises en compte
     const unparsed = [];
-    let totalFormulas = 0;
+    const totals = Object.fromEntries(TYPES.map((t) => [t, 0]));
 
     for (const { situation, worksheetName } of WORKSHEETS) {
       const sheetData = allSheetsData.get(situation);
       const rowToIndicatorMap = allRowToIndicatorMaps.get(situation);
       const formulasMap = allFormulasMapsBySituation.get(situation);
+      const getCellValue = (rowNum, column) => getSheetCell(situation, rowNum, column)?.value ?? null;
+      const push = (type, rowNum, reason, formula) => unparsed.push({ type, situation, worksheetName, rowNum, excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A", reason, formula });
 
-      const getCellValue = (rowNum, column) => {
-        const rowIndex = rowNum - sheetData.startRow - 1;
-        if (rowIndex < 0 || rowIndex >= sheetData.dataRows.length) return null;
-        const colIndex = columnToIndex[column.toUpperCase()];
-        if (colIndex === undefined) return null;
-        return sheetData.dataRows[rowIndex][colIndex];
-      };
+      // --- Colonnes C / G / H : uniquement sur les lignes avec excel_indicator_id (comme createIndicatorsFromExcel)
+      for (let i = 0; i < sheetData.dataRows.length; i++) {
+        const row = sheetData.dataRows[i];
+        if (!row[4] || row[4] === "") continue;
+        const rowNum = sheetData.startRow + 1 + i;
+        const formulaRow = sheetData.formulaRows?.[i] || [];
 
+        // Titre (colonne C) : seules les formules référençant une saisie F sont censées devenir dynamiques
+        const nameFormula = formulaRow[2];
+        if (isFormula(nameFormula) && /(^|[^A-Z])\$?F\$?\d+/.test(nameFormula.replace(/"[^"]*"/g, ""))) {
+          totals["titre"]++;
+          if (!parseNameFormula(nameFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getSheetCell)) push("titre", rowNum, "non reconnue (titre gardé statique)", nameFormula);
+        }
+
+        // Valeurs possibles (colonne G). Les TEXTJOIN/CONCAT sur Parcs types, List, C1, C9… sont statiques par construction :
+        // le scrap découpe la valeur calculée sur les virgules. Seules les formules référençant une saisie F sont censées devenir dynamiques.
+        const possibilitiesFormula = formulaRow[6];
+        if (isFormula(possibilitiesFormula) && referencesValueCell(possibilitiesFormula)) {
+          totals["valeurs possibles"]++;
+          if (!parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue)) push("valeurs possibles", rowNum, "non reconnue (liste gardée statique)", possibilitiesFormula);
+        }
+
+        // Valeur par défaut (colonne H), unité en colonne I pour la conversion des offsets en %.
+        // Seules les formules référençant une saisie F d'une feuille Remplissage sont censées devenir dynamiques.
+        const defaultFormula = formulaRow[7];
+        if (isFormula(defaultFormula) && referencesValueCell(defaultFormula)) {
+          totals["défaut"]++;
+          if (!parseDefaultSourceFormula(defaultFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, row[8], { getSheetCell, lookupSheets })) push("défaut", rowNum, "non reconnue (défaut gardé statique)", defaultFormula);
+        }
+      }
+
+      // --- Colonne K : affichage conditionnel
       const resolvedConditions = resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue, allSheetsData, allRowToIndicatorMaps, allFormulasMapsBySituation);
-
-      totalFormulas += formulasMap.size;
+      totals["affichage"] += formulasMap.size;
       for (const [rowNum, formula] of formulasMap) {
         const resolved = resolvedConditions.get(rowNum);
         if (resolved === null) {
-          unparsed.push({ situation, worksheetName, rowNum, excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A", reason: "non parsée", formula });
+          push("affichage", rowNum, "non parsée", formula);
           continue;
         }
         if (resolved?._ignored) {
-          unparsed.push({ situation, worksheetName, rowNum, excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A", reason: "ignorée (référence inter-feuilles non résolue)", formula });
+          push("affichage", rowNum, "ignorée (référence inter-feuilles non résolue)", formula);
           continue;
         }
 
@@ -100,23 +146,27 @@ const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J:
         if (!hasCellFactor) continue;
         const parsed = parseExcelFormula(formula, rowToIndicatorMap, getCellValue, allRowToIndicatorMaps, allSheetsData);
         if (parsed?._referenceToMerge || parsed?._referencesToAnd || parsed?._factorsToAnd) continue;
-        unparsed.push({ situation, worksheetName, rowNum, excelIndicatorId: rowToIndicatorMap.get(rowNum) || "N/A", reason: 'parse partiel (facteur "* cellule" perdu)', formula });
+        push("affichage", rowNum, 'parse partiel (facteur "* cellule" perdu)', formula);
       }
     }
 
     // Étape 4 : affichage
-    const partialCount = unparsed.filter((u) => u.reason.startsWith("parse partiel")).length;
     console.log("═══════════════════════════════════════════════════════════");
-    console.log(`📊 ${totalFormulas} formules trouvées · ${totalFormulas - unparsed.length} parsées OK · ${unparsed.length - partialCount} NON prises en compte · ${partialCount} parse(s) partiel(s)`);
+    for (const type of TYPES) {
+      const ko = unparsed.filter((u) => u.type === type).length;
+      console.log(`📊 ${type.padEnd(18)} : ${String(totals[type]).padStart(4)} formules · ${String(totals[type] - ko).padStart(4)} OK · ${String(ko).padStart(3)} NON prises en compte`);
+    }
     console.log("═══════════════════════════════════════════════════════════");
 
-    for (const { situation } of WORKSHEETS) {
-      const rows = unparsed.filter((u) => u.situation === situation);
-      if (rows.length === 0) continue;
-      console.log(`\n🔸 Situation "${situation}" — ${rows.length} formule(s) non prise(s) en compte :`);
-      for (const u of rows) {
-        console.log(`   • L${u.rowNum} [${u.excelIndicatorId}] (${u.reason})`);
-        console.log(`     ${u.formula}`);
+    for (const type of TYPES) {
+      for (const { situation } of WORKSHEETS) {
+        const rows = unparsed.filter((u) => u.type === type && u.situation === situation);
+        if (rows.length === 0) continue;
+        console.log(`\n🔸 [${type}] Situation "${situation}" — ${rows.length} formule(s) non prise(s) en compte :`);
+        for (const u of rows) {
+          console.log(`   • L${u.rowNum} [${u.excelIndicatorId}] (${u.reason})`);
+          console.log(`     ${u.formula}`);
+        }
       }
     }
 

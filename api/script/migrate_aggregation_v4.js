@@ -1,10 +1,10 @@
 /**
- * Migration des fichiers d'agrégation vers le template V4 (Agrégation résultats charte_V4.xlsx).
+ * Migration des fichiers d'agrégation vers le template V5 (Agrégation résultats charte_V5.xlsx).
  *
  * Pour chaque collectivité (et chaque entrée collectivité d'un acteur éco) ayant un fichier d'agrégation :
  *  1. Lit les valeurs saisies dans "1. Données d'entrée" (colonnes I:K, lignes identifiées par l'ID en colonne D)
- *  2. Renomme l'ancien fichier en "..._OLD_V2.xlsx" (backup)
- *  3. Duplique le template V4 sous le nom canonique dans le dossier SharePoint de la collectivité
+ *  2. Renomme l'ancien fichier en "..._OLD_V4.xlsx" (backup)
+ *  3. Duplique le template V5 sous le nom canonique dans le dossier SharePoint de la collectivité
  *  4. Réécrit les valeurs dans le nouveau fichier par correspondance d'ID, puis recalcule le workbook
  *  5. Met à jour aggregation_excel_file_id en base (seulement après succès complet)
  *
@@ -34,7 +34,7 @@ async function readInputSheet(siteId, fileId) {
 }
 
 // Extrait { id -> [I, J, K] } pour les lignes ayant au moins une valeur saisie.
-// Exclut la ligne d'en-têtes (ID = 'ID', déjà présente dans le template V4) et le remplissage
+// Exclut la ligne d'en-têtes (ID = 'ID', déjà présente dans le template V5) et le remplissage
 // parasite hérité de l'ancien template : cellule = année de l'ID (ex. 'B3-GES-Init-2010' → 2010),
 // présent en colonne I ou J selon les fichiers.
 function extractFilledValues(idRows, valueRows) {
@@ -99,7 +99,7 @@ async function writeValues(siteId, newFileId, filled) {
   return { written, unmatched };
 }
 
-async function migrateTarget(siteId, target) {
+async function migrateTarget(siteId, target, templateIds) {
   const { label, oldFileId, folderId, fileName, saveNewFileId } = target;
 
   if (!folderId) {
@@ -117,18 +117,19 @@ async function migrateTarget(siteId, target) {
   }
 
   if (DRY_RUN) {
-    console.log(`🔎 [${label}] ${filled.size} ligne(s) avec valeurs à transférer`);
+    const unmatched = [...filled.keys()].filter((id) => !templateIds.has(id));
+    console.log(`🔎 [${label}] ${filled.size} ligne(s) avec valeurs à transférer${unmatched.length ? ` — ${unmatched.length} ID(s) absents du template V5 : ${unmatched.join(', ')}` : ''}`);
     return { status: 'dry-run', count: filled.size };
   }
 
-  const oldName = `${fileName.replace(/\.xlsx$/, '')}_OLD_V2.xlsx`;
+  const oldName = `${fileName.replace(/\.xlsx$/, '')}_OLD_V4.xlsx`;
   await renameFile(siteId, oldFileId, oldName);
 
   let newFileId;
   try {
     newFileId = await duplicateExcelFile(fileName, folderId, aggregationTemplateFileId);
     const { written, unmatched } = await writeValues(siteId, newFileId, filled);
-    if (unmatched.length) console.log(`⚠️  [${label}] IDs non trouvés dans le V4 (valeurs non transférées) :`, unmatched);
+    if (unmatched.length) console.log(`⚠️  [${label}] IDs non trouvés dans le V5 (valeurs non transférées) :`, unmatched);
     await calculateWorkbook(newFileId).catch((e) => console.log(`⚠️  [${label}] recalcul échoué : ${e.message}`));
     await saveNewFileId(newFileId);
     console.log(`✅ [${label}] migré → ${newFileId} (${written} cellule(s) transférée(s), ancien fichier : ${oldName})`);
@@ -173,17 +174,20 @@ async function buildTargets() {
 }
 
 (async () => {
-  console.log(`Mode : ${DRY_RUN ? 'DRY-RUN (aucune écriture)' : 'MIGRATION RÉELLE'} — template V4 : ${aggregationTemplateFileId}`);
+  console.log(`Mode : ${DRY_RUN ? 'DRY-RUN (aucune écriture)' : 'MIGRATION RÉELLE'} — template V5 : ${aggregationTemplateFileId}`);
   await mongoose.connect(config.MONGODB_ENDPOINT);
   console.log('Connecté à MongoDB');
 
   const siteId = await getSiteId();
+  // IDs présents dans le template V5 (colonne D), pour signaler en dry-run les valeurs qui ne seraient pas transférées
+  const templateIds = new Set(((await readInputSheet(siteId, aggregationTemplateFileId)).idRows).map((r) => (r?.[0] != null ? String(r[0]).trim() : '')).filter(Boolean));
+  console.log(`${templateIds.size} ID(s) dans le template V5`);
   const targets = await buildTargets();
   console.log(`${targets.length} fichier(s) d'agrégation à migrer\n`);
 
   const counts = { migrated: 0, 'dry-run': 0, skipped: 0, error: 0 };
   for (const target of targets) {
-    const { status } = await migrateTarget(siteId, target);
+    const { status } = await migrateTarget(siteId, target, templateIds);
     counts[status]++;
   }
 

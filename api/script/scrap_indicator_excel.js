@@ -11,7 +11,9 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADL22SG3FED7PBDKCYVASV4UFHVG"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADJSAPGFGPLDDZCZXBGMLGMP7I37"; // ID du fichier master Excel
+// Feuilles de référence (hors remplissage) lues au scrap pour évaluer les VLOOKUP à clé constante des défauts
+const LOOKUP_SHEET_NAMES = ["Parcs types"];
 
 function formatLogValue(value) {
   if (value === null || value === undefined) return null;
@@ -159,45 +161,109 @@ function mapConditionLeaves(conditions, fn) {
   });
 }
 
-// Parse une formule de référence simple pour les valeurs possibles dynamiques.
-// Exemples acceptés :
-//   ='Remplissage - Sit. Init.'!$F$1593  → { excel_indicator_id, situation: 'init' }
-//   =$F$1593                              → { excel_indicator_id, situation: <currentSituation> }
-// Retourne null si la formule n'est pas une simple référence cellule.
-function parsePossibilitiesFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps) {
+// Formule de la colonne G (valeurs possibles) référençant la VALEUR (colonne F) d'un indicateur de remplissage → liste dynamique résolue au fetch.
+// Formes gérées :
+//   ='Remplissage - Sit. Init.'!$F$1593              → { excel_indicator_id, situation: 'init' }
+//   =$F$1593                                          → { excel_indicator_id, situation: <currentSituation> }
+//   ='Remplissage - Sit. Init.'!$F$1576 & " ,Aucun"   → idem + extra_values: ["Aucun"] (suffixe littéral, valeurs séparées par des virgules)
+//   =VLOOKUP("FretFluvCat" & R602 & "Request", 'Remplissage - Sit. Init.'!$E$473:$F$1088, 2, FALSE)
+//       → la clé est un excel_indicator_id reconstruit depuis le compteur R (constant lu dans la feuille courante) ; elle doit exister dans la plage E:F de la feuille cible
+// Toute autre forme (TEXTJOIN, CONCAT, références hors feuilles de remplissage…) → null : la liste reste statique.
+function parsePossibilitiesFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue = null) {
   if (!formula || typeof formula !== "string") return null;
   const f = formula.trim();
   if (!f.startsWith("=")) return null;
   const content = f.substring(1).trim();
 
-  const sheetRefMatch = content.match(/^['']([^'']+)['']!\$?[A-Z]+\$?(\d+)$/i);
-  if (sheetRefMatch) {
-    const sourceSituation = extractSituationFromSheetName(sheetRefMatch[1]);
+  const resolveSituationAndMap = (sheetName) => {
+    const sourceSituation = sheetName ? extractSituationFromSheetName(sheetName) : currentSituation;
     if (!sourceSituation) return null;
-    const targetMap = allRowToIndicatorMaps?.get(sourceSituation);
-    if (!targetMap) return null;
-    const excelIndicatorId = targetMap.get(parseInt(sheetRefMatch[2], 10));
+    return { sourceSituation, targetMap: sheetName ? allRowToIndicatorMaps?.get(sourceSituation) : rowToIndicatorMap };
+  };
+
+  // Référence simple vers F, éventuellement suivie d'un suffixe littéral : F123 [& "a,b"]
+  const refMatch = content.match(/^(?:['']([^'']+)['']!)?\$?F\$?(\d+)(?:\s*&\s*"([^"]*)")?$/i);
+  if (refMatch) {
+    const resolved = resolveSituationAndMap(refMatch[1]);
+    const excelIndicatorId = resolved?.targetMap?.get(parseInt(refMatch[2], 10));
     if (!excelIndicatorId) return null;
-    return { excel_indicator_id: excelIndicatorId, situation: sourceSituation };
+    const target = { excel_indicator_id: excelIndicatorId, situation: resolved.sourceSituation };
+    if (refMatch[3] === undefined) return target;
+    const extra = refMatch[3]
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => v !== "");
+    if (extra.length > 0) target.extra_values = extra;
+    return target;
   }
 
-  const sameSheetMatch = content.match(/^\$?[A-Z]+\$?(\d+)$/i);
-  if (sameSheetMatch) {
-    const excelIndicatorId = rowToIndicatorMap.get(parseInt(sameSheetMatch[1], 10));
-    if (!excelIndicatorId) return null;
-    return { excel_indicator_id: excelIndicatorId, situation: currentSituation };
+  // VLOOKUP("préfixe" & Rn & "suffixe", 'Feuille'!$E$a:$F$b, 2, FALSE) : la clé est un excel_indicator_id
+  const vlookupMatch = content.match(/^VLOOKUP\(\s*"([^"]*)"\s*&\s*\$?R\$?(\d+)\s*&\s*"([^"]*)"\s*[,;]\s*(?:['']([^'']+)['']!)?\$?E\$?(\d+)\s*:\s*\$?F\$?(\d+)\s*[,;]\s*2\s*[,;]\s*(?:FALSE|0)\s*\)$/i);
+  if (vlookupMatch) {
+    const rValue = getCellValue?.(parseInt(vlookupMatch[2], 10), "R");
+    if (rValue === null || rValue === undefined || rValue === "") return null;
+    const key = `${vlookupMatch[1]}${rValue}${vlookupMatch[3]}`;
+    const resolved = resolveSituationAndMap(vlookupMatch[4]);
+    if (!resolved?.targetMap) return null;
+    const from = parseInt(vlookupMatch[5], 10);
+    const to = parseInt(vlookupMatch[6], 10);
+    for (const [rowNum, id] of resolved.targetMap) {
+      if (id === key && rowNum >= from && rowNum <= to) return { excel_indicator_id: key, situation: resolved.sourceSituation };
+    }
+    return null;
   }
 
   return null;
+}
+
+// Convertit une lettre de colonne Excel en index 0-based (A→0, Z→25, AA→26…)
+function columnLetterToIndex(letters) {
+  let index = 0;
+  for (const ch of letters.toUpperCase()) index = index * 26 + (ch.charCodeAt(0) - 64);
+  return index - 1;
+}
+
+// Charge des feuilles de référence (ex : "Parcs types") pour évaluer au scrap les VLOOKUP à clé constante.
+// Retourne Map<nomFeuille, { values, startRow, startCol }> ; une feuille introuvable est simplement absente de la map.
+async function loadLookupSheets(fileId, sheetNames) {
+  const lookupSheets = new Map();
+  for (const name of sheetNames) {
+    try {
+      const data = await getWorksheetUsedRange(fileId, name);
+      const addr = data.address?.match(/!\$?([A-Z]+)\$?(\d+):/i);
+      lookupSheets.set(name, { values: data.values || [], startRow: addr ? parseInt(addr[2], 10) : 1, startCol: addr ? columnLetterToIndex(addr[1]) : 0 });
+    } catch (error) {
+      console.log(`   ⚠️ Feuille de référence "${name}" non chargée : ${error.message}`);
+    }
+  }
+  return lookupSheets;
+}
+
+// Évalue une expression arithmétique ne contenant que des constantes (chiffres, + - * / ^ et parenthèses). null sinon.
+function evalConstantExpression(expr) {
+  const text = expr.trim();
+  if (text === "" || !/^[\d\s+\-*/().^]+$/.test(text)) return null;
+  try {
+    const result = Function(`"use strict"; return (${text.replace(/\^/g, "**")});`)();
+    return typeof result === "number" && Number.isFinite(result) ? result : null;
+  } catch {
+    return null;
+  }
 }
 
 // Formule de la colonne H (valeur par défaut) référençant la VALEUR (colonne F) d'un autre indicateur → source dynamique résolue au fetch.
 // Formes gérées :
 //   ='Feuille'!F123          =F123          ='Feuille'!F123*0.8          ='Feuille'!F123+0.05  (offset ×100 si l'indicateur est en %)
 //   ='Feuille'!F123*(1+'Feuille2'!F456)     où F456 est un indicateur d'évolution en %  → growth_source
-//   =INDEX('Feuille'!$F$a:$F$b, R123*n±k)   où R est un compteur de catégorie (valeur constante lue dans la feuille courante)
-// Toute autre forme (VLOOKUP Parcs types, IF, référence à G ou H…) → null : le défaut reste statique.
-function parseDefaultSourceFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, targetUnit = null) {
+//   =INDEX('Feuille'!$F$a:$F$b, <position>)  où <position> est une expression arithmétique de constantes et de cellules de la feuille
+//       courante : R (compteur de catégorie, lu par valeur) et cellules littérales (ex : T = sous-position). Ex : R*2-1, (R-1)*5+2, (R-1)*5+T1384
+//   =F123 * k / (a*10^b) …                    produit/quotient d'UNE référence F et de constantes → factor
+//   =IFERROR(VLOOKUP(G473,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)
+//       VLOOKUP à clé littérale (cellule sans formule de la feuille courante) sur une feuille de référence chargée dans ctx.lookupSheets
+//       → constante évaluée au scrap, intégrée au factor. Résultat non numérique ("ND*") → null (Excel donne 0 via IFERROR, le défaut statique aussi)
+// Toute autre forme (IF, MAX, SWITCH, Tableau2, référence à G ou H…) → null : le défaut reste statique.
+// ctx : { getSheetCell(situation,row,col) → {value,formula} (contrôle "cellule littérale"), lookupSheets (cf. loadLookupSheets) }
+function parseDefaultSourceFormula(formula, currentSituation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, targetUnit = null, ctx = {}) {
   if (!formula || typeof formula !== "string") return null;
   const f = formula.trim();
   if (!f.startsWith("=")) return null;
@@ -210,6 +276,15 @@ function parseDefaultSourceFormula(formula, currentSituation, rowToIndicatorMap,
     const excelIndicatorId = targetMap?.get(rowNum);
     if (!excelIndicatorId) return null;
     return { excel_indicator_id: excelIndicatorId, situation: sourceSituation };
+  };
+
+  // Cellule de la feuille courante sans formule (constante du template) → sa valeur numérique, sinon null
+  const literalNumber = (rowNum, column) => {
+    const cell = ctx.getSheetCell?.(currentSituation, rowNum, column);
+    if (!cell) return null;
+    if (typeof cell.formula === "string" && cell.formula.trim().startsWith("=")) return null;
+    const n = parseFloat(cell.value);
+    return Number.isFinite(n) ? n : null;
   };
 
   const refMatch = content.match(/^(?:['']([^'']+)['']!)?\$?F\$?(\d+)(?:\s*\*\s*(\d+(?:\.\d+)?))?(?:\s*([+-])\s*(\d+(?:\.\d+)?))?$/i);
@@ -234,20 +309,104 @@ function parseDefaultSourceFormula(formula, currentSituation, rowToIndicatorMap,
     return target;
   }
 
-  const indexMatch = content.match(/^INDEX\(\s*(?:['']([^'']+)['']!)?\$?F\$?(\d+)\s*:\s*\$?F\$?(\d+)\s*[,;]\s*(?:['']([^'']+)['']!)?\$?R\$?(\d+)\s*\*\s*(\d+)\s*(?:([+-])\s*(\d+))?\s*\)$/i);
+  const indexMatch = content.match(/^INDEX\(\s*(?:['']([^'']+)['']!)?\$?F\$?(\d+)\s*:\s*\$?F\$?(\d+)\s*[,;]\s*(.+)\)$/i);
   if (indexMatch) {
-    // Le compteur R doit être dans la feuille courante
-    if (indexMatch[4] && extractSituationFromSheetName(indexMatch[4]) !== currentSituation) return null;
-    const rValue = parseFloat(getCellValue?.(parseInt(indexMatch[5], 10), "R"));
-    if (isNaN(rValue)) return null;
-    const position = rValue * parseInt(indexMatch[6], 10) + (indexMatch[7] ? (indexMatch[7] === "-" ? -1 : 1) * parseInt(indexMatch[8], 10) : 0);
+    // Position : cellules de la feuille courante remplacées par leur valeur (R lu par valeur, autres colonnes littérales uniquement)
+    let valid = true;
+    const positionExpr = indexMatch[4].replace(/(?:['']([^'']+)['']!)?\$?([A-Z]{1,2})\$?(\d+)/gi, (_, sheetName, column, rowNum) => {
+      if (sheetName && extractSituationFromSheetName(sheetName) !== currentSituation) valid = false;
+      const col = column.toUpperCase();
+      const value = col === "R" ? parseFloat(getCellValue?.(parseInt(rowNum, 10), "R")) : literalNumber(parseInt(rowNum, 10), col);
+      if (value === null || !Number.isFinite(value)) valid = false;
+      return valid ? String(value) : "0";
+    });
+    if (!valid) return null;
+    const position = evalConstantExpression(positionExpr);
+    if (position === null || !Number.isInteger(position)) return null;
     const rangeStart = parseInt(indexMatch[2], 10);
     const targetRow = rangeStart + position - 1;
     if (targetRow < rangeStart || targetRow > parseInt(indexMatch[3], 10)) return null;
     return resolveTarget(indexMatch[1], targetRow);
   }
 
+  // Produit/quotient d'une référence F et de constantes (éventuellement enveloppé dans IFERROR(…, constante))
+  let productExpr = content;
+  const iferrorMatch = content.match(/^IFERROR\((.*)\)$/is);
+  if (iferrorMatch) {
+    const args = splitTopLevel(iferrorMatch[1], [",", ";"]);
+    if (args.length !== 2 || evalConstantExpression(args[1]) === null) return null;
+    productExpr = args[0].trim();
+  }
+  return parseProductForm(productExpr, currentSituation, resolveTarget, literalNumber, ctx);
+}
+
+// VLOOKUP(cellule, 'Feuille'!$C$a:$M$b, n, FALSE) dont la clé est une cellule littérale de la feuille courante → valeur numérique trouvée, sinon null
+function evalConstantVlookup(term, currentSituation, ctx) {
+  const m = term.match(/^VLOOKUP\(\s*\$?([A-Z]{1,2})\$?(\d+)\s*[,;]\s*['']([^'']+)['']!\$?([A-Z]{1,3})\$?(\d+)\s*:\s*\$?([A-Z]{1,3})\$?(\d+)\s*[,;]\s*(\d+)\s*[,;]\s*(?:FALSE|0)\s*\)$/i);
+  if (!m) return null;
+  const keyCell = ctx.getSheetCell?.(currentSituation, parseInt(m[2], 10), m[1].toUpperCase());
+  if (!keyCell || (typeof keyCell.formula === "string" && keyCell.formula.trim().startsWith("="))) return null;
+  const key = String(keyCell.value ?? "").trim();
+  if (key === "") return null;
+  const sheet = ctx.lookupSheets?.get(m[3]);
+  if (!sheet) return null;
+  const keyCol = columnLetterToIndex(m[4]) - sheet.startCol;
+  const valueCol = keyCol + parseInt(m[8], 10) - 1;
+  if (valueCol > columnLetterToIndex(m[6]) - sheet.startCol) return null;
+  for (let row = parseInt(m[5], 10); row <= parseInt(m[7], 10); row++) {
+    const line = sheet.values[row - sheet.startRow];
+    if (!line || String(line[keyCol] ?? "").trim() !== key) continue;
+    const n = typeof line[valueCol] === "number" ? line[valueCol] : parseFloat(line[valueCol]);
+    return Number.isFinite(n) ? n : null;
+  }
   return null;
+}
+
+// Découpe une expression sur * et / au niveau 0 (refuse + et - au niveau 0 : ce serait un offset, pas un facteur).
+// Exactement un terme doit être une référence F (→ source), les autres des constantes ou des VLOOKUP à clé littérale (→ factor).
+function parseProductForm(expr, currentSituation, resolveTarget, literalNumber, ctx) {
+  const terms = [];
+  const ops = [];
+  let depth = 0;
+  let inQuotes = false; // "texte"
+  let inSheetName = false; // 'Remplissage - Sit. Init.' : le tiret n'est pas un opérateur
+  let current = "";
+  for (const ch of expr) {
+    if (ch === '"' && !inSheetName) inQuotes = !inQuotes;
+    if (ch === "'" && !inQuotes) inSheetName = !inSheetName;
+    const literal = inQuotes || inSheetName;
+    if (!literal && ch === "(") depth++;
+    if (!literal && ch === ")") depth--;
+    if (!literal && depth === 0 && (ch === "+" || ch === "-")) return null;
+    if (!literal && depth === 0 && (ch === "*" || ch === "/")) {
+      terms.push(current.trim());
+      ops.push(ch);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  terms.push(current.trim());
+  if (terms.length < 2) return null;
+
+  let target = null;
+  let factor = 1;
+  for (let i = 0; i < terms.length; i++) {
+    const op = i === 0 ? "*" : ops[i - 1];
+    const fRef = terms[i].match(/^(?:['']([^'']+)['']!)?\$?F\$?(\d+)$/i);
+    if (fRef) {
+      if (target || op === "/") return null;
+      target = resolveTarget(fRef[1], parseInt(fRef[2], 10));
+      if (!target) return null;
+      continue;
+    }
+    const k = evalConstantExpression(terms[i]) ?? evalConstantVlookup(terms[i], currentSituation, ctx);
+    if (k === null) return null;
+    factor = op === "*" ? factor * k : factor / k;
+  }
+  if (!target || !Number.isFinite(factor)) return null;
+  if (factor !== 1) target.factor = factor;
+  return target;
 }
 
 // Formule de la colonne C (titre) concaténant du texte et des cellules → titre dynamique résolu au fetch.
@@ -1482,7 +1641,7 @@ async function getWorksheetUsedRange(fileId, worksheetName) {
   return graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(worksheetName)}/usedRange`);
 }
 
-async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData = null) {
+async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData = null, lookupSheets = null) {
   try {
     // Utiliser les données pré-chargées si disponibles, sinon charger
     let dataRows, formulaRows, startRow;
@@ -1641,12 +1800,12 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       // Détecter une formule de référence dans la cellule "valeurs possibles" (colonne G, index 6)
       // Si présente, on stocke la référence vers l'indicateur source pour résolution dynamique au fetch
       const possibilitiesFormula = formulaRows?.[i]?.[6];
-      const possibilitiesSourceForSituation = parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps);
+      const possibilitiesSourceForSituation = parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue);
 
       // Détecter une formule de défaut dynamique dans la cellule "valeur par défaut" (colonne H, index 7)
       // Si elle référence la valeur d'un autre indicateur, on stocke la source pour résolution au fetch et on vide le défaut statique
       const defaultFormula = formulaRows?.[i]?.[7];
-      const defaultSourceForSituation = parseDefaultSourceFormula(defaultFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, row[8]);
+      const defaultSourceForSituation = parseDefaultSourceFormula(defaultFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, row[8], { getSheetCell, lookupSheets });
       if (defaultSourceForSituation) dynamicDefaultCount++;
       if (!defaultSourceForSituation && typeof defaultFormula === "string" && defaultFormula.startsWith("=")) staticDefaultFormulas.push(defaultFormula);
 
@@ -2425,12 +2584,14 @@ if (require.main === module) {
           startRow: data.address?.match(/[A-Z]+(\d+):/i) ? parseInt(data.address.match(/[A-Z]+(\d+):/i)[1], 10) : 1,
         });
       }
+      // Feuilles de référence pour les VLOOKUP à clé constante des défauts (colonne H)
+      const lookupSheets = await loadLookupSheets(masterFileId, LOOKUP_SHEET_NAMES);
       console.log("✅ Toutes les feuilles chargées!");
 
       // Étape 2: Traiter chaque feuille avec accès aux données de toutes les feuilles
       for (const { worksheetName, situation } of worksheetsToProcess) {
         console.log(`\n🔄 Traitement de la feuille "${worksheetName}" (situation: ${situation})...`);
-        await createIndicatorsFromExcel(situation, worksheetName, allSheetsData);
+        await createIndicatorsFromExcel(situation, worksheetName, allSheetsData, lookupSheets);
         console.log(`✅ Feuille "${worksheetName}" traitée avec succès!`);
       }
       // Étape 3: Identifier et supprimer les indicateurs absents de l'Excel
@@ -2562,4 +2723,18 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { createIndicatorsFromExcel, getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, syncIndicatorValuesToExcel, syncIndicatorsToExistingActions, duplicateMasterExcel, generateExcelForAllCollectivities, parseDefaultSourceFormula, parseNameFormula };
+module.exports = {
+  createIndicatorsFromExcel,
+  getWorksheetUsedRange,
+  parseExcelFormula,
+  resolveAllFormulas,
+  syncIndicatorValuesToExcel,
+  syncIndicatorsToExistingActions,
+  duplicateMasterExcel,
+  generateExcelForAllCollectivities,
+  parseDefaultSourceFormula,
+  parseNameFormula,
+  parsePossibilitiesFormula,
+  loadLookupSheets,
+  LOOKUP_SHEET_NAMES,
+};

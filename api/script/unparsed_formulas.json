@@ -1,10 +1,389 @@
 [
   {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 5,
+    "excelIndicatorId": "NbHabTerr",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=VLOOKUP($F$4, Tableau2[[codgeo]:[Population 2023]], 10, FALSE)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 20,
+    "excelIndicatorId": "bioGNV",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IF(F19=\"Oui\",IF(VLOOKUP($F$4,Tableau2[[#All],[codgeo]:[IGR prévisionnel 2028]],38,FALSE)<1,VLOOKUP($F$4,Tableau2[[#All],[codgeo]:[IGR prévisionnel 2028]],38,FALSE),1),\"\")"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 945,
+    "excelIndicatorId": "FretFluvCat43NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G935,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 956,
+    "excelIndicatorId": "FretFluvCat44NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G946,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 967,
+    "excelIndicatorId": "FretFluvCat45NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G957,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 978,
+    "excelIndicatorId": "FretFluvCat46NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G968,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 989,
+    "excelIndicatorId": "FretFluvCat47NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G979,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1000,
+    "excelIndicatorId": "FretFluvCat48NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G990,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1011,
+    "excelIndicatorId": "FretFluvCat49NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1001,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1022,
+    "excelIndicatorId": "FretFluvCat50NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1012,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1033,
+    "excelIndicatorId": "FretFluvCat51NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1023,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1044,
+    "excelIndicatorId": "FretFluvCat52NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1034,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1055,
+    "excelIndicatorId": "FretFluvCat53NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1045,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1066,
+    "excelIndicatorId": "FretFluvCat54NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1056,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1077,
+    "excelIndicatorId": "FretFluvCat55NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1067,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1088,
+    "excelIndicatorId": "FretFluvCat56NbBarges",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(VLOOKUP(G1078,'Parcs types'!$C$68:$M$123,11,FALSE) * $F$5/(70*10^6), 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1095,
+    "excelIndicatorId": "PMMarche",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=INDEX(Tableau2[[Marche à pied]:[Transport en commun]], MATCH($F$4, Tableau2[codgeo], 0), $R1095)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1096,
+    "excelIndicatorId": "PMVelo",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=INDEX(Tableau2[[Marche à pied]:[Transport en commun]], MATCH($F$4, Tableau2[codgeo], 0), $R1096)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1097,
+    "excelIndicatorId": "PM2RM",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=INDEX(Tableau2[[Marche à pied]:[Transport en commun]], MATCH($F$4, Tableau2[codgeo], 0), $R1097)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1098,
+    "excelIndicatorId": "PMVoiture",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=INDEX(Tableau2[[Marche à pied]:[Transport en commun]], MATCH($F$4, Tableau2[codgeo], 0), $R1098)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1099,
+    "excelIndicatorId": "PMTC",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=INDEX(Tableau2[[Marche à pied]:[Transport en commun]], MATCH($F$4, Tableau2[codgeo], 0), $R1099)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1347,
+    "excelIndicatorId": "RepModCatRep1Charge",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(INDEX('Parcs types'!$L$12:$L$56, R1345) * VLOOKUP(F1345, 'BDD_FE routiers'!$C$3:$U$2238, 19, FALSE) * 800, 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1350,
+    "excelIndicatorId": "RepModCatRep2Charge",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(INDEX('Parcs types'!$L$12:$L$56, R1348) * VLOOKUP(F1348, 'BDD_FE routiers'!$C$3:$U$2238, 19, FALSE) * 800, 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1353,
+    "excelIndicatorId": "RepModCatRep3Charge",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IFERROR(INDEX('Parcs types'!$L$12:$L$56, R1351) * VLOOKUP(F1351, 'BDD_FE routiers'!$C$3:$U$2238, 19, FALSE) * 800, 0)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1727,
+    "excelIndicatorId": "EComInitDistUniqLivDir",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=SWITCH($F$1720, $R$1720,'C9'!$L$189, $S$1720,'C9'!$M$189, $T$1720,  'C9'!$N$189)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1728,
+    "excelIndicatorId": "EComInitDistUniqLivPR",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=SWITCH($F$1720, $R$1720,'C9'!$Q$189, $S$1720,'C9'!$R$189, $T$1720,  'C9'!$S$189)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1729,
+    "excelIndicatorId": "EComInitDistUniqRécup",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=SWITCH($F$1720, $R$1720,'C9'!$V$189, $S$1720,'C9'!$W$189, $T$1720,  'C9'!$X$189)"
+  },
+  {
+    "type": "défaut",
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1848,
+    "excelIndicatorId": "FretTCRéfPotentielRemplDirectMétro",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2249, H1852*H1856*H1860)"
+  },
+  {
+    "type": "défaut",
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1849,
+    "excelIndicatorId": "FretTCRéfPotentielRemplDirectTramway",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2250, H1853*H1857*H1861)"
+  },
+  {
+    "type": "défaut",
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1850,
+    "excelIndicatorId": "FretTCRéfPotentielRemplDirectBus",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2251, H1854*H1858*H1862)"
+  },
+  {
+    "type": "défaut",
+    "situation": "ref",
+    "worksheetName": "Remplissage - Sit. Ref.",
+    "rowNum": 1851,
+    "excelIndicatorId": "FretTCRéfPotentielRemplDirectCar",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2252, H1855*H1859*H1863)"
+  },
+  {
+    "type": "affichage",
     "situation": "ref",
     "worksheetName": "Remplissage - Sit. Ref.",
     "rowNum": 1802,
     "excelIndicatorId": "FretTCRéfRemplFretCat1",
     "reason": "non parsée",
     "formula": "='Remplissage - Sit. Init.'!$K$2202:$K$2246"
+  },
+  {
+    "type": "défaut",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2243,
+    "excelIndicatorId": "ELUPrévPassageCommunProportion",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IF(SUM('Remplissage - Sit. Init.'!$F$1414) = 'Remplissage - Sit. Init.'!$H$1414, SUM('Remplissage - Sit. Init.'!$F$1423:$F$1426), SUMIFS('Remplissage - Sit. Init.'!$F$1438:$F$1572, 'Remplissage - Sit. Init.'!I1438:$I$1572, \"t/an\") ) * 'Remplissage - Sit. Prev.'!H2242"
+  },
+  {
+    "type": "défaut",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2956,
+    "excelIndicatorId": "FretTCPrévObjTKmMétro",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2952*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1848, 'Remplissage - Sit. Ref.'!F1852 * 'Remplissage - Sit. Ref.'!F1856 * 'Remplissage - Sit. Ref.'!F1860), MAX('Remplissage - Sit. Ref.'!H1848, 'Remplissage - Sit. Ref.'!H1852 * 'Remplissage - Sit. Ref.'!H1856 * 'Remplissage - Sit. Ref.'!H1860))"
+  },
+  {
+    "type": "défaut",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2957,
+    "excelIndicatorId": "FretTCPrévObjTKmTramway",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2953*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1849, 'Remplissage - Sit. Ref.'!F1853 * 'Remplissage - Sit. Ref.'!F1857 * 'Remplissage - Sit. Ref.'!F1861), MAX('Remplissage - Sit. Ref.'!H1849, 'Remplissage - Sit. Ref.'!H1853 * 'Remplissage - Sit. Ref.'!H1857 * 'Remplissage - Sit. Ref.'!H1861))"
+  },
+  {
+    "type": "défaut",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2958,
+    "excelIndicatorId": "FretTCPrévObjTKmBus",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2954*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1850, 'Remplissage - Sit. Ref.'!F1854 * 'Remplissage - Sit. Ref.'!F1858 * 'Remplissage - Sit. Ref.'!F1862), MAX('Remplissage - Sit. Ref.'!H1850, 'Remplissage - Sit. Ref.'!H1854 * 'Remplissage - Sit. Ref.'!H1858 * 'Remplissage - Sit. Ref.'!H1862))"
+  },
+  {
+    "type": "défaut",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2959,
+    "excelIndicatorId": "FretTCPrévObjTKmCar",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2955*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1851, 'Remplissage - Sit. Ref.'!F1855 * 'Remplissage - Sit. Ref.'!F1859 * 'Remplissage - Sit. Ref.'!F1863), MAX('Remplissage - Sit. Ref.'!H1851, 'Remplissage - Sit. Ref.'!H1855 * 'Remplissage - Sit. Ref.'!H1859 * 'Remplissage - Sit. Ref.'!H1863))"
+  },
+  {
+    "type": "défaut",
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 20,
+    "excelIndicatorId": "bioGNV",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=IF(F19=\"Oui\",IF(VLOOKUP($F$4,Tableau2[[#All],[codgeo]:[IGR prévisionnel 2028]],38+F2-2024,FALSE)<1,VLOOKUP($F$4,Tableau2[[#All],[codgeo]:[IGR prévisionnel 2028]],38+F2-2024,FALSE),1),\"\")"
+  },
+  {
+    "type": "défaut",
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 1100,
+    "excelIndicatorId": "ALNombreTot",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "='Remplissage - Sit. Init.'!F1100+'Remplissage - Sit. Init.'!F1110-'Remplissage - Sit. Init.'!F1111"
+  },
+  {
+    "type": "défaut",
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2656,
+    "excelIndicatorId": "FretTCExpostObjTKmMétro",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2652*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1848, 'Remplissage - Sit. Ref.'!F1852 * 'Remplissage - Sit. Ref.'!F1856*'Remplissage - Sit. Ref.'!F1860), MAX('Remplissage - Sit. Ref.'!H1848, 'Remplissage - Sit. Ref.'!H1852*'Remplissage - Sit. Ref.'!H1856*'Remplissage - Sit. Ref.'!H1860))"
+  },
+  {
+    "type": "défaut",
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2657,
+    "excelIndicatorId": "FretTCExpostObjTKmTramway",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2653*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1849, 'Remplissage - Sit. Ref.'!F1853 * 'Remplissage - Sit. Ref.'!F1857*'Remplissage - Sit. Ref.'!F1861), MAX('Remplissage - Sit. Ref.'!H1849, 'Remplissage - Sit. Ref.'!H1853*'Remplissage - Sit. Ref.'!H1857*'Remplissage - Sit. Ref.'!H1861))"
+  },
+  {
+    "type": "défaut",
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2658,
+    "excelIndicatorId": "FretTCExpostObjTKmBus",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2654*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1850, 'Remplissage - Sit. Ref.'!F1854 * 'Remplissage - Sit. Ref.'!F1858*'Remplissage - Sit. Ref.'!F1862), MAX('Remplissage - Sit. Ref.'!H1850, 'Remplissage - Sit. Ref.'!H1854*'Remplissage - Sit. Ref.'!H1858*'Remplissage - Sit. Ref.'!H1862))"
+  },
+  {
+    "type": "défaut",
+    "situation": "expost",
+    "worksheetName": "Remplissage - Sit. Expost",
+    "rowNum": 2659,
+    "excelIndicatorId": "FretTCExpostObjTKmCar",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=H2655*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1851, 'Remplissage - Sit. Ref.'!F1855 * 'Remplissage - Sit. Ref.'!F1859*'Remplissage - Sit. Ref.'!F1863), MAX('Remplissage - Sit. Ref.'!H1851, 'Remplissage - Sit. Ref.'!H1855*'Remplissage - Sit. Ref.'!H1859*'Remplissage - Sit. Ref.'!H1863))"
   }
 ]

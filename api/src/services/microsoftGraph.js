@@ -5,9 +5,9 @@ const tenantId = process.env.TENANT_ID;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const sharePointSiteName = 'selegobv';
-const masterExcelFileId = '01IBL4ADPZ6PQFBANVRVCIUFDTUJYQK277';
-// Agrégation résultats charte_V4.xlsx
-const aggregationTemplateFileId = '01IBL4ADL22SG3FED7PBDKCYVASV4UFHVG';
+const masterExcelFileId = '01IBL4ADJSAPGFGPLDDZCZXBGMLGMP7I37';
+// Agrégation résultats charte_V5.xlsx
+const aggregationTemplateFileId = '01IBL4ADMXS4VGWITQ5ZEKM3NACKQK5HNM';
 
 const WORKSHEETS = {
   init: 'Remplissage - Sit. Init.',

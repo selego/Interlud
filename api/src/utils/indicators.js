@@ -140,7 +140,8 @@ const buildSourceLookup = async (refs, getSource) => {
 };
 
 // Résout dynamiquement indicator_value_possibilities pour les IVs qui pointent vers un autre indicateur.
-// Mute les IVs en place : remplace indicator_value_possibilities par la valeur courante de l'IV source.
+// Mute les IVs en place : remplace indicator_value_possibilities par la valeur courante de l'IV source,
+// suivie des extra_values fixes du master (ex : F1576 & " ,Aucun" → [...parcs saisis, "Aucun"]).
 const resolveDynamicPossibilities = async (ivs) => {
   const refs = ivs.filter((iv) => iv.indicator_value_possibilities_source?.excel_indicator_id && iv.indicator_value_possibilities_source?.situation);
   if (refs.length === 0) return;
@@ -148,10 +149,11 @@ const resolveDynamicPossibilities = async (ivs) => {
 
   for (const iv of refs) {
     const sourceIV = findSource(iv);
-    if (!sourceIV) continue;
-    const val = sourceIV.value?.[sourceIV.indicator_type];
-    if (Array.isArray(val)) iv.indicator_value_possibilities = val;
-    if (typeof val === 'string' && val !== '') iv.indicator_value_possibilities = [val];
+    const val = sourceIV?.value?.[sourceIV.indicator_type];
+    const resolved = Array.isArray(val) ? val : typeof val === 'string' && val !== '' ? [val] : [];
+    const extra = iv.indicator_value_possibilities_source.extra_values || [];
+    if (resolved.length === 0 && extra.length === 0) continue;
+    iv.indicator_value_possibilities = [...resolved, ...extra.filter((v) => !resolved.includes(v))];
   }
 };
 
