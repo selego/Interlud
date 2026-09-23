@@ -73,7 +73,7 @@ router.put('/:id/add_collectivity', passport.authenticate(['admin', 'user'], { s
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const aggregation_excel_file_id = await duplicateExcelFile(`${actor.name} - ${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
+    const aggregation_excel_file_id = await duplicateExcelFile(`${actor.name} - ${collectivity.name} - Aggregation_V5.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
 
     const newCollectivity = { id: req.body.collectivity_id, name: req.body.collectivity_name, joined_at: new Date(), aggregation_excel_file_id };
     actor.collectivities = [...(actor.collectivities || []), newCollectivity];

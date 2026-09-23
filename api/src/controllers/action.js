@@ -139,7 +139,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     if (!collectivity.sharepoint_folder_id) {
       collectivity.sharepoint_folder_id = await createFolder(collectivity.name);
-      collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
+      collectivity.aggregation_excel_file_id = await duplicateExcelFile(`${collectivity.name} - Aggregation_V5.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
       await collectivity.save();
     }
 

@@ -4,13 +4,19 @@
  * Pour chaque collectivité (et chaque entrée collectivité d'un acteur éco) ayant un fichier d'agrégation :
  *  1. Lit les valeurs saisies dans "1. Données d'entrée" (colonnes I:K, lignes identifiées par l'ID en colonne D)
  *  2. Renomme l'ancien fichier en "..._OLD_V4.xlsx" (backup)
- *  3. Duplique le template V5 sous le nom canonique dans le dossier SharePoint de la collectivité
+ *  3. Duplique le template V5 sous le nom "... - Aggregation_V5.xlsx" dans le dossier SharePoint de la collectivité
  *  4. Réécrit les valeurs dans le nouveau fichier par correspondance d'ID, puis recalcule le workbook
  *  5. Met à jour aggregation_excel_file_id en base (seulement après succès complet)
  *
+ * Relançable : une cible dont le fichier en base finit déjà par "_V5.xlsx" est sautée. En cas d'échec, la copie V5
+ * est supprimée et l'ancien fichier retrouve son nom, pour que la relance reparte d'un état propre.
+ * Excel Online met plusieurs secondes à ouvrir une copie fraîche de 4 Mo : le classeur est "réchauffé" avec des
+ * essais espacés avant la première lecture, et une pause sépare deux cibles.
+ *
  * Usage (depuis api/) :
- *   node script/migrate_aggregation_v4.js --dry-run   # rapport sans aucune écriture
- *   node script/migrate_aggregation_v4.js             # migration réelle
+ *   node script/migrate_aggregation_v4.js --dry-run            # rapport sans aucune écriture
+ *   node script/migrate_aggregation_v4.js                      # migration réelle
+ *   node script/migrate_aggregation_v4.js --only "Morlaix"     # une seule cible (filtre sur le libellé)
  */
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
@@ -23,6 +29,12 @@ const INPUT_SHEET = "1. Données d'entrée";
 const MAX_ROWS = 10000;
 const VALUE_COLS = ['I', 'J', 'K']; // instances 1 à 3
 const DRY_RUN = process.argv.includes('--dry-run');
+const ONLY = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
+const NEW_SUFFIX = '_V5.xlsx';
+const PAUSE_BETWEEN_TARGETS_MS = 10000;
+const WARMUP_ATTEMPTS = 6;
+const WARMUP_DELAY_MS = 10000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const sheetPath = (siteId, fileId) => `/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(INPUT_SHEET)}`;
 
@@ -58,6 +70,32 @@ async function renameFile(siteId, fileId, newName) {
     method: 'PATCH',
     body: JSON.stringify({ name: newName, '@microsoft.graph.conflictBehavior': 'rename' }),
   });
+}
+
+// Première ouverture d'une copie fraîche : Excel Online charge et recalcule tout le classeur, ce qui dépasse
+// souvent le délai Graph (504). On tente une lecture légère jusqu'à ce que le classeur réponde.
+async function warmUpWorkbook(siteId, fileId, label) {
+  for (let attempt = 1; attempt <= WARMUP_ATTEMPTS; attempt++) {
+    try {
+      await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets?$select=name`);
+      return;
+    } catch (e) {
+      if (attempt === WARMUP_ATTEMPTS) throw new Error(`classeur toujours indisponible après ${WARMUP_ATTEMPTS} essais (${e.message})`);
+      console.log(`   ⏳ [${label}] classeur pas encore prêt (${e.message}), nouvel essai dans ${WARMUP_DELAY_MS / 1000}s...`);
+      await sleep(WARMUP_DELAY_MS);
+    }
+  }
+}
+
+// Supprime la copie V5 laissée par un échec, par id si connu, sinon par nom dans le dossier
+async function deleteNewCopy(siteId, folderId, newFileId, newFileName) {
+  let id = newFileId;
+  if (!id) {
+    const escapedName = newFileName.replace(/'/g, "''");
+    id = ((await graphFetch(`/sites/${siteId}/drive/items/${folderId}/children?$filter=name eq '${escapedName}'`)).value || [])[0]?.id;
+  }
+  if (!id) return;
+  await graphFetch(`/sites/${siteId}/drive/items/${id}`, { method: 'DELETE' });
 }
 
 // Écrit les valeurs dans le nouveau fichier par correspondance d'ID en colonne D (un seul PATCH I:K)
@@ -100,11 +138,26 @@ async function writeValues(siteId, newFileId, filled) {
 }
 
 async function migrateTarget(siteId, target, templateIds) {
-  const { label, oldFileId, folderId, fileName, saveNewFileId } = target;
+  const { label, oldFileId, folderId, baseName, saveNewFileId } = target;
+  const newFileName = `${baseName}${NEW_SUFFIX}`;
+  const oldName = `${baseName}_OLD_V4.xlsx`;
 
   if (!folderId) {
     console.log(`⚠️  [${label}] pas de sharepoint_folder_id → ignoré`);
     return { status: 'skipped' };
+  }
+
+  // Nom actuel du fichier pointé en base : déjà en _V5 → migration faite, on saute
+  let currentName;
+  try {
+    currentName = (await graphFetch(`/sites/${siteId}/drive/items/${oldFileId}?$select=name`)).name;
+  } catch (e) {
+    console.log(`⚠️  [${label}] fichier en base introuvable (${e.message}) → ignoré`);
+    return { status: 'error' };
+  }
+  if (currentName.endsWith(NEW_SUFFIX)) {
+    console.log(`⏭️  [${label}] déjà migré (${currentName})`);
+    return { status: 'already' };
   }
 
   let filled;
@@ -118,16 +171,17 @@ async function migrateTarget(siteId, target, templateIds) {
 
   if (DRY_RUN) {
     const unmatched = [...filled.keys()].filter((id) => !templateIds.has(id));
-    console.log(`🔎 [${label}] ${filled.size} ligne(s) avec valeurs à transférer${unmatched.length ? ` — ${unmatched.length} ID(s) absents du template V5 : ${unmatched.join(', ')}` : ''}`);
+    console.log(`🔎 [${label}] ${filled.size} ligne(s) avec valeurs à transférer depuis "${currentName}"${unmatched.length ? ` — ${unmatched.length} ID(s) absents du template V5 : ${unmatched.join(', ')}` : ''}`);
     return { status: 'dry-run', count: filled.size };
   }
 
-  const oldName = `${fileName.replace(/\.xlsx$/, '')}_OLD_V4.xlsx`;
-  await renameFile(siteId, oldFileId, oldName);
+  // Backup : l'ancien fichier prend le nom _OLD_V4 (sauf s'il le porte déjà, cas d'une migration interrompue)
+  if (currentName !== oldName) await renameFile(siteId, oldFileId, oldName);
 
   let newFileId;
   try {
-    newFileId = await duplicateExcelFile(fileName, folderId, aggregationTemplateFileId);
+    newFileId = await duplicateExcelFile(newFileName, folderId, aggregationTemplateFileId);
+    await warmUpWorkbook(siteId, newFileId, label);
     const { written, unmatched } = await writeValues(siteId, newFileId, filled);
     if (unmatched.length) console.log(`⚠️  [${label}] IDs non trouvés dans le V5 (valeurs non transférées) :`, unmatched);
     await calculateWorkbook(newFileId).catch((e) => console.log(`⚠️  [${label}] recalcul échoué : ${e.message}`));
@@ -135,8 +189,9 @@ async function migrateTarget(siteId, target, templateIds) {
     console.log(`✅ [${label}] migré → ${newFileId} (${written} cellule(s) transférée(s), ancien fichier : ${oldName})`);
     return { status: 'migrated' };
   } catch (e) {
-    console.log(`❌ [${label}] échec (${e.message}) → restauration du nom de l'ancien fichier`);
-    await renameFile(siteId, oldFileId, fileName).catch((err) => console.log(`❌ [${label}] restauration du nom échouée : ${err.message}`));
+    console.log(`❌ [${label}] échec (${e.message}) → suppression de la copie V5 et restauration du nom de l'ancien fichier`);
+    await deleteNewCopy(siteId, folderId, newFileId, newFileName).catch((err) => console.log(`❌ [${label}] suppression de la copie V5 échouée : ${err.message}`));
+    if (currentName !== oldName) await renameFile(siteId, oldFileId, currentName).catch((err) => console.log(`❌ [${label}] restauration du nom échouée : ${err.message}`));
     return { status: 'error' };
   }
 }
@@ -150,7 +205,7 @@ async function buildTargets() {
       label: collectivity.name,
       oldFileId: collectivity.aggregation_excel_file_id,
       folderId: collectivity.sharepoint_folder_id,
-      fileName: `${collectivity.name} - Aggregation.xlsx`,
+      baseName: `${collectivity.name} - Aggregation`,
       saveNewFileId: async (newFileId) => Collectivity.updateOne({ _id: collectivity._id }, { $set: { aggregation_excel_file_id: newFileId } }),
     });
   }
@@ -164,7 +219,7 @@ async function buildTargets() {
         label: `${actor.name} / ${entry.name}`,
         oldFileId: entry.aggregation_excel_file_id,
         folderId: collectivity?.sharepoint_folder_id,
-        fileName: `${actor.name} - ${entry.name} - Aggregation.xlsx`,
+        baseName: `${actor.name} - ${entry.name} - Aggregation`,
         saveNewFileId: async (newFileId) => EconomicActor.updateOne({ _id: actor._id, 'collectivities.id': entry.id }, { $set: { 'collectivities.$.aggregation_excel_file_id': newFileId } }),
       });
     }
@@ -182,16 +237,20 @@ async function buildTargets() {
   // IDs présents dans le template V5 (colonne D), pour signaler en dry-run les valeurs qui ne seraient pas transférées
   const templateIds = new Set(((await readInputSheet(siteId, aggregationTemplateFileId)).idRows).map((r) => (r?.[0] != null ? String(r[0]).trim() : '')).filter(Boolean));
   console.log(`${templateIds.size} ID(s) dans le template V5`);
-  const targets = await buildTargets();
-  console.log(`${targets.length} fichier(s) d'agrégation à migrer\n`);
+  const targets = (await buildTargets()).filter((t) => !ONLY || t.label.toLowerCase().includes(ONLY.toLowerCase()));
+  console.log(`${targets.length} fichier(s) d'agrégation à examiner${ONLY ? ` (filtre "${ONLY}")` : ''}\n`);
 
-  const counts = { migrated: 0, 'dry-run': 0, skipped: 0, error: 0 };
-  for (const target of targets) {
-    const { status } = await migrateTarget(siteId, target, templateIds);
+  const counts = { migrated: 0, already: 0, 'dry-run': 0, skipped: 0, error: 0 };
+  for (let i = 0; i < targets.length; i++) {
+    const { status } = await migrateTarget(siteId, targets[i], templateIds);
     counts[status]++;
+    // Laisser respirer Excel Online entre deux migrations réelles
+    if (status === 'migrated' || status === 'error') {
+      if (i < targets.length - 1) await sleep(PAUSE_BETWEEN_TARGETS_MS);
+    }
   }
 
-  console.log(`\nTerminé — migrés: ${counts.migrated}, dry-run: ${counts['dry-run']}, ignorés: ${counts.skipped}, erreurs: ${counts.error}`);
+  console.log(`\nTerminé — migrés: ${counts.migrated}, déjà migrés: ${counts.already}, dry-run: ${counts['dry-run']}, ignorés: ${counts.skipped}, erreurs: ${counts.error}`);
   await mongoose.disconnect();
   process.exit(counts.error > 0 ? 1 : 0);
 })().catch((e) => {
