@@ -5,11 +5,11 @@
  *  1. Lit les valeurs saisies dans "1. Données d'entrée" (colonnes I:K, lignes identifiées par l'ID en colonne D)
  *  2. Renomme l'ancien fichier en "..._OLD_V4.xlsx" (backup)
  *  3. Duplique le template V5 sous le nom "... - Aggregation_V5.xlsx" dans le dossier SharePoint de la collectivité
- *  4. Réécrit les valeurs dans le nouveau fichier par correspondance d'ID, puis recalcule le workbook
+ *  4. Réécrit les valeurs dans le nouveau fichier par correspondance d'ID, par blocs de lignes proches, puis recalcule le workbook
  *  5. Met à jour aggregation_excel_file_id en base (seulement après succès complet)
  *
- * Relançable : une cible dont le fichier en base finit déjà par "_V5.xlsx" est sautée. En cas d'échec, la copie V5
- * est supprimée et l'ancien fichier retrouve son nom, pour que la relance reparte d'un état propre.
+ * Relançable : une cible dont le fichier en base finit déjà par "_V5.xlsx" est sautée. En cas d'échec, l'ancien fichier
+ * retrouve son nom et la copie V5 est conservée : la relance la réutilise au lieu d'en créer une autre.
  * Excel Online met plusieurs secondes à ouvrir une copie fraîche de 4 Mo : le classeur est "réchauffé" avec des
  * essais espacés avant la première lecture, et une pause sépare deux cibles.
  *
@@ -34,6 +34,14 @@ const NEW_SUFFIX = '_V5.xlsx';
 const PAUSE_BETWEEN_TARGETS_MS = 10000;
 const WARMUP_ATTEMPTS = 6;
 const WARMUP_DELAY_MS = 10000;
+// Écriture par blocs : deux lignes remplies séparées de plus de MAX_GAP_ROWS lignes vides vont dans deux PATCH distincts.
+// Un seul PATCH couvrant 6 800 lignes (Morlaix, Nîmes) fait tomber Excel Online en 504.
+const MAX_GAP_ROWS = 100;
+// Étendue maximale d'un bloc (première → dernière ligne) : les fichiers migrés sans problème couvraient ~900 lignes
+const MAX_CLUSTER_ROWS = 500;
+const PAUSE_BETWEEN_PATCHES_MS = 500;
+const RENAME_ATTEMPTS = 3;
+const RENAME_DELAY_MS = 10000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const sheetPath = (siteId, fileId) => `/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(INPUT_SHEET)}`;
@@ -72,6 +80,21 @@ async function renameFile(siteId, fileId, newName) {
   });
 }
 
+// Un fichier reste verrouillé quelques secondes après une lecture de classeur (session Excel Online),
+// ou tant qu'un utilisateur l'a ouvert dans Excel : on réessaie avant d'abandonner la cible.
+async function renameFileWithRetry(siteId, fileId, newName, label) {
+  for (let attempt = 1; attempt <= RENAME_ATTEMPTS; attempt++) {
+    try {
+      await renameFile(siteId, fileId, newName);
+      return;
+    } catch (e) {
+      if (!/locked/i.test(e.message) || attempt === RENAME_ATTEMPTS) throw e;
+      console.log(`   ⏳ [${label}] fichier verrouillé, nouvel essai du renommage dans ${RENAME_DELAY_MS / 1000}s (${attempt}/${RENAME_ATTEMPTS})...`);
+      await sleep(RENAME_DELAY_MS);
+    }
+  }
+}
+
 // Première ouverture d'une copie fraîche : Excel Online charge et recalcule tout le classeur, ce qui dépasse
 // souvent le délai Graph (504). On tente une lecture légère jusqu'à ce que le classeur réponde.
 async function warmUpWorkbook(siteId, fileId, label) {
@@ -87,18 +110,27 @@ async function warmUpWorkbook(siteId, fileId, label) {
   }
 }
 
-// Supprime la copie V5 laissée par un échec, par id si connu, sinon par nom dans le dossier
-async function deleteNewCopy(siteId, folderId, newFileId, newFileName) {
-  let id = newFileId;
-  if (!id) {
-    const escapedName = newFileName.replace(/'/g, "''");
-    id = ((await graphFetch(`/sites/${siteId}/drive/items/${folderId}/children?$filter=name eq '${escapedName}'`)).value || [])[0]?.id;
-  }
-  if (!id) return;
-  await graphFetch(`/sites/${siteId}/drive/items/${id}`, { method: 'DELETE' });
+// Id d'un fichier du dossier par son nom exact, null s'il n'existe pas
+async function findFileByName(siteId, folderId, fileName) {
+  const escapedName = fileName.replace(/'/g, "''");
+  return ((await graphFetch(`/sites/${siteId}/drive/items/${folderId}/children?$filter=name eq '${escapedName}'`)).value || [])[0]?.id || null;
 }
 
-// Écrit les valeurs dans le nouveau fichier par correspondance d'ID en colonne D (un seul PATCH I:K)
+// Regroupe des index de lignes (triés) en blocs : coupure dès qu'un trou dépasse maxGap lignes,
+// ou dès que le bloc s'étendrait sur plus de maxSpan lignes
+function clusterRows(rowIndexes, maxGap, maxSpan = Infinity) {
+  const sorted = [...new Set(rowIndexes)].sort((a, b) => a - b);
+  const clusters = [];
+  for (const row of sorted) {
+    const current = clusters[clusters.length - 1];
+    const fits = current && row - current[current.length - 1] <= maxGap && row - current[0] + 1 <= maxSpan;
+    if (fits) current.push(row);
+    if (!fits) clusters.push([row]);
+  }
+  return clusters;
+}
+
+// Écrit les valeurs dans le nouveau fichier par correspondance d'ID en colonne D, un PATCH I:K par bloc de lignes proches
 async function writeValues(siteId, newFileId, filled) {
   const { idRows, valueRows } = await readInputSheet(siteId, newFileId);
 
@@ -110,31 +142,34 @@ async function writeValues(siteId, newFileId, filled) {
 
   const unmatched = [...filled.keys()].filter((id) => !idRowMap.has(id));
   const matched = [...filled.entries()].filter(([id]) => idRowMap.has(id));
-  if (!matched.length) return { written: 0, unmatched };
+  if (!matched.length) return { written: 0, unmatched, patches: 0 };
 
-  const rowIndexes = matched.map(([id]) => idRowMap.get(id));
-  const min = Math.min(...rowIndexes);
-  const max = Math.max(...rowIndexes);
-
-  // Matrice I:K complète sur min..max : valeurs existantes du template, écrasées par les valeurs migrées
-  const matrix = [];
-  for (let i = min; i <= max; i++) matrix.push([valueRows[i]?.[0] ?? '', valueRows[i]?.[1] ?? '', valueRows[i]?.[2] ?? '']);
+  const valuesByRow = new Map(matched.map(([id, values]) => [idRowMap.get(id), values]));
+  const clusters = clusterRows([...valuesByRow.keys()], MAX_GAP_ROWS, MAX_CLUSTER_ROWS);
   let written = 0;
-  for (const [id, values] of matched) {
-    const row = matrix[idRowMap.get(id) - min];
-    for (let c = 0; c < 3; c++) {
-      if (values[c] === '' || values[c] == null) continue;
-      row[c] = values[c];
-      written++;
+
+  for (let c = 0; c < clusters.length; c++) {
+    const min = clusters[c][0];
+    const max = clusters[c][clusters[c].length - 1];
+    // Matrice I:K complète sur min..max : valeurs existantes du template, écrasées par les valeurs migrées
+    const matrix = [];
+    for (let i = min; i <= max; i++) matrix.push([valueRows[i]?.[0] ?? '', valueRows[i]?.[1] ?? '', valueRows[i]?.[2] ?? '']);
+    for (const row of clusters[c]) {
+      const values = valuesByRow.get(row);
+      for (let k = 0; k < 3; k++) {
+        if (values[k] === '' || values[k] == null) continue;
+        matrix[row - min][k] = values[k];
+        written++;
+      }
     }
+    await graphFetch(`${sheetPath(siteId, newFileId)}/range(address='${VALUE_COLS[0]}${min + 1}:${VALUE_COLS[2]}${max + 1}')`, {
+      method: 'PATCH',
+      body: JSON.stringify({ values: matrix }),
+    });
+    if (c < clusters.length - 1) await sleep(PAUSE_BETWEEN_PATCHES_MS);
   }
 
-  await graphFetch(`${sheetPath(siteId, newFileId)}/range(address='${VALUE_COLS[0]}${min + 1}:${VALUE_COLS[2]}${max + 1}')`, {
-    method: 'PATCH',
-    body: JSON.stringify({ values: matrix }),
-  });
-
-  return { written, unmatched };
+  return { written, unmatched, patches: clusters.length };
 }
 
 async function migrateTarget(siteId, target, templateIds) {
@@ -160,38 +195,58 @@ async function migrateTarget(siteId, target, templateIds) {
     return { status: 'already' };
   }
 
-  let filled;
-  try {
+  const readOld = async () => {
     const { idRows, valueRows } = await readInputSheet(siteId, oldFileId);
-    filled = extractFilledValues(idRows, valueRows);
-  } catch (e) {
-    console.log(`⚠️  [${label}] lecture de l'ancien fichier impossible (${e.message}) → ignoré`);
-    return { status: 'error' };
-  }
+    return extractFilledValues(idRows, valueRows);
+  };
 
   if (DRY_RUN) {
+    let filled;
+    try {
+      filled = await readOld();
+    } catch (e) {
+      console.log(`⚠️  [${label}] lecture de l'ancien fichier impossible (${e.message}) → ignoré`);
+      return { status: 'error' };
+    }
     const unmatched = [...filled.keys()].filter((id) => !templateIds.has(id));
     console.log(`🔎 [${label}] ${filled.size} ligne(s) avec valeurs à transférer depuis "${currentName}"${unmatched.length ? ` — ${unmatched.length} ID(s) absents du template V5 : ${unmatched.join(', ')}` : ''}`);
     return { status: 'dry-run', count: filled.size };
   }
 
-  // Backup : l'ancien fichier prend le nom _OLD_V4 (sauf s'il le porte déjà, cas d'une migration interrompue)
-  if (currentName !== oldName) await renameFile(siteId, oldFileId, oldName);
+  // Backup : l'ancien fichier prend le nom _OLD_V4 (sauf s'il le porte déjà, cas d'une migration interrompue).
+  // Fait AVANT la lecture : lire le classeur pose une session Excel Online qui verrouille le fichier quelques secondes.
+  // Facultatif : le nouveau fichier porte _V5, il n'y a pas de conflit de nom. Si l'ancien reste verrouillé
+  // (fichier ouvert dans Excel, synchro de l'application en cours), il garde son nom et la migration continue.
+  let renamed = false;
+  if (currentName !== oldName) {
+    try {
+      await renameFileWithRetry(siteId, oldFileId, oldName, label);
+      renamed = true;
+    } catch (e) {
+      console.log(`⚠️  [${label}] ancien fichier non renommé, il garde le nom "${currentName}" (${e.message})`);
+    }
+  }
+  const backupName = renamed || currentName === oldName ? oldName : currentName;
 
   let newFileId;
   try {
-    newFileId = await duplicateExcelFile(newFileName, folderId, aggregationTemplateFileId);
+    const filled = await readOld();
+    // Une copie _V5 laissée par une tentative précédente est réutilisée : elle vient du même template, et les
+    // valeurs réécrites sont identiques. Évite aussi de buter sur un fichier encore verrouillé par Excel Online.
+    const existing = await findFileByName(siteId, folderId, newFileName);
+    if (existing) console.log(`   ♻️  [${label}] copie V5 existante réutilisée (${existing})`);
+    newFileId = existing || (await duplicateExcelFile(newFileName, folderId, aggregationTemplateFileId));
     await warmUpWorkbook(siteId, newFileId, label);
-    const { written, unmatched } = await writeValues(siteId, newFileId, filled);
+    const { written, unmatched, patches } = await writeValues(siteId, newFileId, filled);
     if (unmatched.length) console.log(`⚠️  [${label}] IDs non trouvés dans le V5 (valeurs non transférées) :`, unmatched);
     await calculateWorkbook(newFileId).catch((e) => console.log(`⚠️  [${label}] recalcul échoué : ${e.message}`));
     await saveNewFileId(newFileId);
-    console.log(`✅ [${label}] migré → ${newFileId} (${written} cellule(s) transférée(s), ancien fichier : ${oldName})`);
+    console.log(`✅ [${label}] migré → ${newFileId} (${written} cellule(s) transférée(s) en ${patches} bloc(s), ancien fichier : ${backupName})`);
     return { status: 'migrated' };
   } catch (e) {
-    console.log(`❌ [${label}] échec (${e.message}) → suppression de la copie V5 et restauration du nom de l'ancien fichier`);
-    await deleteNewCopy(siteId, folderId, newFileId, newFileName).catch((err) => console.log(`❌ [${label}] suppression de la copie V5 échouée : ${err.message}`));
-    if (currentName !== oldName) await renameFile(siteId, oldFileId, currentName).catch((err) => console.log(`❌ [${label}] restauration du nom échouée : ${err.message}`));
+    // La copie _V5 reste en place pour la relance ; seul l'ancien fichier retrouve son nom
+    console.log(`❌ [${label}] échec (${e.message}) → restauration du nom de l'ancien fichier (copie V5 conservée pour la relance)`);
+    if (renamed) await renameFileWithRetry(siteId, oldFileId, currentName, label).catch((err) => console.log(`❌ [${label}] restauration du nom échouée : ${err.message}`));
     return { status: 'error' };
   }
 }
@@ -242,7 +297,13 @@ async function buildTargets() {
 
   const counts = { migrated: 0, already: 0, 'dry-run': 0, skipped: 0, error: 0 };
   for (let i = 0; i < targets.length; i++) {
-    const { status } = await migrateTarget(siteId, targets[i], templateIds);
+    let status;
+    try {
+      status = (await migrateTarget(siteId, targets[i], templateIds)).status;
+    } catch (e) {
+      console.log(`❌ [${targets[i].label}] erreur inattendue (${e.message}) → cible suivante`);
+      status = 'error';
+    }
     counts[status]++;
     // Laisser respirer Excel Online entre deux migrations réelles
     if (status === 'migrated' || status === 'error') {
