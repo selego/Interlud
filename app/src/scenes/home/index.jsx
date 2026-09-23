@@ -472,6 +472,7 @@ function StackedActionsChart({ emissions, unit, yearExpost }) {
   const yOf = (v) => PAD.t + innerH - (v / yMax) * innerH
 
   const barW = Math.min(40, (innerW / (years.length || 1)) * 0.7)
+  const MIN_SEG_H = 2
 
   const prevYears = years.filter((y) => prevByYear[y] != null && prevByYear[y] > 0)
   const prevPath = prevYears.map((y, i) => `${i === 0 ? "M" : "L"} ${xOf(y)} ${yOf(prevByYear[y])}`).join(" ")
@@ -498,8 +499,10 @@ function StackedActionsChart({ emissions, unit, yearExpost }) {
           return (
             <g key={d.year} onMouseEnter={() => setHover(d)} onMouseLeave={() => setHover(null)} style={{ cursor: "pointer" }}>
               {d.segments.map((seg, i) => {
-                const h = (seg.value / yMax) * innerH
-                if (h < 0.5) return null
+                if (!(seg.value > 0)) return null
+                // Hauteur minimale pour qu'une action contributrice reste visible même si son
+                // ex-post est négligeable face à l'échelle (ex : référence d'une autre action en 100k).
+                const h = Math.max((seg.value / yMax) * innerH, MIN_SEG_H)
                 const yTop = yCursor - h
                 const rect = (
                   <rect key={seg.action} x={xOf(d.year) - barW / 2} y={yTop} width={barW} height={h}
