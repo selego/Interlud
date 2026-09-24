@@ -823,9 +823,9 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
   // Ex: =IF($F$1724=$R$1724,0,1)*$K$1714*IF($F$1714=$S$1714,1,0)
   // Ex: = 1 * 'Remplissage - Sit. Init.'!$K$1416
   // N'est retenu que si TOUS les facteurs sont compris; sinon on laisse la main aux cas suivants.
-  // Les produits composés uniquement d'IF restent sur le CAS 4 (comportement historique préservé).
+  // Les produits composés uniquement d'IF passent aussi ici (préfixes de feuille et cellule = cellule gérés) ; CAS 4 reste le repli.
   const topFactors = splitTopLevel(formulaContent, ["*"]).map((factor) => stripOuterParens(factor));
-  if (topFactors.length >= 2 && !topFactors.some((factor) => factor === "") && !topFactors.every((factor) => /^IF\s*\(/i.test(factor))) {
+  if (topFactors.length >= 2 && !topFactors.some((factor) => factor === "")) {
     const refs = [];
     const conditions = [];
     let neverVisible = false;
@@ -1988,7 +1988,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
             indicator_sub_category_id: subCategory?._id,
             indicator_sub_category_name: subCategory?.name,
             name: row[2] || undefined,
-            description: row[3] || undefined,
+            // null explicite (comme linked_action_id) : avec undefined, Mongoose ignore le champ et une description/unité effacée du master reste en base
+            description: row[3] || null,
             is_primordial: row[15] === true || row[15] === "VRAI",
             value_possibilities: possibilitiesSourceForSituation
               ? []
@@ -1999,7 +2000,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
                     .filter((v) => v !== "")
                 : [],
             value_default: updatedValueDefault,
-            value_unit: row[8] || undefined,
+            value_unit: row[8] || null,
             value_type: valueType,
             // null explicite : avec undefined, Mongoose ignore le champ dans le $set et un indicateur détaché (colonne N vide)
             // reste lié en base → détecté "changé d'action" à chaque passage, IVs supprimées puis recréées au mauvais endroit
@@ -2688,7 +2689,11 @@ async function generateExcelForAllCollectivities(options = {}) {
     const referencedIds = new Set(actions.flatMap((a) => [...(a.exel_files_prev || []), ...(a.excel_files_expost || [])].map((f) => f.excel_file_id).filter(Boolean)));
     const staleOld = (await graphFetch(`/sites/${siteId}/drive/items/${collectivity.sharepoint_folder_id}/children?$top=200`)).value.filter((f) => f.name.startsWith("OLD_") && !referencedIds.has(f.id));
     if (staleOld.length > 0) {
-      await deleteFiles(siteId, staleOld.map((f) => f.id), `reliquat(s) OLD_ non référencé(s)`);
+      await deleteFiles(
+        siteId,
+        staleOld.map((f) => f.id),
+        `reliquat(s) OLD_ non référencé(s)`,
+      );
     }
 
     for (const action of actions) {
@@ -2940,7 +2945,7 @@ if (require.main === module) {
       await syncIndicatorsToExistingActions();
 
       // Étape 5: Régénérer les fichiers Excel pour toutes les collectivités (valeurs + défauts relus après recalcul)
-      await generateExcelForAllCollectivities();
+      // await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
