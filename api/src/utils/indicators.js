@@ -131,11 +131,31 @@ const buildSourceLookup = async (refs, getSource) => {
     }
   }
 
+  // Année attendue de la source, déduite des fichiers de l'action cible (un prev/expost a son propre year_ref) :
+  // sans ça, une action avec un fichier prev (ref 2026) et un fichier expost (ref 2028) prend l'IV ref 2026 pour son expost 2028.
+  const Action = require('../models/action');
+  const actions = await Action.find({ _id: { $in: [...new Set(refs.map((iv) => String(iv.action_id)))] } });
+  const actionsById = new Map(actions.map((a) => [String(a._id), a]));
+  const expectedSourceYear = (iv, sourceSituation) => {
+    if (sourceSituation === iv.situation) return iv.year;
+    const action = actionsById.get(String(iv.action_id));
+    if (!action) return null;
+    if (sourceSituation === 'init') return action.year_init ?? null;
+    if (sourceSituation === 'ref' && iv.situation === 'prev') return (action.exel_files_prev || []).find((f) => f.year_prev === iv.year)?.year_ref ?? null;
+    if (sourceSituation === 'ref' && iv.situation === 'expost') return (action.excel_files_expost || []).find((f) => f.year_expost === iv.year)?.year_ref ?? null;
+    if (sourceSituation === 'prev' && iv.situation === 'ref') return (action.exel_files_prev || []).find((f) => f.year_ref === iv.year)?.year_prev ?? null;
+    if (sourceSituation === 'expost' && iv.situation === 'ref') return (action.excel_files_expost || []).find((f) => f.year_ref === iv.year)?.year_expost ?? null;
+    return null;
+  };
+
   return (iv) => {
     const src = getSource(iv);
     const candidates = sourceMap.get(`${iv.collectivity_id}|${iv.owner}|${iv.economic_actor_id || ''}|${src.excel_indicator_id}|${src.situation}`);
     if (!candidates) return null;
-    return candidates.find((c) => String(c.action_id) === String(iv.action_id)) || candidates[0];
+    const year = expectedSourceYear(iv, src.situation);
+    const sameYear = year === null ? candidates : candidates.filter((c) => c.year === year);
+    const pool = sameYear.length > 0 ? sameYear : candidates;
+    return pool.find((c) => String(c.action_id) === String(iv.action_id)) || pool[0];
   };
 };
 

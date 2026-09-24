@@ -1,5 +1,5 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
-const { graphFetch, duplicateExcelFile } = require("../src/services/microsoftGraph");
+const { graphFetch, duplicateExcelFile, calculateWorkbook, readExcelDefaultValues, updateExcelCellsBatch, createWorkbookSession, closeWorkbookSession } = require("../src/services/microsoftGraph");
 const { isPercentUnit } = require("../src/utils/indicators");
 const Indicator = require("../src/models/indicator");
 const IndicatorValue = require("../src/models/indicator_value");
@@ -2248,10 +2248,13 @@ function formatIndicatorValue(indicatorValue) {
 }
 
 // situationYears: [{ situation: 'init', year: 2020 }, { situation: 'ref', year: 2022 }, ...]
-async function syncIndicatorValuesToExcel(excelFileId, collectivityId, situationYears, siteId) {
+// actionIds : IVs de l'action du fichier + de ses actions config (cf. getActionScopeIds). Sans ce filtre, deux instances du même type
+// d'action avec la même année (ex : deux C3 en init 2023) se mélangent dans valuesMap et le fichier reçoit les valeurs de l'autre instance.
+async function syncIndicatorValuesToExcel(excelFileId, collectivityId, situationYears, siteId, actionIds = null) {
   // Charger uniquement les indicator_values pertinents (par situation + year)
   const indicatorValues = await IndicatorValue.find({
     collectivity_id: collectivityId,
+    ...(actionIds ? { action_id: { $in: actionIds } } : {}),
     $or: situationYears.map((sy) => ({ situation: sy.situation, year: sy.year })),
   });
 
@@ -2488,6 +2491,117 @@ async function syncIndicatorsToExistingActions() {
   return allNewIVs.length;
 }
 
+// Même conversion qu'à la création d'action (parseDefaultValue dans controllers/action.js)
+function parseExcelDefaultValue(rawValue, indicatorType, unit) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") return null;
+  if (typeof rawValue === "string" && rawValue.startsWith("#")) return null;
+  if (indicatorType === "number") {
+    const p = parseFloat(rawValue);
+    if (isNaN(p)) return null;
+    // Excel stocke les % en fraction (0.45 pour 45%), même conversion qu'à l'import
+    return isPercentUnit(unit) ? p * 100 : p;
+  }
+  if (indicatorType === "text" || indicatorType === "radio") return String(rawValue).trim() || null;
+  if (indicatorType === "checkbox")
+    return String(rawValue)
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => v !== "");
+  return null;
+}
+
+const isEmptyIVValue = (v) => v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
+
+// Relit la colonne H d'un fichier Excel (après recalcul, donc avec SIREN, années et saisies de la collectivité)
+// et rejoue la logique de la création d'action sur les IVs de l'action et des actions config, pour les couples situation/année du fichier :
+//   - value_default : mis à jour ; cellule H en erreur Excel (#REF!, #N/A…) → null, comme à la création (la base reflète le fichier)
+//   - value : Parc types et indicateurs non primordiaux d'une action (jamais Données de base), uniquement si la valeur
+//     est vide ou égale à l'ancien défaut (jamais modifiée par l'utilisateur), et jamais écrasée par null.
+//     Une valeur différente de l'ancien défaut est une saisie ou un import utilisateur : conservée.
+//     ⚠️ Ne s'applique qu'à un fichier régénéré depuis le master : un fichier ayant subi un import a des #REF! sur 'Parcs types'.
+//   - les valeurs modifiées en base sont réécrites dans l'Excel pour rester alignées
+// dryRun : journalise les changements sans rien écrire (ni base ni Excel) ; le recalcul du classeur a lieu quand même.
+async function refreshDefaultsFromExcel(fileId, actionIds, situationYears, { dryRun = false, sessionId = null } = {}) {
+  await calculateWorkbook(fileId, sessionId);
+  const defaultsBySituation = new Map();
+  for (const { situation } of situationYears) defaultsBySituation.set(situation, await readExcelDefaultValues(fileId, situation, sessionId));
+
+  const ivs = await IndicatorValue.find({
+    action_id: { $in: actionIds },
+    indicator_excel_id: { $exists: true, $ne: null },
+    $or: situationYears.map((sy) => ({ situation: sy.situation, year: sy.year })),
+  });
+
+  const bulkOps = [];
+  const excelRewrites = new Map(); // situation → [{ excel_indicator_id, value, unit }]
+  const report = { ivs: ivs.length, defaults: 0, values: 0, protected: 0, errors: 0 };
+  const tag = dryRun ? "[dry-run] " : "";
+  const fmt = (v) => JSON.stringify(v ?? null);
+
+  for (const iv of ivs) {
+    const defaults = defaultsBySituation.get(iv.situation);
+    if (!defaults || !defaults.has(iv.indicator_excel_id)) continue;
+
+    const rawDefault = defaults.get(iv.indicator_excel_id);
+    // Cellule en erreur Excel (#REF!, #N/A…) → défaut null, comme parseDefaultValue à la création d'action : la base reflète le fichier
+    const isExcelError = typeof rawDefault === "string" && rawDefault.startsWith("#");
+    const newDefault = parseExcelDefaultValue(rawDefault, iv.indicator_type, iv.indicator_value_unit);
+    const currentDefault = iv.value_default?.[iv.indicator_type] ?? null;
+    if (JSON.stringify(newDefault) === JSON.stringify(currentDefault)) continue;
+
+    const label = `${tag}${iv.action_name} · ${iv.indicator_excel_id} (${iv.situation} ${iv.year})`;
+    const updateFields = { [`value_default.${iv.indicator_type}`]: newDefault };
+    report.defaults++;
+    if (isExcelError) report.errors++;
+    console.log(`      ${label} : défaut ${fmt(currentDefault)} → ${fmt(newDefault)}${isExcelError ? ` (cellule Excel ${rawDefault})` : ""}`);
+
+    const isValueCandidate = iv.action_name !== "Données de base" && (iv.action_name === "Parc types" || iv.is_primordial === false);
+    if (isValueCandidate) {
+      const currentValue = iv.value?.[iv.indicator_type];
+      const isEmpty = isEmptyIVValue(currentValue);
+      const untouched = newDefault !== null && (isEmpty || JSON.stringify(currentValue) === JSON.stringify(currentDefault));
+      if (!untouched && !isEmpty) {
+        report.protected++;
+        console.log(`      ${label} : valeur ${fmt(currentValue)} conservée`);
+      }
+      if (untouched) {
+        report.values++;
+        updateFields[`value.${iv.indicator_type}`] = newDefault;
+        console.log(`      ${label} : valeur ${fmt(currentValue)} → ${fmt(newDefault)}`);
+        if (newDefault !== null) {
+          if (!excelRewrites.has(iv.situation)) excelRewrites.set(iv.situation, []);
+          excelRewrites.get(iv.situation).push({ excel_indicator_id: iv.indicator_excel_id, value: newDefault, unit: iv.indicator_value_unit });
+        }
+      }
+    }
+
+    bulkOps.push({ updateOne: { filter: { _id: iv._id }, update: { $set: updateFields } } });
+  }
+
+  if (dryRun || bulkOps.length === 0) return report;
+
+  await IndicatorValue.bulkWrite(bulkOps);
+  for (const [situation, cells] of excelRewrites) await updateExcelCellsBatch(fileId, cells, situation, sessionId);
+  return report;
+}
+
+// Périmètre des IVs d'un fichier Excel : l'action + ses actions config (Données de base, Parc types) de même owner / acteur économique
+async function getActionScopeIds(action, collectivityId) {
+  const configActions = await Action.find({ collectivity_id: collectivityId, type: "config", owner: action.owner || "collectivity", ...(action.economic_actor_id ? { economic_actor_id: action.economic_actor_id } : {}) });
+  return [action._id.toString(), ...configActions.map((a) => a._id.toString())];
+}
+
+// Enchaîne recalcul + relecture des défauts dans une session workbook dédiée (comme à la création d'action)
+async function refreshDefaultsForFile(fileId, action, collectivityId, situationYears, dryRun) {
+  const actionIds = await getActionScopeIds(action, collectivityId);
+  const sessionId = await createWorkbookSession(fileId).catch(() => null);
+  try {
+    return await refreshDefaultsFromExcel(fileId, actionIds, situationYears, { dryRun, sessionId });
+  } finally {
+    await closeWorkbookSession(fileId, sessionId).catch(() => {});
+  }
+}
+
 async function duplicateMasterExcel(collectivityName) {
   console.log(`\n📋 Duplication du fichier master pour "${collectivityName}"...`);
 
@@ -2510,8 +2624,40 @@ async function duplicateMasterExcel(collectivityName) {
   return newFileId;
 }
 
-async function generateExcelForAllCollectivities() {
-  console.log("\n📊 Régénération des Excel pour toutes les collectivités...");
+// Supprime une liste de fichiers SharePoint, en journalisant les échecs sans interrompre le passage
+async function deleteFiles(siteId, fileIds, label) {
+  let deleted = 0;
+  for (const fileId of fileIds) {
+    try {
+      await graphFetch(`/sites/${siteId}/drive/items/${fileId}`, { method: "DELETE", headers: { Prefer: "bypass-shared-lock" } });
+      deleted++;
+    } catch (error) {
+      console.error(`   ❌ Suppression du fichier ${fileId} :`, error.message);
+    }
+  }
+  console.log(`   🗑️ ${deleted}/${fileIds.length} ${label} supprimé(s)`);
+}
+
+// Fichier du dossier portant exactement ce nom (null si absent)
+async function findFileByName(siteId, folderId, fileName) {
+  const result = await graphFetch(`/sites/${siteId}/drive/items/${folderId}/children?$filter=name eq '${fileName.replace(/'/g, "''")}'`);
+  return result.value?.[0] || null;
+}
+
+// duplicateExcelFile retrouve la copie par son NOM : si un fichier du même nom existe déjà (fichier courant de même version, ou
+// reliquat d'un passage interrompu), il serait confondu avec la nouvelle copie et écrit partiellement. On le renomme avant de copier ;
+// il reste référencé par son id (l'action continue de fonctionner en cas d'échec) et sera supprimé avec les anciens fichiers.
+async function renameConflictingFile(siteId, folderId, fileName) {
+  const existing = await findFileByName(siteId, folderId, fileName);
+  if (!existing) return null;
+  await graphFetch(`/sites/${siteId}/drive/items/${existing.id}`, { method: "PATCH", body: JSON.stringify({ name: `OLD_${Date.now()}_${fileName}` }) });
+  return existing.id;
+}
+
+// options.collectivityFilter : RegExp sur le nom de collectivité pour une relance ciblée (sinon toutes)
+async function generateExcelForAllCollectivities(options = {}) {
+  const { collectivityFilter = null } = options;
+  console.log(`\n📊 Régénération des Excel pour ${collectivityFilter ? `les collectivités /${collectivityFilter.source}/` : "toutes les collectivités"}...`);
 
   const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
 
@@ -2531,13 +2677,22 @@ async function generateExcelForAllCollectivities() {
     if (!collectivity.sharepoint_folder_id) {
       continue;
     }
+    if (collectivityFilter && !collectivityFilter.test(collectivity.name)) continue;
 
     const actions = await Action.find({ collectivity_id: collectivity._id.toString() });
     if (actions.length === 0) continue;
 
     console.log(`\n🏙️ "${collectivity.name}" : ${actions.length} action(s)`);
 
+    // Reliquats OLD_… d'un passage interrompu, non référencés par une action → supprimés d'emblée
+    const referencedIds = new Set(actions.flatMap((a) => [...(a.exel_files_prev || []), ...(a.excel_files_expost || [])].map((f) => f.excel_file_id).filter(Boolean)));
+    const staleOld = (await graphFetch(`/sites/${siteId}/drive/items/${collectivity.sharepoint_folder_id}/children?$top=200`)).value.filter((f) => f.name.startsWith("OLD_") && !referencedIds.has(f.id));
+    if (staleOld.length > 0) {
+      await deleteFiles(siteId, staleOld.map((f) => f.id), `reliquat(s) OLD_ non référencé(s)`);
+    }
+
     for (const action of actions) {
+      const actionIds = await getActionScopeIds(action, collectivity._id.toString());
       // Traiter les fichiers prev
       for (let idx = 0; idx < (action.exel_files_prev || []).length; idx++) {
         const prevFile = action.exel_files_prev[idx];
@@ -2550,6 +2705,8 @@ async function generateExcelForAllCollectivities() {
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
           const ownerPrefix = action.owner === "economic_actor" && action.economic_actor_name ? `${action.economic_actor_name}_` : "";
           const fileName = `${ownerPrefix}${action.name}${instanceSuffix}_Prev${prevFile.year_prev}${versionSuffix}.xlsx`;
+          const conflictingId = await renameConflictingFile(siteId, collectivity.sharepoint_folder_id, fileName);
+          if (conflictingId && conflictingId !== oldFileId) oldFileIdsToDelete.push(conflictingId);
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           // Sync les valeurs (prev file contient init + ref + prev)
@@ -2559,14 +2716,16 @@ async function generateExcelForAllCollectivities() {
             { situation: "prev", year: prevFile.year_prev },
           ].filter((sy) => sy.year);
 
-          const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
+          const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId, actionIds);
+          // Défauts calculés par Excel (SIREN, années…) : relus après recalcul, comme à la création d'action
+          const report = await refreshDefaultsForFile(newFileId, action, collectivity._id.toString(), situationYears, false);
 
           // Mettre à jour le excel_file_id dans l'action
           action.exel_files_prev[idx].excel_file_id = newFileId;
           if (oldFileId !== newFileId) oldFileIdsToDelete.push(oldFileId);
           totalFiles++;
           totalValues += updated;
-          console.log(`   ✅ ${fileName} : ${updated} valeurs`);
+          console.log(`   ✅ ${fileName} : ${updated} valeurs, ${report.defaults} défauts relus, ${report.values} valeurs suivies, ${report.protected} valeurs conservées, ${report.errors} défauts null sur cellule en erreur`);
         } catch (error) {
           console.error(`   ❌ Prev ${prevFile.year_prev} pour "${action.name}":`, error.message);
         }
@@ -2583,6 +2742,8 @@ async function generateExcelForAllCollectivities() {
           const instanceSuffix = action.instance_number > 1 ? `_${action.instance_number}` : "";
           const ownerPrefix = action.owner === "economic_actor" && action.economic_actor_name ? `${action.economic_actor_name}_` : "";
           const fileName = `${ownerPrefix}${action.name}${instanceSuffix}_Expost${expostFile.year_expost}${versionSuffix}.xlsx`;
+          const conflictingId = await renameConflictingFile(siteId, collectivity.sharepoint_folder_id, fileName);
+          if (conflictingId && conflictingId !== oldFileId) oldFileIdsToDelete.push(conflictingId);
           const newFileId = await duplicateExcelFile(fileName, collectivity.sharepoint_folder_id, masterFileId);
 
           const situationYears = [
@@ -2591,36 +2752,33 @@ async function generateExcelForAllCollectivities() {
             { situation: "expost", year: expostFile.year_expost },
           ].filter((sy) => sy.year);
 
-          const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId);
+          const updated = await syncIndicatorValuesToExcel(newFileId, collectivity._id.toString(), situationYears, siteId, actionIds);
+          const report = await refreshDefaultsForFile(newFileId, action, collectivity._id.toString(), situationYears, false);
 
           action.excel_files_expost[idx].excel_file_id = newFileId;
           if (oldFileId !== newFileId) oldFileIdsToDelete.push(oldFileId);
           totalFiles++;
           totalValues += updated;
-          console.log(`   ✅ ${fileName} : ${updated} valeurs`);
+          console.log(`   ✅ ${fileName} : ${updated} valeurs, ${report.defaults} défauts relus, ${report.values} valeurs suivies, ${report.protected} valeurs conservées, ${report.errors} défauts null sur cellule en erreur`);
         } catch (error) {
           console.error(`   ❌ Expost ${expostFile.year_expost} pour "${action.name}":`, error.message);
         }
       }
 
-      // Sauvegarder l'action avec les nouveaux excel_file_id
-      await action.save();
-    }
-  }
-
-  // Supprimer les anciens fichiers Excel remplacés
-  if (oldFileIdsToDelete.length > 0) {
-    console.log(`\n🗑️ Suppression de ${oldFileIdsToDelete.length} ancien(s) fichier(s) Excel...`);
-    let deleted = 0;
-    for (const oldFileId of oldFileIdsToDelete) {
+      // Sauvegarder les nouveaux excel_file_id par updateOne : pas de contrôle de version Mongoose (l'action a pu être modifiée
+      // dans l'app pendant le traitement) et pas d'exception si elle a été supprimée entre-temps (matchedCount 0)
       try {
-        await graphFetch(`/sites/${siteId}/drive/items/${oldFileId}`, { method: "DELETE", headers: { Prefer: "bypass-shared-lock" } });
-        deleted++;
+        const result = await Action.updateOne({ _id: action._id }, { $set: { exel_files_prev: action.exel_files_prev, excel_files_expost: action.excel_files_expost } });
+        if (result.matchedCount === 0) console.error(`   ⚠️ Action "${action.name}" supprimée pendant le traitement : ses nouveaux fichiers restent orphelins`);
       } catch (error) {
-        console.error(`   ❌ Suppression de l'ancien fichier ${oldFileId}:`, error.message);
+        console.error(`   ❌ Sauvegarde des fichiers de "${action.name}" :`, error.message);
       }
     }
-    console.log(`🗑️ ${deleted}/${oldFileIdsToDelete.length} ancien(s) fichier(s) supprimé(s)`);
+
+    // Supprimer les anciens fichiers remplacés, collectivité par collectivité (une interruption ne laisse pas de OLD_ derrière elle)
+    if (oldFileIdsToDelete.length > 0) {
+      await deleteFiles(siteId, oldFileIdsToDelete.splice(0), "ancien(s) fichier(s) remplacé(s)");
+    }
   }
 
   console.log(`\n🎉 Régénération terminée : ${totalFiles} fichiers Excel, ${totalValues} valeurs synchronisées`);
@@ -2781,8 +2939,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // // Étape 5: Générer les fichiers Excel pour toutes les collectivités
-      // await generateExcelForAllCollectivities();
+      // Étape 5: Régénérer les fichiers Excel pour toutes les collectivités (valeurs + défauts relus après recalcul)
+      await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
@@ -2801,6 +2959,9 @@ module.exports = {
   syncIndicatorsToExistingActions,
   duplicateMasterExcel,
   generateExcelForAllCollectivities,
+  refreshDefaultsFromExcel,
+  refreshDefaultsForFile,
+  getActionScopeIds,
   parseDefaultSourceFormula,
   parseNameFormula,
   parsePossibilitiesFormula,
