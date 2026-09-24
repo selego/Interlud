@@ -219,28 +219,28 @@
     "type": "défaut",
     "situation": "init",
     "worksheetName": "Remplissage - Sit. Init.",
-    "rowNum": 1727,
+    "rowNum": 1728,
     "excelIndicatorId": "EComInitDistUniqLivDir",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=SWITCH($F$1720, $R$1720,'C9'!$L$189, $S$1720,'C9'!$M$189, $T$1720,  'C9'!$N$189)"
-  },
-  {
-    "type": "défaut",
-    "situation": "init",
-    "worksheetName": "Remplissage - Sit. Init.",
-    "rowNum": 1728,
-    "excelIndicatorId": "EComInitDistUniqLivPR",
-    "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=SWITCH($F$1720, $R$1720,'C9'!$Q$189, $S$1720,'C9'!$R$189, $T$1720,  'C9'!$S$189)"
+    "formula": "=SWITCH($F$1721, $R$1721,'C9'!$L$189, $S$1721,'C9'!$M$189, $T$1721,  'C9'!$N$189)"
   },
   {
     "type": "défaut",
     "situation": "init",
     "worksheetName": "Remplissage - Sit. Init.",
     "rowNum": 1729,
+    "excelIndicatorId": "EComInitDistUniqLivPR",
+    "reason": "non reconnue (défaut gardé statique)",
+    "formula": "=SWITCH($F$1721, $R$1721,'C9'!$Q$189, $S$1721,'C9'!$R$189, $T$1721,  'C9'!$S$189)"
+  },
+  {
+    "type": "défaut",
+    "situation": "init",
+    "worksheetName": "Remplissage - Sit. Init.",
+    "rowNum": 1730,
     "excelIndicatorId": "EComInitDistUniqRécup",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=SWITCH($F$1720, $R$1720,'C9'!$V$189, $S$1720,'C9'!$W$189, $T$1720,  'C9'!$X$189)"
+    "formula": "=SWITCH($F$1721, $R$1721,'C9'!$V$189, $S$1721,'C9'!$W$189, $T$1721,  'C9'!$X$189)"
   },
   {
     "type": "défaut",
@@ -249,7 +249,7 @@
     "rowNum": 1848,
     "excelIndicatorId": "FretTCRéfPotentielRemplDirectMétro",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=MAX('Remplissage - Sit. Init.'!F2249, H1852*H1856*H1860)"
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2250, H1852*H1856*H1860)"
   },
   {
     "type": "défaut",
@@ -258,7 +258,7 @@
     "rowNum": 1849,
     "excelIndicatorId": "FretTCRéfPotentielRemplDirectTramway",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=MAX('Remplissage - Sit. Init.'!F2250, H1853*H1857*H1861)"
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2251, H1853*H1857*H1861)"
   },
   {
     "type": "défaut",
@@ -267,7 +267,7 @@
     "rowNum": 1850,
     "excelIndicatorId": "FretTCRéfPotentielRemplDirectBus",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=MAX('Remplissage - Sit. Init.'!F2251, H1854*H1858*H1862)"
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2252, H1854*H1858*H1862)"
   },
   {
     "type": "défaut",
@@ -276,16 +276,16 @@
     "rowNum": 1851,
     "excelIndicatorId": "FretTCRéfPotentielRemplDirectCar",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=MAX('Remplissage - Sit. Init.'!F2252, H1855*H1859*H1863)"
+    "formula": "=MAX('Remplissage - Sit. Init.'!F2253, H1855*H1859*H1863)"
   },
   {
-    "type": "affichage",
-    "situation": "ref",
-    "worksheetName": "Remplissage - Sit. Ref.",
-    "rowNum": 1802,
-    "excelIndicatorId": "FretTCRéfRemplFretCat1",
-    "reason": "non parsée",
-    "formula": "='Remplissage - Sit. Init.'!$K$2202:$K$2246"
+    "type": "valeurs possibles",
+    "situation": "prev",
+    "worksheetName": "Remplissage - Sit. Prev.",
+    "rowNum": 2240,
+    "excelIndicatorId": "ELUPrévChoixPassage1",
+    "reason": "non reconnue (liste gardée statique)",
+    "formula": "=IF('Remplissage - Sit. Init.'!$F$1414 = 'Remplissage - Sit. Init.'!$S$1414, \"Objectif commun à toutes les catégories de véhicules,Objectifs par grandes catégories de véhicules (Poids lourds ; VUL ; Cyclo),Objectifs par catégorie détaillée de véhicules\", \"Objectif commun à toutes les catégories de véhicules,Objectifs par grandes catégories de véhicules (Poids lourds ; VUL ; Cyclo)\")"
   },
   {
     "type": "défaut",
@@ -294,43 +294,43 @@
     "rowNum": 2243,
     "excelIndicatorId": "ELUPrévPassageCommunProportion",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=IF(SUM('Remplissage - Sit. Init.'!$F$1414) = 'Remplissage - Sit. Init.'!$H$1414, SUM('Remplissage - Sit. Init.'!$F$1423:$F$1426), SUMIFS('Remplissage - Sit. Init.'!$F$1438:$F$1572, 'Remplissage - Sit. Init.'!I1438:$I$1572, \"t/an\") ) * 'Remplissage - Sit. Prev.'!H2242"
+    "formula": "=IF(SUM('Remplissage - Sit. Init.'!$F$1414) = 'Remplissage - Sit. Init.'!$H$1414, SUM('Remplissage - Sit. Init.'!$F$1424:$F$1427), SUMIFS('Remplissage - Sit. Init.'!$F$1439:$F$1573, 'Remplissage - Sit. Init.'!I1439:$I$1573, \"t/an\") ) * 'Remplissage - Sit. Prev.'!H2242"
   },
   {
     "type": "défaut",
     "situation": "prev",
     "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2956,
+    "rowNum": 2951,
     "excelIndicatorId": "FretTCPrévObjTKmMétro",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2952*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1848, 'Remplissage - Sit. Ref.'!F1852 * 'Remplissage - Sit. Ref.'!F1856 * 'Remplissage - Sit. Ref.'!F1860), MAX('Remplissage - Sit. Ref.'!H1848, 'Remplissage - Sit. Ref.'!H1852 * 'Remplissage - Sit. Ref.'!H1856 * 'Remplissage - Sit. Ref.'!H1860))"
+    "formula": "=H2947*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1848, 'Remplissage - Sit. Ref.'!F1852 * 'Remplissage - Sit. Ref.'!F1856 * 'Remplissage - Sit. Ref.'!F1860), MAX('Remplissage - Sit. Ref.'!H1848, 'Remplissage - Sit. Ref.'!H1852 * 'Remplissage - Sit. Ref.'!H1856 * 'Remplissage - Sit. Ref.'!H1860))"
   },
   {
     "type": "défaut",
     "situation": "prev",
     "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2957,
+    "rowNum": 2952,
     "excelIndicatorId": "FretTCPrévObjTKmTramway",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2953*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1849, 'Remplissage - Sit. Ref.'!F1853 * 'Remplissage - Sit. Ref.'!F1857 * 'Remplissage - Sit. Ref.'!F1861), MAX('Remplissage - Sit. Ref.'!H1849, 'Remplissage - Sit. Ref.'!H1853 * 'Remplissage - Sit. Ref.'!H1857 * 'Remplissage - Sit. Ref.'!H1861))"
+    "formula": "=H2948*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1849, 'Remplissage - Sit. Ref.'!F1853 * 'Remplissage - Sit. Ref.'!F1857 * 'Remplissage - Sit. Ref.'!F1861), MAX('Remplissage - Sit. Ref.'!H1849, 'Remplissage - Sit. Ref.'!H1853 * 'Remplissage - Sit. Ref.'!H1857 * 'Remplissage - Sit. Ref.'!H1861))"
   },
   {
     "type": "défaut",
     "situation": "prev",
     "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2958,
+    "rowNum": 2953,
     "excelIndicatorId": "FretTCPrévObjTKmBus",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2954*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1850, 'Remplissage - Sit. Ref.'!F1854 * 'Remplissage - Sit. Ref.'!F1858 * 'Remplissage - Sit. Ref.'!F1862), MAX('Remplissage - Sit. Ref.'!H1850, 'Remplissage - Sit. Ref.'!H1854 * 'Remplissage - Sit. Ref.'!H1858 * 'Remplissage - Sit. Ref.'!H1862))"
+    "formula": "=H2949*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1850, 'Remplissage - Sit. Ref.'!F1854 * 'Remplissage - Sit. Ref.'!F1858 * 'Remplissage - Sit. Ref.'!F1862), MAX('Remplissage - Sit. Ref.'!H1850, 'Remplissage - Sit. Ref.'!H1854 * 'Remplissage - Sit. Ref.'!H1858 * 'Remplissage - Sit. Ref.'!H1862))"
   },
   {
     "type": "défaut",
     "situation": "prev",
     "worksheetName": "Remplissage - Sit. Prev.",
-    "rowNum": 2959,
+    "rowNum": 2954,
     "excelIndicatorId": "FretTCPrévObjTKmCar",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2955*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1851, 'Remplissage - Sit. Ref.'!F1855 * 'Remplissage - Sit. Ref.'!F1859 * 'Remplissage - Sit. Ref.'!F1863), MAX('Remplissage - Sit. Ref.'!H1851, 'Remplissage - Sit. Ref.'!H1855 * 'Remplissage - Sit. Ref.'!H1859 * 'Remplissage - Sit. Ref.'!H1863))"
+    "formula": "=H2950*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1851, 'Remplissage - Sit. Ref.'!F1855 * 'Remplissage - Sit. Ref.'!F1859 * 'Remplissage - Sit. Ref.'!F1863), MAX('Remplissage - Sit. Ref.'!H1851, 'Remplissage - Sit. Ref.'!H1855 * 'Remplissage - Sit. Ref.'!H1859 * 'Remplissage - Sit. Ref.'!H1863))"
   },
   {
     "type": "défaut",
@@ -354,36 +354,36 @@
     "type": "défaut",
     "situation": "expost",
     "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 2656,
+    "rowNum": 2638,
     "excelIndicatorId": "FretTCExpostObjTKmMétro",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2652*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1848, 'Remplissage - Sit. Ref.'!F1852 * 'Remplissage - Sit. Ref.'!F1856*'Remplissage - Sit. Ref.'!F1860), MAX('Remplissage - Sit. Ref.'!H1848, 'Remplissage - Sit. Ref.'!H1852*'Remplissage - Sit. Ref.'!H1856*'Remplissage - Sit. Ref.'!H1860))"
+    "formula": "=H2634*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1848, 'Remplissage - Sit. Ref.'!F1852 * 'Remplissage - Sit. Ref.'!F1856*'Remplissage - Sit. Ref.'!F1860), MAX('Remplissage - Sit. Ref.'!H1848, 'Remplissage - Sit. Ref.'!H1852*'Remplissage - Sit. Ref.'!H1856*'Remplissage - Sit. Ref.'!H1860))"
   },
   {
     "type": "défaut",
     "situation": "expost",
     "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 2657,
+    "rowNum": 2639,
     "excelIndicatorId": "FretTCExpostObjTKmTramway",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2653*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1849, 'Remplissage - Sit. Ref.'!F1853 * 'Remplissage - Sit. Ref.'!F1857*'Remplissage - Sit. Ref.'!F1861), MAX('Remplissage - Sit. Ref.'!H1849, 'Remplissage - Sit. Ref.'!H1853*'Remplissage - Sit. Ref.'!H1857*'Remplissage - Sit. Ref.'!H1861))"
+    "formula": "=H2635*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1849, 'Remplissage - Sit. Ref.'!F1853 * 'Remplissage - Sit. Ref.'!F1857*'Remplissage - Sit. Ref.'!F1861), MAX('Remplissage - Sit. Ref.'!H1849, 'Remplissage - Sit. Ref.'!H1853*'Remplissage - Sit. Ref.'!H1857*'Remplissage - Sit. Ref.'!H1861))"
   },
   {
     "type": "défaut",
     "situation": "expost",
     "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 2658,
+    "rowNum": 2640,
     "excelIndicatorId": "FretTCExpostObjTKmBus",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2654*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1850, 'Remplissage - Sit. Ref.'!F1854 * 'Remplissage - Sit. Ref.'!F1858*'Remplissage - Sit. Ref.'!F1862), MAX('Remplissage - Sit. Ref.'!H1850, 'Remplissage - Sit. Ref.'!H1854*'Remplissage - Sit. Ref.'!H1858*'Remplissage - Sit. Ref.'!H1862))"
+    "formula": "=H2636*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1850, 'Remplissage - Sit. Ref.'!F1854 * 'Remplissage - Sit. Ref.'!F1858*'Remplissage - Sit. Ref.'!F1862), MAX('Remplissage - Sit. Ref.'!H1850, 'Remplissage - Sit. Ref.'!H1854*'Remplissage - Sit. Ref.'!H1858*'Remplissage - Sit. Ref.'!H1862))"
   },
   {
     "type": "défaut",
     "situation": "expost",
     "worksheetName": "Remplissage - Sit. Expost",
-    "rowNum": 2659,
+    "rowNum": 2641,
     "excelIndicatorId": "FretTCExpostObjTKmCar",
     "reason": "non reconnue (défaut gardé statique)",
-    "formula": "=H2655*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1851, 'Remplissage - Sit. Ref.'!F1855 * 'Remplissage - Sit. Ref.'!F1859*'Remplissage - Sit. Ref.'!F1863), MAX('Remplissage - Sit. Ref.'!H1851, 'Remplissage - Sit. Ref.'!H1855*'Remplissage - Sit. Ref.'!H1859*'Remplissage - Sit. Ref.'!H1863))"
+    "formula": "=H2637*IF( 'Remplissage - Sit. Ref.'!$F$1847 = 'Remplissage - Sit. Ref.'!$R$1847, MAX('Remplissage - Sit. Ref.'!F1851, 'Remplissage - Sit. Ref.'!F1855 * 'Remplissage - Sit. Ref.'!F1859*'Remplissage - Sit. Ref.'!F1863), MAX('Remplissage - Sit. Ref.'!H1851, 'Remplissage - Sit. Ref.'!H1855*'Remplissage - Sit. Ref.'!H1859*'Remplissage - Sit. Ref.'!H1863))"
   }
 ]

@@ -180,7 +180,10 @@ export default function List() {
                   }
                 }}
               >
-                <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">{action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}</td>
+                <td className="pl-12 pr-6 py-4 text-sm font-medium text-gray-900">
+                  {action.name}{action.instance_number > 1 ? ` (${action.instance_number})` : ''}
+                  {action.is_draft ? <span className="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Brouillon</span> : null}
+                </td>
                 <td className="px-6 py-4 text-sm text-gray-600">{action.priority}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{getStatusLabel(action.status)}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{getPiloteLabel(action.pilote)}</td>
@@ -206,6 +209,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const [customName, setCustomName] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
+    const [isDraft, setIsDraft] = useState(false)
     const [year,setYear] = useState( { init: null, prev: null })
     const [isLoading, setIsLoading] = useState(false)
     const [loadingSeconds, setLoadingSeconds] = useState(0)
@@ -251,6 +255,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
           year_init: parseInt(year.init),
           year_prev: parseInt(year.prev),
           started_before_interlud: startedBeforeInterlud,
+          is_draft: isDraft,
           ...(user.role === 'economic_actor' ? {owner: 'economic_actor', economic_actor_id: user.economic_actor_id, economic_actor_name: user.economic_actor_name} : {}),
         }
 
@@ -430,6 +435,21 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 onChange={(e) => setCustomName(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
               />
+            </div>
+
+            <div className="mt-6">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isDraft}
+                  onChange={(e) => setIsDraft(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary-green focus:ring-primary-green cursor-pointer"
+                />
+                <span className="text-sm text-gray-700">
+                  <span className="font-semibold">Fiche brouillon / test</span>
+                  <span className="block text-xs text-gray-500">Exclue des calculs globaux de la collectivité. Modifiable ensuite dans les réglages de l'action.</span>
+                </span>
+              </label>
             </div>
           </div>
         )}

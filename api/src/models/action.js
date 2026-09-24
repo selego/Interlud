@@ -15,6 +15,8 @@ const Schema = new mongoose.Schema(
     year_expost: { type: Number, trim: true },
 
     instance_number: { type: Number, default: 1 },
+    // Fiche brouillon / test : exclue des calculs globaux du fichier d'agrégation (colonne "Prise en compte" à FAUX)
+    is_draft: { type: Boolean, default: false },
 
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },

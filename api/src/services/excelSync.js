@@ -15,6 +15,11 @@ const EMISSION_READ_COL = { GES: 3, PM: 8, NOx: 13, HC: 18, CO: 23, 'Énergie': 
 const EMISSION_WRITE_KEY = { 'Énergie': 'Nrj' };
 // Column letter for aggregation: instance 1 → I, instance 2 → J, instance 3 → K, etc.
 const getAggregationCol = (instanceNumber) => String.fromCharCode(72 + (instanceNumber || 1)); // 72 = 'H', so +1 = 'I'
+// Tableau "Prise en compte des valeurs" de "1. Données d'entrée" : une ligne par worksheet (D9878:D9887),
+// colonnes E/F/G pour les instances 1 à 3. La feuille "3. Émissions par action" multiplie chaque instance
+// par IF(cellule,1,0) dans le TOTAL : VRAI = prise en compte, FAUX = fiche brouillon exclue.
+const DRAFT_FLAG_ROW = { B2: 9878, B3: 9879, B4: 9880, C1: 9881, C2: 9882, C3: 9883, C4: 9884, C6: 9885, C7: 9886, C9: 9887 };
+const getDraftFlagCol = (instanceNumber) => String.fromCharCode(68 + (instanceNumber || 1)); // 68 = 'D', so +1 = 'E'
 
 const getAggregationFileId = async (action) => {
   if (action.owner === 'economic_actor' && action.economic_actor_id) {
@@ -148,6 +153,21 @@ const writeAggregationTargets = async (action, targets) => {
   await graphFetchWithSession(aggregationFileId, `${inputSheetPath}/range(address='${rangeAddress}')`, { method: 'PATCH', body: JSON.stringify({ formulas }) });
 };
 
+// Écrit VRAI/FAUX dans la cellule "Prise en compte" de l'instance : FAUX si fiche brouillon, VRAI sinon.
+// Écriture directe (pas de debounce) : action utilisateur unitaire, sans dépendance aux valeurs d'indicateurs.
+const writeDraftFlag = async (action) => {
+  const row = DRAFT_FLAG_ROW[action.excel_worksheetname];
+  if (row === undefined || action.type === 'config') return;
+  const aggregationFileId = await getAggregationFileId(action);
+  if (!aggregationFileId) return;
+  const siteId = await getSiteId();
+  const address = `${getDraftFlagCol(action.instance_number)}${row}`;
+  await graphFetchWithSession(aggregationFileId, `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}/range(address='${address}')`, {
+    method: 'PATCH',
+    body: JSON.stringify({ values: [[!action.is_draft]] }),
+  });
+};
+
 let pendingCells = new Map(); // `${fileId}|${situation}` -> Map<excelIndicatorId, { excel_indicator_id, value, unit }>
 let pendingAggregations = new Map(); // `${actionId}|${situation}|${year}` -> { actionId, situation, year }
 const pendingSyncActionIds = new Set(); // actions dont le dashboard n'est pas encore à jour (en attente ou en cours de flush)
@@ -225,4 +245,4 @@ const enqueueAggregation = ({ actionId, situation, year }) => {
 // Le dashboard de cette action reflète-t-il les dernières modifs ?
 const isSyncPending = (actionId) => pendingSyncActionIds.has(String(actionId));
 
-module.exports = { enqueueCellUpdate, enqueueAggregation, isSyncPending };
+module.exports = { enqueueCellUpdate, enqueueAggregation, isSyncPending, writeDraftFlag };

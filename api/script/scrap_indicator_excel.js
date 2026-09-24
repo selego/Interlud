@@ -855,6 +855,15 @@ function parseExcelFormula(formula, rowToIndicatorMap, getCellValue = null, allR
         conditions.push(comparison);
         continue;
       }
+      // INDEX('Feuille'!$K$1358:$K$1413, T2066) : la position est un compteur du template (lu par valeur, comme R)
+      // → référence de condition K(1358 + T - 1), avec préfixe de feuille optionnel
+      const indexRef = factor.match(/^INDEX\s*\(\s*(?:'([^']+)'!)?\$?K\$?(\d+)\s*:\s*\$?K\$?(\d+)\s*[,;]\s*\$?([A-Z]{1,3})\$?(\d+)\s*\)$/i);
+      const position = indexRef && getCellValue ? Number(getCellValue(parseInt(indexRef[5], 10), indexRef[4])) : NaN;
+      const indexRow = Number.isInteger(position) && position > 0 ? parseInt(indexRef[2], 10) + position - 1 : null;
+      if (indexRow !== null && indexRow <= parseInt(indexRef[3], 10)) {
+        refs.push({ raw: `K${indexRow}`, refRowNum: indexRow, situation: extractSituationFromSheetName(indexRef[1]) });
+        continue;
+      }
       allParsed = false;
       break;
     }
@@ -1635,6 +1644,83 @@ function resolveAllFormulas(formulasMap, rowToIndicatorMap, getCellValue = null,
   return resolvedConditions;
 }
 
+// Fonctions qui consomment une plage comme argument : une plage passée à l'une d'elles n'est pas un spill
+const RANGE_FUNCTIONS = /^(INDEX|VLOOKUP|HLOOKUP|XLOOKUP|LOOKUP|MATCH|SUM|SUMIF|SUMIFS|SUMPRODUCT|COUNT|COUNTA|COUNTIF|COUNTIFS|MAX|MIN|AVERAGE|TEXTJOIN|CONCAT|FILTER|OFFSET|INDIRECT|CHOOSE)$/i;
+// Plage verticale mono-colonne, préfixe de feuille optionnel : $S2203:$S2247, 'Remplissage - Sit. Init.'!$K$2203:$K$2247
+const VERTICAL_RANGE_RE = /((?:'[^']+'!)?\$?)([A-Z]{1,3})(\$?)(\d+):\$?([A-Z]{1,3})\$?(\d+)/gi;
+
+// Nom de la fonction dont l'argument commence à pos (null si hors fonction). text doit avoir les chaînes masquées.
+function enclosingFunctionName(text, pos) {
+  let depth = 0;
+  for (let i = pos - 1; i >= 0; i--) {
+    if (text[i] === ")") depth++;
+    if (text[i] !== "(") continue;
+    if (depth > 0) {
+      depth--;
+      continue;
+    }
+    const m = text.slice(0, i).match(/([A-Z_.]+)\s*$/i);
+    return m ? m[1] : null;
+  }
+  return null;
+}
+
+// Plages spillées d'une formule matricielle (Excel 365) : plages verticales mono-colonne hors fonction agrégeante,
+// toutes de même hauteur. Ex : =IF(ISNUMBER(SEARCH($S2203:$S2247,$F$2201)),1,0)*K2202 → [{ index, length, height: 45 }].
+// [] si la formule n'est pas un spill (aucune plage, hauteurs incohérentes, ou plage consommée par INDEX/VLOOKUP/SUM…).
+function spillRanges(formula) {
+  const masked = formula.replace(/"[^"]*"/g, (s) => " ".repeat(s.length));
+  const ranges = [];
+  for (const m of masked.matchAll(VERTICAL_RANGE_RE)) {
+    if (m[2].toUpperCase() !== m[5].toUpperCase()) continue;
+    const fn = enclosingFunctionName(masked, m.index);
+    if (fn && RANGE_FUNCTIONS.test(fn)) continue;
+    const height = parseInt(m[6], 10) - parseInt(m[4], 10) + 1;
+    if (height < 2) continue;
+    if (ranges.length > 0 && ranges[0].height !== height) return [];
+    ranges.push({ index: m.index, length: m[0].length, height, prefix: m[1], column: m[2], rowDollar: m[3], startRow: parseInt(m[4], 10) });
+  }
+  return ranges;
+}
+
+// Formule équivalente pour la ligne anchor+offset : chaque plage spillée remplacée par sa cellule à cet offset
+// ($S2203:$S2247 → $S2204 pour offset 1). Les autres références ne bougent pas : un spill est évalué une seule fois.
+function spillRowFormula(formula, ranges, offset) {
+  let result = "";
+  let cursor = 0;
+  for (const r of ranges) {
+    result += formula.slice(cursor, r.index) + `${r.prefix}${r.column}${r.rowDollar}${r.startRow + offset}`;
+    cursor = r.index + r.length;
+  }
+  return result + formula.slice(cursor);
+}
+
+// Map ligne → formule d'affichage (colonne K). Normalise le 0 littéral en "=0" (jamais affiché).
+// Formules matricielles (spill) : Graph ne renvoie la formule que sur la cellule d'ancrage, les lignes suivantes
+// n'ont que la valeur calculée avec les saisies d'exemple du master → on régénère une formule par ligne spillée.
+function buildFormulasMap(formulaRows, startRow) {
+  const formulasMap = new Map();
+  if (!formulaRows) return formulasMap;
+  for (let i = 0; i < formulaRows.length; i++) {
+    const rowNum = startRow + 1 + i;
+    const formula = formulaRows[i][10];
+    if (String(formula).trim() === "0" && !formulasMap.has(rowNum)) formulasMap.set(rowNum, "=0");
+    if (!formula || !String(formula).startsWith("=")) continue;
+    const ranges = spillRanges(String(formula));
+    if (ranges.length === 0) {
+      formulasMap.set(rowNum, String(formula));
+      continue;
+    }
+    for (let offset = 0; offset < ranges[0].height; offset++) {
+      const cell = formulaRows[i + offset]?.[10];
+      // Une vraie formule sur une ligne suivante reprend la main : fin du spill
+      if (offset > 0 && typeof cell === "string" && cell.startsWith("=")) break;
+      formulasMap.set(rowNum + offset, spillRowFormula(String(formula), ranges, offset));
+    }
+  }
+  return formulasMap;
+}
+
 // Récupère la plage utilisée de la feuille de calcul (values, formulas, address)
 async function getWorksheetUsedRange(fileId, worksheetName) {
   const siteId = (await graphFetch(`/sites/${sharePointSiteName}.sharepoint.com`)).id;
@@ -1669,16 +1755,8 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
     }
 
     // Extraire les formules de la colonne K (index 10)
-    const formulasMap = new Map();
-    if (formulaRows) {
-      for (let i = 0; i < formulaRows.length; i++) {
-        const formula = formulaRows[i][10];
-        if (formula && String(formula).startsWith("=")) formulasMap.set(startRow + 1 + i, String(formula));
-        // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" pour le parseur
-        if (String(formula).trim() === "0") formulasMap.set(startRow + 1 + i, "=0");
-      }
-      console.log(`📋 ${formulasMap.size} formules d'affichage trouvées`);
-    }
+    const formulasMap = buildFormulasMap(formulaRows, startRow);
+    if (formulaRows) console.log(`📋 ${formulasMap.size} formules d'affichage trouvées`);
 
     // Fonction pour lire une valeur de cellule depuis les données Excel
     const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 };
@@ -1718,16 +1796,7 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
         allRowToIndicatorMaps.set(sit, sitRowToIndicatorMap);
 
         // Construire formulasMap pour cette feuille
-        const sitFormulasMap = new Map();
-        if (sheetData.formulaRows) {
-          for (let i = 0; i < sheetData.formulaRows.length; i++) {
-            const formula = sheetData.formulaRows[i][10];
-            if (formula && String(formula).startsWith("=")) sitFormulasMap.set(sheetData.startRow + 1 + i, String(formula));
-            // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" pour le parseur
-            if (String(formula).trim() === "0") sitFormulasMap.set(sheetData.startRow + 1 + i, "=0");
-          }
-        }
-        allFormulasMapsBySituation.set(sit, sitFormulasMap);
+        allFormulasMapsBySituation.set(sit, buildFormulasMap(sheetData.formulaRows, sheetData.startRow));
       }
     }
 
@@ -2736,5 +2805,6 @@ module.exports = {
   parseNameFormula,
   parsePossibilitiesFormula,
   loadLookupSheets,
+  buildFormulasMap,
   LOOKUP_SHEET_NAMES,
 };

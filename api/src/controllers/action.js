@@ -12,6 +12,7 @@ const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder, createWorkbookSession, closeWorkbookSession, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 const { isPercentUnit } = require('../utils/indicators');
+const { writeDraftFlag } = require('../services/excelSync');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -70,9 +71,12 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       logs.push(log);
     }
 
+    const draftChanged = req.body.is_draft !== undefined && Boolean(req.body.is_draft) !== Boolean(action.is_draft);
     action.set(req.body);
     await action.save();
     if (logs.length > 0) await Log.insertMany(logs);
+    // Propager le flag brouillon au fichier d'agrégation (colonne "Prise en compte" à VRAI/FAUX)
+    if (draftChanged) await writeDraftFlag(action).catch(capture);
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);
@@ -557,8 +561,9 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     };
 
     // Récupérer tous les IVs des actions créées pour mettre à jour leurs valeurs par défaut
-    // Données de base exclue : ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
-    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypesObj._id.toString()];
+    // Données de base incluse pour value_default uniquement (ex : NbHabTerr calculé par Excel à partir du SIREN) :
+    // ses valeurs (infos collectivité) ne doivent pas être écrasées par les défauts Excel
+    const allActionIdsForDefaultUpdate = [action._id.toString(), configActionParcTypesObj._id.toString(), configActionBasicDataObj._id.toString()];
     const allIVsForDefaultUpdate = await IndicatorValue.find({
       action_id: { $in: allActionIdsForDefaultUpdate },
       indicator_excel_id: { $exists: true, $ne: null },
@@ -586,7 +591,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
       const updateFields = { [`value_default.${iv.indicator_type}`]: newDefault };
 
-      if (iv.is_primordial === false) {
+      if (iv.is_primordial === false && iv.action_name !== 'Données de base') {
         updateFields[`value.${iv.indicator_type}`] = newDefault;
         if (iv.action_name !== 'Parc types' && newDefault !== null && iv.indicator_excel_id) {
           const cell = { excel_indicator_id: iv.indicator_excel_id, value: newDefault, unit: iv.indicator_value_unit };
@@ -649,6 +654,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
       collectivity_name: action.collectivity_name,
     });
 
+    // Colonne "Prise en compte" du fichier d'agrégation : VRAI (ou FAUX si créée en brouillon)
+    await writeDraftFlag(action).catch(capture);
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {
     capture(error);

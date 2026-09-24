@@ -1,7 +1,7 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const fs = require("fs");
 const path = require("path");
-const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossibilitiesFormula, parseDefaultSourceFormula, parseNameFormula, loadLookupSheets, LOOKUP_SHEET_NAMES } = require("./scrap_indicator_excel");
+const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossibilitiesFormula, parseDefaultSourceFormula, parseNameFormula, loadLookupSheets, buildFormulasMap, LOOKUP_SHEET_NAMES } = require("./scrap_indicator_excel");
 
 // Lecture seule : ce script ne se connecte PAS à Mongo et n'écrit RIEN en base.
 // Il reprend le master Excel et rejoue TOUS les parsers de formules de scrap_indicator_excel.js,
@@ -12,7 +12,7 @@ const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossi
 //   - colonne K  (affichage)          → resolveAllFormulas        : non parsée, ignorée (inter-feuilles) ou parse partiel ("* cellule" perdu)
 
 //V22
-const masterFileId = "01IBL4ADJSAPGFGPLDDZCZXBGMLGMP7I37";
+const masterFileId = "01IBL4ADNDE2JFJTPINBGKQSUGPXLK7DQN";
 
 const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -59,16 +59,8 @@ const referencesValueCell = (f) => [...f.replace(/"[^"]*"/g, "").matchAll(/(?:['
       }
       allRowToIndicatorMaps.set(sit, rowToIndicatorMap);
 
-      const formulasMap = new Map();
-      if (sheetData.formulaRows) {
-        for (let i = 0; i < sheetData.formulaRows.length; i++) {
-          const formula = sheetData.formulaRows[i][10];
-          if (formula && String(formula).startsWith("=")) formulasMap.set(sheetData.startRow + 1 + i, String(formula));
-          // 0 littéral (pas de formule) → jamais affiché, on le normalise en "=0" comme dans scrap_indicator_excel.js
-          if (String(formula).trim() === "0") formulasMap.set(sheetData.startRow + 1 + i, "=0");
-        }
-      }
-      allFormulasMapsBySituation.set(sit, formulasMap);
+      // Même construction que le scrap (0 littéral → "=0", formules spill étendues ligne par ligne)
+      allFormulasMapsBySituation.set(sit, buildFormulasMap(sheetData.formulaRows, sheetData.startRow));
     }
 
     // Lit valeur + formule d'une cellule de n'importe quelle feuille (même signature que getSheetCell dans scrap_indicator_excel.js)

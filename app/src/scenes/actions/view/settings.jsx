@@ -374,6 +374,20 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               ]}
             />
           </div>
+          <div className="md:col-span-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(action.is_draft)}
+                onChange={(e) => onUpdate("is_draft", e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary-green focus:ring-primary-green cursor-pointer"
+              />
+              <span className="text-sm text-gray-700">
+                <span className="font-semibold">Fiche brouillon / test</span>
+                <span className="block text-xs text-gray-500">Exclue des calculs globaux de la collectivité (émissions et gains agrégés).</span>
+              </span>
+            </label>
+          </div>
           {action.status === "blocked" ? (
             <div className="md:col-span-2">
               <label className="block text-sm font-semibold mb-2">Raison de blocage</label>
