@@ -288,6 +288,23 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
     }
   }
 
+  // Les défauts, titres et listes dynamiques sont résolus par l'API au fetch : après une sauvegarde, on les
+  // recharge silencieusement (sans loader ni réordonnancement) pour que les indicateurs dépendants suivent
+  const refreshDynamicFields = async () => {
+    const params = { action_id: action._id, situation: activeSituation, limit: 10000 }
+    if (activeYear) params.year = activeYear
+    const { ok, data } = await api.post("/indicator_value/search", params)
+    if (!ok) return
+    const byId = new Map(data.map((iv) => [iv._id, iv]))
+    setIndicatorValues((prev) =>
+      prev.map((iv) => {
+        const fresh = byId.get(iv._id)
+        if (!fresh) return iv
+        return { ...iv, value_default: fresh.value_default, indicator_name: fresh.indicator_name, indicator_value_possibilities: fresh.indicator_value_possibilities }
+      })
+    )
+  }
+
   const saveCounterRef = useRef(0)
   const handleSaveIndicatorValue = async (indicatorValue) => {
     saveCounterRef.current += 1
@@ -306,7 +323,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
-      await onStatsRefresh()
+      await Promise.all([onStatsRefresh(), refreshDynamicFields()])
       // La synchro Excel est différée côté API : on garde le loading tant que le dashboard n'est pas à jour
       toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
       for (let i = 0; i < 60; i++) {

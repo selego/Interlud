@@ -306,6 +306,23 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
     }
   }
 
+  // Les défauts, titres et listes dynamiques sont résolus par l'API au fetch : après une sauvegarde, on les
+  // recharge silencieusement (sans loader ni réordonnancement) pour que les indicateurs dépendants suivent
+  const refreshDynamicFields = async () => {
+    const params = { action_id: activeConfigAction._id, situation: activeSituation, limit: 10000 }
+    if (activeYear) params.year = activeYear
+    const { ok, data } = await api.post("/indicator_value/search", params)
+    if (!ok) return
+    const byId = new Map(data.map((iv) => [iv._id, iv]))
+    setIndicatorValues((prev) =>
+      prev.map((iv) => {
+        const fresh = byId.get(iv._id)
+        if (!fresh) return iv
+        return { ...iv, value_default: fresh.value_default, indicator_name: fresh.indicator_name, indicator_value_possibilities: fresh.indicator_value_possibilities }
+      })
+    )
+  }
+
   const handleSaveIndicatorValue = async (indicatorValue) => {
     toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
@@ -321,7 +338,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
-      await onStatsRefresh()
+      await Promise.all([onStatsRefresh(), refreshDynamicFields()])
       toast.success("Valeur enregistrée", { id: "indicator-save" })
     } catch (error) {
       toast.error("Une erreur est survenue", { id: "indicator-save" })
