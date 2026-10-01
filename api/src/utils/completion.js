@@ -8,7 +8,8 @@ const isIndicatorValueFilled = (iv) => {
   return val !== null && val !== undefined && val !== '';
 };
 
-const computeActionCompletion = async (actionId) => {
+// options.dryRun : calcule et retourne l'update sans écrire en base (utilisé par script/recompute_completion.js)
+const computeActionCompletion = async (actionId, { dryRun = false } = {}) => {
   const [indicatorValues, action] = await Promise.all([IndicatorValue.find({ action_id: actionId }), Action.findById(actionId)]);
   if (!action || indicatorValues.length === 0) return;
 
@@ -38,15 +39,19 @@ const computeActionCompletion = async (actionId) => {
       const yearMappings = yearMappingsBySituationYear[`${iv.situation}_${iv.year}`];
       return shouldDisplayIndicator(iv, yearMappings, conditionValuesMap);
     });
+    // Situation sans aucun indicateur (ex : ex-post sans fichier) → 0 comme avant.
+    // Indicateurs présents mais tous masqués par les conditions d'affichage (ex : C1 en remplissage automatique
+    // n'a aucune question en référence) → rien à remplir, situation complète.
     if (displayed.length === 0) {
-      update[`completion_${situation}`] = 0;
+      update[`completion_${situation}`] = values.length === 0 ? 0 : 100;
       continue;
     }
     const filled = displayed.filter(isIndicatorValueFilled).length;
     update[`completion_${situation}`] = Math.round((filled / displayed.length) * 100);
   }
 
-  await Action.updateOne({ _id: actionId }, { $set: update });
+  if (!dryRun) await Action.updateOne({ _id: actionId }, { $set: update });
+  return update;
 };
 
 module.exports = { isIndicatorValueFilled, computeActionCompletion };

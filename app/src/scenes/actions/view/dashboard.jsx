@@ -640,7 +640,8 @@ export default function Dashboard({ action }) {
 
   const load = async () => {
     if (!collectivity || !action?.excel_worksheetname) return
-    if (!action.completion_init && !action.completion_ref && !action.completion_prev && !action.completion_expost) return
+    // Les graphes exigent 100 % partout (cf. isEmpty) : inutile d'appeler l'agrégation tant que l'onboarding sera affiché
+    if (action.completion_init !== 100 || action.completion_ref !== 100 || action.completion_prev !== 100 || (action.excel_files_expost?.length > 0 && action.completion_expost !== 100)) return
     try {
       setLoading(true)
       const { ok, data } = await api.post("/excel/action_aggregation", {

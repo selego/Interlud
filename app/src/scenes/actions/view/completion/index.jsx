@@ -39,7 +39,8 @@ export default function Completion({ action, onSave }) {
   const getSituationProgress = (situation, year) => {
     if (!stats?.completion) return 0
     const c = stats.completion[`${situation}_${year}`]
-    return c?.total > 0 ? Math.round((c.filled / c.total) * 100) : 0
+    // Aucun indicateur affiché pour cette situation → rien à remplir, 100 % (même règle que l'API)
+    return c?.total > 0 ? Math.round((c.filled / c.total) * 100) : 100
   }
 
   const fetchStats = async () => {
