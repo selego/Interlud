@@ -58,6 +58,8 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
 
   // Regroupement basé sur l'état au chargement : un indicateur rempli en cours de session reste visible dans sa section
   const groupPrio = filteredValues.filter(iv => !iv.initially_filled && iv.is_primordial)
+  // Le badge compte ce qui reste à saisir, pas la taille de la section (figée au chargement)
+  const prioRemaining = groupPrio.filter(iv => !isIndicatorValueFilled(iv)).length
   const groupTodo = filteredValues.filter(iv => !iv.initially_filled && !iv.is_primordial)
   const groupDone = filteredValues.filter(iv => iv.initially_filled)
 
@@ -81,7 +83,7 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
               <FiStar className="w-3.5 h-3.5 fill-[#F59600] stroke-[#F59600]" />
             </span>
             <h3 className="text-base font-bold text-[#B45309] m-0">Données primordiales</h3>
-            <span className="text-xs font-semibold px-2.5 py-[3px] rounded-full bg-[#FFF3E0] text-[#B45309]">{groupPrio.length} restant(s)</span>
+            <span className="text-xs font-semibold px-2.5 py-[3px] rounded-full bg-[#FFF3E0] text-[#B45309]">{prioRemaining} restant(s)</span>
           </div>
           <div className="bg-[#FFFBF5] border border-[#FCE6C8] rounded-[14px] px-[13px] pt-[11px] pb-[13px] flex flex-col gap-[11px]">
             <p className="text-[12.5px] text-[#9a6a1f] m-0 leading-relaxed">Fort impact sur le calcul des gains — à renseigner manuellement.</p>
