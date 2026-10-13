@@ -60,18 +60,6 @@ const Schema = new mongoose.Schema(
       situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
       extra_values: { type: [String], default: undefined }, // valeurs fixes ajoutées à la liste résolue (ex : "Aucun")
     },
-    // Si défini, value_default est résolu dynamiquement au fetch depuis la valeur de l'IV source :
-    // valeur × factor + offset, ou valeur × (1 + évolution/100) si growth_source (IV d'évolution en %)
-    indicator_value_default_source: {
-      excel_indicator_id: { type: String },
-      situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-      factor: { type: Number },
-      offset: { type: Number },
-      growth_source: {
-        excel_indicator_id: { type: String },
-        situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-      },
-    },
     indicator_category_id: { type: String, trim: true },
     indicator_category_name: { type: String, trim: true },
     indicator_sub_category_id: { type: String, trim: true },

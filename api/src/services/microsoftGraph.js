@@ -482,6 +482,7 @@ async function readExcelDefaultValues(fileId, situation, sessionId = null) {
 }
 
 module.exports = {
+  WORKSHEETS,
   getAccessToken,
   graphFetch,
   getSiteId,

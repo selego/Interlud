@@ -179,45 +179,6 @@ const resolveDynamicPossibilities = async (ivs) => {
 
 const isEmptyValue = (val) => val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0);
 
-// Résout dynamiquement value_default pour les IVs dont la colonne H du master référence la valeur d'un autre indicateur
-// (ex : défaut ref/prev/expost = valeur saisie en init). Mute les IVs en place.
-// Nombre : défaut = valeur × factor + offset, ou valeur × (1 + évolution/100) quand growth_source pointe vers un indicateur d'évolution en %.
-const resolveDynamicDefaults = async (ivs) => {
-  const refs = ivs.filter((iv) => iv.indicator_value_default_source?.excel_indicator_id && iv.indicator_value_default_source?.situation);
-  if (refs.length === 0) return;
-  const findSource = await buildSourceLookup(refs, (iv) => iv.indicator_value_default_source);
-  const growthRefs = refs.filter((iv) => iv.indicator_value_default_source.growth_source?.excel_indicator_id);
-  const findGrowth = growthRefs.length > 0 ? await buildSourceLookup(growthRefs, (iv) => iv.indicator_value_default_source.growth_source) : () => null;
-
-  for (const iv of refs) {
-    const sourceIV = findSource(iv);
-    if (!sourceIV) continue;
-    const val = sourceIV.value?.[sourceIV.indicator_type];
-    if (isEmptyValue(val)) {
-      iv.value_default = { [iv.indicator_type]: null };
-      continue;
-    }
-    // Types incompatibles entre source et cible : on garde le défaut statique
-    if (iv.indicator_type === 'number' && typeof val !== 'number') continue;
-    if (iv.indicator_type === 'checkbox' && !Array.isArray(val)) continue;
-    if ((iv.indicator_type === 'text' || iv.indicator_type === 'radio') && typeof val !== 'string') continue;
-    if (iv.indicator_type !== 'number') {
-      iv.value_default = { [iv.indicator_type]: val };
-      continue;
-    }
-
-    const { factor, offset, growth_source } = iv.indicator_value_default_source;
-    let result = val * (factor || 1) + (offset || 0);
-    if (growth_source?.excel_indicator_id) {
-      // Évolution non saisie → Excel lit 0 → défaut = valeur source
-      const growthIV = findGrowth(iv);
-      const growth = growthIV?.value?.number;
-      if (typeof growth === 'number') result = val * (1 + (isPercentUnit(growthIV.indicator_value_unit) ? growth / 100 : growth));
-    }
-    iv.value_default = { number: result };
-  }
-};
-
 // Résout dynamiquement indicator_name pour les IVs dont le titre (colonne C du master) référence la valeur d'autres indicateurs
 // (ex : titre ref affichant la catégorie choisie en init). Mute les IVs en place : remplace les marqueurs {i} du template
 // par la valeur de la source i. Source vide → marqueur remplacé par '' (Excel afficherait 0). Source introuvable → titre inchangé.
@@ -277,4 +238,4 @@ const resolveDynamicNames = async (ivs) => {
   }
 };
 
-module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicDefaults, resolveDynamicNames, collectConditionExcelIds };
+module.exports = { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicNames, collectConditionExcelIds };

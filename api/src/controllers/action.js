@@ -13,6 +13,7 @@ const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile,
 const { computeActionCompletion } = require('../utils/completion');
 const { isPercentUnit } = require('../utils/indicators');
 const { writeDraftFlag } = require('../services/excelSync');
+const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -292,7 +293,6 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
             value_default: { [indicator.value_type]: defaultValue },
             indicator_value_possibilities: indicator.value_possibilities || [],
             indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
-            indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
             indicator_name_source: indicator.name_source?.[situation] || undefined,
             indicator_category_id: indicator.indicator_category_id,
             indicator_category_name: indicator.indicator_category_name,
@@ -382,7 +382,6 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
-          indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
           indicator_name_source: indicator.name_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
@@ -636,6 +635,10 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     // Fermer les sessions workbook (les changements sont persistés au fil de l'eau, persistChanges: true)
     await Promise.all([closeWorkbookSession(excelFileIdPrev, excelSessionPrev).catch(capture), hasExpost ? closeWorkbookSession(excelFileIdExpost, excelSessionExpost).catch(capture) : null]);
+
+    // Chaînes à 2 niveaux : les valeurs non primordiales réécrites en F ci-dessus peuvent faire bouger d'autres défauts
+    // (C9 : récupérations par catégorie lues depuis des saisies auto-remplies) → relecture jusqu'à stabilité
+    await Promise.all([refreshDefaultsAfterSync(excelFileIdPrev).catch(capture), hasExpost ? refreshDefaultsAfterSync(excelFileIdExpost).catch(capture) : null]);
 
     // Recalculer la completion pour l'action créée et les actions config
     await Promise.all([computeActionCompletion(action._id), configActionBasicDataObj ? computeActionCompletion(configActionBasicDataObj._id) : null, configActionParcTypesObj ? computeActionCompletion(configActionParcTypesObj._id) : null].filter(Boolean));
@@ -901,7 +904,6 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
               value_default: { [indicator.value_type]: defaultValue },
               indicator_value_possibilities: indicator.value_possibilities || [],
               indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
-              indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
               indicator_name_source: indicator.name_source?.[situation] || undefined,
               indicator_category_id: indicator.indicator_category_id,
               indicator_category_name: indicator.indicator_category_name,
@@ -936,6 +938,8 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
             await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_prev }, { 'value.number': year_prev }, { new: true });
           }
         }
+        // Parc types a aussi son AnRef pour la nouvelle année de référence (renseigné à la création d'action, pas ici jusqu'alors)
+        if (configActionParcTypes) await IndicatorValue.findOneAndUpdate({ action_id: configActionParcTypes._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_prev }, { 'value.number': year_prev }, { new: true });
       }
     }
 
@@ -999,7 +1003,6 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
-          indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
           indicator_name_source: indicator.name_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
@@ -1133,6 +1136,9 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
 
     // Fermer la session workbook (les changements sont persistés au fil de l'eau, persistChanges: true)
     await closeWorkbookSession(excelFileId, excelSession).catch(capture);
+
+    // Chaînes à 2 niveaux : les valeurs non primordiales réécrites en F peuvent faire bouger d'autres défauts → relecture jusqu'à stabilité
+    await refreshDefaultsAfterSync(excelFileId).catch(capture);
 
     // Recalculer la completion pour l'action et les actions config
     await computeActionCompletion(action._id);
@@ -1271,7 +1277,6 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
               value_default: { [indicator.value_type]: defaultValue },
               indicator_value_possibilities: indicator.value_possibilities || [],
               indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
-              indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
               indicator_name_source: indicator.name_source?.[situation] || undefined,
               indicator_category_id: indicator.indicator_category_id,
               indicator_category_name: indicator.indicator_category_name,
@@ -1306,6 +1311,8 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
         if (configActionBasicData && !existingConfigRefIV) {
           await IndicatorValue.findOneAndUpdate({ action_id: configActionBasicData._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost }, { 'value.number': year_expost }, { new: true });
         }
+        // Parc types a aussi son AnRef pour la nouvelle année de référence (renseigné à la création d'action, pas ici jusqu'alors)
+        if (configActionParcTypes) await IndicatorValue.findOneAndUpdate({ action_id: configActionParcTypes._id, indicator_excel_id: 'AnRef', situation: 'ref', year: year_expost }, { 'value.number': year_expost }, { new: true });
       }
     }
 
@@ -1394,7 +1401,6 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
           value_default: { [indicator.value_type]: defaultValue },
           indicator_value_possibilities: indicator.value_possibilities || [],
           indicator_value_possibilities_source: indicator.value_possibilities_source?.[situation] || undefined,
-          indicator_value_default_source: indicator.value_default_source?.[situation] || undefined,
           indicator_name_source: indicator.name_source?.[situation] || undefined,
           indicator_category_id: indicator.indicator_category_id,
           indicator_category_name: indicator.indicator_category_name,
@@ -1528,6 +1534,9 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
 
     // Fermer la session workbook (les changements sont persistés au fil de l'eau, persistChanges: true)
     await closeWorkbookSession(excelFileId, excelSession).catch(capture);
+
+    // Chaînes à 2 niveaux : les valeurs non primordiales réécrites en F peuvent faire bouger d'autres défauts → relecture jusqu'à stabilité
+    await refreshDefaultsAfterSync(excelFileId).catch(capture);
 
     // Recalculer la completion pour l'action et les actions config
     await computeActionCompletion(action._id);

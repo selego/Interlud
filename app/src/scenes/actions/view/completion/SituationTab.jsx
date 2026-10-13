@@ -76,6 +76,9 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
 
   return (
     <div className="flex flex-col gap-[26px]">
+      <p className="text-[12.5px] text-[#5b6b66] bg-[#F3F7F6] border border-[#DCE7E4] rounded-[14px] px-[13px] py-[11px] m-0 leading-relaxed">
+        Les indicateurs non primordiaux sont remplis automatiquement avec leur valeur par défaut. Cette valeur est recalculée quelques secondes après chacune de vos saisies et mise à jour tant que vous ne l'avez pas modifiée vous-même.
+      </p>
       {groupPrio.length > 0 && (
         <div>
           <div className="flex items-center gap-2.5 mb-3">

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import Modal from "@/components/modal"
 import api from "@/services/api"
-import useStore from "@/services/store"
 import toast from "react-hot-toast"
 
 export default function List() {
@@ -10,7 +8,6 @@ export default function List() {
   const [collectivities, setCollectivities] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [search, setSearch] = useState("")
 
   const fetchCollectivities = async () => {
@@ -32,18 +29,13 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Liste des Collectivités</h1>
-        <div className="flex items-center gap-4">
-          <input
-            type="text"
-            placeholder="Rechercher..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent"
-          />
-          <button onClick={() => setIsModalOpen(true)} className="button-primary">
-            Ajouter
-          </button>
-        </div>
+        <input
+          type="text"
+          placeholder="Rechercher..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent"
+        />
       </div>
 
       <table className="w-full overflow-hidden card-shadow">
@@ -79,70 +71,6 @@ export default function List() {
           </div>
         </div>
       )}
-
-      <AddCollectivityModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
-  )
-}
-
-
-const AddCollectivityModal = ({ isOpen, onClose }) => {
-    const navigate = useNavigate()
-    const { user, setUser } = useStore()
-    const [name, setName] = useState("")
-    const [loading, setLoading] = useState(false)
-
-    const createCollectivity = async () => {
-      try {
-        setLoading(true)
-        if (!name.trim()) return toast.error("Veuillez entrer un nom pour la collectivité")
-        const { ok, data, code } = await api.post("/collectivity/", { name })
-        if (!ok) return toast.error(code || "Une erreur est survenue")
-        setUser({ ...user })
-        navigate(`/admin/collectivity/${data._id}`)
-      } catch (error) {
-        toast.error(error.code || "Une erreur est survenue")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Ajouter une collectivité</h2>
-        </div>
-
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green"></div>
-          </div>
-        )}
-
-        {!loading && (
-          <>
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Nom de la collectivité
-          </label>
-          <input
-            type="text"
-            placeholder="Entrez le nom"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
-          />
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button onClick={createCollectivity} className="button-primary" disabled={loading}>
-            Créer
-          </button>
-        </div>
-        </>
-        )}
-      </div>
-    </Modal>
   )
 }

@@ -231,6 +231,10 @@ export default function Completion({ action, onSave }) {
 }
 
 function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, yearMappings, tabTotal }) {
+  // Onglet affiché au moment présent : la fin de synchro Excel (asynchrone) doit recharger l'onglet courant,
+  // pas celui où la saisie a été faite si l'utilisateur a changé d'onglet entre-temps
+  const viewRef = useRef({ situation: activeSituation, year: activeYear })
+  viewRef.current = { situation: activeSituation, year: activeYear }
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -291,17 +295,24 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
 
   // Les défauts, titres et listes dynamiques sont résolus par l'API au fetch : après une sauvegarde, on les
   // recharge silencieusement (sans loader ni réordonnancement) pour que les indicateurs dépendants suivent
-  const refreshDynamicFields = async () => {
-    const params = { action_id: action._id, situation: activeSituation, limit: 10000 }
-    if (activeYear) params.year = activeYear
+  // Les défauts (relus depuis l'Excel après synchro) et les valeurs des indicateurs non primordiaux sont aussi repris :
+  // l'API fait suivre ces valeurs à leur défaut en appliquant elle-même la règle de protection des saisies.
+  // saveId : identifiant de la sauvegarde appelante ; si une autre sauvegarde a démarré pendant le fetch, les valeurs
+  // renvoyées peuvent être antérieures à cette saisie, on ne reprend alors que les champs dynamiques
+  const refreshDynamicFields = async (saveId) => {
+    const params = { action_id: action._id, situation: viewRef.current.situation, limit: 10000 }
+    if (viewRef.current.year) params.year = viewRef.current.year
     const { ok, data } = await api.post("/indicator_value/search", params)
     if (!ok) return
+    const withValues = saveId === saveCounterRef.current
     const byId = new Map(data.map((iv) => [iv._id, iv]))
     setIndicatorValues((prev) =>
       prev.map((iv) => {
         const fresh = byId.get(iv._id)
         if (!fresh) return iv
-        return { ...iv, value_default: fresh.value_default, indicator_name: fresh.indicator_name, indicator_value_possibilities: fresh.indicator_value_possibilities }
+        const next = { ...iv, value_default: fresh.value_default, indicator_name: fresh.indicator_name, indicator_value_possibilities: fresh.indicator_value_possibilities }
+        if (withValues && iv.is_primordial === false) next.value = fresh.value
+        return next
       })
     )
   }
@@ -324,7 +335,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       }
       const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
-      await Promise.all([onStatsRefresh(), refreshDynamicFields()])
+      await Promise.all([onStatsRefresh(), refreshDynamicFields(mySaveId)])
       // La synchro Excel est différée côté API : on garde le loading tant que le dashboard n'est pas à jour
       toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
       for (let i = 0; i < 60; i++) {
@@ -333,6 +344,8 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
         const { ok: statusOk, data } = await api.get(`/indicator_value/sync_status/${action._id}`)
         if (!statusOk || !data.pending) break
       }
+      // Fin de synchro : les défauts relus depuis l'Excel et les valeurs qui les suivent sont rechargés sur l'onglet affiché
+      await refreshDynamicFields(mySaveId)
       toast.success("Valeur enregistrée, dashboard à jour", { id: "indicator-save" })
     } catch (error) {
       toast.error("Une erreur est survenue", { id: "indicator-save" })
