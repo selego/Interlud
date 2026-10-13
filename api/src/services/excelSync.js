@@ -3,6 +3,7 @@ const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { getSiteId, updateExcelCellsBatch, graphFetchWithSession } = require('./microsoftGraph');
 const { capture } = require('./sentry');
+const { refreshDefaultsAfterSync } = require('./excelDefaults');
 
 // Synchro Excel différée : les modifs d'indicateurs sont accumulées puis écrites en une passe,
 // pour éviter de rejouer tout le pipeline SharePoint (écriture cellule + recalcul + agrégation) à chaque champ modifié.
@@ -207,6 +208,11 @@ const flush = async (cells, aggregations) => {
       for (const group of groups) await updateExcelCellsBatch(fileId, group.updates, group.situation).catch(capture);
     }),
   );
+
+  // Relecture des défauts recalculés par Excel (formules non suivies en temps réel) : met à jour value_default,
+  // et les valeurs non primordiales jamais modifiées par l'utilisateur. Avant les agrégations, qui doivent voir
+  // les valeurs réécrites. Un fichier en échec ne bloque pas les autres.
+  await Promise.all([...updatesByFile.entries()].map(([fileId, groups]) => refreshDefaultsAfterSync(fileId, { writtenSituations: groups.map((g) => g.situation) }).catch(capture)));
 
   // Agrégations après les cellules : les feuilles Agrégation dépendent des valeurs écrites ci-dessus
   for (const agg of aggregations.values()) {

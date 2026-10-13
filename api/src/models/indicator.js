@@ -22,19 +22,6 @@ const conditionNode = { ...leafCondition, operator: { type: String, enum: ['AND'
 
 const displayConditionForSituation = { operator: { type: String, enum: ['AND', 'OR'] }, conditions: [conditionNode] };
 
-// Défaut dynamique : la colonne H du master référence la valeur (colonne F) d'un autre indicateur.
-// défaut = valeur_source × factor + offset, ou valeur_source × (1 + évolution/100) si growth_source (indicateur d'évolution en %)
-const defaultSource = {
-  excel_indicator_id: { type: String },
-  situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-  factor: { type: Number },
-  offset: { type: Number },
-  growth_source: {
-    excel_indicator_id: { type: String },
-    situation: { type: String, enum: ['init', 'ref', 'prev', 'expost'] },
-  },
-};
-
 // Titre dynamique : la colonne C du master concatène du texte et la valeur (colonne F) d'autres indicateurs.
 // template contient des marqueurs {0}, {1}… remplacés au fetch par la valeur des sources correspondantes.
 const nameSource = {
@@ -83,7 +70,6 @@ const Schema = new mongoose.Schema(
         extra_values: { type: [String], default: undefined }, // valeurs fixes ajoutées à la liste résolue (ex : "Aucun")
       },
     },
-    value_default_source: { init: defaultSource, ref: defaultSource, prev: defaultSource, expost: defaultSource },
     value_default: {
       init: { type: type, trim: true },
       ref: { type: type, trim: true },
