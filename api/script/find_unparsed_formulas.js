@@ -1,14 +1,14 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const fs = require("fs");
 const path = require("path");
-const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossibilitiesFormula, parseDefaultSourceFormula, parseNameFormula, loadLookupSheets, buildFormulasMap, LOOKUP_SHEET_NAMES } = require("./scrap_indicator_excel");
+const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossibilitiesFormula, parseNameFormula, buildFormulasMap } = require("./scrap_indicator_excel");
 
 // Lecture seule : ce script ne se connecte PAS à Mongo et n'écrit RIEN en base.
 // Il reprend le master Excel et rejoue TOUS les parsers de formules de scrap_indicator_excel.js,
 // avec les mêmes critères que createIndicatorsFromExcel, pour lister ce qui ne serait pas pris en compte :
 //   - colonne C  (titre)              → parseNameFormula          : formule référençant une saisie F mais non reconnue (titre gardé statique)
 //   - colonne G  (valeurs possibles)  → parsePossibilitiesFormula : formule référençant une saisie F d'une feuille Remplissage mais non reconnue (liste gardée statique)
-//   - colonne H  (valeur par défaut)  → parseDefaultSourceFormula : formule référençant une saisie F d'une feuille Remplissage mais non reconnue (défaut gardé statique)
+//   - colonne H  (valeur par défaut)  : hors périmètre, lue par valeur et relue depuis l'Excel de la collectivité après chaque synchro
 //   - colonne K  (affichage)          → resolveAllFormulas        : non parsée, ignorée (inter-feuilles) ou parse partiel ("* cellule" perdu)
 
 //V22
@@ -21,7 +21,7 @@ const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Expost", situation: "expost" },
 ];
 
-const TYPES = ["titre", "valeurs possibles", "défaut", "affichage"];
+const TYPES = ["titre", "valeurs possibles", "affichage"];
 
 const columnToIndex = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11, M: 12, N: 13, O: 14, P: 15, Q: 16, R: 17, S: 18, T: 19, U: 20, V: 21, W: 22, X: 23, Y: 24, Z: 25 };
 
@@ -45,7 +45,6 @@ const referencesValueCell = (f) => [...f.replace(/"[^"]*"/g, "").matchAll(/(?:['
         startRow: data.address?.match(/[A-Z]+(\d+):/i) ? parseInt(data.address.match(/[A-Z]+(\d+):/i)[1], 10) : 1,
       });
     }
-    const lookupSheets = await loadLookupSheets(masterFileId, LOOKUP_SHEET_NAMES);
     console.log("✅ Toutes les feuilles chargées!\n");
 
     // Étape 2 : construire les maps ligne→indicateur et ligne→formule (colonne K) pour chaque situation
@@ -107,13 +106,6 @@ const referencesValueCell = (f) => [...f.replace(/"[^"]*"/g, "").matchAll(/(?:['
           if (!parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue)) push("valeurs possibles", rowNum, "non reconnue (liste gardée statique)", possibilitiesFormula);
         }
 
-        // Valeur par défaut (colonne H), unité en colonne I pour la conversion des offsets en %.
-        // Seules les formules référençant une saisie F d'une feuille Remplissage sont censées devenir dynamiques.
-        const defaultFormula = formulaRow[7];
-        if (isFormula(defaultFormula) && referencesValueCell(defaultFormula)) {
-          totals["défaut"]++;
-          if (!parseDefaultSourceFormula(defaultFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue, row[8], { getSheetCell, lookupSheets })) push("défaut", rowNum, "non reconnue (défaut gardé statique)", defaultFormula);
-        }
       }
 
       // --- Colonne K : affichage conditionnel

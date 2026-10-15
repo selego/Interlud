@@ -5,14 +5,14 @@ const Action = require("../src/models/action");
 const Collectivity = require("../src/models/collectivity");
 const IndicatorValue = require("../src/models/indicator_value");
 const { graphFetch, getSiteId } = require("../src/services/microsoftGraph");
-const { isPercentUnit, resolveDynamicDefaults } = require("../src/utils/indicators");
+const { isPercentUnit } = require("../src/utils/indicators");
 
 // Vérification LECTURE SEULE de la cohérence base ↔ fichiers Excel d'une ou plusieurs collectivités, après une migration.
 // Pour chaque fichier Excel (prev / expost) de chaque action, et pour chaque feuille du fichier :
 //   - colonne F (valeur saisie)      ↔ IndicatorValue.value          (même conversion que syncIndicatorValuesToExcel)
 //   - colonne H (valeur par défaut)  ↔ IndicatorValue.value_default  (même conversion que parseDefaultValue)
 //       · défaut statique  : value_default tel qu'en base
-//       · défaut dynamique : value_default résolu par resolveDynamicDefaults, exactement comme l'API au fetch → teste la chaîne complète
+//       · (les défauts sont relus depuis l'Excel après chaque synchro : base et fichier doivent coïncider, hors synchro en cours)
 // Ne recalcule pas le classeur, n'écrit rien nulle part.
 //
 //   node script/check_excel_db_consistency.js "Saint-Etienne" "Nîmes"          → vérifie ces collectivités
@@ -106,7 +106,6 @@ const fmt = (v) => (isEmpty(v) ? "∅" : JSON.stringify(v));
 
           const ivs = await IndicatorValue.find({ action_id: { $in: [action._id.toString(), ...configIds] }, indicator_excel_id: { $exists: true, $ne: null }, $or: situationYears.map((sy) => ({ situation: sy.situation, year: sy.year })) });
           // Défauts dynamiques : résolus en mémoire comme au fetch API (lecture seule, les IVs ne sont pas sauvegardées)
-          await resolveDynamicDefaults(ivs);
           const ivMap = new Map(ivs.map((iv) => [`${iv.situation}|${iv.indicator_excel_id}`, iv]));
 
           const stats = { compared: 0, valueMismatch: 0, defaultMismatch: 0, dynamicCompared: 0, dynamicMismatch: 0, excelErrors: 0, missingIV: 0 };
@@ -137,15 +136,7 @@ const fmt = (v) => (isEmpty(v) ? "∅" : JSON.stringify(v));
 
               const expectedDefault = parseDefaultCell(rawH, iv.indicator_type, iv.indicator_value_unit);
               const dbDefault = iv.value_default?.[iv.indicator_type] ?? null;
-              const isDynamic = Boolean(iv.indicator_value_default_source?.excel_indicator_id);
-              if (isDynamic) stats.dynamicCompared++;
               if (sameValue(expectedDefault, dbDefault)) return;
-              if (isDynamic) {
-                stats.dynamicMismatch++;
-                const src = iv.indicator_value_default_source;
-                details.push(`   ✗ H~ ${situation} ${line} ${excelId} [${iv.action_name}] dynamique ← ${src.excel_indicator_id}/${src.situation}${src.factor ? ` ×${src.factor}` : ""}${src.offset ? ` +${src.offset}` : ""}${src.growth_source?.excel_indicator_id ? ` ×(1+${src.growth_source.excel_indicator_id})` : ""} : Excel ${fmt(rawH)} → attendu ${fmt(expectedDefault)} ≠ résolu API ${fmt(dbDefault)}`);
-                return;
-              }
               stats.defaultMismatch++;
               details.push(`   ✗ H  ${situation} ${line} ${excelId} [${iv.action_name}] : Excel ${fmt(rawH)} → attendu ${fmt(expectedDefault)} ≠ base ${fmt(dbDefault)}`);
             });
