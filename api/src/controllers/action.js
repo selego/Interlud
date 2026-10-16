@@ -12,13 +12,17 @@ const EconomicActor = require('../models/economic_actor');
 const { updateExcelCellByIndicatorId, updateExcelCellsBatch, duplicateExcelFile, clearWorksheetValues, graphFetch, sharePointSiteName, calculateWorkbook, readExcelDefaultValues, createFolder, createWorkbookSession, closeWorkbookSession, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const { computeActionCompletion } = require('../utils/completion');
 const { isPercentUnit } = require('../utils/indicators');
-const { writeDraftFlag } = require('../services/excelSync');
+const { writeDraftFlag, warmSessionsForAction } = require('../services/excelSync');
 const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Pré-ouvre les sessions SharePoint des fichiers de l'action (sans attendre) : la première synchro
+    // Excel après ouverture de la page ne paie plus le chargement à froid des classeurs
+    warmSessionsForAction(action);
 
     return res.status(200).send({ ok: true, data: action });
   } catch (error) {

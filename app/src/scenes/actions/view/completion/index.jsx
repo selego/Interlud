@@ -338,8 +338,8 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       await Promise.all([onStatsRefresh(), refreshDynamicFields(mySaveId)])
       // La synchro Excel est différée côté API : on garde le loading tant que le dashboard n'est pas à jour
       toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
-      for (let i = 0; i < 60; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+      for (let i = 0; i < 120; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
         if (mySaveId !== saveCounterRef.current) return
         const { ok: statusOk, data } = await api.get(`/indicator_value/sync_status/${action._id}`)
         if (!statusOk || !data.pending) break

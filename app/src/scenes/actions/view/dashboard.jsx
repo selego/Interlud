@@ -576,7 +576,7 @@ function SyncPendingPoller({ action, onSynced, onPendingChange }) {
         onPendingChange?.(data.pending)
         if (data.pending) {
           wasPending = true
-          setTimeout(poll, 3000)
+          setTimeout(poll, 1500)
           return
         }
         if (wasPending) onSynced?.()

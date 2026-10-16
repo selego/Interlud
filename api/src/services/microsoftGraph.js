@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const { isPercentUnit } = require('../utils/indicators');
 
@@ -68,15 +69,23 @@ async function graphFetch(endpoint, options = {}) {
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const token = await getAccessToken();
+    const startedAt = Date.now();
     const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+      // Sans timeout, un appel SharePoint qui ne répond jamais bloque le flush indéfiniment
+      signal: AbortSignal.timeout(options.timeoutMs || 120000),
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
+        // Trafic « décoré » (AppID + User-Agent au format NONISV|Société|App/Version) : priorisé par SharePoint ;
+        // client-request-id : identifiant à fournir au support Microsoft en cas d'incident
+        'User-Agent': 'NONISV|Selego|Interlud/1.0',
+        'client-request-id': crypto.randomUUID(),
         ...options.headers,
       },
     });
 
+    if (process.env.GRAPH_TIMING) console.log(`[Graph ${Date.now() - startedAt}ms] ${options.method || 'GET'} ${response.status} ${endpoint.replace(/^.*?\/items\/[^/]+/, '…')}`);
     if (response.ok) {
       if (response.status === 202) return response;
       if (response.status === 204) return null;
@@ -202,7 +211,7 @@ async function updateExcelCellByIndicatorId(fileId, excelIndicatorId, value, sit
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`, sessionHeaders(sessionId));
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange?$select=address,values`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
 
   const rowIndex = rows.findIndex((row) => row[4] && String(row[4]).trim() === String(excelIndicatorId).trim());
@@ -230,7 +239,9 @@ async function updateExcelCellsBatch(fileId, updates, situation, sessionId = nul
   const siteId = await getSiteId();
   const fetchWb = (endpoint, options = {}) => (sessionId ? graphFetch(endpoint, { ...options, ...sessionHeaders(sessionId) }) : graphFetchWithSession(fileId, endpoint, options));
 
-  const usedRange = await fetchWb(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange`);
+  // $select : sans projection, Graph renvoie 7 tableaux par plage (values, text, formulas, formulasLocal, formulasR1C1,
+  // numberFormat, valueTypes), soit ~6× plus de données et de temps (mesuré 0.5-1.5s contre 0.13s)
+  const usedRange = await fetchWb(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets/${worksheetName}/usedRange?$select=address,values`);
   const rows = usedRange.values || [];
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
@@ -377,7 +388,7 @@ async function importSheetsToExcelFile(targetFileId, importedFileBuffer, sheets)
     const dataMap = importedDataBySituation[situation];
     if (!dataMap?.size) continue;
 
-    const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange`);
+    const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${targetFileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/usedRange?$select=address,values`);
 
     const rows = usedRange.values || [];
     const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
@@ -424,7 +435,7 @@ async function clearWorksheetValues(fileId, situation, sessionId = null) {
 
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`, sessionHeaders(sessionId));
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange?$select=address,values`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
   const startRow = usedRange.address ? parseInt(usedRange.address.match(/\d+/)?.[0] || 1) : 1;
 
@@ -469,7 +480,7 @@ async function readExcelDefaultValues(fileId, situation, sessionId = null) {
   if (!worksheetName) throw new Error(`No worksheet found for situation: ${situation}`);
   const siteId = await getSiteId();
 
-  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange`, sessionHeaders(sessionId));
+  const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(worksheetName)}')/usedRange?$select=values`, sessionHeaders(sessionId));
   const rows = usedRange.values || [];
 
   const defaults = new Map();

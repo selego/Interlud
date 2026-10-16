@@ -1,13 +1,14 @@
 const Action = require('../models/action');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
-const { getSiteId, updateExcelCellsBatch, graphFetchWithSession } = require('./microsoftGraph');
+const { getSiteId, updateExcelCellsBatch, graphFetchWithSession, getCachedSession } = require('./microsoftGraph');
 const { capture } = require('./sentry');
 const { refreshDefaultsAfterSync } = require('./excelDefaults');
 
 // Synchro Excel différée : les modifs d'indicateurs sont accumulées puis écrites en une passe,
 // pour éviter de rejouer tout le pipeline SharePoint (écriture cellule + recalcul + agrégation) à chaque champ modifié.
-const DEBOUNCE_MS = 2000;
+// 1s suffit : le champ numérique du front a déjà son propre debounce (400ms) et les flushs sont chaînés.
+const DEBOUNCE_MS = 1000;
 // Plafond : si les modifs s'enchaînent sans pause, on flush quand même au bout de ce délai
 const MAX_WAIT_MS = 30000;
 
@@ -91,7 +92,7 @@ const writeAggregationTargets = async (action, targets) => {
   const siteId = await getSiteId();
   const inputSheetPath = `/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent("1. Données d'entrée")}`;
   // IDs en colonne D — plage fixe pour ne pas dépendre du point de départ de la usedRange
-  const inputResult = await graphFetchWithSession(aggregationFileId, `${inputSheetPath}/range(address='D1:D10000')`);
+  const inputResult = await graphFetchWithSession(aggregationFileId, `${inputSheetPath}/range(address='D1:D10000')?$select=values`);
   const inputRows = inputResult.values || [];
   const idRowMap = new Map();
   for (let i = 0; i < inputRows.length; i++) {
@@ -113,7 +114,7 @@ const writeAggregationTargets = async (action, targets) => {
     [...targetsByFile.keys()].map(async (sourceFileId) => {
       try {
         await graphFetchWithSession(sourceFileId, `/sites/${siteId}/drive/items/${sourceFileId}/workbook/application/calculate`, { method: 'POST', body: JSON.stringify({ calculationType: 'Recalculate' }) }).catch(() => {});
-        const result = await graphFetchWithSession(sourceFileId, `/sites/${siteId}/drive/items/${sourceFileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange`);
+        const result = await graphFetchWithSession(sourceFileId, `/sites/${siteId}/drive/items/${sourceFileId}/workbook/worksheets/${encodeURIComponent('Agrégation')}/usedRange?$select=values`);
         rowsByFile.set(sourceFileId, result.values || []);
       } catch (e) {
         capture(e);
@@ -139,9 +140,12 @@ const writeAggregationTargets = async (action, targets) => {
   }
   if (cellWrites.size === 0) return;
 
-  // Un seul PATCH couvrant toute la plage min→max : chaque écriture déclenche un recalcul complet du
-  // classeur (~1.8s mesuré), et les cellules cibles sont dispersées (une ligne par type d'émission,
-  // espacées de 164) — 6 à 18 PATCH séparés coûtaient 11 à 33s, la plage entière ~4.5s.
+  // Un seul PATCH couvrant toute la plage min→max. La feuille range les lignes par type d'émission (6 blocs de
+  // 164 lignes = 4 situations × 41 années), donc toute saisie touche les 6 blocs et les cibles s'étalent des
+  // lignes 24 à 936 (jusqu'à 42 cellules pour une saisie en situation initiale). Mesures (2026-10-15) : le coût est
+  // proportionnel au nombre de cellules écrites, pas au recalcul (recalcul complet du classeur 0.5s) — 1 cellule
+  // 0.3s, la plage entière ~3.6-4.2s en `formulas` comme en `values`, 1.9s par cellule dans un $batch (42 → 80s).
+  // Seule une réorganisation du template (cibles contiguës) ferait baisser ce poste.
   // Les cellules intermédiaires sont relues et réécrites à l'identique via `formulas` (préserve une
   // éventuelle formule ; pour une constante, formulas == valeur).
   const agregCol = getAggregationCol(action.instance_number);
@@ -193,6 +197,19 @@ const startFlush = () => {
   flushChain = flushChain.then(() => flush(cells, aggregations)).catch(capture);
 };
 
+// Ouvre (sans attendre) les sessions workbook des fichiers d'une action et de son fichier d'agrégation.
+// Une création de session à froid coûte 3s par fichier d'action et ~7s pour le fichier d'agrégation : lancée à
+// l'ouverture de l'action, elle est terminée avant la première saisie et le flush trouve des sessions chaudes.
+const warmSessionsForAction = (action) => {
+  if (!action || action.type === 'config') return;
+  for (const f of [...(action.exel_files_prev || []), ...(action.excel_files_expost || [])]) {
+    if (f.excel_file_id) getCachedSession(f.excel_file_id);
+  }
+  getAggregationFileId(action)
+    .then((id) => id && getCachedSession(id))
+    .catch(() => {});
+};
+
 const flush = async (cells, aggregations) => {
   const startedAt = Date.now();
   const updatesByFile = new Map();
@@ -200,6 +217,17 @@ const flush = async (cells, aggregations) => {
     const [fileId, situation] = key.split('|');
     if (!updatesByFile.has(fileId)) updatesByFile.set(fileId, []);
     updatesByFile.get(fileId).push({ situation, updates: [...updates.values()] });
+  }
+
+  // La session du fichier d'agrégation s'ouvre pendant les phases cellules + défauts au lieu d'après
+  const actionsById = new Map();
+  for (const agg of aggregations.values()) {
+    const action = await Action.findById(agg.actionId).catch(() => null);
+    if (!action) continue;
+    actionsById.set(agg.actionId, action);
+    getAggregationFileId(action)
+      .then((id) => id && getCachedSession(id))
+      .catch(() => {});
   }
 
   await Promise.all(
@@ -212,12 +240,14 @@ const flush = async (cells, aggregations) => {
   // Relecture des défauts recalculés par Excel (formules non suivies en temps réel) : met à jour value_default,
   // et les valeurs non primordiales jamais modifiées par l'utilisateur. Avant les agrégations, qui doivent voir
   // les valeurs réécrites. Un fichier en échec ne bloque pas les autres.
+  const cellsDoneAt = Date.now();
   await Promise.all([...updatesByFile.entries()].map(([fileId, groups]) => refreshDefaultsAfterSync(fileId, { writtenSituations: groups.map((g) => g.situation) }).catch(capture)));
+  const defaultsDoneAt = Date.now();
 
   // Agrégations après les cellules : les feuilles Agrégation dépendent des valeurs écrites ci-dessus
   for (const agg of aggregations.values()) {
     try {
-      const action = await Action.findById(agg.actionId);
+      const action = actionsById.get(agg.actionId);
       if (!action) continue;
       await writeAggregationTargets(action, buildAggregationTargets(action, agg.situation, agg.year));
     } catch (e) {
@@ -227,7 +257,7 @@ const flush = async (cells, aggregations) => {
       if (![...pendingAggregations.keys()].some((k) => k.startsWith(`${agg.actionId}|`))) pendingSyncActionIds.delete(agg.actionId);
     }
   }
-  console.log(`[excelSync] flush terminé en ${Date.now() - startedAt}ms — ${updatesByFile.size} fichier(s) action, ${aggregations.size} agrégation(s)`);
+  console.log(`[excelSync] flush terminé en ${Date.now() - startedAt}ms (cellules ${cellsDoneAt - startedAt}ms, défauts ${defaultsDoneAt - cellsDoneAt}ms, agrégation ${Date.now() - defaultsDoneAt}ms) — ${updatesByFile.size} fichier(s) action, ${aggregations.size} agrégation(s)`);
 };
 
 // Enregistre une valeur de cellule à écrire dans un fichier Excel d'action (colonne F de la feuille de la situation).
@@ -251,4 +281,4 @@ const enqueueAggregation = ({ actionId, situation, year }) => {
 // Le dashboard de cette action reflète-t-il les dernières modifs ?
 const isSyncPending = (actionId) => pendingSyncActionIds.has(String(actionId));
 
-module.exports = { enqueueCellUpdate, enqueueAggregation, isSyncPending, writeDraftFlag };
+module.exports = { enqueueCellUpdate, enqueueAggregation, isSyncPending, writeDraftFlag, warmSessionsForAction };
