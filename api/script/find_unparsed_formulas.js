@@ -12,7 +12,7 @@ const { getWorksheetUsedRange, parseExcelFormula, resolveAllFormulas, parsePossi
 //   - colonne K  (affichage)          → resolveAllFormulas        : non parsée, ignorée (inter-feuilles) ou parse partiel ("* cellule" perdu)
 
 //V22
-const masterFileId = "01IBL4ADNDE2JFJTPINBGKQSUGPXLK7DQN";
+const masterFileId = "01IBL4ADMLEEGDOQQYHZHZOPZMBD2NN5D7";
 
 const WORKSHEETS = [
   { worksheetName: "Remplissage - Sit. Init.", situation: "init" },
@@ -105,7 +105,6 @@ const referencesValueCell = (f) => [...f.replace(/"[^"]*"/g, "").matchAll(/(?:['
           totals["valeurs possibles"]++;
           if (!parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue)) push("valeurs possibles", rowNum, "non reconnue (liste gardée statique)", possibilitiesFormula);
         }
-
       }
 
       // --- Colonne K : affichage conditionnel

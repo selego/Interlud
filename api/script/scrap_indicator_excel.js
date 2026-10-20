@@ -11,7 +11,7 @@ const mongoose = require("mongoose");
 const config = require("../src/config");
 
 const sharePointSiteName = "selegobv";
-const masterFileId = "01IBL4ADNDE2JFJTPINBGKQSUGPXLK7DQN"; // ID du fichier master Excel
+const masterFileId = "01IBL4ADMLEEGDOQQYHZHZOPZMBD2NN5D7"; // ID du fichier master Excel
 // Feuilles de référence (hors remplissage) lues au scrap pour évaluer les VLOOKUP à clé constante des défauts
 const LOOKUP_SHEET_NAMES = ["Parcs types"];
 
@@ -1711,7 +1711,6 @@ async function createIndicatorsFromExcel(situation, worksheetName, allSheetsData
       const possibilitiesFormula = formulaRows?.[i]?.[6];
       const possibilitiesSourceForSituation = parsePossibilitiesFormula(possibilitiesFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getCellValue);
 
-
       // Détecter un titre dynamique dans la cellule "titre" (colonne C, index 2) : texte concaténé avec la valeur d'autres indicateurs
       const nameFormula = formulaRows?.[i]?.[2];
       const nameSourceForSituation = parseNameFormula(nameFormula, situation, rowToIndicatorMap, allRowToIndicatorMaps, getSheetCell);
@@ -2369,8 +2368,6 @@ async function refreshDefaultsFromExcel(fileId, actionIds, situationYears, { dry
     const updateFields = { [`value_default.${iv.indicator_type}`]: newDefault };
     report.defaults++;
     if (isExcelError) report.errors++;
-    console.log(`      ${label} : défaut ${fmt(currentDefault)} → ${fmt(newDefault)}${isExcelError ? ` (cellule Excel ${rawDefault})` : ""}`);
-
     const isValueCandidate = iv.action_name !== "Données de base" && (iv.action_name === "Parc types" || iv.is_primordial === false);
     if (isValueCandidate) {
       const currentValue = iv.value?.[iv.indicator_type];
@@ -2378,12 +2375,10 @@ async function refreshDefaultsFromExcel(fileId, actionIds, situationYears, { dry
       const untouched = newDefault !== null && (isEmpty || JSON.stringify(currentValue) === JSON.stringify(currentDefault));
       if (!untouched && !isEmpty) {
         report.protected++;
-        console.log(`      ${label} : valeur ${fmt(currentValue)} conservée`);
       }
       if (untouched) {
         report.values++;
         updateFields[`value.${iv.indicator_type}`] = newDefault;
-        console.log(`      ${label} : valeur ${fmt(currentValue)} → ${fmt(newDefault)}`);
         if (newDefault !== null) {
           if (!excelRewrites.has(iv.situation)) excelRewrites.set(iv.situation, []);
           excelRewrites.get(iv.situation).push({ excel_indicator_id: iv.indicator_excel_id, value: newDefault, unit: iv.indicator_value_unit });
@@ -2757,8 +2752,8 @@ if (require.main === module) {
       // Étape 4: Synchroniser les indicateurs avec les actions existantes
       await syncIndicatorsToExistingActions();
 
-      // Étape 5: Régénérer les fichiers Excel pour toutes les collectivités (valeurs + défauts relus après recalcul)
-      // await generateExcelForAllCollectivities();
+      // // Étape 5: Régénérer les fichiers Excel pour toutes les collectivités (valeurs + défauts relus après recalcul)
+      await generateExcelForAllCollectivities();
 
       process.exit(0);
     } catch (error) {
