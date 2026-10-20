@@ -13,6 +13,9 @@ const { isPercentUnit } = require("../src/utils/indicators");
 //   - colonne H (valeur par défaut)  ↔ IndicatorValue.value_default  (même conversion que parseDefaultValue)
 //       · défaut statique  : value_default tel qu'en base
 //       · (les défauts sont relus depuis l'Excel après chaque synchro : base et fichier doivent coïncider, hors synchro en cours)
+//   - les IVs jamais affichées (condition neverVisible, colonne K "Affichage" à 0 dans le master) sont comptées à part, à titre
+//     informatif : l'app ne les montre ni ne les modifie, et les IVs de config partagées (Parc types) diffèrent légitimement
+//     entre fichiers d'années init différentes alors que la base n'en garde qu'une par situation/année.
 // Ne recalcule pas le classeur, n'écrit rien nulle part.
 //
 //   node script/check_excel_db_consistency.js "Saint-Etienne" "Nîmes"          → vérifie ces collectivités
@@ -71,7 +74,7 @@ const fmt = (v) => (isEmpty(v) ? "∅" : JSON.stringify(v));
     if (names.length === 0) throw new Error('Usage : node script/check_excel_db_consistency.js "Nom collectivité" ["Autre"…] [--details=N] [--version=V38]');
     await mongoose.connect(config.MONGODB_ENDPOINT);
     const siteId = await getSiteId();
-    const grand = { files: 0, badVersion: 0, compared: 0, valueMismatch: 0, defaultMismatch: 0, dynamicCompared: 0, dynamicMismatch: 0, excelErrors: 0, missingIV: 0 };
+    const grand = { files: 0, badVersion: 0, compared: 0, valueMismatch: 0, defaultMismatch: 0, dynamicCompared: 0, dynamicMismatch: 0, excelErrors: 0, missingIV: 0, hiddenCompared: 0, hiddenMismatch: 0 };
 
     for (const name of names) {
       const collectivity = await Collectivity.findOne({ name: { $regex: name, $options: "i" } });
@@ -108,8 +111,9 @@ const fmt = (v) => (isEmpty(v) ? "∅" : JSON.stringify(v));
           // Défauts dynamiques : résolus en mémoire comme au fetch API (lecture seule, les IVs ne sont pas sauvegardées)
           const ivMap = new Map(ivs.map((iv) => [`${iv.situation}|${iv.indicator_excel_id}`, iv]));
 
-          const stats = { compared: 0, valueMismatch: 0, defaultMismatch: 0, dynamicCompared: 0, dynamicMismatch: 0, excelErrors: 0, missingIV: 0 };
+          const stats = { compared: 0, valueMismatch: 0, defaultMismatch: 0, dynamicCompared: 0, dynamicMismatch: 0, excelErrors: 0, missingIV: 0, hiddenCompared: 0, hiddenMismatch: 0 };
           const details = [];
+          const hiddenDetails = [];
           for (const { situation } of situationYears) {
             const usedRange = await graphFetch(`/sites/${siteId}/drive/items/${file.fileId}/workbook/worksheets('${encodeURIComponent(SHEETS[situation])}')/usedRange`);
             const rows = usedRange.values || [];
@@ -129,30 +133,43 @@ const fmt = (v) => (isEmpty(v) ? "∅" : JSON.stringify(v));
               if (typeof rawH === "string" && rawH.startsWith("#")) stats.excelErrors++;
 
               const expectedF = expectedCellValue(iv);
-              if (!sameValue(rawF, expectedF)) {
+              const valueOk = sameValue(rawF, expectedF);
+              const expectedDefault = parseDefaultCell(rawH, iv.indicator_type, iv.indicator_value_unit);
+              const dbDefault = iv.value_default?.[iv.indicator_type] ?? null;
+              const defaultOk = sameValue(expectedDefault, dbDefault);
+
+              // IV jamais affichée dans l'app : écart informatif, ni compté ni bloquant
+              if (iv.display_condition?.conditions?.some((c) => c.type === "neverVisible")) {
+                stats.hiddenCompared++;
+                if (valueOk && defaultOk) return;
+                stats.hiddenMismatch++;
+                hiddenDetails.push(`   ~ ${situation} ${line} ${excelId} [${iv.action_name}] (jamais affichée) : F Excel ${fmt(rawF)} / base ${fmt(iv.value?.[iv.indicator_type])} — H Excel ${fmt(rawH)} / base ${fmt(dbDefault)}`);
+                return;
+              }
+
+              if (!valueOk) {
                 stats.valueMismatch++;
                 details.push(`   ✗ F  ${situation} ${line} ${excelId} [${iv.action_name}] : Excel ${fmt(rawF)} ≠ base ${fmt(iv.value?.[iv.indicator_type])}`);
               }
-
-              const expectedDefault = parseDefaultCell(rawH, iv.indicator_type, iv.indicator_value_unit);
-              const dbDefault = iv.value_default?.[iv.indicator_type] ?? null;
-              if (sameValue(expectedDefault, dbDefault)) return;
+              if (defaultOk) return;
               stats.defaultMismatch++;
               details.push(`   ✗ H  ${situation} ${line} ${excelId} [${iv.action_name}] : Excel ${fmt(rawH)} → attendu ${fmt(expectedDefault)} ≠ base ${fmt(dbDefault)}`);
             });
           }
 
           const ok = stats.valueMismatch === 0 && stats.defaultMismatch === 0 && stats.dynamicMismatch === 0;
-          console.log(`   ${ok ? "✅" : "❌"} ${stats.compared} lignes comparées — écarts valeur (F) : ${stats.valueMismatch} — écarts défaut statique (H) : ${stats.defaultMismatch} — défauts dynamiques (H~) : ${stats.dynamicMismatch} écart(s) sur ${stats.dynamicCompared} — cellules H en erreur : ${stats.excelErrors} — lignes Excel sans IV : ${stats.missingIV}`);
+          console.log(`   ${ok ? "✅" : "❌"} ${stats.compared} lignes comparées — écarts valeur (F) : ${stats.valueMismatch} — écarts défaut statique (H) : ${stats.defaultMismatch} — défauts dynamiques (H~) : ${stats.dynamicMismatch} écart(s) sur ${stats.dynamicCompared} — cellules H en erreur : ${stats.excelErrors} — lignes Excel sans IV : ${stats.missingIV} — IVs jamais affichées : ${stats.hiddenMismatch} écart(s) informatif(s) sur ${stats.hiddenCompared}`);
           for (const d of details.slice(0, MAX_DETAILS)) console.log(d);
           if (details.length > MAX_DETAILS) console.log(`   … ${details.length - MAX_DETAILS} autre(s) écart(s) (--details=N pour en voir plus)`);
+          for (const d of hiddenDetails.slice(0, MAX_DETAILS)) console.log(d);
+          if (hiddenDetails.length > MAX_DETAILS) console.log(`   … ${hiddenDetails.length - MAX_DETAILS} autre(s) écart(s) informatif(s) sur IVs jamais affichées (--details=N pour en voir plus)`);
 
-          for (const k of ["compared", "valueMismatch", "defaultMismatch", "dynamicCompared", "dynamicMismatch", "excelErrors", "missingIV"]) grand[k] += stats[k];
+          for (const k of ["compared", "valueMismatch", "defaultMismatch", "dynamicCompared", "dynamicMismatch", "excelErrors", "missingIV", "hiddenCompared", "hiddenMismatch"]) grand[k] += stats[k];
         }
       }
     }
 
-    console.log(`\n${"═".repeat(100)}\n📊 Total : ${grand.files} fichier(s) (${grand.badVersion} pas en ${EXPECTED_VERSION}), ${grand.compared} lignes comparées, ${grand.valueMismatch} écart(s) valeur, ${grand.defaultMismatch} écart(s) défaut statique, ${grand.dynamicMismatch} écart(s) défaut dynamique sur ${grand.dynamicCompared}, ${grand.excelErrors} cellule(s) H en erreur, ${grand.missingIV} ligne(s) Excel sans IV en base.`);
+    console.log(`\n${"═".repeat(100)}\n📊 Total : ${grand.files} fichier(s) (${grand.badVersion} pas en ${EXPECTED_VERSION}), ${grand.compared} lignes comparées, ${grand.valueMismatch} écart(s) valeur, ${grand.defaultMismatch} écart(s) défaut statique, ${grand.dynamicMismatch} écart(s) défaut dynamique sur ${grand.dynamicCompared}, ${grand.excelErrors} cellule(s) H en erreur, ${grand.missingIV} ligne(s) Excel sans IV en base, ${grand.hiddenMismatch} écart(s) informatif(s) sur ${grand.hiddenCompared} IV(s) jamais affichée(s).`);
     process.exit(grand.valueMismatch + grand.defaultMismatch + grand.dynamicMismatch + grand.badVersion > 0 ? 2 : 0);
   } catch (error) {
     console.error("❌", error.message);
