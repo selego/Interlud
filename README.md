@@ -37,18 +37,19 @@ Le projet est un monorepo composé de trois sous-projets :
 ```
 .
 ├── api/      # Backend Node.js / Express (port 8080)
-├── app/      # Frontend React principal pour les collectivités (port 3000)
-└── admin/    # Dashboard React pour les administrateurs
+└── app/      # Frontend React pour les collectivités et l'administration (port 3000)
 ```
+
+En production : app sur [app.evalud.green](https://app.evalud.green), API sur `api.evalud.green`.
 
 ### API (`api/`)
 
 - **Runtime** : Node.js + Express 4
 - **Base de données** : MongoDB via Mongoose
-- **Auth** : Passport.js + JWT (deux stratégies : `user` et `admin`)
+- **Auth** : Passport.js + JWT (deux stratégies : `user` et `admin`) + SSO Joptimiz (OAuth 2.0)
 - **Emails** : Brevo (Sendinblue)
 - **Fichiers** : stockage S3 compatible (AWS / MinIO)
-- **Office** : Microsoft Graph API (synchronisation SharePoint / Excel)
+- **Office** : Microsoft Graph API (synchronisation SharePoint / Excel, différée avec debounce)
 - **Erreurs** : Sentry
 
 Principales routes exposées :
@@ -83,10 +84,6 @@ Principales sections :
 | `/actions/:id/completion` | Saisie des indicateurs par situation                 |
 | `/general-data`           | Saisie de données générales (import Excel)           |
 | `/admin/*`                | Gestion des utilisateurs, collectivités, indicateurs |
-
-### Admin (`admin/`)
-
-Dashboard React léger pour les administrateurs système : gestion des utilisateurs, statistiques globales, configuration des collectivités.
 
 ---
 
@@ -136,10 +133,6 @@ cd app
 npm install
 npm run dev        # démarre sur le port 3000
 
-# Admin
-cd admin
-npm install
-npm run dev
 ```
 
 ### Variables d'environnement (`api/.env.example`)
@@ -160,6 +153,10 @@ S3_SECRETACCESSKEY=
 TENANT_ID=
 CLIENT_ID=
 CLIENT_SECRET=
+JOPTIMIZ_URL=
+JOPTIMIZ_CLIENT_ID=
+JOPTIMIZ_CLIENT_SECRET=
+JOPTIMIZ_REDIRECT_URI=
 ```
 
 ---
@@ -169,7 +166,8 @@ CLIENT_SECRET=
 - L'interface est entièrement en **français**.
 - Toutes les réponses API suivent le format `{ ok: boolean, data, code }`.
 - L'alias `@/` dans l'app pointe vers `app/src/`.
-- La synchronisation bidirectionnelle Excel ↔ SharePoint est gérée via Microsoft Graph.
+- La synchronisation bidirectionnelle Excel ↔ SharePoint est gérée via Microsoft Graph. Les classeurs (masters, templates, dossiers des collectivités) sont sur le [SharePoint Documents partagés](https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx) ; l'ID du master courant est une constante en tête de `api/src/services/microsoftGraph.js`.
+- Référence technique complète : [DOCUMENTATION.md](DOCUMENTATION.md).
 
 ---
 

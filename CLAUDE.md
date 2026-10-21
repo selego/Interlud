@@ -18,9 +18,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a monorepo with three sub-projects:
 
-- `app/` — Main user-facing React/Vite frontend (runs on port 3000)
+- `app/` — Main user-facing React/Vite frontend, including `/admin/*` screens (runs on port 3000)
 - `api/` — Node.js/Express backend (runs on port 8080)
-- `admin/` — Secondary React/Vite admin frontend
 - `POC/` — Proof of concept (not in active development)
 
 ## Commands
@@ -41,14 +40,6 @@ npm run lint     # ESLint
 npm start        # Build + serve with Express
 ```
 
-### Admin (`cd admin`)
-
-```bash
-npm run dev      # Vite dev server
-npm run build    # Production build
-npm start        # Build + serve with Express
-```
-
 ## API architecture
 
 Express.js + MongoDB (Mongoose) + Passport.js (JWT).
@@ -59,7 +50,7 @@ Express.js + MongoDB (Mongoose) + Passport.js (JWT).
 
 - `controllers/` — Express routers, one file per resource
 - `models/` — Mongoose schemas
-- `services/` — mongo, passport, sentry, brevo (email), microsoftGraph
+- `services/` — mongo, passport, sentry, brevo (email), joptimiz (SSO), microsoftGraph, excelSync (deferred Excel writes), excelDefaults
 - `utils/` — helpers, constants, errorCodes, completion/indicator logic
 - `config.js` — all env vars exported from one place
 
@@ -68,7 +59,11 @@ Express.js + MongoDB (Mongoose) + Passport.js (JWT).
 ```
 MONGODB_ENDPOINT, SECRET, APP_URL, ENVIRONMENT, PORT
 BREVO_KEY, SENTRY_DSN, S3_ENDPOINT, S3_ACCESSKEYID, S3_SECRETACCESSKEY
+TENANT_ID, CLIENT_ID, CLIENT_SECRET (read directly in microsoftGraph.js)
+JOPTIMIZ_URL, JOPTIMIZ_CLIENT_ID, JOPTIMIZ_CLIENT_SECRET, JOPTIMIZ_REDIRECT_URI
 ```
+
+Excel masters and templates live on the SharePoint "Documents partagés" (https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx); the current master id is the `masterExcelFileId` constant at the top of `api/src/services/microsoftGraph.js`.
 
 ## App architecture
 

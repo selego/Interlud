@@ -5,7 +5,7 @@
 Référence technique complète — API · Application · Domaine métier
 Document mixte : onboarding développeurs & archivage projet.
 
-**Version 1.1** — Généré le 27 mai 2026
+**Version 1.2** — Mise à jour le 21 octobre 2026
 
 > Conventions de lecture : les noms de fichiers, champs, routes et identifiants sont en `police à chasse fixe`. Les blocs `> ⚠️` signalent un point d'attention ; les blocs `> 🔒` un point de sécurité à traiter. Conventions générales : voir [CLAUDE.md](CLAUDE.md). Application en français, réponses API au format `{ ok, data, code }`.
 
@@ -53,8 +53,7 @@ Ce document constitue la référence technique complète des applications EVALUD
 |--------|-------------|
 | **Backend** (`api/`) | Node.js + Express + MongoDB (Mongoose) |
 | **Frontend principal** (`app/`) | React 18 + Vite + Zustand + TailwindCSS + DSFR |
-| **Admin** (`admin/`) | React 18 + Vite (interface légère) |
-| **Authentification** | JWT via Passport.js |
+| **Authentification** | JWT via Passport.js + SSO Joptimiz (OAuth 2.0) |
 | **Emails** | Brevo (ex-Sendinblue) |
 | **Fichiers** | Stockage compatible S3 |
 | **Office** | Microsoft Graph API (SharePoint / Excel) |
@@ -64,14 +63,15 @@ Ce document constitue la référence technique complète des applications EVALUD
 
 | Composant | URL |
 |-----------|-----|
-| **API** | `https://interlud-api.cleverapps.io` |
-| **App** | Déployée sur CleverCloud (sous-domaine `app-staging` pour la staging) |
+| **App** | `https://app.evalud.green` |
+| **API** | `https://api.evalud.green` |
 
 ### Données externes
 
 - **MongoDB** : stockage principal (Mongoose).
 - **Microsoft Graph / SharePoint** : fichiers Excel par action, synchronisation bidirectionnelle avec les indicateurs.
-- **Brevo** : emails transactionnels (invitations, reset, notifications).
+- **Brevo** : emails transactionnels (invitations, reset, notifications, formulaire de contact).
+- **Joptimiz** : fournisseur d'identité OAuth 2.0 (bouton « Se connecter avec Joptimiz »).
 - **AWS S3** (optionnel) : pièces jointes.
 - **Sentry** : suivi d'erreurs (production).
 
@@ -79,9 +79,9 @@ Ce document constitue la référence technique complète des applications EVALUD
 
 ## 2. Architecture du monorepo
 
-Le projet est organisé en monorepo regroupant quatre dossiers : l'API backend, l'application frontend principale, le dashboard d'administration et un proof of concept inactif.
+Le projet est organisé en monorepo regroupant trois dossiers : l'API backend, l'application frontend et un proof of concept inactif.
 
-> 🖼️ **Figure 1** — Schéma d'ensemble du monorepo et des quatre sous-projets (`api/`, `app/`, `admin/`, `POC/`).
+> 🖼️ **Figure 1** — Schéma d'ensemble du monorepo et des trois sous-projets (`api/`, `app/`, `POC/`).
 
 ### Arborescence détaillée
 
@@ -93,7 +93,8 @@ Interlud/
 │       ├── config.js      # Variables d'environnement centralisées
 │       ├── controllers/   # Routeurs Express (un fichier par ressource)
 │       ├── models/        # Schémas Mongoose
-│       ├── services/      # mongo, passport, sentry, brevo, microsoftGraph
+│       ├── services/      # mongo, passport, sentry, brevo, joptimiz,
+│       │                  # microsoftGraph, excelSync, excelDefaults
 │       └── utils/         # completion, indicators, errorCodes, constants
 │
 ├── app/                  # Frontend React principal (port 3000)
@@ -105,11 +106,10 @@ Interlud/
 │       ├── services/      # api.js (HTTP), store.js (Zustand)
 │       └── utils/         # indicatorHelpers, constants, index
 │
-├── admin/                # Dashboard admin React (port 3001)
 └── POC/                  # Proof of concept, inactif
 ```
 
-> ⚠️ Le dossier `admin/` est mentionné pour exhaustivité mais n'est pas documenté en détail ici. Le dossier `POC/` est inactif et ne doit pas être déployé.
+> ⚠️ Le dossier `POC/` est inactif et ne doit pas être déployé. L'ancien dossier `admin/` (boilerplate jamais utilisé) a été supprimé en octobre 2026 ; l'administration se fait dans `app/` sous `/admin/*`.
 
 ---
 
@@ -140,11 +140,11 @@ Ordre d'initialisation du serveur :
 11. Handler d'erreur Sentry
 12. `app.listen(PORT)`
 
-**Health check** : `GET /` → `{ name: "interlud-api", environment, last_deployed_at }`.
+**Health check** : `GET /` → `{ name: "api", environment, last_deployed_at }`.
 
 ### Centralisation de la configuration : `api/src/config.js`
 
-Toutes les variables d'environnement sont exportées depuis ce fichier unique. **Ne jamais lire `process.env` ailleurs que dans `config.js`.**
+Les variables d'environnement sont exportées depuis ce fichier. Exception : les secrets Azure (`TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`) sont lus directement dans [services/microsoftGraph.js](api/src/services/microsoftGraph.js).
 
 | Variable exportée | Type | Valeur par défaut |
 |-------------------|------|-------------------|
@@ -158,9 +158,10 @@ Toutes les variables d'environnement sont exportées depuis ce fichier unique. *
 | `S3_ACCESSKEYID` | String | `''` |
 | `S3_SECRETACCESSKEY` | String | `''` |
 | `BREVO_KEY` | String | — |
-| `TENANT_ID` | String | — (Azure AD) |
-| `CLIENT_ID` | String | — (Azure App) |
-| `CLIENT_SECRET` | String | — (Azure App) |
+| `JOPTIMIZ_URL` | String | `https://account.joptimiz.preprod.allohouston.fr` (préprod) |
+| `JOPTIMIZ_CLIENT_ID` | String | `evalud` |
+| `JOPTIMIZ_CLIENT_SECRET` | String | — |
+| `JOPTIMIZ_REDIRECT_URI` | String | `http://localhost:8080/user/sso/joptimiz` |
 
 ---
 
@@ -198,6 +199,18 @@ Deux stratégies JWT sont enregistrées :
 5. Réponse : `{ token, user, userActionRights, collectivity, economicActor }`
 
 **Refresh** : `GET /user/signin_token` régénère un JWT et renvoie l'utilisateur courant + collectivité + droits.
+
+### SSO Joptimiz (OAuth 2.0)
+
+Second mode de connexion, à côté du couple email/mot de passe. Service : [services/joptimiz.js](api/src/services/joptimiz.js) ; route : `GET /user/sso/joptimiz` ([controllers/user.js](api/src/controllers/user.js)).
+
+1. Le front redirige vers `GET /user/sso/joptimiz` (bouton « Se connecter avec Joptimiz » sur `/auth/signin`).
+2. Sans `code` en query : l'API génère un `state` aléatoire, le pose en cookie `joptimiz_state` (httpOnly, 10 min) et redirige vers `{JOPTIMIZ_URL}/oauth/authorize`.
+3. Joptimiz rappelle `JOPTIMIZ_REDIRECT_URI` avec `code` + `state`. L'API vérifie que `state` correspond au cookie, puis échange le code (`/oauth/token`) et lit `/oauth/userinfo`.
+4. L'utilisateur est retrouvé par email (insensible à la casse) ou **créé** avec `role: 'user'` s'il n'existe pas.
+5. JWT classique posé en cookie `jwt`, redirection vers `APP_URL`. En cas d'erreur : redirection vers `{APP_URL}/auth?sso_error=<code>`.
+
+> Par défaut `config.js` pointe sur la préprod Joptimiz. En production, définir `JOPTIMIZ_URL=https://login.joptimiz.green`, `JOPTIMIZ_CLIENT_SECRET` et `JOPTIMIZ_REDIRECT_URI` sur l'URL publique de l'API.
 
 ### Gestion des mots de passe
 
@@ -238,6 +251,7 @@ Représente une mesure environnementale mise en œuvre par une collectivité ou 
 | `excel_worksheetname` | String | Nom de l'onglet Excel associé |
 | `priority` | String (enum) | `high` \| `medium` \| `low` |
 | `is_subsidized_by_program` | Boolean | Subventionné par le programme (défaut false) |
+| `is_draft` | Boolean | Fiche brouillon (défaut false) : exclue du total dans l'Excel d'agrégation via le drapeau « Prise en compte » (voir §7.4) |
 | `pilote` / `pilote_description` | String | `epci` \| `acteur_economique` \| `autres` (+ précision) |
 | `partners` / `partners_description` | String | idem |
 | `budget_costs` / `budget_description` | Number / String | Coût de l'action |
@@ -410,6 +424,7 @@ Format de toutes les réponses : `{ ok: true/false, data: ..., code: "ERROR_CODE
 | POST | `/signin` | 🔓 | Connexion email/password, retourne token + user |
 | POST | `/signup` | 🔓 | Inscription + connexion automatique |
 | POST | `/logout` | 🔓 | Clear cookie JWT |
+| GET | `/sso/joptimiz` | 🔓 | Connexion via Joptimiz (redirection OAuth puis callback, voir §4) |
 | GET | `/signin_token` | 👤🛡️ | Vérifie le token, retourne user + collectivité + droits |
 | POST | `/forgot_password` | 🔓 | Envoie l'email de réinitialisation |
 | POST | `/forgot_password_reset` | 🔓 | Réinitialise le mot de passe via token |
@@ -452,8 +467,10 @@ CRUD (`GET /:id`, `POST /search`, `POST /`, `PUT /:id`, `DELETE /:id`). Le `PUT`
 | PUT | `/:id` | 👤🛡️ | Met à jour + sync Excel + agrégation + log |
 | DELETE | `/:id` | 👤🛡️ | Supprime + cleanup Excel |
 | POST | `/condition_values` | 👤🛡️ | Valeurs des indicateurs référencés en conditions |
-| POST | `/export-excel` | 👤🛡️ | Exporte la feuille de saisie en Excel |
-| POST | `/import-excel` | 👤🛡️ | Importe des valeurs depuis un fichier Excel |
+| POST | `/check-general-data-completion` | 👤🛡️ | Complétion des actions config d'une collectivité, groupée par action liée |
+| GET | `/sync_status/:action_id` | 👤🛡️ | `{ pending }` : la synchro Excel différée de l'action est-elle encore en attente (voir §7.4) |
+| POST | `/export_indicator_values_excel` | 👤🛡️ | Exporte la feuille de saisie en Excel |
+| POST | `/importIndicatorValues` | 👤🛡️ | Importe des valeurs depuis un fichier Excel |
 
 ### `/collectivity` — [controllers/collectivity.js](api/src/controllers/collectivity.js)
 
@@ -474,12 +491,21 @@ CRUD (`GET /:id`, `POST /search` avec count d'actions, `POST /` 🛡️ + dossie
 
 | Méth. | Route | Auth | Description |
 |-------|-------|------|-------------|
-| POST | `/global-gains` | 👤🛡️ | Gains globaux GES/énergie d'une collectivité |
-| POST | `/action-contribution` | 👤🛡️ | Contribution de chaque action aux gains |
+| POST | `/home_aggregation` | 👤🛡️ | Agrégation du tableau de bord d'accueil (gains globaux + contribution par action) d'une collectivité ou d'un acteur économique |
 | POST | `/action_aggregation` | 👤🛡️ | Agrégation des indicateurs d'une action |
 | POST | `/parent_action_aggregation` | 👤🛡️ | Agrégation de toutes les instances d'une action |
 | POST | `/compare_actions` | 👤🛡️ | Comparaison de deux actions |
 | POST | `/export` | 👤🛡️ | Export Excel d'agrégation nationale |
+
+### `/indicator_category` — [controllers/indicator_category.js](api/src/controllers/indicator_category.js)
+
+CRUD (`GET /:id`, `POST /search`, `POST /`, `PUT /:id`, `DELETE /:id`), 👤🛡️.
+
+### `/contact` — [controllers/contact.js](api/src/controllers/contact.js)
+
+| Méth. | Route | Auth | Description |
+|-------|-------|------|-------------|
+| POST | `/` | 🔓 | Formulaire de contact (`name`, `email`, `subject`, `message`) : envoie un email via Brevo au destinataire codé en dur `CONTACT_RECIPIENT`, avec `replyTo` sur l'expéditeur |
 
 ### `/dashboard`, `/log`, `/user_action_right`, `/notification`
 
@@ -507,10 +533,13 @@ Fonctions : `sendEmail(...)`, `sendTemplate(templateId, ...)`, `createContact`/`
 Service central pour toute interaction avec SharePoint et les fichiers Excel des collectivités. Détaillé au §16.
 
 ```
-TENANT_ID, CLIENT_ID, CLIENT_SECRET   → Auth Azure AD (client credentials)
-sharePointSiteName  = 'selegobv'
-masterExcelFileId   = '01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3'   (fichier maître action)
+TENANT_ID, CLIENT_ID, CLIENT_SECRET   → Auth Azure AD (client credentials, lus via process.env)
+sharePointSiteName        = 'selegobv'
+masterExcelFileId         → fichier maître action (constante en tête du fichier)
+aggregationTemplateFileId → template Excel d'agrégation collectivité (idem)
 ```
+
+> 📁 **Fichiers Excel de référence** : tous les classeurs (masters, templates, dossiers des collectivités) sont sur le SharePoint [Documents partagés](https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx). La dernière version du master s'y trouve directement ; l'ID utilisé par l'application est la constante correspondante en tête de `microsoftGraph.js`. Le master change souvent (une version toutes les deux à trois semaines en 2026) : ne pas recopier d'ID dans la doc, toujours se référer au code.
 
 **Mapping des onglets Excel par situation** :
 
@@ -528,6 +557,8 @@ masterExcelFileId   = '01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3'   (fichier maître ac
 | `getAccessToken()` | OAuth2 client credentials, token caché (tampon 2 min) |
 | `getSiteId()` | ID du site SharePoint, mis en cache |
 | `graphFetch(endpoint, options)` | Wrapper avec retry (max 3, backoff expo., codes 429/5xx) |
+| `getCachedSession(fileId)` / `graphFetchWithSession(fileId, endpoint, options)` | Sessions workbook persistantes mises en cache par fichier (voir §16.3) |
+| `calculateWorkbook(fileId)` | Force le recalcul des formules du classeur |
 | `updateExcelCellByIndicatorId(...)` | Met à jour une cellule via l'ID indicateur (colonne E → F) |
 | `updateExcelCellsBatch(...)` | Mise à jour batch d'une plage contiguë |
 | `createFolder(...)` | Crée un dossier SharePoint (comportement `rename` si doublon) |
@@ -541,6 +572,45 @@ masterExcelFileId   = '01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3'   (fichier maître ac
 ### 7.3 Sentry — [services/sentry.js](api/src/services/sentry.js)
 
 Tracking d'erreurs en production (`SENTRY_DSN`). Le contexte utilisateur (id, username, email) est enrichi à chaque authentification réussie. `initSentry(app)`, `setupErrorHandler(app)`, `capture(err)`.
+
+### 7.4 Synchro Excel différée — [services/excelSync.js](api/src/services/excelSync.js)
+
+Depuis octobre 2026, `PUT /indicator_value/:id` n'attend plus SharePoint. Les écritures sont **accumulées en mémoire puis écrites en une passe** (debounce), pour ne pas rejouer tout le pipeline (cellule + recalcul + agrégation) à chaque champ modifié.
+
+| Export | Rôle |
+|--------|------|
+| `enqueueCellUpdate({ fileId, situation, excelIndicatorId, value, unit })` | Enregistre une cellule à écrire (colonne F). Une nouvelle valeur pour le même indicateur/fichier/situation écrase celle en attente. |
+| `enqueueAggregation({ actionId, situation, year })` | Enregistre une propagation vers le fichier d'agrégation, dédupliquée par action/situation/année. |
+| `isSyncPending(actionId)` | `true` tant que le dashboard de l'action ne reflète pas les dernières modifs (exposé par `GET /indicator_value/sync_status/:action_id`). |
+| `writeDraftFlag(action)` | Écrit VRAI/FAUX dans la cellule « Prise en compte » de l'instance dans `1. Données d'entrée` (FAUX si `is_draft`). Écriture directe, sans debounce. |
+| `warmSessionsForAction(action)` | Ouvre en avance (à l'ouverture de l'action, `GET /action/:id`) les sessions workbook des fichiers de l'action et du fichier d'agrégation. |
+
+**Déclenchement du flush** : `DEBOUNCE_MS = 1000` après la dernière modif, plafonné à `MAX_WAIT_MS = 30000` depuis la première modif en attente. Les flushs sont **chaînés** (jamais deux en parallèle, les fichiers pouvant être partagés).
+
+**Ordre d'un flush** :
+
+1. Cellules : un `updateExcelCellsBatch` par couple (fichier, situation), fichiers en parallèle.
+2. Défauts : `refreshDefaultsAfterSync` sur chaque fichier écrit (voir §7.5).
+3. Agrégations : `writeAggregationTargets` lit la feuille `Agrégation` de chaque fichier source (après recalcul) et écrit les cibles dans `1. Données d'entrée` du fichier d'agrégation, en **un seul PATCH** sur la plage min→max de la colonne de l'instance (I/J/K), les cellules intermédiaires étant relues et réécrites à l'identique via `formulas`.
+
+> ⚠️ File d'attente et cache de sessions sont en mémoire process : le fonctionnement suppose **une seule instance d'API**. Un redémarrage pendant la fenêtre de debounce perd les écritures en attente (la base, elle, est déjà à jour).
+
+### 7.5 Relecture des défauts — [services/excelDefaults.js](api/src/services/excelDefaults.js)
+
+`refreshDefaultsAfterSync(fileId, { dryRun, writtenSituations })`. Certaines formules de la colonne H (répartitions, produits, SUMIFS, chaînes de défauts) ne peuvent pas être suivies en temps réel par l'app : une fois les saisies écrites dans le fichier de la collectivité, Excel les recalcule et l'app relit H.
+
+Pour chaque `IndicatorValue` de l'action du fichier :
+- `value_default` est mis à jour (une cellule en erreur `#REF!`/`#N/A` conserve l'ancien défaut).
+- `value` n'est modifiée que pour les indicateurs **non primordiaux** dont la valeur est vide ou égale à l'ancien défaut (jamais touchée par l'utilisateur) ; ces valeurs sont réécrites en colonne F.
+- Plusieurs passes jusqu'à stabilité (`MAX_PASSES = 3`), car une valeur réécrite en F peut faire bouger d'autres H.
+- `writtenSituations` limite la relecture aux situations impactées (`init` alimente tout, `ref` alimente prév et ex-post, etc.). Omis à la création d'action : toutes les situations.
+- Périmètre : l'action du fichier uniquement, jamais les actions config.
+
+Appelée par le flush d'`excelSync` et, directement, à la création d'action et à l'ajout d'année prév./ex-post.
+
+### 7.6 Joptimiz (SSO) — [services/joptimiz.js](api/src/services/joptimiz.js)
+
+Client OAuth 2.0 minimal : `getAuthorizationUrl(state)`, `exchangeCode(code)`, `getUserInfo(accessToken)`. Flux détaillé au §4.
 
 ---
 
@@ -773,7 +843,9 @@ SITUATION_TYPES = { INIT: "init", REF: "ref", PREV: "prev", EXPOST: "expost" }
 
 - `localhost` / `127.0.0.1` → `development` → `apiURL = http://localhost:8080`
 - `app-staging` dans l'URL → `staging`
-- sinon → `production` → `apiURL = https://interlud-api.cleverapps.io`
+- sinon → `production` → `apiURL = https://api.evalud.green`
+
+> ⚠️ Aucune `apiURL` n'est définie pour `staging` : si une app staging est déployée, elle appelle une URL vide. À compléter dans `config.js` si un environnement de staging est remis en service.
 
 ---
 
@@ -823,7 +895,7 @@ Cette section décrit dans le détail technique ce qui se passe réellement lors
 
 > 🖼️ **Figure 3** — Synchronisation d'une valeur saisie : UI → `PUT /indicator_value/:id` → MongoDB → SharePoint (Graph) → recalcul de complétion.
 
-**Flux résumé** : (1) l'utilisateur saisit une valeur dans l'UI ; (2) `PUT /indicator_value/:id` met à jour la BDD ; (3) si `presence_in_excel.{situation} = true`, synchro vers SharePoint via `updateExcelCellByIndicatorId` ou `updateExcelCellsBatch` ; (4) la complétion de l'action est recalculée.
+**Flux résumé** : (1) l'utilisateur saisit une valeur dans l'UI ; (2) `PUT /indicator_value/:id` met à jour la BDD et recalcule la complétion ; (3) les cellules et agrégations à écrire sont mises en file (`excelSync`, §7.4) ; (4) un flush différé (1 s) écrit SharePoint en batch, relit les défauts recalculés (§7.5) puis met à jour le fichier d'agrégation. Le front interroge `GET /indicator_value/sync_status/:action_id` pour savoir si le dashboard est à jour.
 
 ### 16.1 Organisation SharePoint
 
@@ -832,9 +904,9 @@ Toute la donnée Excel vit sur **un unique site SharePoint** : `selegobv.sharepo
 ```
 selegobv.sharepoint.com (drive racine)
 │
-├── [Templates au niveau racine — IDs en dur dans microsoftGraph.js / controllers]
-│   ├── 01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3   → Master action (modèle de chaque fichier d'action)
-│   └── 01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV   → Template d'agrégation collectivité
+├── [Templates au niveau racine — IDs dans les constantes en tête de microsoftGraph.js]
+│   ├── masterExcelFileId          → Master action (modèle de chaque fichier d'action)
+│   └── aggregationTemplateFileId  → Template d'agrégation collectivité
 │
 ├── {Nom collectivité A}/                    ← un dossier par collectivité
 │   ├── {Nom collectivité A} - Aggregation.xlsx
@@ -866,7 +938,7 @@ selegobv.sharepoint.com (drive racine)
 - **Tout dans le dossier de la collectivité** simplifie les permissions SharePoint (un seul dossier à partager) et garantit que les références inter-fichiers (le fichier d'agrégation pointe vers les fichiers d'action) restent valides.
 - **Un fichier d'agrégation par acteur économique** évite les fuites de gains entre acteurs co-implantés sur la même collectivité.
 - **Un fichier par couple (action, année)** évite de réécrire toute la feuille à chaque mise à jour et limite la charge/latence des appels Graph (Excel recalcule en cascade).
-- **Les IDs des templates racine sont en dur** dans le code — ils représentent les modèles versionnés du programme InTerLUD+, mis à jour manuellement par l'équipe métier.
+- **Les IDs des templates racine sont des constantes du code** (`masterExcelFileId`, `aggregationTemplateFileId` dans `microsoftGraph.js`). Ils représentent les modèles versionnés du programme InTerLUD+, mis à jour manuellement à chaque nouvelle version du master. La version courante est visible sur le [SharePoint Documents partagés](https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx).
 
 **Comment l'app retrouve le bon fichier d'agrégation** ([action.js](api/src/controllers/action.js)) :
 
@@ -893,16 +965,16 @@ const aggregationFileId = action.owner === 'economic_actor'
 | `row[5]` | F | Valeur saisie par l'utilisateur (cible d'écriture) |
 | `row[7]` | H | Valeur par défaut, recalculée par les formules Excel |
 
-**IDs critiques** ([microsoftGraph.js](api/src/services/microsoftGraph.js)) :
-- Site SharePoint : `selegobv.sharepoint.com`
-- Master fichier action : `01IBL4ADPW52VMA7PAEVDIZGBCDDPTODA3`
-- Template Excel d'agrégation collectivité : `01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV`
+**Références** ([microsoftGraph.js](api/src/services/microsoftGraph.js)) :
+- Site SharePoint : `selegobv.sharepoint.com` — classeurs visibles dans [Documents partagés](https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx)
+- Master fichier action : constante `masterExcelFileId`
+- Template Excel d'agrégation collectivité : constante `aggregationTemplateFileId`
 
 **Indicateurs « cachés »** (exclus du calcul de complétion) : `HIDDEN_IDS = ['AnneeRempl', 'AnRef', 'ActionsAutres', 'ActionsCharte']`.
 
 **Fichier d'agrégation collectivité** — feuilles et ranges :
 - `1. Données d'entrée` : cible d'écriture des `IndicatorValue` par les actions.
-- `Agrégation` : lue par `POST /excel/global-gains` sur le range `B7:K39`.
+- `Agrégation` : lue par `POST /excel/home_aggregation` sur le range `B7:K39` (gains globaux) et `C40:H300` (contribution par action).
 - `4. Gains par action` et `3. Émissions par action` : lues par `POST /excel/action_aggregation`.
 
 Tables de mapping pour l'agrégation par action ([excel.js](api/src/controllers/excel.js)) :
@@ -923,6 +995,12 @@ EMISSION_TYPES          = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Nrj']
 - Variables d'env : `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`.
 - **Cache** : `_cachedToken` + `_tokenExpiresAt`. Renouvellement quand `Date.now() >= _tokenExpiresAt`. Durée prise = `expires_in − 120s`.
 - Le **Site ID** SharePoint est caché dans `_cachedSiteId` après le premier appel.
+
+**Sessions workbook persistantes** (`createWorkbookSession` / `getCachedSession` / `graphFetchWithSession`) :
+- Sans session, chaque appel Graph force SharePoint à recharger le classeur à froid (~6 s mesurés, contre ~0,3 s sous session), et une lecture peut tomber sur un état pas encore recalculé.
+- Une session `persistChanges: true` est donc gardée **par fichier** dans un cache mémoire (`MAX_CACHED_SESSIONS = 30`), maintenue en vie par un ping toutes les 4 min (SharePoint expire après ~5 min d'inactivité) et fermée après 30 min sans usage.
+- `graphFetchWithSession` rejoue l'appel une fois avec une session neuve si l'ancienne est invalidée ; les écritures étant des valeurs absolues, le rejeu est sans danger. Si la création de session échoue, l'appel part sans session (lent mais fonctionnel).
+- Les sessions sont **pré-chauffées** à l'ouverture d'une action (`warmSessionsForAction`, §7.4).
 
 **`graphFetch(endpoint, options)`** — wrapper avec retry exponentiel :
 - Codes retryables : `429, 500, 502, 503, 504` + corps contenant `"We're sorry"`.
@@ -973,7 +1051,7 @@ EMISSION_TYPES          = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Nrj']
 
 Endpoint le plus complexe du backend ([controllers/action.js](api/src/controllers/action.js)). Décomposition :
 
-**A. Validation & setup** — body requis : `name`, `action_parent_id`, `year_init`, `year_prev` (+ `year_expost` optionnel). Si la collectivité n'a pas de dossier SharePoint → `createFolder` + sauvegarde `sharepoint_folder_id`. Si pas de fichier d'agrégation → `duplicateExcelFile` depuis le template `01IBL4ADOUOXHM475PNZALWXNQOJOSDTIV`. Calcul de `instance_number` (incrémente jusqu'à un slot libre, max 3, sinon `MAX_INSTANCES_REACHED`).
+**A. Validation & setup** — body requis : `name`, `action_parent_id`, `year_init`, `year_prev` (+ `year_expost` optionnel). Si la collectivité n'a pas de dossier SharePoint → `createFolder` + sauvegarde `sharepoint_folder_id`. Si pas de fichier d'agrégation → `duplicateExcelFile` depuis le template `aggregationTemplateFileId`. Calcul de `instance_number` (incrémente jusqu'à un slot libre, max 3, sinon `MAX_INSTANCES_REACHED`).
 
 **B. Duplication des fichiers Excel d'action** — recherche d'une action « sœur » (même parent, même collectivité) déjà dotée d'un `exel_files_prev` (source pour conserver les données init/ref déjà saisies) ; sinon source = master. Le fichier Prev est nettoyé via `clearWorksheetValues(fileId, 'expost')`, et vice-versa. Les cellules des indicateurs liés au parent sont vidées.
 
@@ -1001,7 +1079,7 @@ Action.create({
 - `AnneeRempl` / `AnRef` : pour chaque entrée prev/expost, écrit l'année dans la cellule correspondante (updates en parallèle).
 - `NomTerr` / `SIRENTerr` / `SupTerr` : copie depuis `Collectivity.name`, `siren`, `area` vers `init` (+ expost si applicable).
 
-**H. Re-lecture et correction des defaults** — Excel recalcule la colonne H après écriture des années/infos collectivité. `readExcelDefaultValues` par situation, parse par type, `bulkWrite` d'update sur les IV dont le default a changé (+ réécriture Excel si la valeur courante était le default).
+**H. Re-lecture et correction des defaults** — Excel recalcule la colonne H après écriture des années/infos collectivité. `refreshDefaultsAfterSync` (§7.5) est appelé sur chaque fichier créé (prév. et, le cas échéant, ex-post) : relecture de H, mise à jour de `value_default`, réécriture des valeurs non primordiales jamais saisies.
 
 **I. Finalisation** — `computeActionCompletion` sur l'action principale + les deux actions config ; création d'un `Log` `operation: 'add'`.
 
@@ -1010,6 +1088,8 @@ Action.create({
 ### 16.6 Workflow : mise à jour d'un IndicatorValue (`PUT /indicator_value/:id`)
 
 [controllers/indicator_value.js](api/src/controllers/indicator_value.js). La logique de sync diffère selon que l'action est régulière ou de type config.
+
+> Depuis octobre 2026, les étapes A à C ci-dessous ne sont plus exécutées dans la requête : le contrôleur détermine les fichiers cibles puis appelle `enqueueCellUpdate` / `enqueueAggregation` (§7.4). L'écriture réelle a lieu au flush différé. Les règles de ciblage restent celles décrites ici.
 
 **A. Sync Excel — action de type `config`** — la valeur est propagée à **tous les fichiers Excel des actions régulières** concernés :
 
@@ -1020,7 +1100,7 @@ Action.create({
 | `prev` | actions avec entrée `year_prev === year` | l'entrée matching dans `exel_files_prev` |
 | `expost` | actions avec entrée `year_expost === year` | l'entrée matching dans `excel_files_expost` |
 
-Pour chaque match → `updateExcelCellByIndicatorId(fileId, excel_indicator_id, value, situation, unit)`.
+Pour chaque match → `enqueueCellUpdate({ fileId, situation, excelIndicatorId, value, unit })`.
 
 **B. Sync Excel — action régulière** :
 - `init` → écrit dans **tous** ses fichiers prev ET expost
@@ -1029,8 +1109,9 @@ Pour chaque match → `updateExcelCellByIndicatorId(fileId, excel_indicator_id, 
 - `expost` → uniquement l'entrée `excel_files_expost` dont `year_expost === year`
 
 **C. Sync vers l'Excel d'agrégation collectivité** (actions non-config) :
-1. `buildAggregationTargets(action, situation, year)` — liste des fichiers sources à lire et la cible d'agrégation (`init` → tous les couples ; `ref` → fichiers où `year_ref === year` ; `prev`/`expost` → fichier unique).
-2. `writeAggregationTargets(action, targets, siteId)` — lit la feuille `Agrégation` de chaque source (colonnes par type d'émission GES/PM/NOx/HC/CO/Nrj), mappe vers `1. Données d'entrée` du fichier d'agrégation, `PATCH` cellule par cellule (non batchable car cellules non contiguës).
+1. `enqueueAggregation({ actionId, situation, year })` dans le contrôleur.
+2. Au flush, `buildAggregationTargets(action, situation, year)` ([excelSync.js](api/src/services/excelSync.js)) — liste des fichiers sources à lire et la cible d'agrégation (`init` → tous les couples ; `ref` → fichiers où `year_ref === year` ; `prev`/`expost` → fichier unique).
+3. `writeAggregationTargets(action, targets)` — recalcule et lit la feuille `Agrégation` de chaque source (colonnes par type d'émission GES/PM/NOx/HC/CO/Nrj), mappe vers `1. Données d'entrée` du fichier d'agrégation (IDs en colonne D, format `{worksheet}-{émission}-{situation}-{année}`), puis un seul `PATCH` sur la plage min→max de la colonne de l'instance.
 
 **D. Cross-action sync** — cherche les autres IV avec même `(indicator_id, situation, year, owner)`. Scope : action non-config → restreint à la même action ; config → toutes les actions. Pour chaque IV avec valeur différente : log `synchronization` + `updateMany(..., { $set: { value: newValue } })`.
 
@@ -1049,7 +1130,7 @@ Pour chaque match → `updateExcelCellByIndicatorId(fileId, excel_indicator_id, 
 6. Écriture Excel des IV config existantes dans le nouveau fichier (continuité).
 7. Création des IV principales pour `(prev, year_prev)` et `(ref, year_ref)` (non-primordiaux écrits en batch).
 8. Écriture explicite des années dans le fichier.
-9. Boucle de relecture/correction des defaults (cf. §16.5 H).
+9. `refreshDefaultsAfterSync` sur le nouveau fichier (cf. §7.5).
 10. `computeActionCompletion`.
 
 **`POST /action/add_year_expost`** : structure identique mais cible `excel_files_expost`, vide la feuille `prev`, fallback source = autre fichier expost sinon un fichier prev.
@@ -1064,13 +1145,13 @@ Pour chaque match → `updateExcelCellByIndicatorId(fileId, excel_indicator_id, 
 
 ### 16.8 Workflow : import / export Excel
 
-**`POST /indicator_value/export-excel`** :
+**`POST /indicator_value/export_indicator_values_excel`** :
 1. Query MongoDB sur `(action_id, situation?, year?)`.
 2. Build `conditionValuesMap` + `yearMappings` pour filtrer via `shouldDisplayIndicator`.
 3. Pour chaque situation, crée une feuille ExcelJS avec colonnes `category`, `sub_category`, `title`, `description`, `excel_id`, `value`, `possibilities`, `default`, `unit`, `type`.
 4. Stream le buffer (`Content-Type: ...spreadsheetml.sheet`).
 
-**`POST /indicator_value/import-excel`** :
+**`POST /indicator_value/importIndicatorValues`** :
 1. Body : `fileBase64`, `collectivity`, `action_id`.
 2. **Extraction** : workbook chargé depuis base64, lecture `row[4]` (id) et `row[5]` (value) → `extractedData[]`.
 3. **Sync SharePoint** : collecte tous les `fileIds` concernés (prev + expost + fichiers config), lance en parallèle `importSheetsToExcelFile`.
@@ -1083,7 +1164,9 @@ Pour chaque match → `updateExcelCellByIndicatorId(fileId, excel_indicator_id, 
 
 ### 16.9 Endpoints d'agrégation (`/excel`)
 
-**`POST /excel/global-gains`** — lit `Agrégation!B7:K39`. Détecte dynamiquement la colonne « année » (regex `/^\d{4}$/`), les colonnes « évolution relative » et « cumulée ». Slices : lignes 6-12 (gains prévisionnels), 16-22 (gains réels), 26-32 (écarts). Pour chaque indicateur (GES/PM/HC/NOx/CO/Nrj) renvoie :
+**`POST /excel/home_aggregation`** — alimente le tableau de bord d'accueil ; regroupe les deux lectures ci-dessous (anciennes routes `global-gains` et `action-contribution`). Pour un `economic_actor`, cible le fichier d'agrégation de l'acteur pour la collectivité demandée.
+
+*Gains globaux* — lit `Agrégation!B7:K39`. Détecte dynamiquement la colonne « année » (regex `/^\d{4}$/`), les colonnes « évolution relative » et « cumulée ». Slices : lignes 6-12 (gains prévisionnels), 16-22 (gains réels), 26-32 (écarts). Pour chaque indicateur (GES/PM/HC/NOx/CO/Nrj) renvoie :
 
 ```js
 { label, unit, evolutionRelativePrev, evolutionRelativeReel,
@@ -1093,7 +1176,7 @@ Pour chaque match → `updateExcelCellByIndicatorId(fileId, excel_indicator_id, 
 
 Calcule en plus `avancementTrajectoire = (ecartExpostRef / ecartPrevRef) * 100`.
 
-**`POST /excel/action-contribution`** — lit `Agrégation!C40:H300`, worksheets `['B2','B3','B4','C1'..'C7','C9']`. Pour chaque ligne matching, lit GES prev/réel 4 lignes plus loin ; classifie `type = (ges <= 0) ? 'gain' : 'degradation'` ; trie par `|GES|` décroissant.
+*Contribution par action* — lit `Agrégation!C40:H300`, worksheets `['B2','B3','B4','C1'..'C7','C9']`. Pour chaque ligne matching, lit GES prev/réel 4 lignes plus loin ; classifie `type = (ges <= 0) ? 'gain' : 'degradation'` ; trie par `|GES|` décroissant.
 
 **`POST /excel/action_aggregation`** — dashboard d'une action : lit `4. Gains par action` et `3. Émissions par action`. Colonne ciblée = `INSTANCE_COL_OFFSET[instance_number] + INSTANCE_EMISSION_COL[type]`. Calcule les écarts `init→ref`, `prev→ref`, `expost→ref`, `expost→prev`. Score d'atteinte = `(real / objective) * 100` (capped à 100/type) ; score final = moyenne des 6 types.
 
@@ -1195,12 +1278,17 @@ router.post('/', passport.authenticate('admin', { session: false }), handler)
 | `APP_URL` | Non | URL du frontend (défaut http://localhost:3000) |
 | `SENTRY_DSN` | Non | DSN Sentry |
 | `S3_ENDPOINT` / `S3_ACCESSKEYID` / `S3_SECRETACCESSKEY` | Non | Storage S3 (optionnel) |
-| `BREVO_KEY` | Non | Clé API Brevo (emails) |
-| `TENANT_ID` / `CLIENT_ID` / `CLIENT_SECRET` | Non* | Azure AD / App (Graph) |
+| `BREVO_KEY` | Non | Clé API Brevo (emails, contact) |
+| `TENANT_ID` / `CLIENT_ID` / `CLIENT_SECRET` | Non* | Azure AD / App (Graph) — lus directement dans `microsoftGraph.js` |
+| `JOPTIMIZ_URL` | Non | URL du serveur OAuth Joptimiz (défaut préprod ; prod : `https://login.joptimiz.green`) |
+| `JOPTIMIZ_CLIENT_ID` | Non | Identifiant client OAuth (défaut `evalud`) |
+| `JOPTIMIZ_CLIENT_SECRET` | Non** | Secret client OAuth |
+| `JOPTIMIZ_REDIRECT_URI` | Non** | Callback OAuth (défaut `http://localhost:8080/user/sso/joptimiz` ; prod : `https://api.evalud.green/user/sso/joptimiz`) |
 
 *\* Requis si la synchronisation Excel/SharePoint est utilisée.*
+*\*\* Requis pour la connexion via Joptimiz.*
 
-> 🔒 `SECRET`, `CLIENT_SECRET`, `S3_SECRETACCESSKEY` et `BREVO_KEY` sont des secrets sensibles. Ne jamais les versionner ni les inclure dans une copie de ce document destinée à un tiers ; les gérer via le coffre de secrets de CleverCloud.
+> 🔒 `SECRET`, `CLIENT_SECRET`, `JOPTIMIZ_CLIENT_SECRET`, `S3_SECRETACCESSKEY` et `BREVO_KEY` sont des secrets sensibles. Ne jamais les versionner ni les inclure dans une copie de ce document destinée à un tiers ; les gérer via le coffre de secrets de CleverCloud.
 
 ### App (`app/.env`)
 
@@ -1245,7 +1333,6 @@ L'application est entièrement en français : chaînes UI, codes d'erreur et com
 
 - **API** : application Node.js (`npm start`).
 - **App** : build Vite statique servi par un serveur Express intégré (`npm run build && npm start`).
-- **Admin** : idem.
 
 ### Commandes
 
@@ -1253,12 +1340,10 @@ L'application est entièrement en français : chaînes UI, codes d'erreur et com
 # Développement
 cd api   && npm run dev    # nodemon, hot reload
 cd app   && npm run dev    # Vite dev server, port 3000
-cd admin && npm run dev    # Vite dev server
 
 # Production
 cd api   && npm start
 cd app   && npm run build && npm start
-cd admin && npm run build && npm start
 ```
 
 ### Environnements
@@ -1266,10 +1351,9 @@ cd admin && npm run build && npm start
 | Environnement | App | API |
 |---------------|-----|-----|
 | Développement | localhost:3000 | localhost:8080 |
-| Staging | app-staging.* | — |
-| Production | — | interlud-api.cleverapps.io |
+| Production | app.evalud.green | api.evalud.green |
 
-> ⚠️ **Staging / API** : la source ne précise pas d'URL d'API dédiée à la staging. À clarifier : soit l'app staging consomme l'API de production, soit une API staging existe mais n'est pas documentée.
+> Le front détecte un environnement `staging` quand l'URL contient `app-staging`, mais aucune URL d'API n'y est associée (voir §14).
 
 ### Services tiers requis
 
@@ -1277,6 +1361,7 @@ cd admin && npm run build && npm start
 |---------|-------|---------------|
 | MongoDB | Base de données principale | `MONGODB_ENDPOINT` |
 | SharePoint (Azure) | Fichiers Excel collectivités | `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET` |
+| Joptimiz | SSO OAuth 2.0 | `JOPTIMIZ_*` |
 | Brevo | Emails transactionnels | `BREVO_KEY` |
 | S3 | Stockage fichiers uploadés | `S3_*` |
 | Sentry | Monitoring d'erreurs | `SENTRY_DSN` |
