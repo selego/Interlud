@@ -275,16 +275,6 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
   }
 });
 
-router.get('/', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
-  try {
-    const data = await UserObject.find({ role: 'normal' });
-    return res.status(200).send({ ok: true, data });
-  } catch (error) {
-    capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
-  }
-});
-
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
     const { search, sort, per_page, page } = req.body;
