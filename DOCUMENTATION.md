@@ -5,7 +5,7 @@
 Référence technique complète — API · Application · Domaine métier
 Document mixte : onboarding développeurs & archivage projet.
 
-**Version 1.2** — Mise à jour le 21 octobre 2026
+**Version 1.3** — Mise à jour le 22 octobre 2026
 
 > Conventions de lecture : les noms de fichiers, champs, routes et identifiants sont en `police à chasse fixe`. Les blocs `> ⚠️` signalent un point d'attention ; les blocs `> 🔒` un point de sécurité à traiter. Conventions générales : voir [CLAUDE.md](CLAUDE.md). Application en français, réponses API au format `{ ok, data, code }`.
 

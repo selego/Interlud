@@ -16,11 +16,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository structure
 
-This is a monorepo with three sub-projects:
+This is a monorepo with two sub-projects:
 
 - `app/` — Main user-facing React/Vite frontend, including `/admin/*` screens (runs on port 3000)
 - `api/` — Node.js/Express backend (runs on port 8080)
-- `POC/` — Proof of concept (not in active development)
 
 ## Commands
 

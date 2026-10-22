@@ -49,7 +49,7 @@
 
 ## 2. Architecture du monorepo
 
-Le projet est organisé en monorepo regroupant trois dossiers : l'API backend, l'application frontend et un proof of concept inactif.
+Le projet est organisé en monorepo regroupant deux dossiers : l'API backend et l'application frontend.
 
 ### Arborescence détaillée
 
@@ -73,11 +73,9 @@ Interlud/
 │       ├── components/    # Composants UI partagés
 │       ├── services/      # api.js (HTTP), store.js (Zustand)
 │       └── utils/         # indicatorHelpers, constants, index
-│
-└── POC/                  # Proof of concept, inactif
 ```
 
-> ⚠️ Le dossier `POC/` est inactif et ne doit pas être déployé. L'ancien dossier `admin/` (boilerplate jamais utilisé) a été supprimé en octobre 2026 ; l'administration se fait dans `app/` sous `/admin/*`.
+> ⚠️ Les anciens dossiers `POC/` (proof of concept) et `admin/` (boilerplate jamais utilisé) ont été supprimés en octobre 2026 ; l'administration se fait dans `app/` sous `/admin/*`.
 
 ---
 
