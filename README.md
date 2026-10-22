@@ -27,12 +27,15 @@ Les calculs sont basés sur les **facteurs d'émission ADEME (Base Carbone)**, v
 
 - **Agents de collectivité** — saisie et suivi de leurs actions et indicateurs
 - **Pilotes du programme** (Rozo, Cerema) — vue agrégée nationale
+- **Acteurs économiques** — entreprises propriétaires d'actions
+
+Guide utilisateurs : [app/public/EVALUD_Guide_Utilisateurs.pdf](app/public/EVALUD_Guide_Utilisateurs.pdf), accessible dans l'application via la page `/faq`.
 
 ---
 
 ## Architecture
 
-Le projet est un monorepo composé de trois sous-projets :
+Le projet est un monorepo composé de deux sous-projets :
 
 ```
 .
@@ -54,17 +57,21 @@ En production : app sur [app.evalud.green](https://app.evalud.green), API sur `a
 
 Principales routes exposées :
 
-| Route              | Description                                                               |
-| ------------------ | ------------------------------------------------------------------------- |
-| `/user`            | Authentification, inscription, invitations, réinitialisation mot de passe |
-| `/action`          | CRUD des actions environnementales                                        |
-| `/indicator`       | Définitions des indicateurs                                               |
-| `/indicator_value` | Valeurs saisies par les collectivités                                     |
-| `/collectivity`    | Collectivités territoriales                                               |
-| `/economic_actor`  | Acteurs économiques                                                       |
-| `/excel`           | Import / export, calculs d'agrégation                                     |
-| `/dashboard`       | Statistiques et analytiques                                               |
-| `/log`             | Journal d'audit                                                           |
+| Route                 | Description                                                               |
+| --------------------- | ------------------------------------------------------------------------- |
+| `/user`               | Authentification, inscription, invitations, réinitialisation mot de passe |
+| `/action`             | CRUD des actions environnementales                                        |
+| `/indicator`          | Définitions des indicateurs                                               |
+| `/indicator_value`    | Valeurs saisies par les collectivités                                     |
+| `/collectivity`       | Collectivités territoriales                                               |
+| `/economic_actor`     | Acteurs économiques                                                       |
+| `/excel`              | Import / export, calculs d'agrégation                                     |
+| `/dashboard`          | Statistiques et analytiques                                               |
+| `/log`                | Journal d'audit                                                           |
+| `/indicator_category` | Catégories d'indicateurs                                                  |
+| `/user_action_right`  | Droits par action et par utilisateur                                      |
+| `/notification`       | Notifications utilisateur                                                 |
+| `/contact`            | Formulaire de contact (email via Brevo)                                   |
 
 ### App (`app/`)
 
@@ -77,13 +84,18 @@ Principales routes exposées :
 
 Principales sections :
 
-| Route                     | Description                                          |
-| ------------------------- | ---------------------------------------------------- |
-| `/`                       | Tableau de bord avec graphiques GES / PM / énergie   |
-| `/actions`                | Liste et détail des actions                          |
-| `/actions/:id/completion` | Saisie des indicateurs par situation                 |
-| `/general-data`           | Saisie de données générales (import Excel)           |
-| `/admin/*`                | Gestion des utilisateurs, collectivités, indicateurs |
+| Route                     | Description                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| `/`                       | Tableau de bord avec graphiques GES / PM / énergie                               |
+| `/actions`                | Liste et détail des actions                                                      |
+| `/actions/:id/completion` | Saisie des indicateurs par situation                                             |
+| `/general-data`           | Saisie de données générales (import Excel)                                       |
+| `/collectivity/*`         | Collectivité de l'utilisateur et ses membres                                     |
+| `/economic-actor`         | Acteur économique de l'utilisateur                                               |
+| `/notifications`          | Notifications                                                                    |
+| `/settings`               | Paramètres du compte                                                             |
+| `/admin/*`                | Gestion des utilisateurs, collectivités, indicateurs, acteurs économiques, suivi |
+| `/faq`, `/contact`        | Guide utilisateurs et formulaire de contact                                      |
 
 ---
 
@@ -132,7 +144,12 @@ npm run dev        # démarre sur le port 8080
 cd app
 npm install
 npm run dev        # démarre sur le port 3000
+```
 
+```bash
+# Tests de l'API
+cd api
+npm test
 ```
 
 ### Variables d'environnement (`api/.env.example`)
@@ -140,21 +157,29 @@ npm run dev        # démarre sur le port 3000
 ```
 ENVIRONMENT=development
 PORT=8080
-MONGODB_ENDPOINT=mongodb://localhost:27017/interlud
-SECRET=your_jwt_secret
 APP_URL=http://localhost:3000
+MONGODB_ENDPOINT=mongodb://localhost:27017/interlud
+SECRET=change_me
 
-# Intégrations optionnelles
+# Emails (Brevo)
 BREVO_KEY=
+
+# Monitoring (production)
 SENTRY_DSN=
+
+# Pièces jointes S3 (optionnel)
 S3_ENDPOINT=
 S3_ACCESSKEYID=
 S3_SECRETACCESSKEY=
+
+# Azure AD — synchro Excel / SharePoint (Microsoft Graph)
 TENANT_ID=
 CLIENT_ID=
 CLIENT_SECRET=
+
+# SSO Joptimiz (OAuth 2.0) — préprod par défaut, prod : https://login.joptimiz.green
 JOPTIMIZ_URL=
-JOPTIMIZ_CLIENT_ID=
+JOPTIMIZ_CLIENT_ID=evalud
 JOPTIMIZ_CLIENT_SECRET=
 JOPTIMIZ_REDIRECT_URI=
 ```
