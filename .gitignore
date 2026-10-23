@@ -1,3 +1,9 @@
 
 # Export de la documentation
 docs/documentation-technique/build/
+.DS_Store
+.env*
+!.env.example
+
+# Dossier de passation interne (jamais sur le dépôt public)
+docs/passation/

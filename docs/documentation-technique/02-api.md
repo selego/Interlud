@@ -33,8 +33,6 @@ Deux stratégies JWT sont enregistrées :
 - Payload : `{ _id: user._id }`.
 - **Expiration : `1y`** (`JWT_MAX_AGE` dans [controllers/user.js](../../api/src/controllers/user.js)).
 
-> 🔒 La durée de validité du token est d'un an. C'est long : en cas de fuite, la fenêtre d'exploitation reste large. Envisager une expiration plus courte assortie d'un mécanisme de rafraîchissement adapté aux besoins de sécurité du programme.
-
 ### Flux d'authentification
 
 **Flow signin** ([controllers/user.js](../../api/src/controllers/user.js)) :
@@ -63,8 +61,6 @@ Second mode de connexion, à côté du couple email/mot de passe. Service : [ser
 
 - Hashés avec bcrypt (10 salt rounds) dans le hook `pre('save')` du modèle `User`.
 - Méthode `user.comparePassword(plaintext)` disponible sur les instances.
-
-> 🔒 Le modèle `User` définit un mot de passe par défaut `'Interlud2025'`. Tout compte créé sans mot de passe explicite hérite de cette valeur connue. Forcer la définition d'un mot de passe à la première connexion et éviter ce défaut en production.
 
 ### Invitation et réinitialisation
 
@@ -177,7 +173,7 @@ Valeur réellement saisie pour un indicateur × action × situation × année.
 |-------|------|-------|
 | `name` | String | Prénom + nom |
 | `email` | String | Unique, requis |
-| `password` | String | Hashé bcrypt. Défaut `'Interlud2025'` |
+| `password` | String | Hashé bcrypt |
 | `role` | String (enum) | `user` (défaut) \| `admin` \| `economic_actor` |
 | `status` | String (enum) | `active` (défaut) \| `inactive` |
 | `collectivities` | Array | `[{ id, name, role, status ('pending'/'approved'/'rejected') }]` |

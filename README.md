@@ -146,12 +146,6 @@ npm install
 npm run dev        # démarre sur le port 3000
 ```
 
-```bash
-# Tests de l'API
-cd api
-npm test
-```
-
 ### Variables d'environnement (`api/.env.example`)
 
 ```
