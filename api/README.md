@@ -50,4 +50,4 @@ Sans les variables Azure, l'API fonctionne mais aucune écriture Excel n'a lieu.
 
 ## Excel / SharePoint
 
-Toute la donnée de calcul vit dans des classeurs Excel sur le SharePoint [Documents partagés](https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx) : masters, template d'agrégation, puis un dossier par collectivité. L'ID du master courant est la constante `masterExcelFileId` en tête de `src/services/microsoftGraph.js`. Le détail des workflows (création d'action, synchro différée, agrégation, import / export) est au §16 de [DOCUMENTATION.md](../DOCUMENTATION.md).
+Toute la donnée de calcul vit dans des classeurs Excel sur le SharePoint [Documents partagés](https://selegobv.sharepoint.com/Documents%20partages/Forms/AllItems.aspx) : masters, template d'agrégation, puis un dossier par collectivité. L'ID du master courant est la constante `masterExcelFileId` en tête de `src/services/microsoftGraph.js`. Le détail des workflows (création d'action, synchro différée, agrégation, import / export) est décrit dans la partie [Intégration Excel / SharePoint](../docs/documentation-technique/03-excel-sharepoint.md) de la documentation technique.

@@ -1,14 +1,14 @@
 {
-  "name": "boilerplate-api-node",
+  "name": "evalud-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "API EVALUD — plateforme de suivi d'impact environnemental (programme InTerLUD+)",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon ./src/index.js",
     "start": "node ./src/index.js"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@sentry/node": "^7.120.4",
     "@sentry/tracing": "^7.120.3",
