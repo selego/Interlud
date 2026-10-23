@@ -107,8 +107,6 @@ Représente une mesure environnementale mise en œuvre par une collectivité ou 
 | `last_modif_by_id/_name/_email` | String | Traçabilité de la dernière modification |
 | `last_modif_date` | Date | Défaut `Date.now` |
 
-> ⚠️ **Incohérence de nommage conservée** — le champ prévisionnel s'écrit `exel_files_prev` (un seul « c ») tandis que son équivalent ex-post s'écrit `excel_files_expost` (deux « c »). Cette asymétrie existe dans le code et la base ; toute correction nécessiterait une migration coordonnée code + données.
-
 **Types d'actions** : `global`/`reference` = référentiel national partagé ; `custom` = variante personnalisée d'une action globale par une collectivité ; `config` = données générales (parc de véhicules, données de base) affichées dans `/general-data`.
 
 ### 2.2 Indicator — [indicator.js](../../api/src/models/indicator.js)
@@ -440,8 +438,6 @@ Depuis octobre 2026, `PUT /indicator_value/:id` n'attend plus SharePoint. Les é
 1. Cellules : un `updateExcelCellsBatch` par couple (fichier, situation), fichiers en parallèle.
 2. Défauts : `refreshDefaultsAfterSync` sur chaque fichier écrit (voir [§4.5](#45-relecture-des-défauts--servicesexceldefaultsjs)).
 3. Agrégations : `writeAggregationTargets` lit la feuille `Agrégation` de chaque fichier source (après recalcul) et écrit les cibles dans `1. Données d'entrée` du fichier d'agrégation, en **un seul PATCH** sur la plage min→max de la colonne de l'instance (I/J/K), les cellules intermédiaires étant relues et réécrites à l'identique via `formulas`.
-
-> ⚠️ File d'attente et cache de sessions sont en mémoire process : le fonctionnement suppose **une seule instance d'API**. Un redémarrage pendant la fenêtre de debounce perd les écritures en attente (la base, elle, est déjà à jour).
 
 ### 4.5 Relecture des défauts — [services/excelDefaults.js](../../api/src/services/excelDefaults.js)
 

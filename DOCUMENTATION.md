@@ -7,7 +7,7 @@ Document mixte : onboarding développeurs & archivage projet.
 
 **Version 1.4** — Mise à jour le 23 octobre 2026
 
-> Conventions de lecture : les noms de fichiers, champs, routes et identifiants sont en `police à chasse fixe`. Les blocs `> ⚠️` signalent un point d'attention ; les blocs `> 🔒` un point de sécurité à traiter. Conventions générales : voir [CLAUDE.md](CLAUDE.md). Application en français, réponses API au format `{ ok, data, code }`.
+> Conventions de lecture : les noms de fichiers, champs, routes et identifiants sont en `police à chasse fixe`. Les blocs `> 🔒` signalent une consigne de sécurité. Conventions générales : voir [CLAUDE.md](CLAUDE.md). Application en français, réponses API au format `{ ok, data, code }`.
 
 ---
 

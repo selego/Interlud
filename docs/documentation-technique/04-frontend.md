@@ -166,10 +166,7 @@ SITUATION_TYPES = { INIT: "init", REF: "ref", PREV: "prev", EXPOST: "expost" }
 À partir de `window.location.href` (pas de `.env`) :
 
 - `localhost` / `127.0.0.1` → `development` → `apiURL = http://localhost:8080`
-- `app-staging` dans l'URL → `staging`
 - sinon → `production` → `apiURL = https://api.evalud.green`
-
-> ⚠️ Aucune `apiURL` n'est définie pour `staging` : si une app staging est déployée, elle appelle une URL vide. À compléter dans `config.js` si un environnement de staging est remis en service.
 
 ---
 

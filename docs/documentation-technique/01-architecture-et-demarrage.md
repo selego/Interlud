@@ -75,8 +75,6 @@ Interlud/
 │       └── utils/         # indicatorHelpers, constants, index
 ```
 
-> ⚠️ Les anciens dossiers `POC/` (proof of concept) et `admin/` (boilerplate jamais utilisé) ont été supprimés en octobre 2026 ; l'administration se fait dans `app/` sous `/admin/*`.
-
 ---
 
 ## 3. API — Configuration et démarrage
@@ -137,7 +135,7 @@ Les variables d'environnement sont exportées depuis ce fichier. Exception : les
 
 | Variable | Oblig. | Description |
 |----------|--------|-------------|
-| `ENVIRONMENT` | Non | development / staging / production (défaut development) |
+| `ENVIRONMENT` | Non | development / production (défaut development) |
 | `PORT` | Non | Port d'écoute (défaut 8080) |
 | `MONGODB_ENDPOINT` | **Oui** | URI MongoDB complet |
 | `SECRET` | **Oui** | Clé secrète de signature JWT |
@@ -154,7 +152,7 @@ Les variables d'environnement sont exportées depuis ce fichier. Exception : les
 *\* Requis si la synchronisation Excel/SharePoint est utilisée.*
 *\*\* Requis pour la connexion via Joptimiz.*
 
-> 🔒 `SECRET`, `CLIENT_SECRET`, `JOPTIMIZ_CLIENT_SECRET`, `S3_SECRETACCESSKEY` et `BREVO_KEY` sont des secrets sensibles. Ne jamais les versionner ni les inclure dans une copie de ce document destinée à un tiers ; les gérer via le coffre de secrets de CleverCloud.
+> 🔒 `SECRET`, `CLIENT_SECRET`, `JOPTIMIZ_CLIENT_SECRET`, `S3_SECRETACCESSKEY` et `BREVO_KEY` sont des secrets. Ils ne sont jamais versionnés ni inclus dans une copie de ce document destinée à un tiers ; ils sont gérés via le coffre de variables d'environnement de CleverCloud.
 
 ### App (`app/.env`)
 
@@ -191,8 +189,6 @@ cd app   && npm run build && npm start
 |---------------|-----|-----|
 | Développement | localhost:3000 | localhost:8080 |
 | Production | app.evalud.green | api.evalud.green |
-
-> Le front détecte un environnement `staging` quand l'URL contient `app-staging`, mais aucune URL d'API n'y est associée (voir [Application frontend §5](04-frontend.md#5-utilitaires-frontend)).
 
 ### Services tiers requis
 

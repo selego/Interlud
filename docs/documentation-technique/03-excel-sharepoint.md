@@ -211,7 +211,7 @@ Action.create({
 
 **I. Finalisation** — `computeActionCompletion` sur l'action principale + les deux actions config ; création d'un `Log` `operation: 'add'`.
 
-> ⚠️ **Durée du processus** : la création peut prendre jusqu'à 120 secondes. L'interface affiche des messages de progression.
+> **Durée** : opération longue par nature (copie des classeurs et recalcul côté SharePoint), jusqu'à 120 secondes. L'interface affiche la progression étape par étape.
 
 ## 6. Workflow : mise à jour d'un IndicatorValue (`PUT /indicator_value/:id`)
 
