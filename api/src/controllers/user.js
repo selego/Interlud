@@ -9,7 +9,7 @@ const EconomicActor = require('../models/economic_actor');
 const UserObject = require('../models/user');
 const UserActionRightObject = require('../models/user_action_right');
 const config = require('../config');
-const { validatePassword } = require('../utils');
+const { validatePassword, pickFields } = require('../utils');
 const { BREVO_TEMPLATES } = require('../utils/constants');
 const ERROR_CODES = require('../utils/errorCodes');
 const Notification = require('../models/notification');
@@ -21,54 +21,7 @@ const { capture } = require('../services/sentry');
 // 1 year
 const COOKIE_MAX_AGE = 31557600000;
 
-
-// Champs qu'un utilisateur peut modifier sur son propre compte (liste blanche)
-const SELF_EDITABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifications_push', 'rgpd_accepted_at'];
-// Champs qu'un admin de collectivité peut modifier sur un membre de sa collectivité
-const MEMBER_EDITABLE_FIELDS = ['name', 'status', 'collectivities'];
-
-const pick = (obj, fields) => Object.fromEntries(fields.filter((f) => Object.prototype.hasOwnProperty.call(obj || {}, f)).map((f) => [f, obj[f]]));
-
-// Collectivités dont reqUser est admin approuvé
-const getAdminCollectivityIds = (reqUser) =>
-  (reqUser.collectivities || []).filter((c) => c.role === 'admin' && c.status === 'approved').map((c) => String(c.id));
-
-// Autorisation de PUT /user/:id, placée après passport.authenticate : req.user est l'utilisateur
-// chargé en base par la stratégie. Prépare req.targetUser et req.userUpdate pour le handler.
-const authorizeUserUpdate = async (req, res, next) => {
-  try {
-    const target = await UserObject.findById(req.params.id);
-    if (!target) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-    req.targetUser = target;
-
-    if (req.user.role === 'admin') {
-      req.userUpdate = req.body;
-      return next();
-    }
-
-    const adminIds = getAdminCollectivityIds(req.user);
-    const isSelf = req.user._id.toString() === target._id.toString();
-    if (!isSelf) {
-      if (target.role === 'admin') return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
-      if (!(target.collectivities || []).some((c) => adminIds.includes(String(c.id)))) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
-      // Changer l'email d'un autre compte permettrait d'en prendre le contrôle via forgot_password
-      if (req.body?.email !== undefined && String(req.body.email).trim().toLowerCase() !== target.email) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
-    }
-
-    const obj = pick(req.body, isSelf ? [...SELF_EDITABLE_FIELDS, 'collectivities'] : MEMBER_EDITABLE_FIELDS);
-    // Seules les entrées des collectivités administrées par req.user peuvent être modifiées
-    if (obj.collectivities) {
-      const kept = (target.collectivities || []).filter((c) => !adminIds.includes(String(c.id)));
-      const updated = (Array.isArray(obj.collectivities) ? obj.collectivities : []).filter((c) => adminIds.includes(String(c?.id)));
-      obj.collectivities = [...kept, ...updated];
-    }
-    req.userUpdate = obj;
-    next();
-  } catch (error) {
-    capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
-  }
-};
+const USER_UPDATABLE_FIELDS = ['name', 'email', 'status', 'notifications_email', 'notifications_push', 'rgpd_accepted_at', 'collectivities'];
 const JWT_MAX_AGE = '1y';
 
 // Logo InTerLUD+ pour les emails (URL publique)
@@ -385,10 +338,10 @@ router.post('/', passport.authenticate(['admin'], { session: false }), async (re
 });
 
 //@check
-router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }), authorizeUserUpdate, async (req, res) => {
+router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const user = req.targetUser;
-    user.set(req.userUpdate);
+    const user = await UserObject.findById(req.params.id);
+    user.set(req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS));
     await user.save();
 
     res.status(200).send({ ok: true, data: user });
@@ -398,10 +351,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }),
   }
 });
 
-router.put('/', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
+router.put('/', passport.authenticate(['admin', 'user', 'applicant'], { session: false }), async (req, res) => {
   try {
-    const obj = req.user.role === 'admin' ? req.body : pick(req.body, SELF_EDITABLE_FIELDS);
-    const data = await UserObject.findByIdAndUpdate(req.user._id, obj, { new: true });
+    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS), { new: true });
     res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
@@ -421,7 +373,6 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
 
 router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    // Seul un admin global peut définir le mot de passe d'un autre compte (economic_actor inclus dans le refus)
     if (req.user.role !== 'admin' && req.user._id.toString() !== req.params.id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
     if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
