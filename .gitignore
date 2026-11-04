@@ -7,3 +7,6 @@ docs/documentation-technique/build/
 
 # Dossier de passation interne (jamais sur le dépôt public)
 docs/passation/
+
+# Organisation interne du projet (jamais sur le dépôt public)
+private/
