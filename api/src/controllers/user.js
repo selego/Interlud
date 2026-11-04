@@ -9,7 +9,7 @@ const EconomicActor = require('../models/economic_actor');
 const UserObject = require('../models/user');
 const UserActionRightObject = require('../models/user_action_right');
 const config = require('../config');
-const { validatePassword } = require('../utils');
+const { validatePassword, pickFields } = require('../utils');
 const { BREVO_TEMPLATES } = require('../utils/constants');
 const ERROR_CODES = require('../utils/errorCodes');
 const Notification = require('../models/notification');
@@ -20,6 +20,8 @@ const { capture } = require('../services/sentry');
 
 // 1 year
 const COOKIE_MAX_AGE = 31557600000;
+
+const USER_UPDATABLE_FIELDS = ['name', 'email', 'status', 'notifications_email', 'notifications_push', 'rgpd_accepted_at', 'collectivities'];
 const JWT_MAX_AGE = '1y';
 
 // Logo InTerLUD+ pour les emails (URL publique)
@@ -339,8 +341,7 @@ router.post('/', passport.authenticate(['admin'], { session: false }), async (re
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
     const user = await UserObject.findById(req.params.id);
-    const obj = req.body;
-    user.set(obj);
+    user.set(req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS));
     await user.save();
 
     res.status(200).send({ ok: true, data: user });
@@ -352,8 +353,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }),
 
 router.put('/', passport.authenticate(['admin', 'user', 'applicant'], { session: false }), async (req, res) => {
   try {
-    const obj = req.body;
-    const data = await UserObject.findByIdAndUpdate(req.user._id, obj, { new: true });
+    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS), { new: true });
     res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
@@ -373,7 +373,7 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
 
 router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    if (req.user.role === 'user' && req.user._id.toString() !== req.params.id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    if (req.user.role !== 'admin' && req.user._id.toString() !== req.params.id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     if (req.body.newPassword !== req.body.verifyPassword) return res.status(422).send({ ok: false, code: ERROR_CODES.PASSWORDS_DO_NOT_MATCH });
     if (!validatePassword(req.body.newPassword)) return res.status(400).send({ ok: false, code: ERROR_CODES.PASSWORD_NOT_VALIDATED });
     const obj = await UserObject.findById(req.params.id);
