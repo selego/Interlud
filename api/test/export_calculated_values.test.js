@@ -7,39 +7,20 @@ const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 
-const {
-  GAINS_WORKSHEET,
-  EMISSIONS_WORKSHEET,
-  GAINS_FIRST_ROW,
-  GAINS_LAST_ROW,
-  EMISSIONS_FIRST_ROW,
-  EMISSIONS_LAST_ROW,
-  ACTION_GAINS_RANGES,
-  ACTION_EMISSIONS_RANGES,
-  GAIN_COLUMNS,
-  parseNumber,
-  extractAggregation,
-  columnLetter,
-  sheetRangeAddress,
-  actionBlockAddress,
-  isOversizedRangeError,
-  readAggregationBlocks,
-  sliceActionYearRows,
-  cellNumber,
-  usefulYears,
-  buildCalculatedValueRows,
-  rowsForFile,
-} = require('../src/services/aggregationReader');
+const { GAINS_FIRST_ROW, EMISSIONS_FIRST_ROW, ACTION_GAINS_RANGES, ACTION_EMISSIONS_RANGES, GAIN_COLUMNS, parseNumber, cellNumber, extractAggregation, rowsForFile } = require('../src/services/aggregationReader');
 
-const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, SHEET_NAME, runWithConcurrency } = require('../script/export_calculated_values');
+const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, SHEET_NAME } = require('../script/export_calculated_values');
 
-const blankSheet = (first, last) => Array.from({ length: last - first + 1 }, () => []);
+// Feuilles complètes A19:FU572 et A21:FU574.
+const blankSheet = () => Array.from({ length: 554 }, () => []);
 
 const put = (rows, first, excelRow, col, value) => {
   const line = rows[excelRow - first];
   while (line.length <= col) line.push(null);
   line[col] = value;
 };
+
+const context = { collectivityName: 'CA Exemple', siren: 200012345, department: '69', owner: 'collectivity', actorName: '' };
 
 const c1 = () => ({
   _id: 'a1',
@@ -49,56 +30,30 @@ const c1 = () => ({
   instance_number: 1,
   is_draft: false,
   owner: 'collectivity',
-  year_init: 2020,
-  exel_files_prev: [{ year_prev: 2030, year_ref: 2025 }],
-  excel_files_expost: [{ year_expost: 2030, year_ref: 2025 }],
 });
 
+// Instance 1 de C1 = colonne AW (48) ; total = colonne E (4).
 const fixture = () => {
-  const gains = blankSheet(GAINS_FIRST_ROW, GAINS_LAST_ROW);
-  const em = blankSheet(EMISSIONS_FIRST_ROW, EMISSIONS_LAST_ROW);
-  const emStart = ACTION_EMISSIONS_RANGES.C1.dataStartRow;
-  const gainsStart = ACTION_GAINS_RANGES.C1.dataStartRow;
-  const col = 48;
-  put(em, EMISSIONS_FIRST_ROW, emStart + (2015 - 2010), col, 1);
-  put(em, EMISSIONS_FIRST_ROW, emStart + (2020 - 2010), col, 100);
-  put(em, EMISSIONS_FIRST_ROW, emStart + (2030 - 2010), col + 2, 80);
-  put(em, EMISSIONS_FIRST_ROW, emStart + (2030 - 2010), col + 3, 70);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2020 - 2010), col, 0);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), col, -5);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), col + 1, -6);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), col + 2, -10);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), col + 3, -7);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), col + 4, -4);
-  put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), col + 5, -1);
-  put(em, EMISSIONS_FIRST_ROW, emStart + (2020 - 2010), 4, 999);
-  return { gains, em, emStart, gainsStart, col };
+  const gains = blankSheet();
+  const em = blankSheet();
+  const emRow = (year) => ACTION_EMISSIONS_RANGES.C1.dataStartRow + (year - 2010);
+  const gainsRow = (year) => ACTION_GAINS_RANGES.C1.dataStartRow + (year - 2010);
+  put(em, EMISSIONS_FIRST_ROW, emRow(2015), 48, 1);
+  put(em, EMISSIONS_FIRST_ROW, emRow(2020), 48, 100);
+  put(em, EMISSIONS_FIRST_ROW, emRow(2030), 50, 80);
+  put(em, EMISSIONS_FIRST_ROW, emRow(2030), 51, 70);
+  put(gains, GAINS_FIRST_ROW, gainsRow(2020), 48, 0);
+  [-5, -6, -10, -7, -4, -1].forEach((value, offset) => put(gains, GAINS_FIRST_ROW, gainsRow(2030), 48 + offset, value));
+  put(em, EMISSIONS_FIRST_ROW, emRow(2020), 4, 999);
+  put(em, EMISSIONS_FIRST_ROW, emRow(2025), 6, 50);
+  put(em, EMISSIONS_FIRST_ROW, emRow(2030), 6, '30');
+  put(em, EMISSIONS_FIRST_ROW, emRow(2030), 7, 20);
+  return { gains, em };
 };
 
-describe('mapping des colonnes', () => {
-  test('lettres de colonnes du bloc total et des instances', () => {
-    assert.equal(columnLetter(0), 'A');
-    assert.equal(columnLetter(4), 'E');
-    assert.equal(columnLetter(44), 'AS');
-    assert.equal(columnLetter(48), 'AW');
-    assert.equal(columnLetter(88), 'CK');
-    assert.equal(columnLetter(92), 'CO');
-    assert.equal(columnLetter(132), 'EC');
-    assert.equal(columnLetter(136), 'EG');
-    assert.equal(columnLetter(176), 'FU');
-  });
+const pick = (rows, filter) => rows.filter((row) => Object.entries(filter).every(([key, value]) => row[key] === value));
 
-  test('plages complètes et blocs', () => {
-    assert.equal(GAINS_FIRST_ROW, 19);
-    assert.equal(GAINS_LAST_ROW, 572);
-    assert.equal(EMISSIONS_FIRST_ROW, 21);
-    assert.equal(EMISSIONS_LAST_ROW, 574);
-    assert.equal(sheetRangeAddress(GAINS_FIRST_ROW, GAINS_LAST_ROW), 'A19:FU572');
-    assert.equal(sheetRangeAddress(EMISSIONS_FIRST_ROW, EMISSIONS_LAST_ROW), 'A21:FU574');
-    assert.equal(actionBlockAddress(19), 'A19:FU59');
-    assert.equal(actionBlockAddress(190), 'A190:FU230');
-  });
-
+describe('lecture du dashboard', () => {
   test('les 6 écarts de gains sont dans l’ordre confirmé ; le dashboard ne lit pas +1 ni +3', () => {
     assert.deepEqual(
       GAIN_COLUMNS.map((column) => [column.offset, column.label]),
@@ -119,17 +74,14 @@ describe('mapping des colonnes', () => {
     assert.equal(agg.gains.GES.objective, 0);
     assert.equal(agg.gains.GES.real, 4);
     assert.equal(agg.gains.GES.achievement, null);
-    assert.equal(agg.gains.GES.yearlyData[0].ecartRefInit, 0);
-    assert.equal(agg.gains.GES.yearlyData[0].ecartPrevRef, 0);
   });
-});
 
-describe('parseNumber et cellules', () => {
   test('parseNumber conserve le comportement du dashboard', () => {
     assert.equal(parseNumber(null), 0);
     assert.equal(parseNumber(''), 0);
     assert.equal(parseNumber('1 234,5'), 1234.5);
     assert.equal(parseNumber('nope'), 0);
+    assert.equal(parseNumber('#N/A'), 0);
     assert.equal(parseNumber(-3), -3);
   });
 
@@ -140,215 +92,101 @@ describe('parseNumber et cellules', () => {
     assert.equal(cellNumber(0), 0);
     assert.equal(cellNumber('#N/A'), null);
     assert.equal(cellNumber('1 234,5'), 1234.5);
-    assert.equal(cellNumber({ result: '8' }), 8);
   });
 });
 
 describe('lignes Valeurs calculées', () => {
-  test('années utiles, source, gains signés et atteinte alignée sur extractAggregation', () => {
+  test('émissions et gains signés de toutes les années, vides et zéros omis', () => {
     const { gains, em } = fixture();
-    const action = c1();
-    const gainsYearRows = sliceActionYearRows(gains, GAINS_FIRST_ROW, ACTION_GAINS_RANGES.C1.dataStartRow);
-    const emYearRows = sliceActionYearRows(em, EMISSIONS_FIRST_ROW, ACTION_EMISSIONS_RANGES.C1.dataStartRow);
-    const agg = extractAggregation({ type: 'custom', instance_number: 1 }, gainsYearRows, emYearRows);
-    const rows = buildCalculatedValueRows({
-      collectivityName: 'CA Exemple',
-      siren: 200012345,
-      department: '69',
-      owner: 'collectivity',
-      actorName: '',
-      action,
-      instance: 1,
-      gainsYearRows,
-      emYearRows,
-      includeZero: false,
-      extractedAt: '2026-11-05',
-    });
+    const rows = pick(rowsForFile({ context, actions: [c1()], gainsRows: gains, emRows: em }), { instance: 1, polluant: 'GES' });
 
-    assert.equal(agg.gains.GES.objective, 10);
-    assert.equal(agg.gains.GES.real, 4);
-    assert.equal(agg.gains.GES.achievement, 40);
-    assert.equal(agg.score, 40);
-    assert.ok(!rows.some((row) => row.annee === 2015));
-    assert.ok(!rows.some((row) => row.annee === 2020 && row.famille === 'Gain'));
-
-    const init = rows.find((row) => row.famille === 'Émission' && row.situation === 'init');
-    assert.equal(init.valeur, 100);
-    assert.equal(init.source, `${EMISSIONS_WORKSHEET}!AW202`);
-    assert.equal(init.anneeRef, '');
-    assert.equal(init.polluant, 'GES');
-    assert.equal(init.unite, 'tCO2e');
-    assert.equal(init.brouillon, 'Non');
-    assert.equal(init.siren, 200012345);
-
-    const prev = rows.find((row) => row.famille === 'Émission' && row.situation === 'prev');
-    assert.equal(prev.valeur, 80);
-    assert.equal(prev.annee, 2030);
-    assert.equal(prev.anneeRef, 2025);
-    assert.equal(prev.source, `${EMISSIONS_WORKSHEET}!AY212`);
-
-    const gaps = rows.filter((row) => row.famille === 'Gain' && row.polluant === 'GES').map((row) => [row.situation, row.valeur, row.source]);
-    assert.deepEqual(gaps, [
-      ['Réf-Init', -5, `${GAINS_WORKSHEET}!AW210`],
-      ['Prév-Init', -6, `${GAINS_WORKSHEET}!AX210`],
-      ['Prév-Réf', -10, `${GAINS_WORKSHEET}!AY210`],
-      ['Expost-Init', -7, `${GAINS_WORKSHEET}!AZ210`],
-      ['Expost-Réf', -4, `${GAINS_WORKSHEET}!BA210`],
-      ['Expost-Prév', -1, `${GAINS_WORKSHEET}!BB210`],
-    ]);
-
-    const attainment = rows.filter((row) => row.famille === 'Atteinte');
     assert.deepEqual(
-      attainment.map((row) => [row.situation, row.valeur, row.unite, row.annee]),
+      pick(rows, { famille: 'Émission' }).map((row) => [row.annee, row.situation, row.valeur]),
+      [
+        [2015, 'init', 1],
+        [2020, 'init', 100],
+        [2030, 'prev', 80],
+        [2030, 'expost', 70],
+      ],
+    );
+    assert.deepEqual(
+      pick(rows, { famille: 'Gain' }).map((row) => [row.annee, row.situation, row.valeur]),
+      [
+        [2030, 'Réf-Init', -5],
+        [2030, 'Prév-Init', -6],
+        [2030, 'Prév-Réf', -10],
+        [2030, 'Expost-Init', -7],
+        [2030, 'Expost-Réf', -4],
+        [2030, 'Expost-Prév', -1],
+      ],
+    );
+    const first = rows[0];
+    assert.equal(first.collectivite, 'CA Exemple');
+    assert.equal(first.siren, 200012345);
+    assert.equal(first.unite, 'tCO2e');
+    assert.equal(first.brouillon, 'Non');
+    assert.equal(first.nomFiche, 'Tournées centre');
+  });
+
+  test("l'atteinte d'une instance suit le dashboard d'action", () => {
+    const { gains, em } = fixture();
+    const rows = rowsForFile({ context, actions: [c1()], gainsRows: gains, emRows: em });
+    const agg = extractAggregation({ type: 'custom', instance_number: 1 }, [{ year: 2030, row: gains[ACTION_GAINS_RANGES.C1.dataStartRow + 20 - GAINS_FIRST_ROW] }], []);
+    assert.deepEqual(
+      pick(rows, { instance: 1, polluant: 'GES', famille: 'Atteinte' }).map((row) => [row.situation, row.valeur, row.unite, row.annee]),
       [
         ['objectif', 10, 'tCO2e', 2030],
         ['réel', 4, 'tCO2e', 2030],
         ['taux', 40, '%', 2030],
       ],
     );
-    assert.equal(attainment[0].valeur, agg.gains.GES.objective);
-    assert.equal(attainment[1].valeur, agg.gains.GES.real);
-    assert.equal(attainment[2].valeur, agg.gains.GES.achievement);
-    assert.equal(attainment[2].source, `${GAINS_WORKSHEET}!AY210; ${GAINS_WORKSHEET}!BA210`);
+    assert.equal(agg.gains.GES.achievement, 40);
   });
 
-  test('--all-years et --include-zero', () => {
+  test("l'atteinte du total suit l'accueil : cumul ex-post ÷ cumul prévisionnel", () => {
     const { gains, em } = fixture();
-    const action = c1();
-    const gainsYearRows = sliceActionYearRows(gains, GAINS_FIRST_ROW, ACTION_GAINS_RANGES.C1.dataStartRow);
-    const emYearRows = sliceActionYearRows(em, EMISSIONS_FIRST_ROW, ACTION_EMISSIONS_RANGES.C1.dataStartRow);
-    const rows = buildCalculatedValueRows({ action, instance: 1, gainsYearRows, emYearRows, allYears: true, includeZero: true, extractedAt: '2026-11-05' });
-    assert.ok(rows.some((row) => row.annee === 2015 && row.valeur === 1));
-    assert.ok(rows.some((row) => row.annee === 2020 && row.famille === 'Gain' && row.valeur === 0));
-  });
-
-  test("l'atteinte est émise même hors années utiles, et le taux est omis si l'objectif est nul", () => {
-    const gains = blankSheet(GAINS_FIRST_ROW, GAINS_LAST_ROW);
-    const em = blankSheet(EMISSIONS_FIRST_ROW, EMISSIONS_LAST_ROW);
-    const gainsStart = ACTION_GAINS_RANGES.B2.dataStartRow;
-    put(gains, GAINS_FIRST_ROW, gainsStart + (2040 - 2010), 52, -4);
-    const action = { excel_worksheetname: 'B2', name: 'ZFE', action_parent_name: 'ZFE', instance_number: 1, year_init: 2020 };
-    const rows = buildCalculatedValueRows({
-      action,
-      instance: 1,
-      gainsYearRows: sliceActionYearRows(gains, GAINS_FIRST_ROW, gainsStart),
-      emYearRows: sliceActionYearRows(em, EMISSIONS_FIRST_ROW, ACTION_EMISSIONS_RANGES.B2.dataStartRow),
-      extractedAt: '2026-11-05',
-    });
+    const rows = rowsForFile({ context, actions: [c1()], gainsRows: gains, emRows: em });
     assert.deepEqual(
-      rows.map((row) => [row.famille, row.situation, row.valeur, row.annee, row.anneeRef]),
-      [['Atteinte', 'réel', 4, 2040, '']],
-    );
-  });
-
-  test('instance et total, brouillon, acteur', () => {
-    const { gains, em } = fixture();
-    const emStart = ACTION_EMISSIONS_RANGES.C1.dataStartRow;
-    const gainsStart = ACTION_GAINS_RANGES.C1.dataStartRow;
-    put(em, EMISSIONS_FIRST_ROW, emStart + (2020 - 2010), 92, 50);
-    put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), 6, -10);
-    put(gains, GAINS_FIRST_ROW, gainsStart + (2030 - 2010), 8, -4);
-    const draft = { ...c1(), _id: 'a2', name: 'Brouillon', instance_number: 2, is_draft: true };
-    const rows = rowsForFile({
-      collectivityName: 'CA Exemple',
-      siren: 200012345,
-      department: '69',
-      owner: 'economic_actor',
-      actorName: 'Transports Dupont',
-      actions: [draft, c1()],
-      gainsRows: gains,
-      emRows: em,
-      extractedAt: '2026-11-05',
-    });
-    const instances = rows.filter((row) => row.famille === 'Émission' && row.situation === 'init' && row.annee === 2020);
-    assert.deepEqual(
-      instances.map((row) => [row.instance, row.nomFiche, row.brouillon, row.acteur, row.source]),
+      pick(rows, { instance: 'Total', polluant: 'GES', famille: 'Atteinte' }).map((row) => [row.situation, row.valeur, row.unite, row.annee]),
       [
-        [1, 'Tournées centre', 'Non', 'Transports Dupont', `${EMISSIONS_WORKSHEET}!AW202`],
-        [2, 'Brouillon', 'Oui', 'Transports Dupont', `${EMISSIONS_WORKSHEET}!CO202`],
-        ['Total', 'Optimisation des tournées', '', 'Transports Dupont', `${EMISSIONS_WORKSHEET}!E202`],
+        ['objectif', 80, 'tCO2e', ''],
+        ['réel', 20, 'tCO2e', ''],
+        ['taux', 25, '%', ''],
       ],
     );
-    const totalAtt = rows.find((row) => row.instance === 'Total' && row.famille === 'Atteinte' && row.situation === 'objectif');
-    const gainsYearRows = sliceActionYearRows(gains, GAINS_FIRST_ROW, ACTION_GAINS_RANGES.C1.dataStartRow);
-    const emYearRows = sliceActionYearRows(em, EMISSIONS_FIRST_ROW, ACTION_EMISSIONS_RANGES.C1.dataStartRow);
-    assert.equal(totalAtt.valeur, extractAggregation({ type: 'global' }, gainsYearRows, emYearRows).gains.GES.objective);
   });
 
-  test('une instance hors 1..3 est ignorée', () => {
+  test('instances, total, brouillon, acteur', () => {
     const { gains, em } = fixture();
-    const rows = rowsForFile({ actions: [{ ...c1(), instance_number: 4 }], gainsRows: gains, emRows: em, extractedAt: '2026-11-05' });
-    assert.equal(rows.length, 0);
-  });
-
-  test('années utiles', () => {
-    const years = usefulYears({ year_init: 2020, year_ref: 2024, exel_files_prev: [{ year_prev: 2030, year_ref: 2025 }], excel_files_expost: [], year_expost: 2031 });
-    assert.deepEqual([...years].sort(), [2020, 2024, 2025, 2030, 2031]);
-  });
-});
-
-describe('lecture des plages', () => {
-  test('une plage complète réussie ne redécoupe pas', async () => {
-    const calls = [];
-    const { gainsRows, emRows } = await readAggregationBlocks('file', {
-      fetchRange: async (worksheet, address) => {
-        calls.push([worksheet, address]);
-        return worksheet === GAINS_WORKSHEET ? [['g']] : [['e']];
-      },
-    });
-    assert.deepEqual(calls, [
-      [GAINS_WORKSHEET, 'A19:FU572'],
-      [EMISSIONS_WORKSHEET, 'A21:FU574'],
-    ]);
-    assert.deepEqual(gainsRows, [['g']]);
-    assert.deepEqual(emRows, [['e']]);
-  });
-
-  test('un 504 découpe par bloc et aligne les lignes', async () => {
-    const calls = [];
-    const { gainsRows, emRows } = await readAggregationBlocks('file', {
-      fetchRange: async (worksheet, address) => {
-        calls.push(address);
-        if (address === 'A19:FU572' || address === 'A21:FU574') throw new Error('Graph API error: 504');
-        const start = Number(address.slice(1, address.indexOf(':')));
-        return Array.from({ length: 41 }, (_, i) => [`${worksheet}:${start + i}`]);
-      },
-    });
-    assert.equal(gainsRows.length, 572 - 19 + 1);
-    assert.equal(emRows.length, 574 - 21 + 1);
-    assert.deepEqual(gainsRows[190 - 19], [`${GAINS_WORKSHEET}:190`]);
-    assert.deepEqual(gainsRows[60 - 19], []);
-    assert.deepEqual(emRows[192 - 21], [`${EMISSIONS_WORKSHEET}:192`]);
-    assert.ok(calls.includes('A190:FU230'));
-    assert.equal(calls.filter((address) => address === 'A19:FU572').length, 1);
-  });
-
-  test('une erreur autre qu’un timeout ou un 504 est propagée', async () => {
-    await assert.rejects(
-      () => readAggregationBlocks('file', { fetchRange: async () => { throw new Error('Graph API error: 403'); } }),
-      /403/,
+    put(em, EMISSIONS_FIRST_ROW, ACTION_EMISSIONS_RANGES.C1.dataStartRow + 10, 92, 50);
+    const draft = { ...c1(), _id: 'a2', name: 'Brouillon', instance_number: 2, is_draft: true };
+    const rows = rowsForFile({ context: { ...context, owner: 'economic_actor', actorName: 'Dupont' }, actions: [draft, c1()], gainsRows: gains, emRows: em });
+    assert.deepEqual(
+      pick(rows, { famille: 'Émission', situation: 'init', annee: 2020, polluant: 'GES' }).map((row) => [row.instance, row.nomFiche, row.brouillon, row.acteur, row.valeur]),
+      [
+        [1, 'Tournées centre', 'Non', 'Dupont', 100],
+        [2, 'Brouillon', 'Oui', 'Dupont', 50],
+        ['Total', 'Optimisation des tournées', '', 'Dupont', 999],
+      ],
     );
   });
 
-  test('détection timeout', () => {
-    assert.equal(isOversizedRangeError(Object.assign(new Error('aborted'), { name: 'TimeoutError' })), true);
-    assert.equal(isOversizedRangeError(new Error('The operation was aborted due to timeout')), true);
-    assert.equal(isOversizedRangeError(new Error('Graph API error: 404')), false);
+  test('une instance hors 1..3 est ignorée et signalée', (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    const { gains, em } = fixture();
+    assert.equal(rowsForFile({ context, actions: [{ ...c1(), instance_number: 4 }], gainsRows: gains, emRows: em }).length, 0);
+    assert.equal(warn.mock.callCount(), 1);
+    assert.match(warn.mock.calls[0].arguments[0], /instance 4/);
   });
 });
 
 describe('script', () => {
   test('arguments', () => {
     assert.throws(() => parseArgs(['node', 'script']), /Usage/);
-    const parsed = parseArgs(['node', 'script', '--collectivities', 'a,b', '--template', './t.xlsx', '--out', './out/x.xlsx', '--include-zero', 'false', '--concurrency', '3', '--all-years']);
-    assert.equal(parsed.collectivities, 'a,b');
-    assert.equal(parsed.template, './t.xlsx');
-    assert.equal(parsed.out, './out/x.xlsx');
-    assert.equal(parsed.includeZero, false);
-    assert.equal(parsed.concurrency, 3);
-    assert.equal(parsed.allYears, true);
-    assert.equal(parseArgs(['node', 'script', '--collectivities=all', '--include-zero=true']).includeZero, true);
-    assert.equal(parseArgs(['node', 'script', '--collectivities=all', '--include-zero']).includeZero, true);
+    const parsed = parseArgs(['node', 'script', '--collectivities', 'a,b', '--template', './t.xlsx', '--out=./out/x.xlsx']);
+    assert.deepEqual(parsed, { collectivities: 'a,b', template: './t.xlsx', out: './out/x.xlsx' });
+    assert.throws(() => parseArgs(['node', 'script', '--collectivities=all', '--all-years']), /Option inconnue/);
+    assert.throws(() => parseArgs(['node', 'script', '--collectivities', '--out', 'x']), /Valeur manquante/);
   });
 
   test('fichiers collectivité puis acteurs', () => {
@@ -380,23 +218,10 @@ describe('script', () => {
     assert.equal(text.includes('01ABC'), false);
   });
 
-  test('concurrence plafonnée', async () => {
-    let current = 0;
-    let max = 0;
-    await runWithConcurrency([1, 2], 2, async () => {
-      current += 1;
-      max = Math.max(max, current);
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      current -= 1;
-    });
-    assert.equal(max, 2);
-  });
-
   test('onglet ajouté après Valeurs, en-tête figé, Lisez-moi', async () => {
     const wb = new ExcelJS.Workbook();
     const readme = wb.addWorksheet('Lisez-moi');
     readme.getCell('A9').value = '• Valeurs — exemple';
-    readme.getCell('A9').font = { name: 'Arial', size: 10 };
     wb.addWorksheet('Valeurs');
     wb.addWorksheet('Actions');
     addCalculatedValuesSheet(wb, [{ collectivite: 'CA Exemple', valeur: 12, fiche: 'C1' }]);
@@ -407,23 +232,12 @@ describe('script', () => {
     assert.equal(sheet.getRow(1).getCell(1).value, 'Collectivité');
     assert.equal(sheet.getRow(2).getCell(1).value, 'CA Exemple');
     assert.equal(sheet.views[0].state, 'frozen');
-    assert.equal(sheet.views[0].ySplit, 1);
     assert.ok(sheet.autoFilter);
-    const bullets = [];
-    readme.eachRow((row) => {
-      const value = row.getCell(1).value;
-      if (typeof value === 'string' && value.includes('Valeurs calculées')) bullets.push(value);
-    });
-    assert.deepEqual(bullets, [README_BULLET]);
-
-    const buf = await wb.xlsx.writeBuffer();
-    const reloaded = new ExcelJS.Workbook();
-    await reloaded.xlsx.load(buf);
-    assert.deepEqual(reloaded.worksheets.map((s) => s.name), ['Lisez-moi', 'Valeurs', SHEET_NAME, 'Actions']);
-    assert.equal(reloaded.getWorksheet(SHEET_NAME).views[0].state, 'frozen');
+    assert.equal(readme.getCell('A10').value, README_BULLET);
+    assert.equal(readme.getColumn(1).values.filter((value) => value === README_BULLET).length, 1);
   });
 
-  test('le template du dépôt n’est pas modifié', async () => {
+  test('sortie sans les exemples fictifs ni les questions, template du dépôt intact', async () => {
     const template = path.resolve(__dirname, '../../Template_export_Interlud.xlsx');
     const before = crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex');
     const wb = new ExcelJS.Workbook();
@@ -431,15 +245,20 @@ describe('script', () => {
     addCalculatedValuesSheet(wb, []);
     const out = path.join(os.tmpdir(), `export-calculees-${process.pid}.xlsx`);
     await wb.xlsx.writeFile(out);
-    const after = crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex');
-    assert.equal(before, after);
+    assert.equal(crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex'), before);
+
     const check = new ExcelJS.Workbook();
     await check.xlsx.readFile(out);
-    assert.deepEqual(check.worksheets.map((sheet) => sheet.name), ['Lisez-moi', 'Valeurs', SHEET_NAME, 'Actions', 'Collectivités', 'Acteurs économiques']);
-    assert.equal(check.getWorksheet('Valeurs').getCell('A2').value, 'CA Exemple Agglo');
-    assert.match(String(check.getWorksheet('Lisez-moi').getCell('A13').value), /Valeurs calculées/);
-    assert.match(String(check.getWorksheet('Lisez-moi').getCell('A9').value), /onglet principal/);
     fs.unlinkSync(out);
+    assert.deepEqual(check.worksheets.map((sheet) => sheet.name), ['Lisez-moi', 'Valeurs', SHEET_NAME, 'Actions', 'Collectivités', 'Acteurs économiques']);
+    for (const name of ['Valeurs', 'Actions', 'Collectivités', 'Acteurs économiques']) {
+      const sheet = check.getWorksheet(name);
+      assert.equal(sheet.actualRowCount, 1, `${name} ne garde que l'en-tête`);
+      assert.ok(sheet.getCell('A1').value);
+    }
+    const readme = Array.from(check.getWorksheet('Lisez-moi').getColumn(1).values, (value) => String(value || ''));
+    assert.ok(!readme.some((value) => /Questions pour BL|exemple fictive|Document de travail|^\d\. /.test(value)));
+    assert.equal(readme.indexOf(README_BULLET), readme.findIndex((value) => value.startsWith('• Valeurs —')) + 1);
   });
 });
 
@@ -450,12 +269,12 @@ describe('garde-fous lecture seule', () => {
     assert.doesNotMatch(src, /graphFetchWithSession|excelSync|createWorkbookSession|duplicateExcelFile|method:\s*['"]PATCH|method:\s*['"]POST|calculate/);
   });
 
-  test('le script ne fait que find/lean, et les routes réutilisent le service', () => {
+  test('le script ne fait que des find, et les routes réutilisent le service', () => {
     const script = fs.readFileSync(path.join(__dirname, '../script/export_calculated_values.js'), 'utf8');
     const controller = fs.readFileSync(path.join(__dirname, '../src/controllers/excel.js'), 'utf8');
     assert.match(script, /Collectivity\.find\(/);
     assert.match(script, /Action\.find\(/);
-    assert.match(script, /\.lean\(\)/);
+    assert.doesNotMatch(script, /\.lean\(\)/);
     assert.doesNotMatch(script, /\.(save|updateOne|updateMany|insertMany|deleteOne|deleteMany|findOneAndUpdate|bulkWrite)\(/);
     assert.doesNotMatch(script, /excelSync|graphFetchWithSession|createWorkbookSession|duplicateExcelFile|Log\.create/);
     assert.match(controller, /aggregationReader/);

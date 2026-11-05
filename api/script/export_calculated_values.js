@@ -9,33 +9,50 @@ const config = require('../src/config');
 const Collectivity = require('../src/models/collectivity');
 const Action = require('../src/models/action');
 const EconomicActor = require('../src/models/economic_actor');
-const { ACTION_GAINS_RANGES, CALCULATED_COLUMNS, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
+const { ACTION_GAINS_RANGES, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
 
 // Export local, en lecture seule, des valeurs calculées (émissions, gains, atteinte)
 // lues dans le fichier d'agrégation SharePoint de chaque collectivité.
 //
 // Depuis api/ :
 //   node script/export_calculated_values.js --collectivities <id1,id2|all> \
-//     [--template ../Template_export_Interlud.xlsx] \
-//     [--out ./out/export_valeurs_calculees.xlsx] \
-//     [--include-zero false] [--concurrency 2] [--all-years]
+//     [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx]
 //
-// Mongo : find + lean uniquement. SharePoint : GET de plages, via readAggregationBlocks.
+// Mongo : find uniquement. SharePoint : GET de plages, via readAggregationBlocks.
 // La sortie est un fichier local. Ne pas lancer sur autre chose qu'un petit échantillon au début.
 
-const USAGE = `Usage : node script/export_calculated_values.js --collectivities <id1,id2|all> [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx] [--include-zero false] [--concurrency 2] [--all-years]
+const USAGE = `Usage : node script/export_calculated_values.js --collectivities <id1,id2|all> [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx]
 
 À lancer depuis api/, avec api/.env déjà en place (ne pas afficher ce fichier).
-Lecture seule Mongo (find/lean) et SharePoint (GET). Par défaut : années de la fiche seulement.
---all-years garde 2010-2050. --include-zero true conserve les zéros ; les cellules vides restent omises.`;
+Lecture seule Mongo (find) et SharePoint (GET).`;
 
 const DEFAULT_TEMPLATE = path.resolve(__dirname, '../../Template_export_Interlud.xlsx');
 const DEFAULT_OUT = path.resolve(__dirname, '../out/export_valeurs_calculees.xlsx');
-const PAUSE_MS = 500;
 const SHEET_NAME = 'Valeurs calculées';
-const README_BULLET = "• Valeurs calculées — émissions, gains (écarts entre situations) et taux d'atteinte, une ligne par valeur, lus dans le fichier d'agrégation de la collectivité ou de l'acteur économique (feuilles « 3. Émissions par action » et « 4. Gains par action »).";
+const README_BULLET =
+  "• Valeurs calculées — émissions, gains (écarts entre situations) et taux d'atteinte, une ligne par valeur, lus dans le fichier d'agrégation de la collectivité ou de l'acteur économique (feuilles « 3. Émissions par action » et « 4. Gains par action »). Ce sont les valeurs au moment de l'export : un nouvel export les remplace, sans historique. Ligne Total : atteinte = cumul ex-post ÷ cumul prévisionnel sur toutes les années, comme sur l'accueil.";
+// Fond jaune des lignes d'exemple fictives du template.
+const EXAMPLE_FILL = 'FFFFF8DC';
+const OPTIONS = ['collectivities', 'template', 'out'];
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const CALCULATED_COLUMNS = [
+  { header: 'Collectivité', key: 'collectivite', width: 28 },
+  { header: 'SIREN', key: 'siren', width: 14 },
+  { header: 'Département', key: 'departement', width: 14 },
+  { header: 'Propriétaire', key: 'proprietaire', width: 18 },
+  { header: 'Acteur économique', key: 'acteur', width: 28 },
+  { header: 'Fiche action', key: 'fiche', width: 14 },
+  { header: 'Action de référence', key: 'actionReference', width: 36 },
+  { header: 'Nom de la fiche', key: 'nomFiche', width: 36 },
+  { header: 'Instance', key: 'instance', width: 12 },
+  { header: 'Brouillon', key: 'brouillon', width: 12 },
+  { header: 'Famille', key: 'famille', width: 14 },
+  { header: 'Polluant', key: 'polluant', width: 14 },
+  { header: 'Situation / Écart', key: 'situation', width: 20 },
+  { header: 'Année', key: 'annee', width: 10 },
+  { header: 'Valeur', key: 'valeur', width: 14 },
+  { header: 'Unité', key: 'unite', width: 12 },
+];
 
 const safeError = (error) =>
   String(error && error.message ? error.message : error)
@@ -44,47 +61,16 @@ const safeError = (error) =>
     .replace(/\/items\/[^/\s'"]+/g, '/items/…')
     .slice(0, 400);
 
-const takeValue = (args, index) => {
-  const eq = args[index].indexOf('=');
-  if (eq !== -1) return { value: args[index].slice(eq + 1), next: index };
-  return { value: args[index + 1], next: index + 1 };
-};
-
 const parseArgs = (argv) => {
-  const parsed = { collectivities: '', template: '', out: '', includeZero: false, concurrency: 2, allYears: false };
+  const parsed = { collectivities: '', template: '', out: '' };
   const args = argv.slice(2);
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--all-years') {
-      parsed.allYears = true;
-      continue;
-    }
-    if (arg === '--include-zero' || arg.startsWith('--include-zero=')) {
-      const taken = arg.startsWith('--include-zero=') ? { value: arg.slice('--include-zero='.length), next: i } : takeValue(args, i);
-      i = taken.next;
-      if (taken.value === 'true' || taken.value === 'false') {
-        parsed.includeZero = taken.value === 'true';
-        continue;
-      }
-      if (taken.value === undefined || String(taken.value).startsWith('--')) {
-        parsed.includeZero = true;
-        if (taken.value !== undefined && String(taken.value).startsWith('--')) i -= 1;
-        continue;
-      }
-      throw new Error('--include-zero attend true ou false');
-    }
-    const key = arg.startsWith('--collectivities') ? 'collectivities' : arg.startsWith('--template') ? 'template' : arg.startsWith('--out') ? 'out' : arg.startsWith('--concurrency') ? 'concurrency' : '';
-    if (!key) throw new Error(`Option inconnue : ${arg.split('=')[0]}\n${USAGE}`);
-    const taken = takeValue(args, i);
-    i = taken.next;
-    if (taken.value === undefined || String(taken.value).startsWith('--')) throw new Error(`Valeur manquante pour --${key}\n${USAGE}`);
-    if (key === 'concurrency') {
-      const n = parseInt(taken.value, 10);
-      if (!Number.isFinite(n) || n < 1) throw new Error('--concurrency doit être un entier ≥ 1');
-      parsed.concurrency = n;
-      continue;
-    }
-    parsed[key] = taken.value;
+    const [flag, inline] = args[i].split(/=(.*)/s);
+    const key = OPTIONS.find((option) => flag === `--${option}`);
+    if (!key) throw new Error(`Option inconnue : ${flag}\n${USAGE}`);
+    const value = inline !== undefined ? inline : args[++i];
+    if (value === undefined || value.startsWith('--')) throw new Error(`Valeur manquante pour --${key}\n${USAGE}`);
+    parsed[key] = value;
   }
   if (!parsed.collectivities) throw new Error(USAGE);
   return parsed;
@@ -128,23 +114,6 @@ const jobsForCollectivity = (collectivity, actions, actors) => {
   return { jobs, orphanActorActions: actions.filter((action) => action.owner === 'economic_actor' && !seen.has(String(action._id))).length };
 };
 
-async function runWithConcurrency(items, concurrency, fn) {
-  const results = new Array(items.length);
-  if (!items.length) return results;
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      if (index > 0) await delay(PAUSE_MS);
-      results[index] = await fn(items[index], index);
-    }
-  };
-  const workers = Math.min(concurrency, items.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-  return results;
-}
-
 const moveSheetAfter = (workbook, sheetName, afterName) => {
   const ordered = workbook.worksheets;
   const moved = ordered.find((sheet) => sheet.name === sheetName);
@@ -156,34 +125,53 @@ const moveSheetAfter = (workbook, sheetName, afterName) => {
   });
 };
 
+// Le template contient des lignes d'exemple fictives et des notes de travail pour BL : on ne les garde pas dans l'export.
+const removeTemplateExamples = (workbook) => {
+  for (const sheet of workbook.worksheets) {
+    for (let row = sheet.rowCount; row >= 2; row--) {
+      if (sheet.getRow(row).getCell(1).fill?.fgColor?.argb === EXAMPLE_FILL) sheet.spliceRows(row, 1);
+    }
+  }
+  const readme = workbook.getWorksheet('Lisez-moi');
+  if (!readme) return;
+  // Section « Questions pour BL » jusqu'à la fin (légende comprise), puis la note de travail.
+  // Une ligne à la fois : spliceRows d'exceljs ne fait rien si la plage dépasse la dernière ligne.
+  const values = Array.from(readme.getColumn(1).values, (value) => String(value || ''));
+  const questionsRow = values.indexOf('Questions pour BL');
+  if (questionsRow !== -1) {
+    for (let row = readme.rowCount; row >= questionsRow; row--) readme.spliceRows(row, 1);
+  }
+  const noteRow = values.findIndex((value) => value.startsWith('Document de travail'));
+  if (noteRow !== -1) readme.spliceRows(noteRow, 1);
+};
+
+// Puce insérée sous celle de l'onglet « Valeurs », avec le même style.
 const addReadmeBullet = (workbook) => {
   const sheet = workbook.getWorksheet('Lisez-moi');
   if (!sheet) return;
-  const max = Math.max(sheet.rowCount, 13);
-  for (let row = 1; row <= max; row++) {
-    const value = sheet.getCell(row, 1).value;
-    if (typeof value === 'string' && value.includes('Valeurs calculées')) return;
+  const values = Array.from(sheet.getColumn(1).values, (value) => String(value || ''));
+  if (values.some((value) => value.includes('Valeurs calculées'))) return;
+  const valuesRow = values.findIndex((value) => value.startsWith('• Valeurs'));
+  if (valuesRow === -1) {
+    sheet.addRow([README_BULLET]);
+    return;
   }
-  const target = sheet.getCell(13, 1);
-  const cell = target.value ? sheet.getCell(max + 1, 1) : target;
-  cell.value = README_BULLET;
-  const sample = sheet.getCell(9, 1);
-  if (sample.font) cell.font = { ...sample.font };
+  sheet.insertRow(valuesRow + 1, [README_BULLET], 'i');
 };
 
 const addCalculatedValuesSheet = (workbook, rows) => {
   const existing = workbook.getWorksheet(SHEET_NAME);
   if (existing) workbook.removeWorksheet(existing.id);
   const sheet = workbook.addWorksheet(SHEET_NAME, { views: [{ state: 'frozen', ySplit: 1 }] });
-  sheet.columns = CALCULATED_COLUMNS.map((column) => ({ header: column.header, key: column.key, width: column.width }));
+  sheet.columns = CALCULATED_COLUMNS;
   const header = sheet.getRow(1);
   header.font = { bold: true };
   header.alignment = { wrapText: true, vertical: 'middle' };
   header.height = 30;
   if (rows.length) sheet.addRows(rows);
-  const lastRow = Math.max(sheet.rowCount, 1);
-  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: lastRow, column: CALCULATED_COLUMNS.length } };
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(sheet.rowCount, 1), column: CALCULATED_COLUMNS.length } };
   moveSheetAfter(workbook, SHEET_NAME, 'Valeurs');
+  removeTemplateExamples(workbook);
   addReadmeBullet(workbook);
   return sheet;
 };
@@ -196,13 +184,12 @@ const fileContext = (job) => ({
   actorName: job.actorName,
 });
 
-async function processJob(job, options) {
+async function processJob(job) {
   if (!job.actions.length) return { status: 'ok', label: job.label, rows: [], note: 'aucune fiche' };
   if (!job.fileId) return { status: 'ko', label: job.label, rows: [], error: "pas de fichier d'agrégation" };
   try {
     const { gainsRows, emRows } = await readAggregationBlocks(job.fileId);
-    const rows = rowsForFile({ ...fileContext(job), actions: job.actions, gainsRows, emRows, allYears: options.allYears, includeZero: options.includeZero, extractedAt: options.extractedAt });
-    return { status: 'ok', label: job.label, rows };
+    return { status: 'ok', label: job.label, rows: rowsForFile({ context: fileContext(job), actions: job.actions, gainsRows, emRows }) };
   } catch (error) {
     return { status: 'ko', label: job.label, rows: [], error: safeError(error) };
   }
@@ -225,7 +212,7 @@ async function main() {
 
     const filter = options.collectivities === 'all' ? {} : { _id: { $in: options.collectivities.split(',').map((id) => id.trim()).filter(Boolean) } };
     if (options.collectivities !== 'all' && !filter._id.$in.length) throw new Error('--collectivities est vide');
-    const collectivities = await Collectivity.find(filter).lean();
+    const collectivities = await Collectivity.find(filter);
     if (options.collectivities !== 'all') {
       const found = new Set(collectivities.map((collectivity) => String(collectivity._id)));
       for (const id of filter._id.$in) {
@@ -239,10 +226,9 @@ async function main() {
       collectivity_id: { $in: ids },
       excel_worksheetname: { $in: Object.keys(ACTION_GAINS_RANGES) },
       type: { $nin: ['config', 'global'] },
-    }).lean();
-    const actors = await EconomicActor.find({ 'collectivities.id': { $in: ids } }).lean();
+    });
+    const actors = await EconomicActor.find({ 'collectivities.id': { $in: ids } });
 
-    const extractedAt = new Date().toISOString().slice(0, 10);
     const jobs = [];
     let orphans = 0;
     for (const collectivity of collectivities) {
@@ -256,13 +242,13 @@ async function main() {
     }
     if (orphans) console.warn(`${orphans} fiche(s) d'acteur économique sans fichier d'agrégation identifié, ignorée(s).`);
 
-    console.log(`${jobs.length} fichier(s) d'agrégation à lire (concurrence ${options.concurrency}, pause ${PAUSE_MS} ms).`);
-    const results = await runWithConcurrency(jobs, options.concurrency, async (job, index) => {
-      const result = await processJob(job, { ...options, extractedAt });
-      const detail = result.error ? ` — ${result.error}` : result.note ? ` — ${result.note}` : '';
-      console.log(`[${index + 1}/${jobs.length}] ${result.status === 'ok' ? 'OK' : 'KO'} ${result.label} — ${result.rows.length} ligne(s)${detail}`);
-      return result;
-    });
+    console.log(`${jobs.length} fichier(s) d'agrégation à lire.`);
+    const results = [];
+    for (const [index, job] of jobs.entries()) {
+      const result = await processJob(job);
+      console.log(`[${index + 1}/${jobs.length}] ${result.status === 'ok' ? 'OK' : 'KO'} ${result.label} — ${result.rows.length} ligne(s)${result.error || result.note ? ` — ${result.error || result.note}` : ''}`);
+      results.push(result);
+    }
 
     const rows = results.flatMap((result) => result.rows);
     const ok = results.filter((result) => result.status === 'ok').length;
@@ -295,6 +281,5 @@ module.exports = {
   jobsForCollectivity,
   safeError,
   addCalculatedValuesSheet,
-  runWithConcurrency,
   processJob,
 };

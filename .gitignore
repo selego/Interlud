@@ -11,4 +11,4 @@ docs/passation/
 private/
 
 # Sorties locales du script d'export (jamais commitées)
-out/
+api/out/
