@@ -54,16 +54,16 @@ const INDICATORS_CONFIG = [
   { key: 'Nrj', label: 'Énergie', unit: 'GWh' },
 ];
 
-// 6 écarts par polluant. Les offsets 0, 2, 4 et 5 sont ceux lus par extractAggregation.
-// +1 (Prév-Init) et +3 (Expost-Init) viennent du commentaire historique du contrôleur :
-// ils ne sont pas consommés par le dashboard et les en-têtes SharePoint n'ont pas été relus ici.
+// 6 écarts par polluant, ordre confirmé : +0 Réf-Init, +1 Prév-Init, +2 Prév-Réf,
+// +3 Expost-Init, +4 Expost-Réf, +5 Expost-Prév.
+// Le dashboard (extractAggregation) ne consomme que +0, +2, +4 et +5.
 const GAIN_COLUMNS = [
-  { offset: 0, label: 'Réf-Init', verified: true },
-  { offset: 1, label: 'Prév-Init', verified: false },
-  { offset: 2, label: 'Prév-Réf', verified: true },
-  { offset: 3, label: 'Expost-Init', verified: false },
-  { offset: 4, label: 'Expost-Réf', verified: true },
-  { offset: 5, label: 'Expost-Prév', verified: true },
+  { offset: 0, label: 'Réf-Init' },
+  { offset: 1, label: 'Prév-Init' },
+  { offset: 2, label: 'Prév-Réf' },
+  { offset: 3, label: 'Expost-Init' },
+  { offset: 4, label: 'Expost-Réf' },
+  { offset: 5, label: 'Expost-Prév' },
 ];
 
 const EMISSION_SITUATIONS = [
@@ -220,6 +220,8 @@ async function defaultFetchRange(fileId, worksheet, address) {
   return result?.values || [];
 }
 
+// Chemin normal : une plage par feuille. Les retries 429/5xx sont déjà dans graphFetch.
+// Découpage par bloc d'action seulement si cette lecture part en timeout ou en 504.
 async function readSheetRows(worksheet, ranges, firstRow, lastRow, fetchRange) {
   const fullAddress = sheetRangeAddress(firstRow, lastRow);
   try {

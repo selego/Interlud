@@ -99,16 +99,16 @@ describe('mapping des colonnes', () => {
     assert.equal(actionBlockAddress(190), 'A190:FU230');
   });
 
-  test('offsets de gains : +1 et +3 ne sont pas lus par extractAggregation', () => {
+  test('les 6 écarts de gains sont dans l’ordre confirmé ; le dashboard ne lit pas +1 ni +3', () => {
     assert.deepEqual(
-      GAIN_COLUMNS.map((column) => [column.offset, column.label, column.verified]),
+      GAIN_COLUMNS.map((column) => [column.offset, column.label]),
       [
-        [0, 'Réf-Init', true],
-        [1, 'Prév-Init', false],
-        [2, 'Prév-Réf', true],
-        [3, 'Expost-Init', false],
-        [4, 'Expost-Réf', true],
-        [5, 'Expost-Prév', true],
+        [0, 'Réf-Init'],
+        [1, 'Prév-Init'],
+        [2, 'Prév-Réf'],
+        [3, 'Expost-Init'],
+        [4, 'Expost-Réf'],
+        [5, 'Expost-Prév'],
       ],
     );
     const row = Array(60).fill(0);

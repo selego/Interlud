@@ -9,13 +9,7 @@ const config = require('../src/config');
 const Collectivity = require('../src/models/collectivity');
 const Action = require('../src/models/action');
 const EconomicActor = require('../src/models/economic_actor');
-const {
-  ACTION_GAINS_RANGES,
-  CALCULATED_COLUMNS,
-  readAggregationBlocks,
-  rowsForFile,
-  GAIN_COLUMNS,
-} = require('../src/services/aggregationReader');
+const { ACTION_GAINS_RANGES, CALCULATED_COLUMNS, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
 
 // Export local, en lecture seule, des valeurs calculées (émissions, gains, atteinte)
 // lues dans le fichier d'agrégation SharePoint de chaque collectivité.
@@ -220,8 +214,6 @@ async function main() {
   if (path.resolve(options.template) === path.resolve(options.out)) throw new Error('Le fichier de sortie ne peut pas être le template.');
   if (!config.MONGODB_ENDPOINT) throw new Error('MONGODB_ENDPOINT est absent (api/.env). Ne pas coller son contenu dans le terminal.');
 
-  const unverified = GAIN_COLUMNS.filter((column) => !column.verified).map((column) => `+${column.offset} ${column.label}`).join(', ');
-  console.log(`Note : écarts de gains non confirmés sur les en-têtes SharePoint (${unverified}). Ordre repris du commentaire de extractAggregation, qui ne lit pas ces deux colonnes.`);
   console.log(`Template : ${options.template}`);
   console.log(`Sortie   : ${options.out}`);
 
