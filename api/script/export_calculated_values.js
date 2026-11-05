@@ -210,14 +210,13 @@ async function main() {
     await mongoose.connect(config.MONGODB_ENDPOINT);
     connected = true;
 
-    const filter = options.collectivities === 'all' ? {} : { _id: { $in: options.collectivities.split(',').map((id) => id.trim()).filter(Boolean) } };
-    if (options.collectivities !== 'all' && !filter._id.$in.length) throw new Error('--collectivities est vide');
-    const collectivities = await Collectivity.find(filter);
-    if (options.collectivities !== 'all') {
-      const found = new Set(collectivities.map((collectivity) => String(collectivity._id)));
-      for (const id of filter._id.$in) {
-        if (!found.has(id)) console.warn(`Collectivité introuvable : ${id}`);
-      }
+    // Mongoose convertit le filtre en ObjectId sur place : on garde la liste demandée à part.
+    const requested = options.collectivities === 'all' ? [] : options.collectivities.split(',').map((id) => id.trim()).filter(Boolean);
+    if (options.collectivities !== 'all' && !requested.length) throw new Error('--collectivities est vide');
+    const collectivities = await Collectivity.find(options.collectivities === 'all' ? {} : { _id: { $in: requested } });
+    const found = new Set(collectivities.map((collectivity) => String(collectivity._id)));
+    for (const id of requested) {
+      if (!found.has(id)) console.warn(`Collectivité introuvable : ${id}`);
     }
     if (!collectivities.length) throw new Error('Aucune collectivité trouvée.');
 
