@@ -17,7 +17,9 @@ import GeneralData from "@/scenes/general-data"
 import AdminUsers from "@/scenes/admin/users"
 import AdminEconomicActors from "@/scenes/admin/economic-actors"
 import AdminSuivi from "@/scenes/admin/suivi"
+import AdminEconomicActorQuestions from "@/scenes/admin/economic-actor-questions"
 import EconomicActor from "@/scenes/economic-actor"
+import Questionnaire from "@/scenes/questionnaire"
 import NotFound from "@/scenes/not-found"
 import Conditions from "@/scenes/confidentiality/conditions"
 import Politique from "@/scenes/confidentiality/politique"
@@ -69,12 +71,14 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/collectivity/*" element={<Collectivity />} />
           <Route path="/economic-actor" element={<EconomicActor />} />
+          <Route path="/questionnaire" element={<Questionnaire />} />
           <Route path="/a-propos" element={<div>À propos</div>} />
           <Route path="/admin/action/*" element={<AdminAction />} />
           <Route path="/admin/collectivity/*" element={<AdminCollectivity />} />
           <Route path="/admin/indicator/*" element={<AdminIndicator />} />
           <Route path="/admin/economic-actors/*" element={<AdminEconomicActors />} />
           <Route path="/admin/suivi" element={<AdminSuivi />} />
+          <Route path="/admin/economic-actor-questions/*" element={<AdminEconomicActorQuestions />} />
           <Route path="/general-data" element={<GeneralData />} />
         </Route>
         <Route path="*" element={<NotFound />} />

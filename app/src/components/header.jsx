@@ -198,6 +198,10 @@ export default function Header() {
             text: "Mon organisation",
             linkProps: { to: "/economic-actor" }
           },
+          user.role === "economic_actor" && {
+            text: "Questionnaire",
+            linkProps: { to: "/questionnaire" }
+          },
           {
             text: "Mes Actions",
             linkProps: { to: "/actions" }
@@ -238,6 +242,10 @@ export default function Header() {
             {
               linkProps: { to: "/admin/economic-actors" },
               text: "Acteurs économiques"
+            },
+            {
+              linkProps: { to: "/admin/economic-actor-questions" },
+              text: "Questionnaire acteurs éco"
             }
           ]
         },
