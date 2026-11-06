@@ -10,7 +10,7 @@ const ExcelJS = require('exceljs');
 const { GAINS_FIRST_ROW, EMISSIONS_FIRST_ROW, ACTION_GAINS_RANGES, ACTION_EMISSIONS_RANGES, GAIN_COLUMNS, parseNumber, cellNumber, extractAggregation, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
 const graph = require('../src/services/microsoftGraph');
 
-const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, README_TITLE, SHEET_NAME, EXCEL_MAX_ROWS } = require('../script/export_calculated_values');
+const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, README_TITLE, SHEET_NAME, EXCEL_MAX_ROWS, ANSWERS_SHEET_NAME, answerRows, addAnswersSheet } = require('../script/export_calculated_values');
 
 // Feuilles complètes A19:FU572 et A21:FU574.
 const blankSheet = () => Array.from({ length: 554 }, () => []);
@@ -185,7 +185,8 @@ describe('script', () => {
   test('arguments', () => {
     assert.throws(() => parseArgs(['node', 'script']), /Usage/);
     const parsed = parseArgs(['node', 'script', '--collectivities', 'a,b', '--template', './t.xlsx', '--out=./out/x.xlsx']);
-    assert.deepEqual(parsed, { collectivities: 'a,b', template: './t.xlsx', out: './out/x.xlsx' });
+    assert.deepEqual(parsed, { collectivities: 'a,b', template: './t.xlsx', out: './out/x.xlsx', withAnswers: false });
+    assert.equal(parseArgs(['node', 'script', '--collectivities', 'all', '--with-answers']).withAnswers, true);
     assert.throws(() => parseArgs(['node', 'script', '--collectivities=all', '--all-years']), /Option inconnue/);
     assert.throws(() => parseArgs(['node', 'script', '--collectivities', '--out', 'x']), /Valeur manquante/);
   });
@@ -236,6 +237,57 @@ describe('script', () => {
     assert.ok(sheet.autoFilter);
     assert.equal(readme.getCell('A10').value, README_BULLET);
     assert.equal(readme.getColumn(1).values.filter((value) => value === README_BULLET).length, 1);
+  });
+
+  test('réponses acteurs éco : une ligne par acteur et question active, plus les questions désactivées déjà répondues', () => {
+    const actors = [
+      { _id: 'ea1', name: 'Transports Un', collectivities: [{ id: 'c1', name: 'CA Exemple' }, { id: 'c2', name: 'CC Voisine' }] },
+      { _id: 'ea2', name: 'Livraisons Deux', collectivities: [{ id: 'c1', name: 'CA Exemple' }] },
+    ];
+    const questions = [
+      { _id: 'q1', label: 'Nombre de véhicules', type: 'number', value_unit: 'véh.', active: true, actions: [{ id: 'g1', name: 'C1' }] },
+      { _id: 'q2', label: 'Énergies utilisées', type: 'checkbox', active: true, actions: [] },
+      { _id: 'q3', label: 'Ancienne question', type: 'text', active: false, actions: [] },
+    ];
+    const updatedAt = new Date('2026-11-06T10:00:00Z');
+    const answers = [
+      { economic_actor_id: 'ea1', question_id: 'q1', value: { number: 12 }, updatedAt },
+      { economic_actor_id: 'ea1', question_id: 'q2', value: { checkbox: ['Diesel', 'Électrique'] }, updatedAt },
+      { economic_actor_id: 'ea2', question_id: 'q3', value: { text: 'oui' }, updatedAt },
+    ];
+    const rows = answerRows({ actors, questions, answers });
+    assert.deepEqual(
+      rows.map((row) => [row.acteur, row.question, row.reponse]),
+      [
+        ['Transports Un', 'Nombre de véhicules', 12],
+        ['Transports Un', 'Énergies utilisées', 'Diesel, Électrique'],
+        ['Livraisons Deux', 'Nombre de véhicules', ''],
+        ['Livraisons Deux', 'Énergies utilisées', ''],
+        ['Livraisons Deux', 'Ancienne question', 'oui'],
+      ],
+    );
+    assert.equal(rows[0].collectivites, 'CA Exemple, CC Voisine');
+    assert.equal(rows[0].fiches, 'C1');
+    assert.equal(rows[0].unite, 'véh.');
+    assert.equal(rows[0].misAJour, updatedAt);
+    assert.equal(rows[2].misAJour, null);
+    assert.equal(rows[4].active, 'Non');
+  });
+
+  test('onglet des réponses placé après les valeurs calculées', () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('Lisez-moi');
+    wb.addWorksheet('Valeurs');
+    wb.addWorksheet('Actions');
+    addCalculatedValuesSheet(wb, []);
+    addAnswersSheet(wb, [{ acteur: 'Transports Un', question: 'Nombre de véhicules', reponse: 12 }]);
+    addAnswersSheet(wb, [{ acteur: 'Transports Un', question: 'Nombre de véhicules', reponse: 12 }]);
+    assert.deepEqual(wb.worksheets.map((sheet) => sheet.name), ['Lisez-moi', 'Valeurs', SHEET_NAME, ANSWERS_SHEET_NAME, 'Actions']);
+    const sheet = wb.getWorksheet(ANSWERS_SHEET_NAME);
+    assert.equal(sheet.getRow(1).getCell(1).value, 'Acteur économique');
+    assert.equal(sheet.getRow(2).getCell(1).value, 'Transports Un');
+    assert.equal(sheet.rowCount, 2);
+    assert.equal(sheet.views[0].state, 'frozen');
   });
 
   test('sortie sans les exemples fictifs ni les questions, template du dépôt intact', async () => {
@@ -366,6 +418,7 @@ describe('garde-fous lecture seule', () => {
     const controller = fs.readFileSync(path.join(__dirname, '../src/controllers/excel.js'), 'utf8');
     assert.match(script, /Collectivity\.find\(/);
     assert.match(script, /Action\.find\(/);
+    assert.match(script, /EconomicActorAnswer\.find\(/);
     assert.doesNotMatch(script, /\.lean\(\)/);
     assert.doesNotMatch(script, /\.(save|updateOne|updateMany|insertMany|deleteOne|deleteMany|findOneAndUpdate|bulkWrite)\(/);
     assert.doesNotMatch(script, /excelSync|graphFetchWithSession|createWorkbookSession|duplicateExcelFile|Log\.create/);
