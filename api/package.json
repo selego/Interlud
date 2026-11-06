@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon ./src/index.js",
     "start": "node ./src/index.js",
-    "test": "node --test test/export_calculated_values.test.js"
+    "test": "node --test test/export_calculated_values.test.js test/economic_actor_questionnaire.test.js"
   },
   "author": "",
   "license": "MIT",
