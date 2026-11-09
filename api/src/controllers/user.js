@@ -20,9 +20,30 @@ const { capture } = require('../services/sentry');
 
 // 1 year
 const COOKIE_MAX_AGE = 31557600000;
-
-const USER_UPDATABLE_FIELDS = ['name', 'email', 'status', 'notifications_email', 'notifications_push', 'rgpd_accepted_at', 'collectivities'];
 const JWT_MAX_AGE = '1y';
+
+// Champs qu'un non-admin peut modifier sur son propre compte
+const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifications_push', 'rgpd_accepted_at'];
+// Champs qu'un admin de collectivité peut modifier sur un membre de sa collectivité
+const MEMBER_UPDATABLE_FIELDS = ['name', 'status', 'collectivities'];
+
+// Modifications de PUT /user/:id autorisées pour un non-admin, ou null si refusé
+const getUserUpdate = (reqUser, target, body) => {
+  const adminIds = (reqUser.collectivities || []).filter((c) => c.role === 'admin' && c.status === 'approved').map((c) => String(c.id));
+  const isSelf = reqUser._id.toString() === target._id.toString();
+  if (!isSelf && target.role === 'admin') return null;
+  if (!isSelf && !(target.collectivities || []).some((c) => adminIds.includes(String(c.id)))) return null;
+  // Changer l'email d'un autre compte permettrait d'en prendre le contrôle via forgot_password
+  if (!isSelf && body?.email !== undefined && String(body.email).trim().toLowerCase() !== target.email) return null;
+
+  const update = pickFields(body, isSelf ? [...USER_UPDATABLE_FIELDS, 'collectivities'] : MEMBER_UPDATABLE_FIELDS);
+  if (update.collectivities) {
+    const kept = (target.collectivities || []).filter((c) => !adminIds.includes(String(c.id)));
+    const updated = (Array.isArray(update.collectivities) ? update.collectivities : []).filter((c) => adminIds.includes(String(c?.id)));
+    update.collectivities = [...kept, ...updated];
+  }
+  return update;
+};
 
 // Logo InTerLUD+ pour les emails (URL publique)
 const INTERLUD_LOGO_URL = 'https://www.interlud.green/images/interlud-plus@2x.png';
@@ -341,21 +362,26 @@ router.post('/', passport.authenticate(['admin'], { session: false }), async (re
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
     const user = await UserObject.findById(req.params.id);
-    user.set(req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS));
+    if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    const update = req.user.role === 'admin' ? req.body : getUserUpdate(req.user, user, req.body);
+    if (!update) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    user.set(update);
     await user.save();
 
     res.status(200).send({ ok: true, data: user });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
   }
 });
 
-router.put('/', passport.authenticate(['admin', 'user', 'applicant'], { session: false }), async (req, res) => {
+router.put('/', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS), { new: true });
+    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS), { new: true, runValidators: true });
     res.status(200).send({ ok: true, data });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
   }
