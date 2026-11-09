@@ -112,11 +112,11 @@ async function graphFetch(endpoint, options = {}) {
 // Sessions workbook persistantes : garantissent que les écritures, le recalcul des formules et les lectures
 // qui suivent voient le même état du classeur (sans session, chaque appel ouvre une session éphémère côté
 // SharePoint et une lecture peut tomber sur un état pas encore recalculé)
-async function createWorkbookSession(fileId) {
+async function createWorkbookSession(fileId, persistChanges = true) {
   const siteId = await getSiteId();
   const session = await graphFetch(`/sites/${siteId}/drive/items/${fileId}/workbook/createSession`, {
     method: 'POST',
-    body: JSON.stringify({ persistChanges: true }),
+    body: JSON.stringify({ persistChanges }),
   });
   return session?.id || null;
 }

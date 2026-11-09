@@ -1,6 +1,6 @@
 // Lecture des feuilles d'agrégation « 3. Émissions par action » et « 4. Gains par action ».
-// GET de plages uniquement : pas de session workbook, pas d'écriture SharePoint.
-// Les routes /excel/* importent les constantes et extractAggregation ; leur réponse ne change pas.
+// GET de plages uniquement, dans une session workbook non persistante : pas d'écriture SharePoint.
+// Les routes /excel/* importent les constantes et extractAggregation.
 
 const GAINS_WORKSHEET = '4. Gains par action';
 const EMISSIONS_WORKSHEET = '3. Émissions par action';
@@ -160,14 +160,23 @@ const blockYearRows = (gainsRows, emRows, key) => ({
 // { gainsRows, emRows } alignés sur A19:FU572 et A21:FU574 (ligne 0 = première ligne de la plage, colonne 0 = A).
 async function readAggregationBlocks(aggregationFileId) {
   if (!aggregationFileId) throw new Error("Identifiant de fichier d'agrégation manquant");
-  const { graphFetch, getSiteId } = require('./microsoftGraph');
+  const { graphFetch, getSiteId, createWorkbookSession, closeWorkbookSession } = require('./microsoftGraph');
   const siteId = await getSiteId();
+  // Sans session, les GET restent sans effet sur le fichier : on lit quand même, plus lentement.
+  const sessionId = await createWorkbookSession(aggregationFileId, false).catch((error) => {
+    console.warn(`[aggregationReader] Session de lecture indisponible, lecture sans session : ${error.message}`);
+    return null;
+  });
   const readSheet = async (worksheet, firstRow, lastRow) => {
-    const result = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(worksheet)}/range(address='A${firstRow}:FU${lastRow}')`);
+    const result = await graphFetch(`/sites/${siteId}/drive/items/${aggregationFileId}/workbook/worksheets/${encodeURIComponent(worksheet)}/range(address='A${firstRow}:FU${lastRow}')`, sessionId ? { headers: { 'workbook-session-id': sessionId } } : {});
     return result?.values || [];
   };
-  const [gainsRows, emRows] = await Promise.all([readSheet(GAINS_WORKSHEET, GAINS_FIRST_ROW, GAINS_LAST_ROW), readSheet(EMISSIONS_WORKSHEET, EMISSIONS_FIRST_ROW, EMISSIONS_LAST_ROW)]);
-  return { gainsRows, emRows };
+  try {
+    const [gainsRows, emRows] = await Promise.all([readSheet(GAINS_WORKSHEET, GAINS_FIRST_ROW, GAINS_LAST_ROW), readSheet(EMISSIONS_WORKSHEET, EMISSIONS_FIRST_ROW, EMISSIONS_LAST_ROW)]);
+    return { gainsRows, emRows };
+  } finally {
+    await closeWorkbookSession(aggregationFileId, sessionId).catch(() => {});
+  }
 }
 
 // Atteinte d'une instance : même règle que le dashboard d'action (extractAggregation).

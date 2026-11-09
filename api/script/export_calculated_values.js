@@ -23,12 +23,15 @@ const { ACTION_GAINS_RANGES, readAggregationBlocks, rowsForFile } = require('../
 
 const USAGE = `Usage : node script/export_calculated_values.js --collectivities <id1,id2|all> [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx]
 
-À lancer depuis api/, avec api/.env déjà en place (ne pas afficher ce fichier).
+À lancer depuis api/ (api/.env requis).
 Lecture seule Mongo (find) et SharePoint (GET).`;
 
 const DEFAULT_TEMPLATE = path.resolve(__dirname, '../../Template_export_Interlud.xlsx');
 const DEFAULT_OUT = path.resolve(__dirname, '../out/export_valeurs_calculees.xlsx');
 const SHEET_NAME = 'Valeurs calculées';
+// Nombre maximal de lignes d'une feuille Excel, en-tête compris.
+const EXCEL_MAX_ROWS = 1048576;
+const README_TITLE = 'Export des données Interlud+';
 const README_BULLET =
   "• Valeurs calculées — émissions, gains (écarts entre situations) et taux d'atteinte, une ligne par valeur, lus dans le fichier d'agrégation de la collectivité ou de l'acteur économique (feuilles « 3. Émissions par action » et « 4. Gains par action »). Ce sont les valeurs au moment de l'export : un nouvel export les remplace, sans historique. Ligne Total : atteinte = cumul ex-post ÷ cumul prévisionnel sur toutes les années, comme sur l'accueil.";
 // Fond jaune des lignes d'exemple fictives du template.
@@ -134,15 +137,18 @@ const removeTemplateExamples = (workbook) => {
   }
   const readme = workbook.getWorksheet('Lisez-moi');
   if (!readme) return;
-  // Section « Questions pour BL » jusqu'à la fin (légende comprise), puis la note de travail.
-  // Une ligne à la fois : spliceRows d'exceljs ne fait rien si la plage dépasse la dernière ligne.
-  const values = Array.from(readme.getColumn(1).values, (value) => String(value || ''));
-  const questionsRow = values.indexOf('Questions pour BL');
+  const findRow = (predicate) => Array.from(readme.getColumn(1).values, (value) => String(value || '')).findIndex(predicate);
+  const titleRow = findRow((value) => value.startsWith("Template d'export"));
+  if (titleRow !== -1) readme.getCell(titleRow, 1).value = README_TITLE;
+  for (const draft of ['Document de travail', "L'export serait"]) {
+    const row = findRow((value) => value.startsWith(draft));
+    if (row !== -1) readme.spliceRows(row, 1);
+  }
+  // Section « Questions pour BL » jusqu'à la fin, une ligne à la fois : spliceRows d'exceljs ne fait rien si la plage dépasse la dernière ligne.
+  const questionsRow = findRow((value) => value === 'Questions pour BL');
   if (questionsRow !== -1) {
     for (let row = readme.rowCount; row >= questionsRow; row--) readme.spliceRows(row, 1);
   }
-  const noteRow = values.findIndex((value) => value.startsWith('Document de travail'));
-  if (noteRow !== -1) readme.spliceRows(noteRow, 1);
 };
 
 // Puce insérée sous celle de l'onglet « Valeurs », avec le même style.
@@ -160,6 +166,10 @@ const addReadmeBullet = (workbook) => {
 };
 
 const addCalculatedValuesSheet = (workbook, rows) => {
+  if (rows.length + 1 > EXCEL_MAX_ROWS) {
+    throw new Error(`Export annulé : l'onglet « ${SHEET_NAME} » compterait ${rows.length + 1} lignes (en-tête compris), au-delà de la limite Excel de ${EXCEL_MAX_ROWS}. Relancer avec moins de collectivités.`);
+  }
+  removeTemplateExamples(workbook);
   const existing = workbook.getWorksheet(SHEET_NAME);
   if (existing) workbook.removeWorksheet(existing.id);
   const sheet = workbook.addWorksheet(SHEET_NAME, { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -171,7 +181,6 @@ const addCalculatedValuesSheet = (workbook, rows) => {
   if (rows.length) sheet.addRows(rows);
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(sheet.rowCount, 1), column: CALCULATED_COLUMNS.length } };
   moveSheetAfter(workbook, SHEET_NAME, 'Valeurs');
-  removeTemplateExamples(workbook);
   addReadmeBullet(workbook);
   return sheet;
 };
@@ -199,7 +208,7 @@ async function main() {
   const options = resolvePaths(parseArgs(process.argv));
   if (!fs.existsSync(options.template)) throw new Error(`Template introuvable : ${options.template}`);
   if (path.resolve(options.template) === path.resolve(options.out)) throw new Error('Le fichier de sortie ne peut pas être le template.');
-  if (!config.MONGODB_ENDPOINT) throw new Error('MONGODB_ENDPOINT est absent (api/.env). Ne pas coller son contenu dans le terminal.');
+  if (!config.MONGODB_ENDPOINT) throw new Error('MONGODB_ENDPOINT absent : api/.env requis.');
 
   console.log(`Template : ${options.template}`);
   console.log(`Sortie   : ${options.out}`);
@@ -213,7 +222,7 @@ async function main() {
     // Mongoose convertit le filtre en ObjectId sur place : on garde la liste demandée à part.
     const requested = options.collectivities === 'all' ? [] : options.collectivities.split(',').map((id) => id.trim()).filter(Boolean);
     if (options.collectivities !== 'all' && !requested.length) throw new Error('--collectivities est vide');
-    const collectivities = await Collectivity.find(options.collectivities === 'all' ? {} : { _id: { $in: requested } });
+    const collectivities = await Collectivity.find(options.collectivities === 'all' ? {} : { _id: { $in: requested.filter((id) => mongoose.isValidObjectId(id)) } });
     const found = new Set(collectivities.map((collectivity) => String(collectivity._id)));
     for (const id of requested) {
       if (!found.has(id)) console.warn(`Collectivité introuvable : ${id}`);
@@ -274,7 +283,9 @@ if (require.main === module) {
 module.exports = {
   USAGE,
   README_BULLET,
+  README_TITLE,
   SHEET_NAME,
+  EXCEL_MAX_ROWS,
   parseArgs,
   resolvePaths,
   jobsForCollectivity,

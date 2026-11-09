@@ -7,9 +7,10 @@ const path = require('path');
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 
-const { GAINS_FIRST_ROW, EMISSIONS_FIRST_ROW, ACTION_GAINS_RANGES, ACTION_EMISSIONS_RANGES, GAIN_COLUMNS, parseNumber, cellNumber, extractAggregation, rowsForFile } = require('../src/services/aggregationReader');
+const { GAINS_FIRST_ROW, EMISSIONS_FIRST_ROW, ACTION_GAINS_RANGES, ACTION_EMISSIONS_RANGES, GAIN_COLUMNS, parseNumber, cellNumber, extractAggregation, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
+const graph = require('../src/services/microsoftGraph');
 
-const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, SHEET_NAME } = require('../script/export_calculated_values');
+const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, README_TITLE, SHEET_NAME, EXCEL_MAX_ROWS } = require('../script/export_calculated_values');
 
 // Feuilles complètes A19:FU572 et A21:FU574.
 const blankSheet = () => Array.from({ length: 554 }, () => []);
@@ -257,8 +258,98 @@ describe('script', () => {
       assert.ok(sheet.getCell('A1').value);
     }
     const readme = Array.from(check.getWorksheet('Lisez-moi').getColumn(1).values, (value) => String(value || ''));
-    assert.ok(!readme.some((value) => /Questions pour BL|exemple fictive|Document de travail|^\d\. /.test(value)));
+    assert.ok(!readme.some((value) => /Questions pour BL|exemple fictive|Document de travail|proposition de format|L'export serait|^\d\. /.test(value)));
+    assert.equal(readme[1], README_TITLE);
     assert.equal(readme.indexOf(README_BULLET), readme.findIndex((value) => value.startsWith('• Valeurs —')) + 1);
+  });
+
+  test('Lisez-moi : brouillon retiré sans dépendre des numéros de ligne', () => {
+    const wb = new ExcelJS.Workbook();
+    const readme = wb.addWorksheet('Lisez-moi');
+    ["Template d'export — proposition de format", 'Garder', 'Document de travail Selego → BL', "L'export serait généré à la demande.", '• Valeurs — exemple', 'Questions pour BL', '1. Question', 'Légende'].forEach((value, index) => {
+      readme.getCell(index + 1, 1).value = value;
+    });
+    readme.getCell(8, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8DC' } };
+    addCalculatedValuesSheet(wb, []);
+    assert.deepEqual(readme.getColumn(1).values.slice(1), [README_TITLE, 'Garder', '• Valeurs — exemple', README_BULLET]);
+  });
+
+  test('les exemples du template sont retirés avant la création de l’onglet', (t) => {
+    const wb = new ExcelJS.Workbook();
+    const values = wb.addWorksheet('Valeurs');
+    values.getCell('A1').value = 'En-tête';
+    values.getCell('A2').value = 'Exemple';
+    values.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8DC' } };
+    const addWorksheet = wb.addWorksheet.bind(wb);
+    const rowsWhenAdded = [];
+    t.mock.method(wb, 'addWorksheet', (...args) => {
+      rowsWhenAdded.push(values.actualRowCount);
+      return addWorksheet(...args);
+    });
+    addCalculatedValuesSheet(wb, []);
+    assert.deepEqual(rowsWhenAdded, [1]);
+  });
+
+  test('garde-fou volume : au-delà de la limite Excel, rien n’est ajouté', () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('Valeurs');
+    assert.throws(() => addCalculatedValuesSheet(wb, new Array(EXCEL_MAX_ROWS)), /1048577 lignes \(en-tête compris\), au-delà de la limite Excel de 1048576/);
+    assert.equal(wb.getWorksheet(SHEET_NAME), undefined);
+  });
+});
+
+describe('lecture sous session non persistante', () => {
+  const mockGraph = (t, { session }) => {
+    const calls = { fetch: [], create: [], close: [] };
+    t.mock.method(graph, 'getSiteId', async () => 'site');
+    t.mock.method(graph, 'createWorkbookSession', async (...args) => {
+      calls.create.push(args);
+      if (session instanceof Error) throw session;
+      return session;
+    });
+    t.mock.method(graph, 'closeWorkbookSession', async (...args) => {
+      calls.close.push(args);
+    });
+    return calls;
+  };
+
+  test('les deux plages sont lues sous la session, fermée ensuite', async (t) => {
+    const calls = mockGraph(t, { session: 'sid' });
+    t.mock.method(graph, 'graphFetch', async (endpoint, options) => {
+      calls.fetch.push([endpoint, options]);
+      return { values: [[endpoint.includes('Gains') ? 'g' : 'e']] };
+    });
+    assert.deepEqual(await readAggregationBlocks('file'), { gainsRows: [['g']], emRows: [['e']] });
+    assert.deepEqual(calls.create, [['file', false]]);
+    assert.equal(calls.fetch.length, 2);
+    for (const [, options] of calls.fetch) {
+      assert.equal(options.headers['workbook-session-id'], 'sid');
+      assert.equal(options.method, undefined);
+    }
+    assert.deepEqual(calls.close, [['file', 'sid']]);
+  });
+
+  test('la session est fermée même si une lecture échoue', async (t) => {
+    const calls = mockGraph(t, { session: 'sid' });
+    t.mock.method(graph, 'graphFetch', async () => {
+      throw new Error('Graph API error: 503');
+    });
+    await assert.rejects(readAggregationBlocks('file'), /503/);
+    assert.deepEqual(calls.close, [['file', 'sid']]);
+  });
+
+  test('sans session possible, lecture sans session et avertissement', async (t) => {
+    const calls = mockGraph(t, { session: new Error('Graph API error: 403') });
+    const warn = t.mock.method(console, 'warn', () => {});
+    t.mock.method(graph, 'graphFetch', async (endpoint, options) => {
+      calls.fetch.push([endpoint, options]);
+      return { values: [] };
+    });
+    assert.deepEqual(await readAggregationBlocks('file'), { gainsRows: [], emRows: [] });
+    assert.equal(calls.fetch.length, 2);
+    for (const [, options] of calls.fetch) assert.deepEqual(options, {});
+    assert.equal(warn.mock.callCount(), 1);
+    assert.match(warn.mock.calls[0].arguments[0], /lecture sans session/);
   });
 });
 
@@ -266,7 +357,8 @@ describe('garde-fous lecture seule', () => {
   test('le service ne déclenche pas d’écriture SharePoint', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/services/aggregationReader.js'), 'utf8');
     assert.match(src, /graphFetch\(/);
-    assert.doesNotMatch(src, /graphFetchWithSession|excelSync|createWorkbookSession|duplicateExcelFile|method:\s*['"]PATCH|method:\s*['"]POST|calculate/);
+    assert.match(src, /createWorkbookSession\(aggregationFileId, false\)/);
+    assert.doesNotMatch(src, /graphFetchWithSession|excelSync|duplicateExcelFile|method:\s*['"]PATCH|method:\s*['"]POST|calculate/);
   });
 
   test('le script ne fait que des find, et les routes réutilisent le service', () => {
