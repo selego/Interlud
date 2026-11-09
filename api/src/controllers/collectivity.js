@@ -6,6 +6,9 @@ const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const { createFolder, duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
+const { pickFields } = require('../utils');
+
+const COLLECTIVITY_UPDATABLE_FIELDS = ['name', 'description', 'department', 'population', 'siren', 'area'];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -21,8 +24,14 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const collectivity = await Collectivity.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const collectivity = await Collectivity.findById(req.params.id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (req.user.role !== 'admin' && !req.user.collectivities.some((c) => c.id === collectivity._id.toString() && c.status === 'approved' && c.role === 'admin')) {
+      return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    }
+
+    collectivity.set(req.user.role === 'admin' ? req.body : pickFields(req.body, COLLECTIVITY_UPDATABLE_FIELDS));
+    await collectivity.save();
     return res.status(200).send({ ok: true, data: collectivity });
   } catch (error) {
     capture(error);

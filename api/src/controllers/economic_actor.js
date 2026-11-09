@@ -8,6 +8,9 @@ const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 const { duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
+const { pickFields } = require('../utils');
+
+const ECONOMIC_ACTOR_UPDATABLE_FIELDS = ['name', 'description'];
 
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
@@ -56,8 +59,24 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const actor = await EconomicActor.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const actor = await EconomicActor.findById(req.params.id);
     if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    if (req.user.role === 'admin') {
+      actor.set(req.body);
+      await actor.save();
+      return res.status(200).send({ ok: true, data: actor });
+    }
+
+    // Un admin de collectivité peut seulement rattacher l'acteur à ses propres collectivités (approbation d'un utilisateur acteur)
+    const isActor = req.user.economic_actor_id === actor._id.toString();
+    const adminCollectivityIds = req.user.collectivities.filter((c) => c.status === 'approved' && c.role === 'admin').map((c) => c.id);
+    const addedCollectivities = (Array.isArray(req.body.collectivities) ? req.body.collectivities : []).filter((c) => adminCollectivityIds.includes(c?.id) && !actor.collectivities.some((ac) => ac.id === c.id));
+    if (!isActor && addedCollectivities.length === 0) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+
+    if (isActor) actor.set(pickFields(req.body, ECONOMIC_ACTOR_UPDATABLE_FIELDS));
+    for (const c of addedCollectivities) actor.collectivities.push({ id: c.id, name: c.name, joined_at: c.joined_at });
+    await actor.save();
     return res.status(200).send({ ok: true, data: actor });
   } catch (error) {
     capture(error);

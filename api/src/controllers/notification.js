@@ -4,6 +4,9 @@ const passport = require('passport');
 const Notification = require('../models/notification');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
+const { pickFields } = require('../utils');
+
+const NOTIFICATION_UPDATABLE_FIELDS = ['read_at'];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -19,8 +22,12 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const notification = await Notification.findById(req.params.id);
     if (!notification) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (req.user.role !== 'admin' && notification.user_id !== req.user._id.toString()) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+
+    notification.set(req.user.role === 'admin' ? req.body : pickFields(req.body, NOTIFICATION_UPDATABLE_FIELDS));
+    await notification.save();
     return res.status(200).send({ ok: true, data: notification });
   } catch (error) {
     capture(error);
