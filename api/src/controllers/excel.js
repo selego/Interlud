@@ -3,118 +3,11 @@ const passport = require('passport');
 const router = express.Router();
 const { capture } = require('../services/sentry');
 const { graphFetchWithSession, getSiteId, exportExcelFile, sharePointSiteName } = require('../services/microsoftGraph');
+const { GAINS_WORKSHEET, EMISSIONS_WORKSHEET, ACTION_GAINS_RANGES, ACTION_EMISSIONS_RANGES, EMISSION_TYPES, INSTANCE_END_COL, INDICATORS_CONFIG, extractAggregation } = require('../services/aggregationReader');
 const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
-
-const GAINS_WORKSHEET = '4. Gains par action';
-const EMISSIONS_WORKSHEET = '3. Émissions par action';
-// Blocs par action espacés de 57 lignes dans les deux feuilles (pas de C5 ni C8)
-const ACTION_GAINS_RANGES = {
-  B2: { dataStartRow: 19 },
-  B3: { dataStartRow: 76 },
-  B4: { dataStartRow: 133 },
-  C1: { dataStartRow: 190 },
-  C2: { dataStartRow: 247 },
-  C3: { dataStartRow: 304 },
-  C4: { dataStartRow: 361 },
-  C6: { dataStartRow: 418 },
-  C7: { dataStartRow: 475 },
-  C9: { dataStartRow: 532 },
-};
-const ACTION_EMISSIONS_RANGES = {
-  B2: { dataStartRow: 21 },
-  B3: { dataStartRow: 78 },
-  B4: { dataStartRow: 135 },
-  C1: { dataStartRow: 192 },
-  C2: { dataStartRow: 249 },
-  C3: { dataStartRow: 306 },
-  C4: { dataStartRow: 363 },
-  C6: { dataStartRow: 420 },
-  C7: { dataStartRow: 477 },
-  C9: { dataStartRow: 534 },
-};
-const EMISSION_TYPES = ['GES', 'PM', 'NOx', 'HC', 'CO', 'Nrj'];
-// Instance-specific column offsets (0-indexed): instance 1 = AW(48), instance 2 = CO(92), instance 3 = EG(136)
-const INSTANCE_COL_OFFSET = { 1: 48, 2: 92, 3: 136 };
-const INSTANCE_EMISSION_COL = { GES: 0, PM: 7, NOx: 14, HC: 21, CO: 28, Nrj: 35 };
-const INSTANCE_END_COL = { 1: 'CK', 2: 'EC', 3: 'FU' };
-
-const INDICATORS_CONFIG = [
-  { key: 'GES', label: 'GES', unit: 'tCO2e' },
-  { key: 'PM', label: 'PM', unit: 'tPart' },
-  { key: 'HC', label: 'HC', unit: 'tHC' },
-  { key: 'NOx', label: 'NOx', unit: 'tNOx' },
-  { key: 'CO', label: 'CO', unit: 'tCO' },
-  { key: 'Nrj', label: 'Énergie', unit: 'GWh' },
-];
-
-const parseNumber = (val) => {
-  if (val === null || val === undefined || val === '') return 0;
-  if (typeof val === 'number') return val;
-  if (typeof val === 'string') {
-    const cleaned = val.replace(/\s/g, '').replace(',', '.');
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? 0 : num;
-  }
-  return 0;
-};
-
-const extractAggregation = (action, gainsYearRows, emYearRows) => {
-  let processedData = { score: 0, gains: {}, emissions: {} };
-
-  let totalAchievement = 0;
-  let achievementCount = 0;
-
-  for (const emissionType of EMISSION_TYPES) {
-    if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
-    const col = (action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number]) + INSTANCE_EMISSION_COL[emissionType];
-
-    // Gains : 6 écarts par type (Réf-Init, Prév-Init, Prév-Réf, Expost-Init, Expost-Réf, Expost-Prév)
-    const yearlyData = gainsYearRows.map((d) => ({
-      year: d.year,
-      ecartRefInit: parseNumber(d.row[col]),
-      ecartPrevRef: parseNumber(d.row[col + 2]),
-      ecartExpostRef: parseNumber(d.row[col + 4]),
-      ecartExpostPrev: parseNumber(d.row[col + 5]),
-    }));
-
-    const latestWithExpost = [...yearlyData].reverse().find((d) => d.ecartExpostRef !== 0);
-    const objective = latestWithExpost ? Math.abs(latestWithExpost.ecartPrevRef) : 0;
-    const real = latestWithExpost ? Math.abs(latestWithExpost.ecartExpostRef) : 0;
-
-    let achievement = null;
-    if (objective > 0 && real > 0) achievement = (real / objective) * 100;
-
-    if (achievement !== null) {
-      totalAchievement += Math.min(achievement, 100);
-      achievementCount++;
-    }
-
-    processedData.gains[emissionType] = { label: emissionType, unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit, objective, real, objectiveVal: objective, realVal: real, achievement, yearlyData };
-  }
-
-  processedData.score = achievementCount > 0 ? Math.round(totalAchievement / achievementCount) : 0;
-
-  for (const emissionType of EMISSION_TYPES) {
-    if (INSTANCE_EMISSION_COL[emissionType] === undefined) continue;
-    const emCol = (action.type === 'global' ? 4 : INSTANCE_COL_OFFSET[action.instance_number]) + INSTANCE_EMISSION_COL[emissionType];
-    processedData.emissions[emissionType] = {
-      label: emissionType,
-      unit: INDICATORS_CONFIG.find((c) => c.key === emissionType)?.unit,
-      yearlyData: emYearRows.map((d) => ({
-        year: d.year,
-        initiale: parseNumber(d.row[emCol]),
-        reference: parseNumber(d.row[emCol + 1]),
-        previsionnelle: parseNumber(d.row[emCol + 2]),
-        expost: parseNumber(d.row[emCol + 3]),
-      })),
-    };
-  }
-
-  return processedData;
-};
 
 router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
