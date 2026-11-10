@@ -14,6 +14,14 @@ const { computeActionCompletion } = require('../utils/completion');
 const { isPercentUnit } = require('../utils/indicators');
 const { writeDraftFlag, warmSessionsForAction } = require('../services/excelSync');
 const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
+const { pickFields } = require('../utils');
+
+const ACTION_UPDATABLE_FIELDS = [
+  'name', 'description', 'status', 'priority', 'blocked_reason', 'step_description', 'date_start', 'date_end',
+  'budget_costs', 'budget_description', 'financial_aid', 'financial_aid_description',
+  'pilote', 'pilote_description', 'partners', 'partners_description',
+  'is_subsidized_by_program', 'related_initiatives', 'comment', 'is_draft',
+];
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -36,6 +44,14 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    if (req.user.role !== 'admin') {
+      const isCollectivityMember = req.user.collectivities.some((c) => c.id === action.collectivity_id && c.status === 'approved' && c.role !== 'economic_actor');
+      const isActionActor = !!action.economic_actor_id && action.economic_actor_id === req.user.economic_actor_id;
+      if (!isCollectivityMember && !isActionActor) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    }
+
+    const updates = req.user.role === 'admin' ? req.body : pickFields(req.body, ACTION_UPDATABLE_FIELDS);
+
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
     action.last_modif_by_email = req.user.email;
@@ -43,9 +59,9 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     await action.save();
 
     const logs = [];
-    for (const field of Object.keys(req.body)) {
+    for (const field of Object.keys(updates)) {
       if (['updatedAt', '__v', 'createdAt', '_id', 'last_modif_by_name', 'last_modif_date', 'last_modif_by_id'].includes(field)) continue;
-      let newValue = req.body[field];
+      let newValue = updates[field];
       const originalValue = action[field];
 
       if (originalValue instanceof Date && typeof newValue === 'string') newValue = new Date(newValue);
@@ -76,8 +92,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       logs.push(log);
     }
 
-    const draftChanged = req.body.is_draft !== undefined && Boolean(req.body.is_draft) !== Boolean(action.is_draft);
-    action.set(req.body);
+    const draftChanged = updates.is_draft !== undefined && Boolean(updates.is_draft) !== Boolean(action.is_draft);
+    action.set(updates);
     await action.save();
     if (logs.length > 0) await Log.insertMany(logs);
     // Propager le flag brouillon au fichier d'agrégation (colonne "Prise en compte" à VRAI/FAUX)
