@@ -11,7 +11,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
   try {
     const query = {};
     if (req.body.active === true || req.body.active === false) query.active = req.body.active;
-    if (req.body.search) query.label = { $regex: req.body.search, $options: 'i' };
+    if (req.body.search) query.label = { $regex: String(req.body.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
     // Les utilisateurs non admin ne voient que les questions actives
     if (req.user.role !== 'admin') query.active = true;
 
