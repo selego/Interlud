@@ -9,6 +9,8 @@ const config = require('../src/config');
 const Collectivity = require('../src/models/collectivity');
 const Action = require('../src/models/action');
 const EconomicActor = require('../src/models/economic_actor');
+const EconomicActorQuestion = require('../src/models/economic_actor_question');
+const EconomicActorAnswer = require('../src/models/economic_actor_answer');
 const { ACTION_GAINS_RANGES, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
 
 // Export local, en lecture seule, des valeurs calculées (émissions, gains, atteinte)
@@ -16,12 +18,14 @@ const { ACTION_GAINS_RANGES, readAggregationBlocks, rowsForFile } = require('../
 //
 // Depuis api/ :
 //   node script/export_calculated_values.js --collectivities <id1,id2|all> \
-//     [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx]
+//     [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx] [--with-answers]
+//
+// --with-answers ajoute l'onglet « Réponses acteurs éco » (questionnaire AE, lu en base uniquement).
 //
 // Mongo : find uniquement. SharePoint : GET de plages, via readAggregationBlocks.
 // La sortie est un fichier local. Ne pas lancer sur autre chose qu'un petit échantillon au début.
 
-const USAGE = `Usage : node script/export_calculated_values.js --collectivities <id1,id2|all> [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx]
+const USAGE = `Usage : node script/export_calculated_values.js --collectivities <id1,id2|all> [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx] [--with-answers]
 
 À lancer depuis api/ (api/.env requis).
 Lecture seule Mongo (find) et SharePoint (GET).`;
@@ -37,6 +41,19 @@ const README_BULLET =
 // Fond jaune des lignes d'exemple fictives du template.
 const EXAMPLE_FILL = 'FFFFF8DC';
 const OPTIONS = ['collectivities', 'template', 'out'];
+const ANSWERS_SHEET_NAME = 'Réponses acteurs éco';
+
+const ANSWERS_COLUMNS = [
+  { header: 'Acteur économique', key: 'acteur', width: 28 },
+  { header: 'Collectivités', key: 'collectivites', width: 36 },
+  { header: 'Question', key: 'question', width: 48 },
+  { header: 'Question active', key: 'active', width: 12 },
+  { header: 'Fiches rattachées', key: 'fiches', width: 24 },
+  { header: 'Type', key: 'type', width: 12 },
+  { header: 'Réponse', key: 'reponse', width: 36 },
+  { header: 'Unité', key: 'unite', width: 12 },
+  { header: 'Mise à jour', key: 'misAJour', width: 14 },
+];
 
 const CALCULATED_COLUMNS = [
   { header: 'Collectivité', key: 'collectivite', width: 28 },
@@ -65,10 +82,14 @@ const safeError = (error) =>
     .slice(0, 400);
 
 const parseArgs = (argv) => {
-  const parsed = { collectivities: '', template: '', out: '' };
+  const parsed = { collectivities: '', template: '', out: '', withAnswers: false };
   const args = argv.slice(2);
   for (let i = 0; i < args.length; i++) {
     const [flag, inline] = args[i].split(/=(.*)/s);
+    if (flag === '--with-answers') {
+      parsed.withAnswers = true;
+      continue;
+    }
     const key = OPTIONS.find((option) => flag === `--${option}`);
     if (!key) throw new Error(`Option inconnue : ${flag}\n${USAGE}`);
     const value = inline !== undefined ? inline : args[++i];
@@ -185,6 +206,41 @@ const addCalculatedValuesSheet = (workbook, rows) => {
   return sheet;
 };
 
+// Une ligne par acteur et par question : questions actives (même sans réponse) et questions désactivées déjà répondues.
+const answerRows = ({ actors, questions, answers }) =>
+  actors.flatMap((actor) =>
+    questions
+      .map((question) => ({ question, answer: answers.find((a) => a.economic_actor_id === String(actor._id) && a.question_id === String(question._id)) }))
+      .filter((line) => line.question.active || line.answer)
+      .map((line) => ({
+        acteur: actor.name || '',
+        collectivites: (actor.collectivities || []).map((c) => c.name).join(', '),
+        question: line.question.label || '',
+        active: line.question.active ? 'Oui' : 'Non',
+        fiches: (line.question.actions || []).map((a) => a.name).join(', '),
+        type: line.question.type || '',
+        reponse: Array.isArray(line.answer?.value?.[line.question.type]) ? line.answer.value[line.question.type].join(', ') : line.answer?.value?.[line.question.type] ?? '',
+        unite: line.question.value_unit || '',
+        misAJour: line.answer?.updatedAt || null,
+      })),
+  );
+
+const addAnswersSheet = (workbook, rows) => {
+  const existing = workbook.getWorksheet(ANSWERS_SHEET_NAME);
+  if (existing) workbook.removeWorksheet(existing.id);
+  const sheet = workbook.addWorksheet(ANSWERS_SHEET_NAME, { views: [{ state: 'frozen', ySplit: 1 }] });
+  sheet.columns = ANSWERS_COLUMNS;
+  const header = sheet.getRow(1);
+  header.font = { bold: true };
+  header.alignment = { wrapText: true, vertical: 'middle' };
+  header.height = 30;
+  if (rows.length) sheet.addRows(rows);
+  sheet.getColumn('misAJour').numFmt = 'dd/mm/yyyy';
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(sheet.rowCount, 1), column: ANSWERS_COLUMNS.length } };
+  moveSheetAfter(workbook, ANSWERS_SHEET_NAME, SHEET_NAME);
+  return sheet;
+};
+
 const fileContext = (job) => ({
   collectivityName: job.collectivity.name || '',
   siren: job.collectivity.siren,
@@ -264,6 +320,13 @@ async function main() {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(options.template);
     addCalculatedValuesSheet(workbook, rows);
+    if (options.withAnswers) {
+      const questions = await EconomicActorQuestion.find({}).sort({ order: 1, createdAt: 1 });
+      const answers = await EconomicActorAnswer.find({ economic_actor_id: { $in: actors.map((actor) => String(actor._id)) } });
+      const answersRows = answerRows({ actors, questions, answers });
+      addAnswersSheet(workbook, answersRows);
+      console.log(`Réponses acteurs éco : ${answersRows.length} ligne(s), ${answers.length} réponse(s) saisie(s).`);
+    }
     await fs.promises.mkdir(path.dirname(options.out), { recursive: true });
     await workbook.xlsx.writeFile(options.out);
     console.log(`Résumé : ${ok} OK, ${ko} KO, ${rows.length} ligne(s) → ${options.out}`);
@@ -286,10 +349,13 @@ module.exports = {
   README_TITLE,
   SHEET_NAME,
   EXCEL_MAX_ROWS,
+  ANSWERS_SHEET_NAME,
   parseArgs,
   resolvePaths,
   jobsForCollectivity,
   safeError,
   addCalculatedValuesSheet,
+  answerRows,
+  addAnswersSheet,
   processJob,
 };

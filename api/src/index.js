@@ -42,6 +42,9 @@ app.use('/dashboard', require('./controllers/dashboard'));
 app.use('/excel', require('./controllers/excel'));
 app.use('/user_action_right', require('./controllers/user_action_right'));
 app.use('/economic_actor', require('./controllers/economic_actor'));
+app.use('/economic_actor_question', require('./controllers/economic_actor_question'));
+app.use('/economic_actor_answer', require('./controllers/economic_actor_answer'));
+app.use('/economic_actor_form', require('./controllers/economic_actor_form'));
 app.use('/notification', require('./controllers/notification'));
 app.use('/contact', require('./controllers/contact'));
 
