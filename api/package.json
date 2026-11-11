@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon ./src/index.js",
     "start": "node ./src/index.js",
-    "test": "node --test test/export_calculated_values.test.js test/economic_actor_questionnaire.test.js test/global_writes_admin_only.test.js"
+    "test": "node --test test/export_calculated_values.test.js test/economic_actor_questionnaire.test.js test/global_writes_admin_only.test.js test/security_headers.test.js"
   },
   "author": "",
   "license": "MIT",
@@ -23,6 +23,7 @@
     "dotenv": "^16.3.1",
     "exceljs": "^4.4.0",
     "express": "^4.18.2",
+    "helmet": "8.3.0",
     "mangopay2-nodejs-sdk": "^1.41.0",
     "moment": "^2.29.4",
     "mongoose": "^7.4.4",
