@@ -39,7 +39,7 @@ export default function List() {
       </div>
       <p className="text-sm text-gray-600 mb-6 max-w-3xl">
         Les questions actives sont affichées aux acteurs économiques sur leur page « Questionnaire », dans l'ordre indiqué. Leurs réponses sont enregistrées sur la plateforme, sans lien avec
-        les fichiers Excel, et peuvent être exportées.
+        les fichiers Excel.
       </p>
 
       <IntroText />

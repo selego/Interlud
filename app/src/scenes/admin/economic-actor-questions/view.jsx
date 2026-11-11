@@ -202,7 +202,7 @@ function LinkedActions({ question, setQuestion }) {
   return (
     <div>
       <label className="block text-sm font-medium mb-1">Fiches rattachées (facultatif)</label>
-      <p className="text-xs text-gray-600 mb-2">Pour information et pour l'export : la question reste affichée à tous les acteurs économiques.</p>
+      <p className="text-xs text-gray-600 mb-2">Pour information : la question reste affichée à tous les acteurs économiques.</p>
       {actions.length === 0 ? (
         <p className="text-sm text-gray-500">Aucune fiche disponible</p>
       ) : (
