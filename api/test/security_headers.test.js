@@ -33,6 +33,8 @@ describe('En-têtes de sécurité', () => {
     assert.equal(res.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
     assert.equal(res.headers.get('content-security-policy'), null);
     assert.equal(res.headers.get('cross-origin-resource-policy'), 'same-site');
+    assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin');
+    assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
   });
 
   test('hors production : pas de HSTS', async () => {

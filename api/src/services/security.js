@@ -10,6 +10,10 @@ function securityHeaders(environment) {
     // HSTS seulement en production (HTTPS derrière le proxy Clever Cloud) pour ne pas gêner le développement local.
     strictTransportSecurity: environment === 'production' ? { maxAge: 31536000, includeSubDomains: true } : false,
     frameguard: { action: 'deny' },
+    // Valeurs par défaut de helmet, écrites explicitement. L'API ne sert pas de page ; la redirection SSO vers Joptimiz
+    // est une navigation normale (pas une popup), donc same-origin ne la gêne pas, et elle part sans Referer.
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    referrerPolicy: { policy: 'no-referrer' },
   });
 }
 
