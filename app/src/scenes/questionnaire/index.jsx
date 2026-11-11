@@ -42,7 +42,8 @@ export default function Questionnaire() {
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Questionnaire</h1>
+      <h1 className="text-3xl font-bold mb-2">Questionnaire</h1>
+      <p className="text-sm text-gray-600 mb-6">Vos réponses sont enregistrées automatiquement à chaque saisie. Vous pouvez revenir les modifier à tout moment.</p>
       <IntroText />
       <Questions />
     </div>
@@ -187,7 +188,7 @@ function QuestionCard({ question, answer, onSaved }) {
           ))}
         </div>
       )}
-      <label className="block text-[10.5px] font-semibold uppercase tracking-wider text-[#9aa8a4] mb-2">Réponse</label>
+      <label className="block text-[10.5px] font-semibold uppercase tracking-wider text-[#9aa8a4] mb-2">{question.type === "checkbox" ? "Réponse (plusieurs choix possibles)" : "Réponse"}</label>
       <div className="flex items-center gap-2">
         <div className="flex-1 max-w-xl">
           <IndicatorValueInput

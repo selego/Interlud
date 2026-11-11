@@ -332,7 +332,7 @@ export default function Header() {
                             <FiChevronDown className={`ml-1 inline transition-transform ${openQuickAccessDropdown === index ? "rotate-180" : ""}`} />
                           </button>
                           {openQuickAccessDropdown === index && (
-                            <div className="absolute top-9 right-0 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+                            <div className="absolute top-9 right-0 min-w-[12rem] w-max bg-white border border-gray-200 rounded-md shadow-lg z-50">
                               <ul className="py-1">
                                 {item.menuItems.map((subItem, subIndex) => (
                                   <li key={subIndex}>
@@ -344,7 +344,7 @@ export default function Header() {
                                     ) : (
                                       <Link
                                         {...subItem.linkProps}
-                                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center whitespace-nowrap"
                                         onClick={() => setOpenQuickAccessDropdown(null)}
                                       >
                                         {subItem.iconId && <span className={`${subItem.iconId} mr-2`} aria-hidden="true"></span>}
@@ -422,7 +422,7 @@ export default function Header() {
                           <Link
                             {...item.linkProps}
                             className={`p-4 text-base ${
-                              isActive ? "border-b-2 border-primary-green text-primary-green" : "hover:bg-gray-100/50 hover:border-gray-200 hover:border-b-2"
+                              isActive ? "border-b-2 border-primary-green text-primary-green" : "border-b-2 border-transparent hover:bg-gray-100/50 hover:border-gray-200"
                             }`}
                           >
                             {item.text}
