@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const UserActionRight = require('../models/user_action_right');
+const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 
@@ -19,7 +20,11 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     }
 
-    const userActionRight = await UserActionRight.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // Un admin de collectivité ne modifie que la description et les droits de lecture et d'écriture (pas d'opérateur comme $set)
+    const update = req.user.role === 'admin' ? req.body : {};
+    if (req.user.role !== 'admin') ['description', 'can_read', 'can_write'].filter((field) => req.body[field] !== undefined).forEach((field) => (update[field] = req.body[field]));
+
+    const userActionRight = await UserActionRight.findByIdAndUpdate(req.params.id, update, { new: true });
     return res.status(200).send({ ok: true, data: userActionRight });
   } catch (error) {
     capture(error);
@@ -47,6 +52,11 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
   try {
     if (req.user.role !== 'admin' && !req.body.collectivity_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!canManageCollectivity(req.user, req.body.collectivity_id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // L'action doit appartenir à la collectivité de l'admin
+    if (req.user.role !== 'admin') {
+      const action = req.body.action_id ? await Action.findById(req.body.action_id) : null;
+      if (!action || action.collectivity_id !== req.body.collectivity_id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    }
 
     const userActionRight = await UserActionRight.create(req.body);
 

@@ -15,6 +15,7 @@ const IndicatorCategory = require('../src/models/indicator_category');
 const IndicatorValue = require('../src/models/indicator_value');
 const Log = require('../src/models/log');
 const UserActionRight = require('../src/models/user_action_right');
+const Action = require('../src/models/action');
 
 // ---------- Utilisateurs simulés ----------
 const users = {
@@ -51,6 +52,7 @@ const mockModel = (Model, key, prefix) => {
     return doc;
   };
   Model.findByIdAndUpdate = async (id, body) => {
+    store.lastUpdate = body;
     const doc = store[key].find((d) => d._id === id);
     if (!doc) return null;
     return Object.assign(doc, body);
@@ -69,6 +71,7 @@ User.findOne = async (query) => Object.values(users).find((u) => u._id === query
 mockModel(Indicator, 'indicators', 'ind');
 mockModel(IndicatorCategory, 'categories', 'cat');
 mockModel(UserActionRight, 'rights', 'right');
+Action.findById = async (id) => store.actions.find((a) => a._id === id) || null;
 Log.create = async () => ({});
 Log.insertMany = async () => [];
 IndicatorValue.updateMany = async () => ({});
@@ -115,6 +118,11 @@ beforeEach(() => {
   store = {
     indicators: [{ _id: 'ind-x', name: 'Indicateur X', value_type: 'number', value_possibilities: [] }],
     categories: [{ _id: 'cat-x', name: 'Catégorie X', type: 'principal' }],
+    actions: [
+      { _id: 'act-a', collectivity_id: 'col-a' },
+      { _id: 'act-a2', collectivity_id: 'col-a' },
+      { _id: 'act-b', collectivity_id: 'col-b' },
+    ],
     rights: [
       { _id: 'right-a', user_id: 'u-member', collectivity_id: 'col-a', action_id: 'act-a', can_read: true, can_write: false },
       { _id: 'right-b', user_id: 'u-other', collectivity_id: 'col-b', action_id: 'act-b', can_read: true, can_write: false },
@@ -214,6 +222,18 @@ describe('Écritures sur /user_action_right', () => {
     assert.equal((await call('PUT', '/user_action_right/right-a', 'adminA', { user_id: 'u-other' })).status, 403);
     assert.equal(store.rights[0].collectivity_id, 'col-a');
     assert.equal(store.rights[0].user_id, 'u-member');
+  });
+
+  test("un admin de collectivité ne passe pas d'opérateur Mongoose ni d'autre champ", async () => {
+    const updated = await call('PUT', '/user_action_right/right-a', 'adminA', { $set: { collectivity_id: 'col-b', user_id: 'u-other' }, action_id: 'act-b', can_write: true });
+    assert.equal(updated.status, 200);
+    assert.deepEqual(store.lastUpdate, { can_write: true });
+  });
+
+  test("un admin de collectivité ne crée pas de droit sur l'action d'une autre collectivité", async () => {
+    assert.equal((await call('POST', '/user_action_right', 'adminA', { user_id: 'u-member', collectivity_id: 'col-a', action_id: 'act-b' })).status, 403);
+    assert.equal((await call('POST', '/user_action_right', 'adminA', { user_id: 'u-member', collectivity_id: 'col-a', action_id: 'act-absente' })).status, 403);
+    assert.equal(store.rights.length, 2);
   });
 
   test('collectivity_id obligatoire pour un non-admin, droit inconnu : 404', async () => {
