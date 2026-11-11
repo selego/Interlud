@@ -5,7 +5,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import Pagination from "@/components/pagination"
 
-const TYPE_LABELS = { number: "Nombre", text: "Texte", radio: "Radio", checkbox: "Checkbox" }
+const TYPE_LABELS = { number: "Nombre", text: "Texte libre", radio: "Choix unique", checkbox: "Choix multiples" }
 
 export default function List() {
   const navigate = useNavigate()
@@ -37,12 +37,19 @@ export default function List() {
           Ajouter une question
         </button>
       </div>
+      <p className="text-sm text-gray-600 mb-6 max-w-3xl">
+        Les questions actives sont affichées aux acteurs économiques sur leur page « Questionnaire », dans l'ordre indiqué. Leurs réponses sont enregistrées sur la plateforme, sans lien avec
+        les fichiers Excel, et peuvent être exportées.
+      </p>
 
       <IntroText />
 
       {questions.length === 0 ? (
         <div className="flex items-center justify-center py-12">
-          <div className="text-lg text-gray-600">Aucune question pour le moment</div>
+          <div className="text-center text-gray-600">
+            <p className="text-lg">Aucune question pour le moment</p>
+            <p className="text-sm mt-1">Cliquez sur « Ajouter une question » pour créer la première.</p>
+          </div>
         </div>
       ) : (
         <table className="w-full overflow-hidden card-shadow">
@@ -69,13 +76,15 @@ export default function List() {
         </table>
       )}
       <AddQuestionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-      <Pagination
-        total={total}
-        per_page={filters.limit}
-        currentPage={filters.page + 1}
-        onNext={() => setFilters({ ...filters, page: filters.page + 1 })}
-        onPrevious={() => setFilters({ ...filters, page: filters.page - 1 })}
-      />
+      {total > filters.limit && (
+        <Pagination
+          total={total}
+          per_page={filters.limit}
+          currentPage={filters.page + 1}
+          onNext={() => setFilters({ ...filters, page: filters.page + 1 })}
+          onPrevious={() => setFilters({ ...filters, page: filters.page - 1 })}
+        />
+      )}
     </div>
   )
 }
@@ -117,8 +126,14 @@ function IntroText() {
   return (
     <div className="space-y-4 card-shadow mb-6">
       <h2 className="text-lg font-semibold text-gray-900 pb-2 border-b">Texte explicatif</h2>
-      <p className="text-sm text-gray-600">Affiché en haut de la page questionnaire des acteurs économiques.</p>
-      <textarea value={form.intro_text || ""} onChange={(e) => setForm({ ...form, intro_text: e.target.value })} rows="4" className="w-full input-primary rounded-lg" />
+      <p className="text-sm text-gray-600">Affiché en haut de la page « Questionnaire » des acteurs économiques. Laissez vide pour ne rien afficher.</p>
+      <textarea
+        value={form.intro_text || ""}
+        onChange={(e) => setForm({ ...form, intro_text: e.target.value })}
+        rows="4"
+        placeholder="Exemple : ces questions nous aident à mieux connaître votre activité. Vos réponses sont enregistrées au fur et à mesure."
+        className="w-full input-primary rounded-lg"
+      />
       <div className="flex justify-end">
         <button onClick={handleSave} disabled={saving} className="button-primary disabled:opacity-60">
           {saving ? "Enregistrement..." : "Enregistrer"}
@@ -150,16 +165,24 @@ const AddQuestionModal = ({ isOpen, onClose }) => {
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une question</h2>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-2">
           <label className="block text-sm font-semibold text-gray-700 mb-2">Intitulé de la question</label>
           <input
             type="text"
             placeholder="Entrez l'intitulé"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                createQuestion()
+              }
+            }}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
           />
         </div>
+
+        <p className="text-xs text-gray-600 mb-6">Vous choisirez ensuite le type de réponse et les options.</p>
 
         <div className="flex justify-end gap-3">
           <button onClick={createQuestion} className="button-primary">

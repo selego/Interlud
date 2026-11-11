@@ -11,6 +11,7 @@ export default function View() {
   const navigate = useNavigate()
   const [question, setQuestion] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const getQuestion = async () => {
     try {
@@ -25,6 +26,8 @@ export default function View() {
   const handleSave = async () => {
     try {
       if (!question.label?.trim()) return toast.error("Veuillez entrer l'intitulé de la question")
+      if ((question.type === "radio" || question.type === "checkbox") && !(question.value_possibilities || []).some((option) => option.trim()))
+        return toast.error("Ajoutez au moins une option pour une question à choix")
       setSaving(true)
       const { ok, data, code } = await api.put(`/economic_actor_question/${id}`, question)
       if (!ok) return toast.error(code || "Une erreur est survenue")
@@ -34,6 +37,22 @@ export default function View() {
       toast.error(error.code || "Une erreur est survenue")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      if (!confirm("Supprimer cette question et toutes les réponses déjà saisies par les acteurs économiques ? Cette action est définitive.\n\nPour la retirer sans perdre les réponses, décochez plutôt « Question active »."))
+        return
+      setDeleting(true)
+      const { ok, code } = await api.delete(`/economic_actor_question/${id}`)
+      if (!ok) return toast.error(code || "Une erreur est survenue")
+      toast.success("Question supprimée")
+      navigate("/admin/economic-actor-questions")
+    } catch (error) {
+      toast.error(error.code || "Une erreur est survenue")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -74,7 +93,7 @@ export default function View() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">Aide affichée à l'acteur</label>
+          <label className="block text-sm font-medium mb-2">Aide affichée à l'acteur (facultatif)</label>
           <textarea value={question.description || ""} onChange={(e) => setQuestion({ ...question, description: e.target.value })} rows="3" className="w-full input-primary rounded-lg" />
         </div>
 
@@ -86,27 +105,27 @@ export default function View() {
               onChange={(value) => setQuestion({ ...question, type: value })}
               options={[
                 { value: "number", label: "Nombre" },
-                { value: "text", label: "Texte" },
-                { value: "radio", label: "Radio" },
-                { value: "checkbox", label: "Checkbox" }
+                { value: "text", label: "Texte libre" },
+                { value: "radio", label: "Choix unique (liste déroulante)" },
+                { value: "checkbox", label: "Choix multiples (cases à cocher)" }
               ]}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Unité de mesure</label>
+            <label className="block text-sm font-medium mb-2">Unité (facultatif, ex. : t, km, %)</label>
             <input type="text" value={question.value_unit || ""} onChange={(e) => setQuestion({ ...question, value_unit: e.target.value })} className="w-full input-primary" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Ordre d'affichage</label>
+            <label className="block text-sm font-medium mb-2">Ordre d'affichage (du plus petit au plus grand)</label>
             <input type="number" value={question.order ?? 0} onChange={(e) => setQuestion({ ...question, order: Number(e.target.value) })} className="w-full input-primary" />
           </div>
         </div>
 
         {(question.type === "checkbox" || question.type === "radio") && (
           <div>
-            <label className="block text-sm font-medium mb-2">Options disponibles</label>
+            <label className="block text-sm font-medium mb-2">Options proposées à l'acteur</label>
             <div className="space-y-2">
               {(question.value_possibilities || []).map((option, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -147,10 +166,13 @@ export default function View() {
             className="w-4 h-4"
             style={{ accentColor: "#2DAC6A" }}
           />
-          <span className="text-sm text-gray-700">Question active (proposée aux acteurs économiques ; une question désactivée garde ses réponses)</span>
+          <span className="text-sm text-gray-700">Question active : affichée aux acteurs économiques. Décochez pour la masquer sans perdre les réponses déjà saisies.</span>
         </label>
 
         <div className="pt-4 mt-4 border-t border-light-border flex items-center justify-end gap-3">
+          <button onClick={handleDelete} disabled={deleting} className="button-primary bg-red-600 inline-flex items-center gap-2 disabled:opacity-60">
+            {deleting ? "Suppression..." : "Supprimer"}
+          </button>
           <button onClick={handleSave} disabled={saving} className="button-primary inline-flex items-center gap-2 disabled:opacity-60">
             {saving ? "Enregistrement..." : "Enregistrer"}
           </button>
@@ -179,7 +201,8 @@ function LinkedActions({ question, setQuestion }) {
 
   return (
     <div>
-      <label className="block text-sm font-medium mb-2">Fiches rattachées</label>
+      <label className="block text-sm font-medium mb-1">Fiches rattachées (facultatif)</label>
+      <p className="text-xs text-gray-600 mb-2">Pour information et pour l'export : la question reste affichée à tous les acteurs économiques.</p>
       {actions.length === 0 ? (
         <p className="text-sm text-gray-500">Aucune fiche disponible</p>
       ) : (
