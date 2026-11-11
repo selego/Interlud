@@ -59,6 +59,14 @@ EconomicActorQuestion.create = async (body) => {
 };
 
 EconomicActorAnswer.find = async (query) => store.answers.filter((a) => matches(a, query));
+EconomicActorAnswer.deleteMany = async (query) => {
+  store.answers = store.answers.filter((a) => !matches(a, query));
+};
+EconomicActorQuestion.findByIdAndDelete = async (id) => {
+  const question = store.questions.find((q) => q._id === id) || null;
+  store.questions = store.questions.filter((q) => q._id !== id);
+  return question;
+};
 EconomicActorAnswer.findOneAndUpdate = async (filter, update) => {
   let answer = store.answers.find((a) => matches(a, filter));
   if (!answer) {
@@ -136,6 +144,28 @@ describe('Administration des questions', () => {
     assert.equal(updated.status, 200);
     assert.equal(updated.body.data.label, 'Tonnage annuel livré');
     assert.deepEqual(updated.body.data.actions, [{ id: 'g-c1', name: 'C1' }]);
+  });
+
+  test('question à choix : au moins une option, options vides retirées', async () => {
+    assert.equal((await call('PUT', '/economic_actor_question/q-radio', 'admin', { value_possibilities: ['', '  '] })).status, 400);
+    const updated = await call('PUT', '/economic_actor_question/q-radio', 'admin', { value_possibilities: [' Propre ', '', 'Louée'] });
+    assert.equal(updated.status, 200);
+    assert.deepEqual(updated.body.data.value_possibilities, ['Propre', 'Louée']);
+    assert.equal((await call('PUT', '/economic_actor_question/q-text', 'admin', { type: 'checkbox' })).status, 400);
+  });
+
+  test("un admin supprime une question et ses réponses, sans toucher aux autres", async () => {
+    await call('PUT', '/economic_actor_answer/mine/q-text', 'ae1', { value: { number: 12 } });
+    await call('PUT', '/economic_actor_answer/mine/q-radio', 'ae1', { value: { radio: 'Louée' } });
+    assert.equal((await call('DELETE', '/economic_actor_question/q-text', 'admin')).status, 200);
+    assert.deepEqual(store.questions.map((q) => q._id), ['q-radio', 'q-off']);
+    assert.deepEqual(store.answers.map((a) => a.question_id), ['q-radio']);
+    assert.equal((await call('DELETE', '/economic_actor_question/q-text', 'admin')).status, 404);
+  });
+
+  test('un AE ou un utilisateur de collectivité ne peut pas supprimer', async () => {
+    for (const who of ['ae1', 'collectivity']) assert.equal((await call('DELETE', '/economic_actor_question/q-text', who)).status, 401);
+    assert.equal(store.questions.length, 3);
   });
 
   test('libellé obligatoire', async () => {

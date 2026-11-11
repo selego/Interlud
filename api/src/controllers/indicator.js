@@ -19,7 +19,7 @@ router.get("/:id", passport.authenticate(["admin", "user"], { session: false, fa
   }
 });
 
-router.put("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.put("/:id", passport.authenticate("admin", { session: false, failWithError: true }), async (req, res) => {
   try {
     const oldIndicator = await Indicator.findById(req.params.id);
     if (!oldIndicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
@@ -88,7 +88,7 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
   }
 });
 
-router.post("/", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.post("/", passport.authenticate("admin", { session: false, failWithError: true }), async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const indicator = await Indicator.create( req.body );
@@ -115,7 +115,7 @@ router.post("/", passport.authenticate(["admin", "user"], { session: false, fail
   }
 });
 
-router.delete("/:id", passport.authenticate(["admin", "user"], { session: false, failWithError: true }), async (req, res) => {
+router.delete("/:id", passport.authenticate("admin", { session: false, failWithError: true }), async (req, res) => {
   try {
     const indicator = await Indicator.findOne({ _id: req.params.id });
     if (!indicator) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
