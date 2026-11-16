@@ -51,6 +51,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      {/* Avant les routes : premier élément atteint au clavier, tant qu'il est affiché */}
+      <CookieBanner />
       <Routes>
         <Route element={<AuthLayout />}>
           <Route path="/auth/*" element={<Auth />} />
@@ -85,7 +87,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster position="top-center" />
-      <CookieBanner />
     </BrowserRouter>
   )
 }

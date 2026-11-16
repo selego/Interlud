@@ -28,15 +28,14 @@ export default function CookieBanner() {
 
   return (
     <section
-      role="region"
       aria-labelledby="cookie-banner-title"
-      className="fixed bottom-4 left-4 right-24 sm:bottom-6 sm:left-6 sm:right-auto sm:max-w-md z-40 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-sm text-gray-800"
+      className="fixed bottom-4 left-4 right-24 sm:bottom-6 sm:left-6 sm:right-auto sm:max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto z-40 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-sm text-gray-800"
     >
       <div className="flex items-start justify-between gap-3">
         <h2 id="cookie-banner-title" className="text-base font-semibold text-gray-900 !mb-0">
           Cookies et authentification
         </h2>
-        <button type="button" onClick={close} className="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-close-line fr-btn--icon-right shrink-0">
+        <button type="button" onClick={close} aria-label="Fermer le bandeau d'information sur les cookies" className="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-close-line fr-btn--icon-right shrink-0">
           Fermer
         </button>
       </div>
