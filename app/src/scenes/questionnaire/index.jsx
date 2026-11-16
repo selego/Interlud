@@ -5,6 +5,7 @@ import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import IndicatorValueInput from "@/scenes/actions/view/completion/IndicatorValueInput"
 import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
+import Alert from "@codegouvfr/react-dsfr/Alert"
 
 // Même palette que les cartes d'indicateurs (completion/SituationTab.jsx)
 const STATE_STYLES = {
@@ -135,8 +136,28 @@ function Answers({ questions }) {
   if (failed) return <LoadError onRetry={fetchAnswers} />
   if (!answers) return <Loader />
 
+  // Signalement seulement : l'enregistrement est automatique et il n'y a pas de validation finale à bloquer.
+  const missingRequired = questions.filter(
+    (question) => question.required && !isIndicatorValueFilled({ value: answers.find((a) => a.question_id === question._id)?.value, indicator_type: question.type })
+  )
+
   return (
     <div className="flex flex-col gap-[11px]">
+      {missingRequired.length > 0 && (
+        <Alert
+          severity="warning"
+          small
+          className="mb-2"
+          description={
+            <>
+              <strong>
+                {missingRequired.length} question{missingRequired.length > 1 ? "s" : ""} obligatoire{missingRequired.length > 1 ? "s" : ""} sans réponse
+              </strong>{" "}
+              : {missingRequired.map((question) => question.label).join(", ")}.
+            </>
+          }
+        />
+      )}
       {questions.map((question) => (
         <QuestionCard
           key={question._id}
@@ -173,7 +194,17 @@ function QuestionCard({ question, answer, onSaved }) {
     <div className="bg-white rounded-xl border border-[#eef1f0] px-[18px] py-4 transition-all" style={{ borderLeft: `4px solid ${stateStyle.accent}`, boxShadow: stateStyle.cardShadow }}>
       <div className="flex items-center gap-2.5 mb-2">
         <span className="w-[9px] h-[9px] rounded-full shrink-0" style={{ background: stateStyle.accent }} />
-        <h3 className="text-[15px] font-bold text-[#123314] m-0 leading-tight">{question.label}</h3>
+        <h3 className="text-[15px] font-bold text-[#123314] m-0 leading-tight">
+          {question.label}
+          {question.required && (
+            <>
+              <span className="text-red-600 ml-1" aria-hidden="true">
+                *
+              </span>{" "}
+              <span className="ml-1 text-[11px] font-semibold text-red-700 align-middle">obligatoire</span>
+            </>
+          )}
+        </h3>
         <span className="ml-auto inline-flex items-center text-[11.5px] font-semibold px-[11px] py-1 rounded-full whitespace-nowrap" style={{ background: stateStyle.tagBg, color: stateStyle.tagColor }}>
           {stateStyle.tagText}
         </span>

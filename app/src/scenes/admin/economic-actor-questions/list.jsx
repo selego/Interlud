@@ -4,6 +4,7 @@ import Modal from "@/components/modal"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Pagination from "@/components/pagination"
+import Checkbox from "@codegouvfr/react-dsfr/Checkbox"
 
 const TYPE_LABELS = { number: "Nombre", text: "Texte libre", radio: "Choix unique", checkbox: "Choix multiples" }
 
@@ -66,7 +67,10 @@ export default function List() {
             {questions.map((question) => (
               <tr key={question._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/economic-actor-questions/${question._id}`)}>
                 <td className="px-6 py-4 text-sm text-gray-600">{question.order}</td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{question.label}</td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  {question.label}
+                  {question.required && <span className="ml-2 inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">Obligatoire</span>}
+                </td>
                 <td className="px-6 py-4 text-sm text-gray-600">{TYPE_LABELS[question.type]}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{question.actions?.length ? question.actions.map((action) => action.name).join(", ") : "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{question.active ? "Active" : "Désactivée"}</td>
@@ -146,11 +150,12 @@ function IntroText() {
 const AddQuestionModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
   const [label, setLabel] = useState("")
+  const [required, setRequired] = useState(false)
 
   const createQuestion = async () => {
     try {
       if (!label.trim()) return toast.error("Veuillez entrer l'intitulé de la question")
-      const { ok, data, code } = await api.post("/economic_actor_question", { label })
+      const { ok, data, code } = await api.post("/economic_actor_question", { label, required })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       navigate(`/admin/economic-actor-questions/${data._id}`)
     } catch (error) {
@@ -181,6 +186,11 @@ const AddQuestionModal = ({ isOpen, onClose }) => {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
           />
         </div>
+
+        <Checkbox
+          small
+          options={[{ label: "Question obligatoire", nativeInputProps: { checked: required, onChange: (e) => setRequired(e.target.checked) } }]}
+        />
 
         <p className="text-xs text-gray-600 mb-6">Vous choisirez ensuite le type de réponse et les options.</p>
 
