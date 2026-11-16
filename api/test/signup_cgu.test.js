@@ -9,6 +9,7 @@ const { test, describe, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
 
 const User = require('../src/models/user');
 const UserActionRight = require('../src/models/user_action_right');
@@ -37,7 +38,15 @@ const makeInvitedUser = () => {
   return doc;
 };
 
+const selfUser = { _id: 'u-self', email: 'self@exemple.fr', role: 'user', collectivities: [] };
+let lastUpdate;
+User.findByIdAndUpdate = async (id, update) => {
+  lastUpdate = update;
+  return { ...selfUser, ...update };
+};
+
 User.findOne = async (query) => {
+  if (query._id === 'u-self') return selfUser;
   if (query.invitation_token) return invited && invited.email === query.email && invited.invitation_token === query.invitation_token ? invited : null;
   return null;
 };
@@ -120,4 +129,21 @@ describe('POST /user/invite-accepted', () => {
     assert.equal(res.status, 200);
     assert.equal(invited.rgpd_accepted_at, undefined);
   });
+});
+
+test("POST /user/signup : une date d'acceptation envoyée directement est ignorée", async () => {
+  await post('/user/signup', { email: 'nouveau@exemple.fr', password: PASSWORD, name: 'Nouvel Utilisateur', role: 'user', rgpd_accepted_at: '2099-01-01' });
+  assert.equal(created.rgpd_accepted_at, undefined);
+});
+
+test("PUT /user : la date d'acceptation des CGU est celle du serveur, pas celle envoyée", async () => {
+  const before = Date.now();
+  const response = await fetch(`${baseUrl}/user`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `JWT ${jwt.sign({ _id: 'u-self' }, process.env.SECRET)}` },
+    body: JSON.stringify({ rgpd_accepted_at: '2099-01-01' }),
+  });
+  assert.equal(response.status, 200);
+  assert.ok(lastUpdate.rgpd_accepted_at instanceof Date);
+  assert.ok(lastUpdate.rgpd_accepted_at.getTime() >= before && lastUpdate.rgpd_accepted_at.getTime() <= Date.now());
 });

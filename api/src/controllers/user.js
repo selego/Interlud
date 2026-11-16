@@ -35,6 +35,12 @@ const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifica
 // Champs qu'un admin de collectivité peut modifier sur un membre de sa collectivité
 const MEMBER_UPDATABLE_FIELDS = ['name', 'status', 'collectivities'];
 
+// Acceptation des CGU : la date est toujours celle du serveur, jamais celle envoyée par le client
+const stampRgpdAcceptance = (update) => {
+  if (update && Object.prototype.hasOwnProperty.call(update, 'rgpd_accepted_at')) update.rgpd_accepted_at = new Date();
+  return update;
+};
+
 // Modifications de PUT /user/:id autorisées pour un non-admin, ou null si refusé
 const getUserUpdate = (reqUser, target, body) => {
   const adminIds = (reqUser.collectivities || []).filter((c) => c.role === 'admin' && c.status === 'approved').map((c) => String(c.id));
@@ -50,7 +56,7 @@ const getUserUpdate = (reqUser, target, body) => {
     const updated = (Array.isArray(update.collectivities) ? update.collectivities : []).filter((c) => adminIds.includes(String(c?.id)));
     update.collectivities = [...kept, ...updated];
   }
-  return update;
+  return stampRgpdAcceptance(update);
 };
 
 // Collectivités où l'utilisateur est approuvé (optionnellement avec un rôle donné)
@@ -443,7 +449,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }),
 
 router.put('/', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS), { new: true, runValidators: true });
+    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : stampRgpdAcceptance(pickFields(req.body, USER_UPDATABLE_FIELDS)), { new: true, runValidators: true });
     res.status(200).send({ ok: true, data });
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
