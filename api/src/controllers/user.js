@@ -18,9 +18,10 @@ const brevo = require('../services/brevo');
 const joptimiz = require('../services/joptimiz');
 const { capture } = require('../services/sentry');
 
-// 1 year
-const COOKIE_MAX_AGE = 31557600000;
-const JWT_MAX_AGE = '1y';
+// Durée de session : 7 jours (audit SEC-10), identique pour le JWT et le cookie
+const SESSION_DURATION_DAYS = 7;
+const COOKIE_MAX_AGE = SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
+const JWT_MAX_AGE = `${SESSION_DURATION_DAYS}d`;
 
 // Champs qu'un non-admin peut modifier sur son propre compte
 const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifications_push', 'rgpd_accepted_at'];
