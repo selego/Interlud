@@ -94,7 +94,8 @@ describe('Limitation des tentatives (SEC-06)', () => {
     const ip = newIp();
     for (let i = 0; i < RATE_LIMITS.FORGOT_PASSWORD.limit; i++) {
       const res = await post('/user/forgot_password', { email: `inconnu${i}@example.com` }, ip);
-      assert.equal(res.status, 401);
+      // Même réponse que le compte existe ou non (SEC-09)
+      assert.equal(res.status, 200);
     }
     const blocked = await post('/user/forgot_password', { email: 'autre@example.com' }, ip);
     assert.equal(blocked.status, 429);
@@ -104,7 +105,8 @@ describe('Limitation des tentatives (SEC-06)', () => {
   test('mot de passe oublié : limite par adresse e-mail, quelle que soit l’IP', async () => {
     for (let i = 0; i < RATE_LIMITS.FORGOT_PASSWORD_PER_EMAIL.limit; i++) {
       const res = await post('/user/forgot_password', { email: 'cible@example.com' }, newIp());
-      assert.equal(res.status, 401);
+      // Même réponse que le compte existe ou non (SEC-09)
+      assert.equal(res.status, 200);
     }
     const blocked = await post('/user/forgot_password', { email: '  Cible@Example.com ' }, newIp());
     assert.equal(blocked.status, 429);
@@ -115,7 +117,7 @@ describe('Limitation des tentatives (SEC-06)', () => {
     const ip = newIp();
     for (let i = 0; i < RATE_LIMITS.INVITATION.limit; i++) {
       const path = i % 2 ? '/user/invite-accepted' : '/user/check-invitation-token';
-      const res = await post(path, { invitation_token: `jeton-${i}`, email: 'inconnu@example.com' }, ip);
+      const res = await post(path, { invitation_token: `jeton-${i}`, email: 'inconnu@example.com', password: 'MotDePasse-Test1!' }, ip);
       assert.equal(res.status, 404);
     }
     const blocked = await post('/user/check-invitation-token', { invitation_token: 'jeton-x' }, ip);
@@ -161,7 +163,8 @@ describe('Limitation des tentatives (SEC-06)', () => {
   test('mot de passe oublié : une adresse vide ne crée pas de compteur par e-mail partagé', async () => {
     for (let i = 0; i < RATE_LIMITS.FORGOT_PASSWORD_PER_EMAIL.limit + 2; i++) {
       const res = await post('/user/forgot_password', { email: '   ' }, newIp());
-      assert.equal(res.status, 401);
+      // Même réponse que le compte existe ou non (SEC-09)
+      assert.equal(res.status, 200);
     }
   });
 });
