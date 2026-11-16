@@ -4,6 +4,7 @@ const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
@@ -23,6 +24,10 @@ const { capture } = require('../services/sentry');
 // 1 year
 const COOKIE_MAX_AGE = 31557600000;
 const JWT_MAX_AGE = '1y';
+
+// Hash factice (même coût que le modèle User) comparé quand l'e-mail est inconnu,
+// pour que la connexion prenne le même temps que le compte existe ou non
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
 
 // Champs qu'un non-admin peut modifier sur son propre compte
 const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifications_push', 'rgpd_accepted_at'];
@@ -100,14 +105,24 @@ const cookieOptions = () => {
 const joptimizStateCookieOptions = () => ({ httpOnly: true, secure: config.ENVIRONMENT !== 'development', sameSite: 'lax' });
 
 router.post('/signin', async (req, res) => {
-  let { password, email } = req.body;
-  email = (email || '').trim().toLowerCase();
+  let { password, email } = req.body || {};
+  email = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
-  if (!email || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
+  if (!email || typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
 
   try {
     const user = await UserObject.findOne({ email });
-    if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    if (!user) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+      return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    }
+
+    // Compte sans mot de passe (SSO, invitation non acceptée) : bcrypt rejetterait tout de suite un hash vide,
+    // ce qui révélerait le compte par le temps de réponse. On compare donc contre le hash factice.
+    let match = config.ENVIRONMENT === 'development';
+    if (!match && user.password) match = await user.comparePassword(password);
+    if (!match && !user.password) await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
 
@@ -117,9 +132,6 @@ router.post('/signin', async (req, res) => {
 
     let economicActor = null;
     if (user.role === 'economic_actor') economicActor = await EconomicActor.findById(user.economic_actor_id);
-
-    const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
-    if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     user.set({ last_login_at: Date.now() });
     await user.save();
@@ -237,9 +249,13 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
 
 router.post('/forgot_password', async (req, res) => {
   try {
-    const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const obj = email ? await UserObject.findOne({ email }) : null;
 
-    if (!obj) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    // Même réponse, envoyée tout de suite, que le compte existe ou non (pas d'énumération des comptes).
+    // L'écriture du jeton et l'envoi du mail se font après : leur durée et leurs erreurs ne doivent rien révéler.
+    res.status(200).send({ ok: true });
+    if (!obj) return;
 
     const token = await crypto.randomBytes(20).toString('hex');
     obj.set({ password_reset_token: token, password_reset_expires: Date.now() + 7200000 }); //2h
@@ -269,11 +285,9 @@ router.post('/forgot_password', async (req, res) => {
         to: [{ email: obj.email }],
       },
     );
-
-    res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+    if (!res.headersSent) return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
