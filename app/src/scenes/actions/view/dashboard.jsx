@@ -644,13 +644,14 @@ export default function Dashboard({ action }) {
   const resultsHidden = areResultsHidden(user, action.collectivity_id)
 
   const load = async () => {
-    if (resultsHidden || !collectivity || !action?.excel_worksheetname) return
+    // Collectivité de l'action en priorité : celle du store peut être une autre (lien direct)
+    if (resultsHidden || !(action.collectivity_id || collectivity) || !action?.excel_worksheetname) return
     // Les graphes exigent 100 % partout (cf. isEmpty) : inutile d'appeler l'agrégation tant que l'onboarding sera affiché
     if (action.completion_init !== 100 || action.completion_ref !== 100 || action.completion_prev !== 100 || (action.excel_files_expost?.length > 0 && action.completion_expost !== 100)) return
     try {
       setLoading(true)
       const { ok, data } = await api.post("/excel/action_aggregation", {
-        collectivity,
+        collectivity: action.collectivity_id ? { _id: action.collectivity_id } : collectivity,
         action
       })
       if (!ok) return setLoadError(true)
