@@ -3,6 +3,7 @@ const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
@@ -21,6 +22,10 @@ const { capture } = require('../services/sentry');
 // 1 year
 const COOKIE_MAX_AGE = 31557600000;
 const JWT_MAX_AGE = '1y';
+
+// Hash factice (même coût que le modèle User) comparé quand l'e-mail est inconnu,
+// pour que la connexion prenne le même temps que le compte existe ou non
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
 
 // Champs qu'un non-admin peut modifier sur son propre compte
 const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifications_push', 'rgpd_accepted_at'];
@@ -75,7 +80,13 @@ router.post('/signin', async (req, res) => {
 
   try {
     const user = await UserObject.findOne({ email });
-    if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    if (!user) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+      return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    }
+
+    const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
+    if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
 
@@ -85,9 +96,6 @@ router.post('/signin', async (req, res) => {
 
     let economicActor = null;
     if (user.role === 'economic_actor') economicActor = await EconomicActor.findById(user.economic_actor_id);
-
-    const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
-    if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     user.set({ last_login_at: Date.now() });
     await user.save();
@@ -205,7 +213,8 @@ router.post('/forgot_password', async (req, res) => {
   try {
     const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
 
-    if (!obj) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    // Même réponse que le compte existe ou non (pas d'énumération des comptes)
+    if (!obj) return res.status(200).send({ ok: true });
 
     const token = await crypto.randomBytes(20).toString('hex');
     obj.set({ password_reset_token: token, password_reset_expires: Date.now() + 7200000 }); //2h

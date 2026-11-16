@@ -16,7 +16,7 @@ export default () => {
       if (!validator.isEmail(email)) return toast.error("Adresse e-mail invalide")
       const { ok, code } = await api.post("/user/forgot_password", { email })
       if (!ok) return toast.error(code || "Une erreur est survenue")
-      toast.success("E-mail envoyé !")
+      toast.success("Demande envoyée !")
       setDone(true)
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
@@ -40,8 +40,8 @@ export default () => {
                 </svg>
               </div>
               <p className="text-sm text-gray-600">
-                Un lien de réinitialisation a été envoyé à votre adresse e-mail. Consultez votre boîte de réception et suivez le lien pour
-                définir un nouveau mot de passe.
+                Si un compte existe pour cette adresse, un lien de réinitialisation vient de lui être envoyé. Consultez votre boîte de
+                réception et suivez le lien pour définir un nouveau mot de passe.
               </p>
               <Link to="/auth" className="inline-block text-sm text-primary-green hover:text-primary-green font-medium transition-colors">
                 Retour à la connexion
