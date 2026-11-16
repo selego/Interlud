@@ -112,6 +112,14 @@ describe('POST /user/signin', () => {
     assert.equal(compareCalls, 1);
   });
 
+  test('un compte sans mot de passe (SSO, invitation) passe aussi par bcrypt', async () => {
+    users[0].password = undefined;
+    const res = await post('/user/signin', { email: 'existe@exemple.fr', password: 'peu-importe' });
+    assert.equal(res.status, 401);
+    assert.deepEqual(res.body, { ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    assert.equal(compareCalls, 1);
+  });
+
   test('le bon mot de passe connecte toujours', async () => {
     const res = await post('/user/signin', { email: 'existe@exemple.fr', password: PASSWORD });
     assert.equal(res.status, 200);
@@ -121,6 +129,28 @@ describe('POST /user/signin', () => {
 });
 
 describe('POST /user/forgot_password', () => {
+  test("la réponse n'attend pas l'envoi du mail, et une erreur d'envoi ne change pas la réponse", async () => {
+    const original = brevo.sendEmail;
+    brevo.sendEmail = async () => {
+      throw new Error('Brevo indisponible');
+    };
+    try {
+      const unknown = await post('/user/forgot_password', { email: 'inconnu@exemple.fr' });
+      const known = await post('/user/forgot_password', { email: 'existe@exemple.fr' });
+      assert.deepEqual(unknown, known);
+      assert.equal(known.status, 200);
+    } finally {
+      brevo.sendEmail = original;
+    }
+  });
+
+  test('un e-mail absent ou non textuel reçoit la même réponse', async () => {
+    const missing = await post('/user/forgot_password', {});
+    const object = await post('/user/forgot_password', { email: { $ne: '' } });
+    const spaced = await post('/user/forgot_password', { email: '  inconnu@exemple.fr ' });
+    for (const res of [missing, object, spaced]) assert.deepEqual(res.body, { ok: true });
+  });
+
   test('même réponse que le compte existe ou non', async () => {
     const unknown = await post('/user/forgot_password', { email: 'inconnu@exemple.fr' });
     const known = await post('/user/forgot_password', { email: 'existe@exemple.fr' });
@@ -135,6 +165,7 @@ describe('POST /user/forgot_password', () => {
     assert.equal(sentEmails.length, 0);
 
     await post('/user/forgot_password', { email: 'existe@exemple.fr' });
+    await new Promise((resolve) => setImmediate(resolve)); // l'envoi se fait après la réponse
     assert.equal(sentEmails.length, 1);
     assert.deepEqual(sentEmails[0].to, [{ email: 'existe@exemple.fr' }]);
     assert.ok(users[0].password_reset_token);

@@ -85,7 +85,11 @@ router.post('/signin', async (req, res) => {
       return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
     }
 
-    const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
+    // Compte sans mot de passe (SSO, invitation non acceptée) : bcrypt rejetterait tout de suite un hash vide,
+    // ce qui révélerait le compte par le temps de réponse. On compare donc contre le hash factice.
+    let match = config.ENVIRONMENT === 'development';
+    if (!match && user.password) match = await user.comparePassword(password);
+    else if (!match) await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
@@ -211,10 +215,13 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
 
 router.post('/forgot_password', async (req, res) => {
   try {
-    const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const obj = email ? await UserObject.findOne({ email }) : null;
 
-    // Même réponse que le compte existe ou non (pas d'énumération des comptes)
-    if (!obj) return res.status(200).send({ ok: true });
+    // Même réponse, envoyée tout de suite, que le compte existe ou non (pas d'énumération des comptes).
+    // L'écriture du jeton et l'envoi du mail se font après : leur durée et leurs erreurs ne doivent rien révéler.
+    res.status(200).send({ ok: true });
+    if (!obj) return;
 
     const token = await crypto.randomBytes(20).toString('hex');
     obj.set({ password_reset_token: token, password_reset_expires: Date.now() + 7200000 }); //2h
@@ -244,11 +251,9 @@ router.post('/forgot_password', async (req, res) => {
         to: [{ email: obj.email }],
       },
     );
-
-    res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    if (!res.headersSent) return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
