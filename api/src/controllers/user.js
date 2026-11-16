@@ -47,7 +47,7 @@ const getUserUpdate = (reqUser, target, body) => {
 
 // Collectivités où l'utilisateur est approuvé (optionnellement avec un rôle donné)
 const approvedCollectivityIds = (user, role) =>
-  (user.collectivities || []).filter((c) => c.status === 'approved' && (!role || c.role === role)).map((c) => String(c.id));
+  (user.collectivities || []).filter((c) => c?.id && c.status === 'approved' && (!role || c.role === role)).map((c) => String(c.id));
 
 // Lecture d'un profil : soi-même, ou un membre d'une collectivité dont on est administrateur approuvé
 const canReadUser = (reqUser, target) => {
@@ -56,14 +56,14 @@ const canReadUser = (reqUser, target) => {
   // Un admin de collectivité ne lit jamais un admin de la plateforme, même rattaché à sa collectivité
   if (target.role === 'admin') return false;
   const adminIds = approvedCollectivityIds(reqUser, 'admin');
-  return (target.collectivities || []).some((c) => adminIds.includes(String(c.id)));
+  return (target.collectivities || []).some((c) => c?.id && adminIds.includes(String(c.id)));
 };
 
 // Recherche par un non-admin : limitée aux collectivités dont il est administrateur approuvé, ou à son acteur économique
-const canSearchUsers = (reqUser, body) => {
+const canSearchUsers = (reqUser, body = {}) => {
   if (reqUser.role === 'admin') return true;
   if (typeof body.collectivity_id === 'string' && approvedCollectivityIds(reqUser, 'admin').includes(body.collectivity_id)) return true;
-  return !!(body.economic_actor_id && reqUser.economic_actor_id && String(body.economic_actor_id) === String(reqUser.economic_actor_id));
+  return reqUser.role === 'economic_actor' && typeof body.economic_actor_id === 'string' && !!reqUser.economic_actor_id && body.economic_actor_id === String(reqUser.economic_actor_id);
 };
 
 // Logo InTerLUD+ pour les emails (URL publique)
@@ -323,13 +323,15 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    if (!canSearchUsers(req.user, req.body)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    if (!canSearchUsers(req.user, req.body || {})) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { search, sort, per_page, page } = req.body;
     let query = {};
 
     if (req.body.collectivity_id) query = { ...query, collectivities: { $elemMatch: { id: req.body.collectivity_id } } };
     if (req.body.economic_actor_id) query = { ...query, economic_actor_id: req.body.economic_actor_id };
     if (req.body.role) query = { ...query, role: req.body.role };
+    // Un non-admin ne voit jamais les admins de la plateforme (comme pour GET /user/:id)
+    if (req.user.role !== 'admin') query = { ...query, role: typeof req.body.role === 'string' ? { $eq: req.body.role, $ne: 'admin' } : { $ne: 'admin' } };
 
     const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, '\\$&');
     if (search) {
@@ -778,11 +780,14 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
 
 router.post('/check-invitation-token', async (req, res) => {
   try {
-    const { invitation_token } = req.body;
+    const { invitation_token } = req.body || {};
+    // Jeton vide ou nul : correspondrait à tous les comptes sans invitation en cours
+    if (typeof invitation_token !== 'string' || !invitation_token.trim()) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
     const user = await UserObject.findOne({ invitation_token });
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
     // if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
-    return res.status(200).send({ ok: true, user });
+    // Route publique : seuls l'e-mail et le nom servent à l'écran d'invitation
+    return res.status(200).send({ ok: true, user: { email: user.email, name: user.name } });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });

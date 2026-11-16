@@ -64,10 +64,21 @@ const chain = (rows) => {
 User.findOne = async (query) => {
   if (query._id) return all.find((u) => u._id.toString() === String(query._id)) || null;
   if (query.email) return all.find((u) => u.email === query.email) || null;
-  if (query.invitation_token) return all.find((u) => u.invitation_token === query.invitation_token) || null;
+  if ('invitation_token' in query) return all.find((u) => u.invitation_token === query.invitation_token) || null;
   return null;
 };
-User.find = () => chain(all);
+// Filtre simulé : reproduit les conditions construites par POST /user/search
+const matches = (u, q) => {
+  if (q.collectivities && !(u.collectivities || []).some((c) => String(c.id) === String(q.collectivities.$elemMatch.id))) return false;
+  if (q.economic_actor_id && String(u.economic_actor_id) !== String(q.economic_actor_id)) return false;
+  if (typeof q.role === 'string' && u.role !== q.role) return false;
+  if (q.role && typeof q.role === 'object') {
+    if ('$ne' in q.role && u.role === q.role.$ne) return false;
+    if ('$eq' in q.role && u.role !== q.role.$eq) return false;
+  }
+  return true;
+};
+User.find = (q = {}) => chain(all.filter((u) => matches(u, q)));
 User.countDocuments = async () => all.length;
 UserActionRight.find = async () => [];
 Collectivity.findById = async () => null;
@@ -128,6 +139,21 @@ describe('Aucun hash ni jeton dans les réponses /user', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.user.email, 'member@test.fr');
     assertNoSecrets(res);
+  });
+
+  test('POST /user/check-invitation-token refuse un jeton vide ou nul', async () => {
+    // Comptes sans invitation en cours : jeton vide (inscription) ou nul (invitation déjà acceptée)
+    users.memberB.invitation_token = '';
+    users.adminB.invitation_token = null;
+    try {
+      for (const invitation_token of ['', '  ', null, undefined, { $ne: 'x' }]) {
+        const res = await call('POST', '/user/check-invitation-token', null, { invitation_token });
+        assert.equal(res.status, 404, `jeton ${JSON.stringify(invitation_token)}`);
+      }
+    } finally {
+      users.memberB.invitation_token = 'invite-memberb';
+      users.adminB.invitation_token = 'invite-adminb';
+    }
   });
 
   test('POST /user/check-invitation-token renvoie email et nom, sans jeton', async () => {
@@ -195,6 +221,26 @@ describe('POST /user/search', () => {
     assert.equal((await call('POST', '/user/search', 'member', { collectivity_id: COL_A })).status, 403);
     assert.equal((await call('POST', '/user/search', 'ae', { collectivity_id: COL_A })).status, 403);
     assert.equal((await call('POST', '/user/search', 'adminA', { collectivity_id: { $ne: COL_B } })).status, 403);
+  });
+
+  test("un admin de collectivité ne voit pas l'admin plateforme rattaché, même en filtrant sur le rôle", async () => {
+    const res = await call('POST', '/user/search', 'adminA', { collectivity_id: COL_A });
+    assert.equal(res.status, 200);
+    const ids = res.body.data.map((u) => u._id);
+    assert.ok(ids.includes(users.member._id.toString()));
+    assert.ok(!ids.includes(users.adminInA._id.toString()));
+    const asAdmin = await call('POST', '/user/search', 'adminA', { collectivity_id: COL_A, role: 'admin' });
+    assert.equal(asAdmin.body.data.length, 0);
+  });
+
+  test("un utilisateur rétrogradé n'utilise plus l'ancien acteur économique ; corps absent : 403", async () => {
+    users.member.economic_actor_id = EA_1;
+    try {
+      assert.equal((await call('POST', '/user/search', 'member', { economic_actor_id: EA_1 })).status, 403);
+    } finally {
+      users.member.economic_actor_id = undefined;
+    }
+    assert.equal((await call('POST', '/user/search', 'ae', { economic_actor_id: [EA_1] })).status, 403);
   });
 
   test('un admin de collectivité liste les membres de sa collectivité', async () => {
