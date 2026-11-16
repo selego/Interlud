@@ -162,7 +162,7 @@ const UserLayout = () => {
       
       setCollectivity(data)
     } catch (error) {
-      toast.error(error || "Erreur lors de la récupération de la collectivité")
+      toast.error(error?.code || "Erreur lors de la récupération de la collectivité")
     }
   }
 
@@ -173,7 +173,7 @@ const UserLayout = () => {
       if (!ok) return toast.error(code || "Erreur lors de la récupération de l'acteur économique")
       setEconomicActor(data)
     } catch (error) {
-      toast.error(error || "Erreur lors de la récupération de l'acteur économique")
+      toast.error(error?.code || "Erreur lors de la récupération de l'acteur économique")
     }
   }
 
