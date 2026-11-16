@@ -27,6 +27,7 @@ const ERROR_CODES = {
   ALREADY_MEMBER: 'Cet utilisateur est déjà membre de la collectivité',
   YEAR_PREV_ALREADY_EXISTS: 'Année prévisionnelle déjà existante',
   YEAR_EXPOST_ALREADY_EXISTS: 'Année ex-post déjà existante',
+  TOO_MANY_REQUESTS: 'Trop de tentatives, veuillez réessayer plus tard',
 };
 
 module.exports = ERROR_CODES;

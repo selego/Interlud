@@ -26,7 +26,7 @@ const Invite = () => {
       setValues({ ...values, email: user.email, name: user.name })
     } catch (error) {
       console.error(error)
-      toast.error("Invalid or expired invitation token")
+      toast.error(error.code || error.message || "Invalid or expired invitation token")
       setInvalidToken(true)
     }
   }
@@ -64,7 +64,7 @@ const Invite = () => {
     } catch (error) {
       console.log("✌️  error", error)
       if (error.code === "USER_ALREADY_REGISTERED") return toast.error("Cette adresse e-mail est déjà enregistrée.\nEssayez de vous connecter.")
-      toast.error("Erreur lors de la création du compte")
+      toast.error(error.code || "Erreur lors de la création du compte")
     }
     setLoading(false)
   }
