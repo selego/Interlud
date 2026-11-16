@@ -7,9 +7,12 @@ const cookieParser = require('cookie-parser');
 const passport = require('passport');
 const { initSentry, setupErrorHandler } = require('./services/sentry');
 const { securityHeaders } = require('./services/security');
+const { mountRateLimits } = require('./services/rateLimit');
 const { PORT, ENVIRONMENT, APP_URL } = require('./config');
 
 const app = express();
+// Clever Cloud place un seul reverse proxy devant l'app : req.ip = IP du client (X-Forwarded-For), utilisée par la limitation des tentatives.
+app.set('trust proxy', 1);
 initSentry(app);
 app.use(securityHeaders(ENVIRONMENT));
 
@@ -23,6 +26,7 @@ app.use(cors({ credentials: true, origin: [APP_URL, 'your production url because
 app.use(cookieParser());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+mountRateLimits(app);
 
 const lastDeployedAt = new Date();
 app.get('/', async (req, res) => {

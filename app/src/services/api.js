@@ -109,6 +109,8 @@ class api {
         })
 
         const res = await response.json()
+        // Limitation des tentatives côté API : les écrans affichent `code` tel quel, on le traduit ici
+        if (res.code === "TOO_MANY_REQUESTS") res.code = "Trop de tentatives, veuillez réessayer plus tard"
         if (response.status !== 200) {
           return reject(res)
         }
