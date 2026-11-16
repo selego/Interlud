@@ -160,13 +160,26 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     const hasExpost = !!req.body.year_expost;
 
-    // Seul un admin plateforme peut créer autre chose qu'une action de référence ou personnalisée
-    if (req.user.role !== 'admin' && req.body.type && !['reference', 'custom'].includes(req.body.type)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    // Hors admin plateforme : uniquement une action de référence ou personnalisée (référence par défaut)
+    if (req.user.role !== 'admin') {
+      if (!req.body.type) req.body.type = 'reference';
+      if (!['reference', 'custom'].includes(req.body.type)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
     // Un acteur économique crée toujours pour son propre compte
     if (req.user.role === 'economic_actor') {
+      if (!req.user.economic_actor_id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
       req.body.owner = 'economic_actor';
       req.body.economic_actor_id = String(req.user.economic_actor_id);
+      req.body.economic_actor_name = req.user.economic_actor_name;
     }
+    // Un membre de collectivité crée toujours pour la collectivité
+    if (req.user.role === 'user') {
+      req.body.owner = 'collectivity';
+      delete req.body.economic_actor_id;
+      delete req.body.economic_actor_name;
+    }
+    if (req.body.owner && !['collectivity', 'economic_actor'].includes(req.body.owner)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (req.body.owner === 'economic_actor' && (typeof req.body.economic_actor_id !== 'string' || !req.body.economic_actor_id.trim())) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     delete req.body.visible_for_economic_actors;
 
     const parentAction = await Action.findById(req.body.action_parent_id);

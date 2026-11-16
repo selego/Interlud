@@ -19,6 +19,7 @@ const users = {
   admin: { _id: 'u-admin', name: 'Admin', role: 'admin', collectivities: [] },
   member: { _id: 'u-member', name: 'Membre A', role: 'user', collectivities: [{ id: 'col-a', role: 'admin', status: 'approved' }] },
   ae: { _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'economic_actor', status: 'approved' }] },
+  aeSansOrga: { _id: 'u-ae2', name: 'AE sans organisation', role: 'economic_actor', economic_actor_id: '', collectivities: [] },
 };
 
 let store;
@@ -145,9 +146,26 @@ describe("Création d'action (POST /action)", () => {
     assert.equal((await call('POST', '/action', 'ae', createBody('g-b2', { owner: 'collectivity' }))).status, 403);
   });
 
-  test("une collectivité ne peut pas créer pour un acteur économique sur une fiche non visible", async () => {
-    const res = await call('POST', '/action', 'member', createBody('g-b2', { owner: 'economic_actor', economic_actor_id: 'ea-1' }));
+  test("un admin ne peut pas créer pour un acteur économique sur une fiche non visible", async () => {
+    const res = await call('POST', '/action', 'admin', createBody('g-b2', { owner: 'economic_actor', economic_actor_id: 'ea-1' }));
     assert.equal(res.status, 403);
+  });
+
+  test("un membre de collectivité crée toujours pour la collectivité", async () => {
+    // owner forcé à collectivity : le contrôle de visibilité est passé, arrêt sur la collectivité simulée absente
+    const res = await call('POST', '/action', 'member', createBody('g-b2', { owner: 'economic_actor', economic_actor_id: 'ea-autre' }));
+    assert.equal(res.status, 404);
+  });
+
+  test("un acteur économique sans organisation est refusé", async () => {
+    const res = await call('POST', '/action', 'aeSansOrga', createBody('g-b3'));
+    assert.equal(res.status, 403);
+  });
+
+  test("owner acteur économique sans identifiant ou owner inconnu : refus", async () => {
+    assert.equal((await call('POST', '/action', 'admin', createBody('g-b3', { owner: 'economic_actor' }))).status, 400);
+    assert.equal((await call('POST', '/action', 'admin', createBody('g-b3', { owner: 'economic_actor', economic_actor_id: { $ne: null } }))).status, 400);
+    assert.equal((await call('POST', '/action', 'admin', createBody('g-b3', { owner: 'autre' }))).status, 400);
   });
 
   test("une fiche existante sans le champ reste utilisable par un acteur économique", async () => {
@@ -164,6 +182,8 @@ describe("Création d'action (POST /action)", () => {
     assert.equal((await call('POST', '/action', 'ae', createBody('g-b3', { type: 'global' }))).status, 400);
     assert.equal((await call('POST', '/action', 'member', createBody('g-b3', { type: 'global' }))).status, 400);
     assert.equal((await call('POST', '/action', 'member', createBody('g-b3', { type: 'custom' }))).status, 404);
+    assert.equal((await call('POST', '/action', 'member', createBody('g-b3', { type: 'config' }))).status, 400);
+    assert.equal((await call('POST', '/action', 'admin', createBody('g-b3', { type: 'global' }))).status, 404);
   });
 });
 
