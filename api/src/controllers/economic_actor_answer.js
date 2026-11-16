@@ -93,7 +93,7 @@ router.post('/admin/search', passport.authenticate('admin', { session: false, fa
           updatedAt: answer.updatedAt,
         };
       })
-      .sort((a, b) => a.economic_actor_name.localeCompare(b.economic_actor_name, 'fr') || a.question_order - b.question_order);
+      .sort((a, b) => a.economic_actor_name.localeCompare(b.economic_actor_name, 'fr') || a.question_order - b.question_order || a.question_label.localeCompare(b.question_label, 'fr'));
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { FiArrowLeft } from "react-icons/fi"
 import api from "@/services/api"
@@ -11,19 +11,24 @@ export default function Answers() {
   const [answers, setAnswers] = useState(null)
   const [failed, setFailed] = useState(false)
   const [filters, setFilters] = useState({ question_id: "" })
+  // Numéro de la dernière requête : la réponse d'une requête dépassée (filtre changé, réessai) est ignorée
+  const lastRequest = useRef(0)
 
   const fetchAnswers = async () => {
+    const requestId = ++lastRequest.current
     // Pendant le chargement et en cas d'échec, on n'affiche jamais les lignes d'un autre filtre
     setAnswers(null)
     setFailed(false)
     try {
       const { ok, data, code } = await api.post("/economic_actor_answer/admin/search", { ...filters })
+      if (requestId !== lastRequest.current) return
       if (!ok) {
         setFailed(true)
         return toast.error(code || "Une erreur est survenue")
       }
       setAnswers(data)
     } catch (error) {
+      if (requestId !== lastRequest.current) return
       setFailed(true)
       toast.error(error?.code || "Une erreur est survenue")
     }
@@ -103,8 +108,10 @@ function QuestionFilter({ filters, setFilters }) {
 
   return (
     <div className="mb-4 max-w-md">
-      <label className="block text-sm font-semibold text-gray-700 mb-2">Question</label>
-      <select value={filters.question_id} onChange={(e) => setFilters({ ...filters, question_id: e.target.value })} className="w-full input-primary rounded-lg">
+      <label htmlFor="answers-question-filter" className="block text-sm font-semibold text-gray-700 mb-2">
+        Question
+      </label>
+      <select id="answers-question-filter" value={filters.question_id} onChange={(e) => setFilters({ ...filters, question_id: e.target.value })} className="w-full input-primary rounded-lg">
         <option value="">Toutes les questions</option>
         {questions.map((question) => (
           <option key={question._id} value={question._id}>
