@@ -281,6 +281,23 @@ describe('POST /user/invite', () => {
   test("seul un membre de l'acteur économique invite dans cet acteur", async () => {
     assert.equal((await invite('member', { email: 'nouveau-ae@test.fr', economic_actor: { _id: EA_1 } })).status, 403);
     assert.equal((await invite('ae', { email: 'nouveau-ae@test.fr', economic_actor: { _id: id() } })).status, 400);
+    assert.equal((await invite('adminA', { email: 'x@test.fr', collectivity: { _id: 'abc' } })).status, 400);
+    assert.equal((await invite('adminA', { email: 'x@test.fr', collectivity: { _id: { $ne: null } } })).status, 400);
+  });
+
+  test("un nouveau compte invité dans un acteur économique garde son jeton et son rattachement", async () => {
+    const res = await invite('ae', { email: 'nouveau-ae@test.fr', economic_actor: { _id: EA_1 } });
+    assert.equal(res.status, 200);
+    const doc = created.at(-1);
+    assert.equal(doc.role, 'economic_actor');
+    assert.equal(doc.economic_actor_id, EA_1);
+    assert.ok(doc.invitation_token);
+    assert.ok(doc.invitation_token_expires);
+  });
+
+  test("un membre d'acteur économique ne rattache pas un agent de collectivité existant", async () => {
+    assert.equal((await invite('ae', { email: 'member@test.fr', economic_actor: { _id: EA_1 } })).status, 403);
+    assert.equal(users.member.role, 'user');
   });
 
   test("l'invitation ne renvoie jamais le profil invité, et le nouveau compte ne prend aucun champ du corps", async () => {

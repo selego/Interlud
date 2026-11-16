@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
@@ -453,8 +454,12 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
     if (!email) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     // L'acteur économique ou la collectivité sont relus en base : jamais de nom ni de rattachement venant du corps
-    const economicActor = body.economic_actor?._id ? await EconomicActor.findById(String(body.economic_actor._id)) : null;
-    const collectivity = !economicActor && body.collectivity?._id ? await Collectivity.findById(String(body.collectivity._id)) : null;
+    const economicActorId = body.economic_actor?._id;
+    const collectivityId = body.collectivity?._id;
+    const targetId = economicActorId || collectivityId;
+    if (typeof targetId !== 'string' || !mongoose.isValidObjectId(targetId)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const economicActor = economicActorId ? await EconomicActor.findById(economicActorId) : null;
+    const collectivity = economicActorId ? null : await Collectivity.findById(collectivityId);
     if (!economicActor && !collectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!canInvite(req.user, { economicActor, collectivity })) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
@@ -467,6 +472,10 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
       if (exist) {
         if (exist.economic_actor_id === obj.economic_actor._id) {
           return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_MEMBER });
+        }
+        // Hors admin plateforme, on ne rattache pas un compte d'agent de collectivité ou d'un autre acteur économique
+        if (req.user.role !== 'admin' && (exist.role !== 'economic_actor' || exist.economic_actor_id)) {
+          return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
         }
 
         exist.economic_actor_id = obj.economic_actor._id;
@@ -587,7 +596,9 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
         to: [{ email: obj.email }],
       });
 
-      await UserObject.create(pickFields(obj, ['email', 'created_at']));
+      await UserObject.create(
+        pickFields(obj, ['email', 'created_at', 'invitation_token', 'invitation_token_expires', 'invitation_sent_at', 'role', 'economic_actor_id', 'economic_actor_name', 'collectivities']),
+      );
       return res.status(200).send({ ok: true });
     }
 
@@ -818,7 +829,8 @@ router.post('/invite-accepted', async (req, res) => {
     const { email, password, name, invitation_token } = req.body || {};
     // Jeton vide ou nul : correspondrait à tous les comptes sans invitation en cours
     if (typeof email !== 'string' || typeof invitation_token !== 'string' || !invitation_token.trim()) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
-    const user = await UserObject.findOne({ email, invitation_token });
+    if (typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
+    const user = await UserObject.findOne({ email: email.trim().toLowerCase(), invitation_token });
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
 
     // Sans date d'expiration, le jeton n'est pas une invitation valide
