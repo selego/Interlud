@@ -21,9 +21,10 @@ const brevo = require('../services/brevo');
 const joptimiz = require('../services/joptimiz');
 const { capture } = require('../services/sentry');
 
-// 1 year
-const COOKIE_MAX_AGE = 31557600000;
-const JWT_MAX_AGE = '1y';
+// Durée de session : 7 jours (audit SEC-10), identique pour le JWT et le cookie
+const SESSION_DURATION_DAYS = 7;
+const COOKIE_MAX_AGE = SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
+const JWT_MAX_AGE = `${SESSION_DURATION_DAYS}d`;
 
 // Hash factice (même coût que le modèle User) comparé quand l'e-mail est inconnu,
 // pour que la connexion prenne le même temps que le compte existe ou non
