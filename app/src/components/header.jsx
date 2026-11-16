@@ -28,8 +28,8 @@ function SelectSearch({ value, label, onChange }) {
   const fetchCollectivities = async () => {
       try {
       setLoading(true)
-      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      const { ok, data, code } = await api.post("/collectivity/search", { search: escaped, limit: 20 })
+      // L'API échappe elle-même la saisie (SEC-04) : on envoie le texte brut
+      const { ok, data, code } = await api.post("/collectivity/search", { search, limit: 20 })
         if (!ok) return toast.error(code || "Erreur lors de la récupération des collectivités")
         setOptions(data)
       } catch (error) {
