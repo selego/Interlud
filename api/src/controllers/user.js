@@ -1,8 +1,10 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
@@ -12,15 +14,21 @@ const config = require('../config');
 const { validatePassword, pickFields } = require('../utils');
 const { BREVO_TEMPLATES } = require('../utils/constants');
 const ERROR_CODES = require('../utils/errorCodes');
+const { searchRegex, isInvalidSearch } = require('../utils/search');
 const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
 const joptimiz = require('../services/joptimiz');
 const { capture } = require('../services/sentry');
 
-// 1 year
-const COOKIE_MAX_AGE = 31557600000;
-const JWT_MAX_AGE = '1y';
+// Durée de session : 7 jours (audit SEC-10), identique pour le JWT et le cookie
+const SESSION_DURATION_DAYS = 7;
+const COOKIE_MAX_AGE = SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
+const JWT_MAX_AGE = `${SESSION_DURATION_DAYS}d`;
+
+// Hash factice (même coût que le modèle User) comparé quand l'e-mail est inconnu,
+// pour que la connexion prenne le même temps que le compte existe ou non
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
 
 // Champs qu'un non-admin peut modifier sur son propre compte
 const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifications_push', 'rgpd_accepted_at'];
@@ -45,6 +53,34 @@ const getUserUpdate = (reqUser, target, body) => {
   return update;
 };
 
+// Collectivités où l'utilisateur est approuvé (optionnellement avec un rôle donné)
+const approvedCollectivityIds = (user, role) =>
+  (user.collectivities || []).filter((c) => c?.id && c.status === 'approved' && (!role || c.role === role)).map((c) => String(c.id));
+
+// Lecture d'un profil : soi-même, ou un membre d'une collectivité dont on est administrateur approuvé
+const canReadUser = (reqUser, target) => {
+  if (reqUser.role === 'admin') return true;
+  if (reqUser._id.toString() === target._id.toString()) return true;
+  // Un admin de collectivité ne lit jamais un admin de la plateforme, même rattaché à sa collectivité
+  if (target.role === 'admin') return false;
+  const adminIds = approvedCollectivityIds(reqUser, 'admin');
+  return (target.collectivities || []).some((c) => c?.id && adminIds.includes(String(c.id)));
+};
+
+// Recherche par un non-admin : limitée aux collectivités dont il est administrateur approuvé, ou à son acteur économique
+const canSearchUsers = (reqUser, body = {}) => {
+  if (reqUser.role === 'admin') return true;
+  if (typeof body.collectivity_id === 'string' && approvedCollectivityIds(reqUser, 'admin').includes(body.collectivity_id)) return true;
+  return reqUser.role === 'economic_actor' && typeof body.economic_actor_id === 'string' && !!reqUser.economic_actor_id && body.economic_actor_id === String(reqUser.economic_actor_id);
+};
+
+// Invitation : admin plateforme, admin approuvé de la collectivité, ou membre de l'acteur économique
+const canInvite = (reqUser, { economicActor, collectivity }) => {
+  if (reqUser.role === 'admin') return true;
+  if (economicActor) return reqUser.role === 'economic_actor' && String(reqUser.economic_actor_id) === String(economicActor._id);
+  return approvedCollectivityIds(reqUser, 'admin').includes(String(collectivity._id));
+};
+
 // Logo InTerLUD+ pour les emails (URL publique)
 const INTERLUD_LOGO_URL = 'https://www.interlud.green/images/interlud-plus@2x.png';
 
@@ -62,20 +98,32 @@ const cookieOptions = () => {
       httpOnly: true,
       secure: true,
       origin: 'YOUR PROD URL',
-      sameSite: 'none',
+      sameSite: 'lax',
     };
   }
 };
 
-router.post('/signin', async (req, res) => {
-  let { password, email } = req.body;
-  email = (email || '').trim().toLowerCase();
+const joptimizStateCookieOptions = () => ({ httpOnly: true, secure: config.ENVIRONMENT !== 'development', sameSite: 'lax' });
 
-  if (!email || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
+router.post('/signin', async (req, res) => {
+  let { password, email } = req.body || {};
+  email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+
+  if (!email || typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
 
   try {
     const user = await UserObject.findOne({ email });
-    if (!user) return res.status(401).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    if (!user) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+      return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    }
+
+    // Compte sans mot de passe (SSO, invitation non acceptée) : bcrypt rejetterait tout de suite un hash vide,
+    // ce qui révélerait le compte par le temps de réponse. On compare donc contre le hash factice.
+    let match = config.ENVIRONMENT === 'development';
+    if (!match && user.password) match = await user.comparePassword(password);
+    if (!match && !user.password) await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
 
     const userActionRights = await UserActionRightObject.find({ user_id: user._id });
 
@@ -86,9 +134,6 @@ router.post('/signin', async (req, res) => {
     let economicActor = null;
     if (user.role === 'economic_actor') economicActor = await EconomicActor.findById(user.economic_actor_id);
 
-    const match = config.ENVIRONMENT === 'development' || (await user.comparePassword(password));
-    if (!match) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
-
     user.set({ last_login_at: Date.now() });
     await user.save();
 
@@ -98,7 +143,7 @@ router.post('/signin', async (req, res) => {
     return res.status(200).send({ ok: true, token, user, userActionRights, collectivity, economicActor });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -128,13 +173,15 @@ router.post('/signup', async (req, res) => {
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
 router.post('/logout', async (_, res) => {
   try {
-    res.clearCookie('jwt', cookieOptions());
+    // Sans maxAge : sinon Express 4 recalcule une expiration future et le cookie n'est pas effacé.
+    const { maxAge, ...clearOptions } = cookieOptions();
+    res.clearCookie('jwt', clearOptions);
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
@@ -148,12 +195,12 @@ router.get('/sso/joptimiz', async (req, res) => {
 
     if (!code) {
       const newState = crypto.randomBytes(16).toString('hex');
-      res.cookie('joptimiz_state', newState, { maxAge: 600000, httpOnly: true, secure: config.ENVIRONMENT !== 'development', sameSite: 'lax' });
+      res.cookie('joptimiz_state', newState, { maxAge: 600000, ...joptimizStateCookieOptions() });
       return res.redirect(joptimiz.getAuthorizationUrl(newState));
     }
 
     if (!state || state !== req.cookies.joptimiz_state) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
-    res.clearCookie('joptimiz_state');
+    res.clearCookie('joptimiz_state', joptimizStateCookieOptions());
 
     const tokenData = await joptimiz.exchangeCode(code);
     if (!tokenData.access_token) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
@@ -197,15 +244,19 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
     return res.status(200).send({ user, token, ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
 router.post('/forgot_password', async (req, res) => {
   try {
-    const obj = await UserObject.findOne({ email: req.body.email.toLowerCase() });
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const obj = email ? await UserObject.findOne({ email }) : null;
 
-    if (!obj) return res.status(401).send({ ok: false, code: ERROR_CODES.EMAIL_OR_PASSWORD_INVALID });
+    // Même réponse, envoyée tout de suite, que le compte existe ou non (pas d'énumération des comptes).
+    // L'écriture du jeton et l'envoi du mail se font après : leur durée et leurs erreurs ne doivent rien révéler.
+    res.status(200).send({ ok: true });
+    if (!obj) return;
 
     const token = await crypto.randomBytes(20).toString('hex');
     obj.set({ password_reset_token: token, password_reset_expires: Date.now() + 7200000 }); //2h
@@ -235,11 +286,9 @@ router.post('/forgot_password', async (req, res) => {
         to: [{ email: obj.email }],
       },
     );
-
-    res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    if (!res.headersSent) return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -261,7 +310,7 @@ router.post('/forgot_password_reset', async (req, res) => {
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -284,35 +333,49 @@ router.post('/reset_password', passport.authenticate('user', { session: false })
     return res.status(200).send({ ok: true, user: obj });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const data = await UserObject.findOne({ _id: req.params.id });
+    if (!data) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    if (!canReadUser(req.user, data)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const { search, sort, per_page, page } = req.body;
+    if (!canSearchUsers(req.user, req.body || {})) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    const { search, sort, per_page, page } = req.body || {};
     let query = {};
 
     if (req.body.collectivity_id) query = { ...query, collectivities: { $elemMatch: { id: req.body.collectivity_id } } };
     if (req.body.economic_actor_id) query = { ...query, economic_actor_id: req.body.economic_actor_id };
     if (req.body.role) query = { ...query, role: req.body.role };
+    // Un non-admin ne voit jamais les admins de la plateforme (comme pour GET /user/:id)
+    if (req.user.role !== 'admin') query = { ...query, role: typeof req.body.role === 'string' ? { $eq: req.body.role, $ne: 'admin' } : { $ne: 'admin' } };
 
-    const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, '\\$&');
+    if (isInvalidSearch(search)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (search) {
       query = {
         ...query,
-        $or: [{ name: { $regex: searchValue, $options: 'i' } }, { email: { $regex: searchValue, $options: 'i' } }],
+        $or: [{ name: searchRegex(search) }, { email: searchRegex(search) }],
       };
+    }
+
+    // Liste fermée des champs de tri : les autres (mot de passe, jetons…) sont ignorés
+    const USER_SORT_FIELDS = ['name', 'email', 'role', 'status', 'createdAt', 'updatedAt', 'last_login_at'];
+    const safeSort = {};
+    if (sort && typeof sort === 'object' && !Array.isArray(sort)) {
+      for (const [field, order] of Object.entries(sort)) {
+        if (USER_SORT_FIELDS.includes(field)) safeSort[field] = [-1, '-1', 'desc', 'descending'].includes(order) ? -1 : 1;
+      }
     }
 
     const no_of_docs_each_page = per_page || 200;
@@ -321,14 +384,14 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const users = await UserObject.find(query)
       .skip(no_of_docs_each_page * current_page_number)
       .limit(no_of_docs_each_page)
-      .sort(sort);
+      .sort(safeSort);
 
     const total = await UserObject.countDocuments(query);
 
     return res.status(200).send({ ok: true, data: users, total: total });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -354,7 +417,7 @@ router.post('/', passport.authenticate(['admin'], { session: false }), async (re
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -372,7 +435,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }),
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -383,7 +446,7 @@ router.put('/', passport.authenticate(['admin', 'user'], { session: false }), as
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -393,7 +456,7 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
     res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -409,19 +472,39 @@ router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { se
     return res.status(200).send({ ok: true, user: obj });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
 router.post('/invite', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const obj = req.body;
-    const exist = await UserObject.findOne({ email: obj.email });
+    const body = req.body || {};
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    if (!email) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
+    // L'acteur économique ou la collectivité sont relus en base : jamais de nom ni de rattachement venant du corps
+    const economicActorId = body.economic_actor?._id;
+    const collectivityId = body.collectivity?._id;
+    const targetId = economicActorId || collectivityId;
+    if (typeof targetId !== 'string' || !mongoose.isValidObjectId(targetId)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const economicActor = economicActorId ? await EconomicActor.findById(economicActorId) : null;
+    const collectivity = economicActorId ? null : await Collectivity.findById(collectivityId);
+    if (!economicActor && !collectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!canInvite(req.user, { economicActor, collectivity })) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+
+    const obj = economicActor
+      ? { email, economic_actor: { _id: String(economicActor._id), name: economicActor.name, collectivities: economicActor.collectivities || [] } }
+      : { email, collectivity: { _id: String(collectivity._id), name: collectivity.name } };
+    const exist = await UserObject.findOne({ email });
 
     if (obj.economic_actor) {
       if (exist) {
         if (exist.economic_actor_id === obj.economic_actor._id) {
           return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_MEMBER });
+        }
+        // Hors admin plateforme, on ne rattache pas un compte d'agent de collectivité ou d'un autre acteur économique
+        if (req.user.role !== 'admin' && (exist.role !== 'economic_actor' || exist.economic_actor_id)) {
+          return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
         }
 
         exist.economic_actor_id = obj.economic_actor._id;
@@ -468,7 +551,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
           to: [{ email: exist.email }],
         });
 
-        return res.status(200).send({ data: exist, ok: true });
+        return res.status(200).send({ ok: true });
       }
 
       obj.created_at = new Date();
@@ -542,8 +625,10 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
         to: [{ email: obj.email }],
       });
 
-      const user = await UserObject.create(obj);
-      return res.status(200).send({ data: user, ok: true });
+      await UserObject.create(
+        pickFields(obj, ['email', 'created_at', 'invitation_token', 'invitation_token_expires', 'invitation_sent_at', 'role', 'economic_actor_id', 'economic_actor_name', 'collectivities']),
+      );
+      return res.status(200).send({ ok: true });
     }
 
     if (exist) {
@@ -593,7 +678,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
         to: [{ email: exist.email }],
       });
 
-      return res.status(200).send({ data: exist, ok: true });
+      return res.status(200).send({ ok: true });
     }
 
     obj.created_at = new Date();
@@ -666,8 +751,8 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
       to: [{ email: obj.email }],
     });
 
-    const user = await UserObject.create(obj);
-    return res.status(200).send({ data: user, ok: true });
+    await UserObject.create(pickFields(obj, ['email', 'created_at', 'invitation_token', 'invitation_token_expires', 'invitation_sent_at', 'collectivities']));
+    return res.status(200).send({ ok: true });
   } catch (error) {
     console.log('ERROR', error);
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
@@ -754,11 +839,14 @@ router.post('/send-invite/:id', passport.authenticate(['admin'], { session: fals
 
 router.post('/check-invitation-token', async (req, res) => {
   try {
-    const { invitation_token } = req.body;
+    const { invitation_token } = req.body || {};
+    // Jeton vide ou nul : correspondrait à tous les comptes sans invitation en cours
+    if (typeof invitation_token !== 'string' || !invitation_token.trim()) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
     const user = await UserObject.findOne({ invitation_token });
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
     // if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
-    return res.status(200).send({ ok: true, user });
+    // Route publique : seuls l'e-mail et le nom servent à l'écran d'invitation
+    return res.status(200).send({ ok: true, user: { email: user.email, name: user.name } });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
@@ -767,11 +855,15 @@ router.post('/check-invitation-token', async (req, res) => {
 
 router.post('/invite-accepted', async (req, res) => {
   try {
-    const { email, password, name, invitation_token } = req.body;
-    const user = await UserObject.findOne({ email, invitation_token });
+    const { email, password, name, invitation_token } = req.body || {};
+    // Jeton vide ou nul : correspondrait à tous les comptes sans invitation en cours
+    if (typeof email !== 'string' || typeof invitation_token !== 'string' || !invitation_token.trim()) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
+    if (typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
+    const user = await UserObject.findOne({ email: email.trim().toLowerCase(), invitation_token });
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
 
-    if (new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
+    // Sans date d'expiration, le jeton n'est pas une invitation valide
+    if (!user.invitation_token_expires || new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
 
     const updateData = { password, name, invitation_token: null, invitation_token_expires: null, invitation_accepted_at: new Date(), last_login_at: new Date() };
 
@@ -871,7 +963,7 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     res.status(200).send({ ok: true, data: user });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 

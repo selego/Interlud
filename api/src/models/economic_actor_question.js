@@ -20,6 +20,8 @@ const Schema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     // Une question désactivée n'est plus proposée aux acteurs ; ses réponses sont conservées
     active: { type: Boolean, default: true },
+    // Question obligatoire : signalée à l'acteur tant qu'elle est sans réponse, sans bloquer l'enregistrement automatique
+    required: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

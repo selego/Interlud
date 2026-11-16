@@ -4,6 +4,7 @@ import Modal from "@/components/modal"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import Pagination from "@/components/pagination"
+import Checkbox from "@codegouvfr/react-dsfr/Checkbox"
 
 const TYPE_LABELS = { number: "Nombre", text: "Texte libre", radio: "Choix unique", checkbox: "Choix multiples" }
 
@@ -33,9 +34,14 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Questionnaire acteurs économiques</h1>
-        <button onClick={() => setIsModalOpen(true)} className="button-primary">
-          Ajouter une question
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => navigate("/admin/economic-actor-questions/answers")} className="px-4 py-2 rounded-lg border border-primary-green text-primary-green text-sm">
+            Voir les réponses
+          </button>
+          <button onClick={() => setIsModalOpen(true)} className="button-primary">
+            Ajouter une question
+          </button>
+        </div>
       </div>
       <p className="text-sm text-gray-600 mb-6 max-w-3xl">
         Les questions actives sont affichées aux acteurs économiques sur leur page « Questionnaire », dans l'ordre indiqué. Leurs réponses sont enregistrées sur la plateforme, sans lien avec
@@ -66,7 +72,10 @@ export default function List() {
             {questions.map((question) => (
               <tr key={question._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/economic-actor-questions/${question._id}`)}>
                 <td className="px-6 py-4 text-sm text-gray-600">{question.order}</td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{question.label}</td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  {question.label}
+                  {question.required && <span className="ml-2 inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">Obligatoire</span>}
+                </td>
                 <td className="px-6 py-4 text-sm text-gray-600">{TYPE_LABELS[question.type]}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{question.actions?.length ? question.actions.map((action) => action.name).join(", ") : "-"}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{question.active ? "Active" : "Désactivée"}</td>
@@ -146,11 +155,12 @@ function IntroText() {
 const AddQuestionModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
   const [label, setLabel] = useState("")
+  const [required, setRequired] = useState(false)
 
   const createQuestion = async () => {
     try {
       if (!label.trim()) return toast.error("Veuillez entrer l'intitulé de la question")
-      const { ok, data, code } = await api.post("/economic_actor_question", { label })
+      const { ok, data, code } = await api.post("/economic_actor_question", { label, required })
       if (!ok) return toast.error(code || "Une erreur est survenue")
       navigate(`/admin/economic-actor-questions/${data._id}`)
     } catch (error) {
@@ -158,8 +168,15 @@ const AddQuestionModal = ({ isOpen, onClose }) => {
     }
   }
 
+  // Formulaire vidé à la fermeture : une nouvelle ouverture ne reprend pas la saisie précédente
+  const handleClose = () => {
+    setLabel("")
+    setRequired(false)
+    onClose()
+  }
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
+    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-md">
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une question</h2>
@@ -181,6 +198,11 @@ const AddQuestionModal = ({ isOpen, onClose }) => {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
           />
         </div>
+
+        <Checkbox
+          small
+          options={[{ label: "Question obligatoire", nativeInputProps: { checked: required, onChange: (e) => setRequired(e.target.checked) } }]}
+        />
 
         <p className="text-xs text-gray-600 mb-6">Vous choisirez ensuite le type de réponse et les options.</p>
 

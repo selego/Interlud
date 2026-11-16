@@ -5,6 +5,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
 import Loader from "@/components/loader"
+import Checkbox from "@codegouvfr/react-dsfr/Checkbox"
 
 export default function View() {
   const { id } = useParams()
@@ -157,6 +158,16 @@ export default function View() {
         )}
 
         <LinkedActions question={question} setQuestion={setQuestion} />
+
+        <Checkbox
+          options={[
+            {
+              label: "Question obligatoire",
+              hintText: "Signalée à l'acteur tant qu'elle est sans réponse. La saisie n'est pas bloquée : les réponses restent enregistrées automatiquement.",
+              nativeInputProps: { checked: !!question.required, onChange: (e) => setQuestion({ ...question, required: e.target.checked }) }
+            }
+          ]}
+        />
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input

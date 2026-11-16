@@ -5,6 +5,7 @@ const EconomicActor = require('../models/economic_actor');
 const Action = require('../models/action');
 const IndicatorValue = require('../models/indicator_value');
 const ERROR_CODES = require('../utils/errorCodes');
+const { searchRegex, isInvalidSearch } = require('../utils/search');
 const { capture } = require('../services/sentry');
 const { duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
@@ -31,8 +32,9 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const query = {};
     if (req.body.collectivity_id) query['collectivities.id'] = req.body.collectivity_id;
     if (req.body.status) query.status = req.body.status;
+    if (isInvalidSearch(req.body.search)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (req.body.search) {
-      query.$or = [{ name: { $regex: req.body.search, $options: 'i' } }, { description: { $regex: req.body.search, $options: 'i' } }];
+      query.$or = [{ name: searchRegex(req.body.search) }, { description: searchRegex(req.body.search) }];
     }
 
     const limit = req.body.limit || 50;
