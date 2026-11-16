@@ -78,12 +78,15 @@ export default function List() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
         <div className="flex gap-3">
-          <button
-            onClick={() => navigate("/actions/compare")}
-            className="px-4 py-2 rounded-lg border-2 border-primary-green text-primary-green text-sm font-semibold hover:bg-green-50 transition-colors"
-          >
-            Comparer
-          </button>
+          {/* La comparaison affiche des résultats : masquée pour les acteurs économiques */}
+          {user.role !== "economic_actor" && (
+            <button
+              onClick={() => navigate("/actions/compare")}
+              className="px-4 py-2 rounded-lg border-2 border-primary-green text-primary-green text-sm font-semibold hover:bg-green-50 transition-colors"
+            >
+              Comparer
+            </button>
+          )}
           { (isAdmin || user.role === 'economic_actor') && (
             <button
               onClick={() => setIsModalOpen(true)}
@@ -153,16 +156,21 @@ export default function List() {
           ).flatMap(([parentName, children]) => [
             <tr
               key={parentName}
-              role="button"
-              tabIndex={0}
-              className="bg-gray-50 hover:bg-gray-100 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-green"
-              onClick={() => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)
-                }
-              }}
+              // Le tableau de bord de l'action parente affiche des résultats : ligne non cliquable pour les acteurs économiques
+              {...(user.role === "economic_actor"
+                ? { className: "bg-gray-50" }
+                : {
+                    role: "button",
+                    tabIndex: 0,
+                    className: "bg-gray-50 hover:bg-gray-100 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-green",
+                    onClick: () => navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`),
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        navigate(`/actions/${children[0].action_parent_id}/parent-dashboard`)
+                      }
+                    }
+                  })}
             >
               <td colSpan={8} className="px-6 py-3 text-sm font-bold text-gray-800">{parentName}</td>
             </tr>,

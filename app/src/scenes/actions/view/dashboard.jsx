@@ -4,6 +4,7 @@ import api from "@/services/api"
 import useStore from "@/services/store"
 import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2 } from "react-icons/fi"
 import Loader from "@/components/loader"
+import ResultsHidden from "@/components/ResultsHidden"
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -637,9 +638,11 @@ export default function Dashboard({ action }) {
   const right = userActionRights.find((r) => r.action_id === action._id)
   const canRead = isAdmin || isEco || right?.can_read
   const canWrite = isAdmin || isEco || right?.can_write
+  // Les acteurs économiques ne voient aucun résultat (graphiques, émissions, gains) : seulement la saisie et le taux de remplissage
+  const resultsHidden = user.role === "economic_actor"
 
   const load = async () => {
-    if (!collectivity || !action?.excel_worksheetname) return
+    if (resultsHidden || !collectivity || !action?.excel_worksheetname) return
     // Les graphes exigent 100 % partout (cf. isEmpty) : inutile d'appeler l'agrégation tant que l'onboarding sera affiché
     if (action.completion_init !== 100 || action.completion_ref !== 100 || action.completion_prev !== 100 || (action.excel_files_expost?.length > 0 && action.completion_expost !== 100)) return
     try {
@@ -748,7 +751,7 @@ export default function Dashboard({ action }) {
 
   return (
     <div className="max-w-8xl mx-auto px-6 sm:px-8 lg:px-10 py-10 space-y-8">
-      <SyncPendingPoller action={action} onSynced={load} onPendingChange={setSyncPending} />
+      {!resultsHidden && <SyncPendingPoller action={action} onSynced={load} onPendingChange={setSyncPending} />}
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header>
         <div className="flex items-center gap-2 mb-4">
@@ -806,16 +809,18 @@ export default function Dashboard({ action }) {
         </div>
       </header>
 
-      {syncPending && <SyncRecalcLoader />}
+      {resultsHidden && <ResultsHidden />}
 
-      {loading && !syncPending && <Loader />}
+      {!resultsHidden && syncPending && <SyncRecalcLoader />}
 
-      {!loading && !syncPending && loadError && <GraphsInDevelopment action={action} />}
+      {!resultsHidden && loading && !syncPending && <Loader />}
 
-      {!loading && !syncPending && !loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
+      {!resultsHidden && !loading && !syncPending && loadError && <GraphsInDevelopment action={action} />}
+
+      {!resultsHidden && !loading && !syncPending && !loadError && isEmpty && <OnboardingContent action={action} onStart={() => navigate(`/actions/${action._id}/completion`)} />}
 
       {/* ── SECTION 01 — VUE GLOBALE ─────────────────────────────────────── */}
-      {!loading && !syncPending && !loadError && !isEmpty && (
+      {!resultsHidden && !loading && !syncPending && !loadError && !isEmpty && (
         <>
           <section>
             {/* Filter bar */}

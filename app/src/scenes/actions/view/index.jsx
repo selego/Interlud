@@ -7,9 +7,12 @@ import Dashboard from "./dashboard";
 import ParentDashboard from "./parent-dashboard";
 import Completion from "./completion/index";
 import Settings from "./settings";
+import ResultsHidden from "@/components/ResultsHidden";
+import useStore from "@/services/store";
 
 export default function Index() {
   const { id } = useParams();
+  const { user } = useStore();
   const [action, setAction] = useState(null);
   const fetchAction = async () => {
     try {
@@ -33,7 +36,8 @@ export default function Index() {
   return (
     <Routes>
       <Route path="/dashboard" element={<Dashboard action={action} />} />
-      <Route path="/parent-dashboard" element={<ParentDashboard action={action} />} />
+      {/* Le tableau de bord de l'action parente affiche des résultats : refusé aux acteurs économiques (API comprise) */}
+      <Route path="/parent-dashboard" element={user.role === "economic_actor" ? <div className="p-8"><ResultsHidden /></div> : <ParentDashboard action={action} />} />
       <Route path="/completion" element={<Completion action={action} onSave={fetchAction} />} />
       <Route path="/settings" element={<Settings action={action}  onSave={fetchAction}/>} />
     </Routes>
