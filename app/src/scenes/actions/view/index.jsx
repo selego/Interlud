@@ -8,6 +8,7 @@ import ParentDashboard from "./parent-dashboard";
 import Completion from "./completion/index";
 import Settings from "./settings";
 import ResultsHidden from "@/components/ResultsHidden";
+import SirenMissingAlert from "@/components/SirenMissingAlert";
 import useStore from "@/services/store";
 import { areResultsHidden } from "@/utils/results";
 
@@ -35,6 +36,8 @@ export default function Index() {
   );
 
   return (
+    <>
+    <SirenMissingAlert action={action} className="max-w-7xl mt-8 mx-8 xl:mx-auto" />
     <Routes>
       <Route path="/dashboard" element={<Dashboard action={action} />} />
       {/* Le tableau de bord de l'action parente affiche des résultats : refusé aux acteurs économiques (API comprise) */}
@@ -58,5 +61,6 @@ export default function Index() {
       <Route path="/completion" element={<Completion action={action} onSave={fetchAction} />} />
       <Route path="/settings" element={<Settings action={action}  onSave={fetchAction}/>} />
     </Routes>
+    </>
   );
 }
