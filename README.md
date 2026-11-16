@@ -161,11 +161,6 @@ BREVO_KEY=
 # Monitoring (production)
 SENTRY_DSN=
 
-# Pièces jointes S3 (optionnel)
-S3_ENDPOINT=
-S3_ACCESSKEYID=
-S3_SECRETACCESSKEY=
-
 # Azure AD — synchro Excel / SharePoint (Microsoft Graph)
 TENANT_ID=
 CLIENT_ID=
