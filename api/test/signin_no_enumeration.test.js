@@ -120,6 +120,13 @@ describe('POST /user/signin', () => {
     assert.equal(compareCalls, 1);
   });
 
+  test("un e-mail ou un mot de passe non textuel renvoie 400 sans planter", async () => {
+    const res = await post('/user/signin', { email: { $ne: '' }, password: 'x' });
+    assert.equal(res.status, 400);
+    const res2 = await post('/user/signin', { email: 'existe@exemple.fr', password: { $ne: '' } });
+    assert.equal(res2.status, 400);
+  });
+
   test('le bon mot de passe connecte toujours', async () => {
     const res = await post('/user/signin', { email: 'existe@exemple.fr', password: PASSWORD });
     assert.equal(res.status, 200);
