@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const passport = require('passport');
 const { initSentry, setupErrorHandler } = require('./services/sentry');
 const { securityHeaders } = require('./services/security');
+const { errorHandler } = require('./services/errorHandler');
 const { PORT, ENVIRONMENT, APP_URL } = require('./config');
 
 const app = express();
@@ -51,6 +52,7 @@ app.use('/notification', require('./controllers/notification'));
 app.use('/contact', require('./controllers/contact'));
 
 setupErrorHandler(app);
+app.use(errorHandler(ENVIRONMENT));
 require('./services/passport')(app);
 
 app.listen(PORT, () => {

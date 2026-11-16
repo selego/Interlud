@@ -25,7 +25,6 @@ Health check : `GET /` → `{ name: "api", environment, last_deployed_at }`.
 | `SECRET` | Clé de signature JWT |
 | `BREVO_KEY` | Emails transactionnels (invitations, reset, contact) |
 | `SENTRY_DSN` | Monitoring (production) |
-| `S3_ENDPOINT`, `S3_ACCESSKEYID`, `S3_SECRETACCESSKEY` | Pièces jointes (optionnel) |
 | `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET` | Azure AD : synchro Excel / SharePoint via Microsoft Graph |
 | `JOPTIMIZ_URL`, `JOPTIMIZ_CLIENT_ID`, `JOPTIMIZ_CLIENT_SECRET`, `JOPTIMIZ_REDIRECT_URI` | SSO Joptimiz (OAuth 2.0) |
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const passport = require("passport");
 const Indicator = require("../models/indicator");
 const ERROR_CODES = require("../utils/errorCodes");
+const { searchRegex, isInvalidSearch } = require("../utils/search");
 const { capture } = require("../services/sentry");
 const IndicatorValue = require("../models/indicator_value");
 const Log = require("../models/log");
@@ -76,7 +77,8 @@ router.post("/search", passport.authenticate(["admin", "user"], { session: false
     let query = {};
     
     if (req.body._id) query._id = req.body._id;
-    if (req.body.name) query.name = { $regex: req.body.name, $options: "i" };
+    if (isInvalidSearch(req.body.name)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (req.body.name) query.name = searchRegex(req.body.name);
     const limit = req.body.limit || 10;
     const skip = req.body.page * limit;
     const total = await Indicator.countDocuments(query);
