@@ -62,7 +62,7 @@ const cookieOptions = () => {
       httpOnly: true,
       secure: true,
       origin: 'YOUR PROD URL',
-      sameSite: 'none',
+      sameSite: 'lax',
     };
   }
 };
