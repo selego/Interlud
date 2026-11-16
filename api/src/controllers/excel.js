@@ -44,7 +44,7 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     res.json({ ok: true, data: extractAggregation(action, toYearRows(gainsResult), toYearRows(emResult)) });
   } catch (error) {
     capture(error);
-    res.json({ ok: false, data: { error: error.message } });
+    res.status(500).json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -120,7 +120,7 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
     res.json({ ok: true, data: { emissions } });
   } catch (error) {
     capture(error);
-    res.json({ ok: false, data: { error: error.message } });
+    res.status(500).json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -172,7 +172,7 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     res.json({ ok: true, data: { actions, aggregations } });
   } catch (error) {
     capture(error);
-    res.json({ ok: false, data: { error: error.message } });
+    res.status(500).json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -325,7 +325,7 @@ router.post('/compare_actions', passport.authenticate(['admin', 'user'], { sessi
     });
   } catch (error) {
     capture(error);
-    res.json({ ok: false, data: { error: error.message } });
+    res.status(500).json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -337,7 +337,7 @@ router.post('/export', passport.authenticate(['admin', 'user'], { session: false
     res.json({ ok: true, data: result });
   } catch (error) {
     capture(error);
-    res.json({ ok: false, data: { error: error.message } });
+    res.status(500).json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 

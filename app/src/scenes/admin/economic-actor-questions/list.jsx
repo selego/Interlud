@@ -34,9 +34,14 @@ export default function List() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Questionnaire acteurs économiques</h1>
-        <button onClick={() => setIsModalOpen(true)} className="button-primary">
-          Ajouter une question
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => navigate("/admin/economic-actor-questions/answers")} className="px-4 py-2 rounded-lg border border-primary-green text-primary-green text-sm">
+            Voir les réponses
+          </button>
+          <button onClick={() => setIsModalOpen(true)} className="button-primary">
+            Ajouter une question
+          </button>
+        </div>
       </div>
       <p className="text-sm text-gray-600 mb-6 max-w-3xl">
         Les questions actives sont affichées aux acteurs économiques sur leur page « Questionnaire », dans l'ordre indiqué. Leurs réponses sont enregistrées sur la plateforme, sans lien avec

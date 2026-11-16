@@ -6,7 +6,7 @@ const ERROR_CODES = {
   USER_NOT_EXISTS: 'Utilisateur non trouvé',
   USER_ALREADY_REGISTERED: 'Cette adresse e-mail est déjà enregistrée',
   NOT_FOUND: 'Ressource non trouvée',
-  EMAIL_OR_PASSWORD_INVALID: 'Mot de passe ou email incorrect',
+  EMAIL_OR_PASSWORD_INVALID: 'E-mail ou mot de passe invalide',
   PASSWORD_INVALID: 'Mot de passe invalide',
   PASSWORD_NOT_VALIDATED: 'Mot de passe invalide',
   PASSWORD_TOKEN_EXPIRED_OR_INVALID: 'Token de mot de passe expiré ou invalide',
@@ -27,6 +27,7 @@ const ERROR_CODES = {
   ALREADY_MEMBER: 'Cet utilisateur est déjà membre de la collectivité',
   YEAR_PREV_ALREADY_EXISTS: 'Année prévisionnelle déjà existante',
   YEAR_EXPOST_ALREADY_EXISTS: 'Année ex-post déjà existante',
+  TOO_MANY_REQUESTS: 'Trop de tentatives, veuillez réessayer plus tard',
 };
 
 module.exports = ERROR_CODES;
