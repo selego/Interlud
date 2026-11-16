@@ -6,6 +6,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
+import { areResultsHidden } from "@/utils/results"
 import { FiInfo } from "react-icons/fi"
 
 const getStatusLabel = (status) => {
@@ -79,7 +80,7 @@ export default function List() {
         <h1 className="text-3xl font-bold">Liste des Actions</h1>
         <div className="flex gap-3">
           {/* La comparaison affiche des résultats : masquée pour les acteurs économiques */}
-          {user.role !== "economic_actor" && (
+          {!areResultsHidden(user, collectivity) && (
             <button
               onClick={() => navigate("/actions/compare")}
               className="px-4 py-2 rounded-lg border-2 border-primary-green text-primary-green text-sm font-semibold hover:bg-green-50 transition-colors"
@@ -157,7 +158,7 @@ export default function List() {
             <tr
               key={parentName}
               // Le tableau de bord de l'action parente affiche des résultats : ligne non cliquable pour les acteurs économiques
-              {...(user.role === "economic_actor"
+              {...(areResultsHidden(user, collectivity)
                 ? { className: "bg-gray-50" }
                 : {
                     role: "button",

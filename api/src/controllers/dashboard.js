@@ -4,12 +4,13 @@ const passport = require('passport');
 const Action = require('../models/action');
 const Collectivity = require('../models/collectivity');
 const ERROR_CODES = require('../utils/errorCodes');
+const { areResultsHidden } = require('../utils/results');
 const { capture } = require('../services/sentry');
 
 router.post('/synthese', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    // Les acteurs économiques ne voient aucun résultat calculé (décision du 16/10)
-    if (req.user.role === 'economic_actor') return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
+    if (areResultsHidden(req.user, req.body.collectivity_id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity_id } = req.body;
 
     let query = { collectivity_id, owner: 'collectivity', type: { $ne: 'config' } };

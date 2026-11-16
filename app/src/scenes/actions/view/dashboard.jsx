@@ -5,6 +5,7 @@ import useStore from "@/services/store"
 import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2 } from "react-icons/fi"
 import Loader from "@/components/loader"
 import ResultsHidden from "@/components/ResultsHidden"
+import { areResultsHidden } from "@/utils/results"
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -639,7 +640,7 @@ export default function Dashboard({ action }) {
   const canRead = isAdmin || isEco || right?.can_read
   const canWrite = isAdmin || isEco || right?.can_write
   // Les acteurs économiques ne voient aucun résultat (graphiques, émissions, gains) : seulement la saisie et le taux de remplissage
-  const resultsHidden = user.role === "economic_actor"
+  const resultsHidden = areResultsHidden(user, collectivity)
 
   const load = async () => {
     if (resultsHidden || !collectivity || !action?.excel_worksheetname) return

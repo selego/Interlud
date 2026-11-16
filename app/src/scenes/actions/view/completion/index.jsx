@@ -5,6 +5,7 @@ import toast from "react-hot-toast"
 import { FiArrowLeft, FiBarChart2, FiPlus, FiCalendar, FiInfo } from "react-icons/fi"
 import { shouldDisplayIndicatorFromMap, fetchConditionValuesMap, isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
+import { areResultsHidden } from "@/utils/results"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
 import Modal from "@/components/modal"
@@ -24,7 +25,7 @@ const SITUATION_ORDER = ["init", "ref", "prev", "expost"]
 
 export default function Completion({ action, onSave }) {
   const navigate = useNavigate()
-  const { user } = useStore()
+  const { user, collectivity } = useStore()
   const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === action.collectivity_id && c.role === "admin")
 
   const [activeSituation, setActiveSituation] = useState(null)
@@ -106,6 +107,8 @@ export default function Completion({ action, onSave }) {
                 {action.name}
                 {action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}
               </h1>
+              {/* Les graphiques sont des résultats : bouton masqué pour les acteurs économiques */}
+              {!areResultsHidden(user, collectivity) && (
               <button
                 onClick={() => {
                   onSave?.()
@@ -117,6 +120,7 @@ export default function Completion({ action, onSave }) {
                 <FiBarChart2 className="w-4 h-4" />
                 <span>Visualiser mes graphs</span>
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -235,6 +239,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
   // pas celui où la saisie a été faite si l'utilisateur a changé d'onglet entre-temps
   const viewRef = useRef({ situation: activeSituation, year: activeYear })
   viewRef.current = { situation: activeSituation, year: activeYear }
+  const { user, collectivity } = useStore()
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -337,7 +342,8 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
       await Promise.all([onStatsRefresh(), refreshDynamicFields(mySaveId)])
       // La synchro Excel est différée côté API : on garde le loading tant que le dashboard n'est pas à jour
-      toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
+      // Les acteurs économiques ne voient pas le dashboard : message neutre
+      toast.loading(areResultsHidden(user, collectivity) ? "Valeur enregistrée" : "Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
       for (let i = 0; i < 120; i++) {
         await new Promise((resolve) => setTimeout(resolve, 1000))
         if (mySaveId !== saveCounterRef.current) return
@@ -346,7 +352,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       }
       // Fin de synchro : les défauts relus depuis l'Excel et les valeurs qui les suivent sont rechargés sur l'onglet affiché
       await refreshDynamicFields(mySaveId)
-      toast.success("Valeur enregistrée, dashboard à jour", { id: "indicator-save" })
+      toast.success(areResultsHidden(user, collectivity) ? "Valeur enregistrée" : "Valeur enregistrée, dashboard à jour", { id: "indicator-save" })
     } catch (error) {
       toast.error("Une erreur est survenue", { id: "indicator-save" })
     }
