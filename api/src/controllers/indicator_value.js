@@ -917,7 +917,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
     res.status(200).json({ ok: true });
   } catch (error) {
     capture(error);
-    res.status(500).json({ ok: false, data: { error: error.message } });
+    res.status(500).json({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
