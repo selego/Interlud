@@ -22,6 +22,8 @@ const user = {
   email: 'membre@exemple.fr',
   role: 'user',
   collectivities: [],
+  // Un compte avec mot de passe (sans hash, la connexion le traite comme un compte SSO)
+  password: 'hash-simulé',
   comparePassword: async (p) => p === 'bon-mot-de-passe',
   set() {},
   save: async () => {},
