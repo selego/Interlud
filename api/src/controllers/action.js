@@ -135,6 +135,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       if (req.body.type === 'global') {
         delete query.owner;
         delete query.economic_actor_id;
+        // Un acteur économique ne voit que les fiches du catalogue qui lui sont ouvertes (champ absent = visible)
+        if (req.user.role === 'economic_actor') query.visible_for_economic_actors = { $ne: false };
       }
     }
 
@@ -160,6 +162,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    // Fiche du catalogue fermée aux acteurs économiques : création refusée
+    if (parentAction.visible_for_economic_actors === false && (req.user.role === 'economic_actor' || req.body.owner === 'economic_actor')) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });

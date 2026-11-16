@@ -241,6 +241,21 @@ export default function View() {
               </div>
             </div>
 
+            {action.type === "global" ? (
+              <div className="flex items-center justify-between border rounded-xl p-4 bg-gray-50 mt-4">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={action.visible_for_economic_actors !== false}
+                    onChange={(e) => setAction({...action, visible_for_economic_actors: e.target.checked})}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-gray-800">Visible pour les acteurs économiques</span>
+                </label>
+                <span className="text-xs text-gray-500">Décochée : les acteurs économiques ne peuvent plus créer d'action à partir de cette fiche.</span>
+              </div>
+            ) : null}
+
             {/* <div className="flex items-center justify-between border rounded-xl p-4 bg-gray-50 mt-4">
               <label className="flex items-center gap-3">
                 <input
