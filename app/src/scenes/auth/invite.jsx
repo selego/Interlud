@@ -7,6 +7,10 @@ import store from "@/services/store"
 import api from "@/services/api"
 import Loader from "@/components/loader"
 
+// Mêmes règles que l'inscription et que l'API
+const validatePassword = (password) =>
+  password.length >= 12 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password) && !/\s/.test(password)
+
 const Invite = () => {
   const [values, setValues] = useState({ email: "", password: "", name: "" })
   const [errors, setErrors] = useState({ email: "", password: "", name: "", acceptedTerms: "" })
@@ -23,7 +27,7 @@ const Invite = () => {
     try {
       const { ok, user, code } = await api.post("/user/check-invitation-token", { invitation_token: inviteToken })
       if (!ok) throw new Error(code)
-      setValues({ ...values, email: user.email, name: user.name })
+      setValues((prev) => ({ ...prev, email: user.email, name: user.name || "" }))
     } catch (error) {
       console.error(error)
       toast.error(error.code || error.message || "Invalid or expired invitation token")
@@ -40,6 +44,7 @@ const Invite = () => {
 
     if (!values.email) return setErrors({ ...errors, email: "Ce champ est requis" })
     if (!values.password) return setErrors({ ...errors, password: "Ce champ est requis" })
+    if (!validatePassword(values.password)) return setErrors({ ...errors, password: "Le mot de passe doit contenir au moins 12 caractères, dont une majuscule, une minuscule, un chiffre et un caractère spécial" })
     if (!values.name) return setErrors({ ...errors, name: "Ce champ est requis" })
     if (!acceptedTerms) return setErrors({ ...errors, acceptedTerms: "Vous devez accepter les conditions d'utilisation" })
     if (!validator.isEmail(values?.email)) return toast.error("Adresse e-mail invalide")
@@ -159,10 +164,14 @@ const Invite = () => {
                 type="password"
                 id="password"
                 value={values.password}
-                onChange={(e) => setValues({ ...values, password: e.target.value })}
+                onChange={(e) => {
+                  setValues({ ...values, password: e.target.value })
+                  setErrors({ ...errors, password: "" })
+                }}
                 placeholder="••••••••"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</p>
               {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
             </div>
 
