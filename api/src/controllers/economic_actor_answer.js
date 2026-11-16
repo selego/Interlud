@@ -67,7 +67,8 @@ const formatValue = (value, type) => {
 // Filtre optionnel : question_id.
 router.post('/admin/search', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
   try {
-    const answers = await EconomicActorAnswer.find(req.body.question_id ? { question_id: String(req.body.question_id) } : {});
+    const questionId = req.body?.question_id;
+    const answers = await EconomicActorAnswer.find(questionId ? { question_id: String(questionId) } : {});
     const questions = await EconomicActorQuestion.find({});
     const actors = await EconomicActor.find({ _id: { $in: [...new Set(answers.map((a) => a.economic_actor_id))] } });
 

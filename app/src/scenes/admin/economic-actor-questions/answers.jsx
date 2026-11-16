@@ -9,15 +9,23 @@ import Loader from "@/components/loader"
 export default function Answers() {
   const navigate = useNavigate()
   const [answers, setAnswers] = useState(null)
+  const [failed, setFailed] = useState(false)
   const [filters, setFilters] = useState({ question_id: "" })
 
   const fetchAnswers = async () => {
+    // Pendant le chargement et en cas d'échec, on n'affiche jamais les lignes d'un autre filtre
+    setAnswers(null)
+    setFailed(false)
     try {
       const { ok, data, code } = await api.post("/economic_actor_answer/admin/search", { ...filters })
-      if (!ok) return toast.error(code || "Une erreur est survenue")
+      if (!ok) {
+        setFailed(true)
+        return toast.error(code || "Une erreur est survenue")
+      }
       setAnswers(data)
     } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
+      setFailed(true)
+      toast.error(error?.code || "Une erreur est survenue")
     }
   }
 
@@ -34,11 +42,18 @@ export default function Answers() {
 
       <QuestionFilter filters={filters} setFilters={setFilters} />
 
-      {!answers ? (
+      {failed ? (
+        <div className="flex flex-col items-center justify-center gap-4 py-12">
+          <p className="text-lg text-gray-600">Impossible de charger les réponses.</p>
+          <button onClick={fetchAnswers} className="button-primary">
+            Réessayer
+          </button>
+        </div>
+      ) : !answers ? (
         <Loader />
       ) : answers.length === 0 ? (
         <div className="flex items-center justify-center py-12">
-          <p className="text-lg text-gray-600">Aucune réponse pour le moment</p>
+          <p className="text-lg text-gray-600">{filters.question_id ? "Aucune réponse à cette question pour le moment" : "Aucune réponse pour le moment"}</p>
         </div>
       ) : (
         <table className="w-full overflow-hidden card-shadow">
@@ -78,7 +93,7 @@ function QuestionFilter({ filters, setFilters }) {
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setQuestions(data)
     } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
+      toast.error(error?.code || "Une erreur est survenue")
     }
   }
 
@@ -94,6 +109,7 @@ function QuestionFilter({ filters, setFilters }) {
         {questions.map((question) => (
           <option key={question._id} value={question._id}>
             {question.label}
+            {question.active === false ? " (désactivée)" : ""}
           </option>
         ))}
       </select>
