@@ -32,7 +32,8 @@ export default () => {
       email: values.email,
       password: values.password,
       role: accountType,
-      name: `${values.first_name} ${values.last_name}`
+      name: `${values.first_name} ${values.last_name}`,
+      rgpd_accepted: true
     }
 
     if (accountType === "economic_actor") {

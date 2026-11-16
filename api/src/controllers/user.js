@@ -148,7 +148,7 @@ router.post('/signin', async (req, res) => {
 });
 
 router.post('/signup', async (req, res) => {
-  let { password, email, economic_actor_name, role, name } = req.body;
+  let { password, email, economic_actor_name, role, name, rgpd_accepted } = req.body;
   email = (email || '').trim().toLowerCase();
 
   try {
@@ -158,6 +158,8 @@ router.post('/signup', async (req, res) => {
     if (password && !validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
 
     let payload = { password, email, role: 'user', name };
+    // CGU acceptées via la case du formulaire d'inscription : évite de réafficher la modale juste après
+    if (rgpd_accepted === true) payload.rgpd_accepted_at = new Date();
     if (role === 'economic_actor') {
       const economic_actor = await EconomicActor.create({ name: economic_actor_name });
       payload.economic_actor_id = economic_actor._id;
@@ -855,7 +857,7 @@ router.post('/check-invitation-token', async (req, res) => {
 
 router.post('/invite-accepted', async (req, res) => {
   try {
-    const { email, password, name, invitation_token } = req.body || {};
+    const { email, password, name, invitation_token, rgpd_accepted } = req.body || {};
     // Jeton vide ou nul : correspondrait à tous les comptes sans invitation en cours
     if (typeof email !== 'string' || typeof invitation_token !== 'string' || !invitation_token.trim()) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
     if (typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
@@ -866,6 +868,8 @@ router.post('/invite-accepted', async (req, res) => {
     if (!user.invitation_token_expires || new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
 
     const updateData = { password, name, invitation_token: null, invitation_token_expires: null, invitation_accepted_at: new Date(), last_login_at: new Date() };
+    // CGU acceptées via la case du formulaire d'invitation : évite de réafficher la modale juste après
+    if (rgpd_accepted === true) updateData.rgpd_accepted_at = new Date();
 
     user.set(updateData);
     await user.save();
