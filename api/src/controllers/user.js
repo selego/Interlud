@@ -45,6 +45,25 @@ const getUserUpdate = (reqUser, target, body) => {
   return update;
 };
 
+// Collectivités où l'utilisateur est approuvé (optionnellement avec un rôle donné)
+const approvedCollectivityIds = (user, role) =>
+  (user.collectivities || []).filter((c) => c.status === 'approved' && (!role || c.role === role)).map((c) => String(c.id));
+
+// Lecture d'un profil : soi-même, ou un membre d'une collectivité dont on est administrateur approuvé
+const canReadUser = (reqUser, target) => {
+  if (reqUser.role === 'admin') return true;
+  if (reqUser._id.toString() === target._id.toString()) return true;
+  const adminIds = approvedCollectivityIds(reqUser, 'admin');
+  return (target.collectivities || []).some((c) => adminIds.includes(String(c.id)));
+};
+
+// Recherche par un non-admin : limitée à ses collectivités ou à son acteur économique
+const canSearchUsers = (reqUser, body) => {
+  if (reqUser.role === 'admin') return true;
+  if (body.collectivity_id && approvedCollectivityIds(reqUser).includes(String(body.collectivity_id))) return true;
+  return !!(body.economic_actor_id && reqUser.economic_actor_id && String(body.economic_actor_id) === String(reqUser.economic_actor_id));
+};
+
 // Logo InTerLUD+ pour les emails (URL publique)
 const INTERLUD_LOGO_URL = 'https://www.interlud.green/images/interlud-plus@2x.png';
 
@@ -291,6 +310,8 @@ router.post('/reset_password', passport.authenticate('user', { session: false })
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const data = await UserObject.findOne({ _id: req.params.id });
+    if (!data) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_EXISTS });
+    if (!canReadUser(req.user, data)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
@@ -300,6 +321,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.post('/search', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
+    if (!canSearchUsers(req.user, req.body)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { search, sort, per_page, page } = req.body;
     let query = {};
 
