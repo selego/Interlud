@@ -79,6 +79,10 @@ describe('SEC-11 : cookie jwt en SameSite=Lax', () => {
   test('déconnexion : le cookie est effacé avec les mêmes attributs', async () => {
     const response = await fetch(`${baseUrl}/user/logout`, { method: 'POST' });
     assert.equal(response.status, 200);
-    assert.match(jwtCookie(response), /;\s*SameSite=Lax/i);
+    const cookie = jwtCookie(response);
+    assert.match(cookie, /;\s*SameSite=Lax/i);
+    // Le cookie doit être réellement expiré, pas reposé vide pour un an.
+    assert.match(cookie, /Expires=Thu, 01 Jan 1970 00:00:00 GMT/);
+    assert.doesNotMatch(cookie, /Max-Age=[1-9]/);
   });
 });
