@@ -12,6 +12,7 @@ const config = require('../config');
 const { validatePassword, pickFields } = require('../utils');
 const { BREVO_TEMPLATES } = require('../utils/constants');
 const ERROR_CODES = require('../utils/errorCodes');
+const { searchRegex, isInvalidSearch } = require('../utils/search');
 const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
@@ -307,12 +308,21 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.economic_actor_id) query = { ...query, economic_actor_id: req.body.economic_actor_id };
     if (req.body.role) query = { ...query, role: req.body.role };
 
-    const searchValue = search?.replace(/[#-.]|[[-^]|[?|{}]/g, '\\$&');
+    if (isInvalidSearch(search)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (search) {
       query = {
         ...query,
-        $or: [{ name: { $regex: searchValue, $options: 'i' } }, { email: { $regex: searchValue, $options: 'i' } }],
+        $or: [{ name: searchRegex(search) }, { email: searchRegex(search) }],
       };
+    }
+
+    // Liste fermée des champs de tri : les autres (mot de passe, jetons…) sont ignorés
+    const USER_SORT_FIELDS = ['name', 'email', 'role', 'status', 'createdAt', 'updatedAt', 'last_login_at'];
+    const safeSort = {};
+    if (sort && typeof sort === 'object' && !Array.isArray(sort)) {
+      for (const [field, order] of Object.entries(sort)) {
+        if (USER_SORT_FIELDS.includes(field)) safeSort[field] = [-1, '-1', 'desc', 'descending'].includes(order) ? -1 : 1;
+      }
     }
 
     const no_of_docs_each_page = per_page || 200;
@@ -321,7 +331,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     const users = await UserObject.find(query)
       .skip(no_of_docs_each_page * current_page_number)
       .limit(no_of_docs_each_page)
-      .sort(sort);
+      .sort(safeSort);
 
     const total = await UserObject.countDocuments(query);
 

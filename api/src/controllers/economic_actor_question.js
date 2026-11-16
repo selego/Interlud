@@ -4,6 +4,7 @@ const passport = require('passport');
 const EconomicActorQuestion = require('../models/economic_actor_question');
 const EconomicActorAnswer = require('../models/economic_actor_answer');
 const ERROR_CODES = require('../utils/errorCodes');
+const { searchRegex, isInvalidSearch } = require('../utils/search');
 const { capture } = require('../services/sentry');
 
 // Questionnaire acteurs économiques : aucune synchronisation Microsoft Graph ni écriture Excel ici.
@@ -12,7 +13,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
   try {
     const query = {};
     if (req.body.active === true || req.body.active === false) query.active = req.body.active;
-    if (req.body.search) query.label = { $regex: String(req.body.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    if (isInvalidSearch(req.body.search)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (req.body.search) query.label = searchRegex(req.body.search);
     // Les utilisateurs non admin ne voient que les questions actives
     if (req.user.role !== 'admin') query.active = true;
 

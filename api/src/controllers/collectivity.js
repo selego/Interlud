@@ -4,6 +4,7 @@ const passport = require('passport');
 const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
+const { searchRegex, isInvalidSearch, pickSortField } = require('../utils/search');
 const { capture } = require('../services/sentry');
 const { createFolder, duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const { pickFields } = require('../utils');
@@ -43,10 +44,12 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
   try {
     let query = {};
 
-    if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
+    if (isInvalidSearch(req.body.search)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (req.body.search) query.name = searchRegex(req.body.search);
     const limit = req.body.limit || 50;
     const skip = req.body.offset || 0;
-    const sortBy = req.body.sortBy || 'createdAt';
+    // Liste fermée des tris autorisés : toute autre valeur retombe sur le tri par défaut
+    const sortBy = pickSortField(req.body.sortBy, ['createdAt', 'updatedAt', 'name', 'department', 'population', 'action_count'], 'createdAt');
     const sortOrder = req.body.sortOrder === 'asc' ? 1 : -1;
     const total = await Collectivity.countDocuments(query);
 
