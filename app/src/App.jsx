@@ -28,6 +28,7 @@ import Contact from "@/scenes/contact"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 import RgpdModal from "@/components/RgpdModal"
+import CookieBanner from "@/components/CookieBanner"
 
 import useStore from "@/services/store"
 import api from "@/services/api"
@@ -50,6 +51,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      {/* Avant les routes : premier élément atteint au clavier, tant qu'il est affiché */}
+      <CookieBanner />
       <Routes>
         <Route element={<AuthLayout />}>
           <Route path="/auth/*" element={<Auth />} />
