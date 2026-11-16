@@ -6,10 +6,6 @@ const SECRET = process.env.SECRET;
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const SENTRY_DSN = process.env.SENTRY_DSN;
 
-const S3_ENDPOINT = process.env.S3_ENDPOINT || '';
-const S3_ACCESSKEYID = process.env.S3_ACCESSKEYID || '';
-const S3_SECRETACCESSKEY = process.env.S3_SECRETACCESSKEY || '';
-
 const BREVO_KEY = process.env.BREVO_KEY;
 
 // SSO Joptimiz (OAuth 2.0) — préprod par défaut, prod : JOPTIMIZ_URL=https://login.joptimiz.green
@@ -25,9 +21,6 @@ const CONFIG = {
   SECRET,
   APP_URL,
   SENTRY_DSN,
-  S3_ENDPOINT,
-  S3_ACCESSKEYID,
-  S3_SECRETACCESSKEY,
   BREVO_KEY,
   JOPTIMIZ_URL,
   JOPTIMIZ_CLIENT_ID,
