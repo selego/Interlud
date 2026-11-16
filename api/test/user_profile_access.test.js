@@ -16,6 +16,7 @@ const User = require('../src/models/user');
 const UserActionRight = require('../src/models/user_action_right');
 const Collectivity = require('../src/models/collectivity');
 const EconomicActor = require('../src/models/economic_actor');
+const brevo = require('../src/services/brevo');
 
 const PASSWORD = 'MotDePasse!2026';
 const HASH = bcrypt.hashSync(PASSWORD, 4);
@@ -81,9 +82,16 @@ const matches = (u, q) => {
 User.find = (q = {}) => chain(all.filter((u) => matches(u, q)));
 User.countDocuments = async () => all.length;
 UserActionRight.find = async () => [];
-Collectivity.findById = async () => null;
+const collectivityDocs = { [COL_A]: { _id: COL_A, name: 'Collectivité A' }, [COL_B]: { _id: COL_B, name: 'Collectivité B' } };
+Collectivity.findById = async (id) => collectivityDocs[String(id)] || null;
 Collectivity.findOne = async () => null;
-EconomicActor.findById = async () => null;
+EconomicActor.findById = async (id) => (String(id) === EA_1 ? { _id: EA_1, name: 'Acteur 1', collectivities: [] } : null);
+const created = [];
+User.create = async (doc) => {
+  created.push(doc);
+  return doc;
+};
+brevo.sendEmail = async () => {};
 
 // ---------- Serveur de test ----------
 let server;
@@ -258,5 +266,52 @@ describe('POST /user/search', () => {
     assert.equal((await call('POST', '/user/search', 'ae', { economic_actor_id: EA_1 })).status, 200);
     assert.equal((await call('POST', '/user/search', 'ae', { economic_actor_id: id() })).status, 403);
     assert.equal((await call('POST', '/user/search', 'member', { economic_actor_id: EA_1 })).status, 403);
+  });
+});
+
+describe('POST /user/invite', () => {
+  const invite = (who, body) => call('POST', '/user/invite', who, body);
+
+  test("seul un admin de la collectivité (ou l'admin plateforme) invite dans cette collectivité", async () => {
+    assert.equal((await invite('member', { email: 'memberb@test.fr', collectivity: { _id: COL_A } })).status, 403);
+    assert.equal((await invite('adminB', { email: 'memberb@test.fr', collectivity: { _id: COL_A } })).status, 403);
+    assert.equal((await invite('ae', { email: 'memberb@test.fr', collectivity: { _id: COL_A } })).status, 403);
+  });
+
+  test("seul un membre de l'acteur économique invite dans cet acteur", async () => {
+    assert.equal((await invite('member', { email: 'nouveau-ae@test.fr', economic_actor: { _id: EA_1 } })).status, 403);
+    assert.equal((await invite('ae', { email: 'nouveau-ae@test.fr', economic_actor: { _id: id() } })).status, 400);
+  });
+
+  test("l'invitation ne renvoie jamais le profil invité, et le nouveau compte ne prend aucun champ du corps", async () => {
+    const existing = await invite('adminA', { email: 'memberb@test.fr', collectivity: { _id: COL_A, name: 'Nom forgé' } });
+    assert.equal(existing.status, 200);
+    assert.deepEqual(existing.body, { ok: true });
+    users.memberB.collectivities = users.memberB.collectivities.filter((c) => String(c.id) !== COL_A);
+
+    const fresh = await invite('adminA', { email: 'nouveau@test.fr', collectivity: { _id: COL_A }, role: 'admin', password: 'x' });
+    assert.equal(fresh.status, 200);
+    assert.deepEqual(fresh.body, { ok: true });
+    const doc = created.at(-1);
+    assert.equal(doc.role, undefined);
+    assert.equal(doc.password, undefined);
+    assert.equal(doc.collectivities[0].name, 'Collectivité A');
+  });
+});
+
+describe('POST /user/invite-accepted', () => {
+  test('refuse un jeton vide, nul ou sans date d’expiration', async () => {
+    users.memberB.invitation_token = '';
+    users.memberB.invitation_token_expires = undefined;
+    try {
+      for (const invitation_token of ['', '  ', null, undefined]) {
+        const res = await call('POST', '/user/invite-accepted', null, { email: 'memberb@test.fr', invitation_token, password: 'NouveauMotDePasse!2026', name: 'X' });
+        assert.ok([400, 404].includes(res.status), `jeton ${JSON.stringify(invitation_token)} : ${res.status}`);
+        assert.equal(res.body.token, undefined);
+      }
+    } finally {
+      users.memberB.invitation_token = 'invite-memberb';
+      users.memberB.invitation_token_expires = new Date(Date.now() + 3600000);
+    }
   });
 });
