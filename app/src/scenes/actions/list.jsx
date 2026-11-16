@@ -31,10 +31,6 @@ export default function List() {
   const [filters, setFilters] = useState({ pilote: "", budget_min: "", budget_max: "" })
   const { collectivity, user } = useStore()
 
-
-    const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === collectivity._id && c.role === "admin")
-
-
   const fetchActions = async () => {
     if (!collectivity?._id) return;
     try {
@@ -49,6 +45,12 @@ export default function List() {
   useEffect(() => {
     fetchActions()
   }, [collectivity, filters])
+
+  // Rechargement direct de /actions : UserLayout charge la collectivité après le user, elle est encore null au premier rendu.
+  // On attend qu'elle arrive (l'effet ci-dessus relance alors la recherche) au lieu de lire collectivity._id.
+  if (!collectivity) return <Loader />
+
+  const isAdmin = user.role === "admin" || user.collectivities.some((c) => c.id === collectivity._id && c.role === "admin")
 
   if (actions.length === 0)
     return (
