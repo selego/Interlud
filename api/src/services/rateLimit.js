@@ -1,4 +1,6 @@
+const express = require('express');
 const { rateLimit } = require('express-rate-limit');
+const ERROR_CODES = require('../utils/errorCodes');
 
 // Limitation des tentatives sur les routes publiques d'authentification (audit Adacis SEC-06).
 // Stockage en mémoire : une seule instance tourne sur Clever Cloud ; les compteurs repartent de zéro à chaque redémarrage.
@@ -32,27 +34,38 @@ const limiter = (options) =>
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     statusCode: 429,
-    message: { ok: false, code: 'TOO_MANY_REQUESTS' },
+    message: { ok: false, code: ERROR_CODES.TOO_MANY_REQUESTS },
   });
 
+const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
+
 // À monter après cors et le parseur JSON (le limiteur par e-mail lit req.body), avant les routeurs.
+// Les limiteurs sont déclarés dans des express.Router() montés par app.use sur le même préfixe que les contrôleurs :
+// le routage est ainsi identique (ex. POST /user//signin atteint le contrôleur, il passe donc aussi par le limiteur).
 const mountRateLimits = (app) => {
   const invitation = limiter(RATE_LIMITS.INVITATION);
-  app.post('/user/signin', limiter({ ...RATE_LIMITS.SIGNIN, skipSuccessfulRequests: true }));
-  app.post('/user/signup', limiter(RATE_LIMITS.SIGNUP));
-  app.post('/user/forgot_password', limiter(RATE_LIMITS.FORGOT_PASSWORD));
-  app.post(
-    '/user/forgot_password',
+
+  const user = express.Router();
+  user.post('/signin', limiter({ ...RATE_LIMITS.SIGNIN, skipSuccessfulRequests: true }));
+  user.post('/signup', limiter(RATE_LIMITS.SIGNUP));
+  user.post('/forgot_password', limiter(RATE_LIMITS.FORGOT_PASSWORD));
+  user.post(
+    '/forgot_password',
     limiter({
       ...RATE_LIMITS.FORGOT_PASSWORD_PER_EMAIL,
-      skip: (req) => typeof req.body?.email !== 'string',
-      keyGenerator: (req) => req.body.email.trim().toLowerCase(),
+      // Sans adresse exploitable, pas de compteur par e-mail (évite une clé "" partagée par tous) ; la limite par IP s'applique.
+      skip: (req) => !normalizeEmail(req.body?.email),
+      keyGenerator: (req) => normalizeEmail(req.body.email),
     }),
   );
-  app.post('/user/forgot_password_reset', limiter(RATE_LIMITS.FORGOT_PASSWORD_RESET));
-  app.post('/user/check-invitation-token', invitation);
-  app.post('/user/invite-accepted', invitation);
-  app.post('/contact', limiter(RATE_LIMITS.CONTACT));
+  user.post('/forgot_password_reset', limiter(RATE_LIMITS.FORGOT_PASSWORD_RESET));
+  user.post('/check-invitation-token', invitation);
+  user.post('/invite-accepted', invitation);
+  app.use('/user', user);
+
+  const contact = express.Router();
+  contact.post('/', limiter(RATE_LIMITS.CONTACT));
+  app.use('/contact', contact);
 };
 
 module.exports = { mountRateLimits, RATE_LIMITS };

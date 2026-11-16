@@ -11,6 +11,8 @@ const cookieParser = require('cookie-parser');
 const User = require('../src/models/user');
 const Collectivity = require('../src/models/collectivity');
 const UserActionRight = require('../src/models/user_action_right');
+const brevo = require('../src/services/brevo');
+const ERROR_CODES = require('../src/utils/errorCodes');
 const { mountRateLimits, RATE_LIMITS } = require('../src/services/rateLimit');
 
 // Compte existant : en environnement de développement (celui des tests), le mot de passe n'est pas vérifié,
@@ -22,6 +24,10 @@ User.findOne = async (query) => {
 };
 Collectivity.findById = async () => null;
 UserActionRight.find = async () => [];
+// Aucun e-mail envoyé (formulaire de contact)
+brevo.sendEmail = async () => {};
+
+const TOO_MANY = { ok: false, code: ERROR_CODES.TOO_MANY_REQUESTS };
 
 let server;
 let baseUrl;
@@ -40,12 +46,14 @@ const post = async (path, body, ip) => {
 
 before(async () => {
   const app = express();
-  // Même configuration que src/index.js : un proxy devant l'app, limiteurs montés après le parseur JSON.
+  // Même configuration que src/index.js : un proxy devant l'app, limiteurs montés après le parseur JSON,
+  // puis les vrais contrôleurs sur les mêmes préfixes.
   app.set('trust proxy', 1);
   app.use(cookieParser());
   app.use(express.json());
   mountRateLimits(app);
   app.use('/user', require('../src/controllers/user'));
+  app.use('/contact', require('../src/controllers/contact'));
   await new Promise((resolve) => {
     server = app.listen(0, resolve);
   });
@@ -63,7 +71,7 @@ describe('Limitation des tentatives (SEC-06)', () => {
     }
     const blocked = await post('/user/signin', { email: 'inconnu@example.com', password: 'x' }, ip);
     assert.equal(blocked.status, 429);
-    assert.deepEqual(blocked.body, { ok: false, code: 'TOO_MANY_REQUESTS' });
+    assert.deepEqual(blocked.body, TOO_MANY);
 
     // Une fois bloquée, l'IP ne peut plus se connecter, même avec un compte valide
     const valid = await post('/user/signin', { email: KNOWN_EMAIL, password: 'x' }, ip);
@@ -90,7 +98,7 @@ describe('Limitation des tentatives (SEC-06)', () => {
     }
     const blocked = await post('/user/forgot_password', { email: 'autre@example.com' }, ip);
     assert.equal(blocked.status, 429);
-    assert.deepEqual(blocked.body, { ok: false, code: 'TOO_MANY_REQUESTS' });
+    assert.deepEqual(blocked.body, TOO_MANY);
   });
 
   test('mot de passe oublié : limite par adresse e-mail, quelle que soit l’IP', async () => {
@@ -100,7 +108,7 @@ describe('Limitation des tentatives (SEC-06)', () => {
     }
     const blocked = await post('/user/forgot_password', { email: '  Cible@Example.com ' }, newIp());
     assert.equal(blocked.status, 429);
-    assert.deepEqual(blocked.body, { ok: false, code: 'TOO_MANY_REQUESTS' });
+    assert.deepEqual(blocked.body, TOO_MANY);
   });
 
   test('invitation : compteur commun à la vérification et à l’acceptation du jeton', async () => {
@@ -112,7 +120,7 @@ describe('Limitation des tentatives (SEC-06)', () => {
     }
     const blocked = await post('/user/check-invitation-token', { invitation_token: 'jeton-x' }, ip);
     assert.equal(blocked.status, 429);
-    assert.deepEqual(blocked.body, { ok: false, code: 'TOO_MANY_REQUESTS' });
+    assert.deepEqual(blocked.body, TOO_MANY);
   });
 
   test('réinitialisation du mot de passe par jeton : limite par IP', async () => {
@@ -123,5 +131,37 @@ describe('Limitation des tentatives (SEC-06)', () => {
     }
     const blocked = await post('/user/forgot_password_reset', { token: 'jeton-x', password: 'x' }, ip);
     assert.equal(blocked.status, 429);
+  });
+
+  test('connexion : le double slash (/user//signin) partage le compteur et ne contourne pas la limite', async () => {
+    const ip = newIp();
+    for (let i = 0; i < RATE_LIMITS.SIGNIN.limit; i++) {
+      const path = i % 2 ? '/user//signin' : '/user/signin';
+      const res = await post(path, { email: 'inconnu@example.com', password: 'x' }, ip);
+      assert.equal(res.status, 401);
+    }
+    const blocked = await post('/user//signin', { email: 'inconnu@example.com', password: 'x' }, ip);
+    assert.equal(blocked.status, 429);
+    assert.deepEqual(blocked.body, TOO_MANY);
+  });
+
+  test('contact : limite par IP, y compris via /contact//', async () => {
+    const ip = newIp();
+    const body = { name: 'Agent', email: 'agent@example.com', subject: 'Sujet', message: 'Message' };
+    for (let i = 0; i < RATE_LIMITS.CONTACT.limit; i++) {
+      const res = await post('/contact//', body, ip);
+      assert.equal(res.status, 200);
+    }
+    const blocked = await post('/contact//', body, ip);
+    assert.equal(blocked.status, 429);
+    assert.deepEqual(blocked.body, TOO_MANY);
+    assert.equal((await post('/contact', body, ip)).status, 429);
+  });
+
+  test('mot de passe oublié : une adresse vide ne crée pas de compteur par e-mail partagé', async () => {
+    for (let i = 0; i < RATE_LIMITS.FORGOT_PASSWORD_PER_EMAIL.limit + 2; i++) {
+      const res = await post('/user/forgot_password', { email: '   ' }, newIp());
+      assert.equal(res.status, 401);
+    }
   });
 });
