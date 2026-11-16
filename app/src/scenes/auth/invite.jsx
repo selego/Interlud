@@ -27,7 +27,7 @@ const Invite = () => {
     try {
       const { ok, user, code } = await api.post("/user/check-invitation-token", { invitation_token: inviteToken })
       if (!ok) throw new Error(code)
-      setValues({ ...values, email: user.email, name: user.name || "" })
+      setValues((prev) => ({ ...prev, email: user.email, name: user.name || "" }))
     } catch (error) {
       console.error(error)
       toast.error("Invalid or expired invitation token")
@@ -164,7 +164,10 @@ const Invite = () => {
                 type="password"
                 id="password"
                 value={values.password}
-                onChange={(e) => setValues({ ...values, password: e.target.value })}
+                onChange={(e) => {
+                  setValues({ ...values, password: e.target.value })
+                  setErrors({ ...errors, password: "" })
+                }}
                 placeholder="••••••••"
                 required
               />
