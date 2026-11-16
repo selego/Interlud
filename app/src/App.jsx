@@ -28,6 +28,7 @@ import Contact from "@/scenes/contact"
 import Layout from "@/components/Layout"
 import Loader from "@/components/loader"
 import RgpdModal from "@/components/RgpdModal"
+import CookieBanner from "@/components/CookieBanner"
 
 import useStore from "@/services/store"
 import api from "@/services/api"
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster position="top-center" />
+      <CookieBanner />
     </BrowserRouter>
   )
 }
