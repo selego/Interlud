@@ -92,10 +92,12 @@ const cookieOptions = () => {
       httpOnly: true,
       secure: true,
       origin: 'YOUR PROD URL',
-      sameSite: 'none',
+      sameSite: 'lax',
     };
   }
 };
+
+const joptimizStateCookieOptions = () => ({ httpOnly: true, secure: config.ENVIRONMENT !== 'development', sameSite: 'lax' });
 
 router.post('/signin', async (req, res) => {
   let { password, email } = req.body;
@@ -164,7 +166,9 @@ router.post('/signup', async (req, res) => {
 
 router.post('/logout', async (_, res) => {
   try {
-    res.clearCookie('jwt', cookieOptions());
+    // Sans maxAge : sinon Express 4 recalcule une expiration future et le cookie n'est pas effacé.
+    const { maxAge, ...clearOptions } = cookieOptions();
+    res.clearCookie('jwt', clearOptions);
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
@@ -178,12 +182,12 @@ router.get('/sso/joptimiz', async (req, res) => {
 
     if (!code) {
       const newState = crypto.randomBytes(16).toString('hex');
-      res.cookie('joptimiz_state', newState, { maxAge: 600000, httpOnly: true, secure: config.ENVIRONMENT !== 'development', sameSite: 'lax' });
+      res.cookie('joptimiz_state', newState, { maxAge: 600000, ...joptimizStateCookieOptions() });
       return res.redirect(joptimiz.getAuthorizationUrl(newState));
     }
 
     if (!state || state !== req.cookies.joptimiz_state) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
-    res.clearCookie('joptimiz_state');
+    res.clearCookie('joptimiz_state', joptimizStateCookieOptions());
 
     const tokenData = await joptimiz.exchangeCode(code);
     if (!tokenData.access_token) return res.redirect(`${config.APP_URL}/auth?sso_error=${encodeURIComponent(ERROR_CODES.UNAUTHORIZED)}`);
