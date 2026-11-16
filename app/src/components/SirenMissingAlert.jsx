@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import toast from "react-hot-toast"
 import Alert from "@codegouvfr/react-dsfr/Alert"
 import api from "@/services/api"
 import useStore from "@/services/store"
@@ -14,24 +13,30 @@ import { areResultsHidden } from "@/utils/results"
 export default function SirenMissingAlert({ action, className }) {
   const { user, collectivity: storeCollectivity } = useStore()
   const [collectivity, setCollectivity] = useState(null)
-
-  const fetchCollectivity = async () => {
-    try {
-      setCollectivity(null)
-      if (!action?.collectivity_id && !storeCollectivity?._id) return
-      const { ok, data, code } = await api.get(`/collectivity/${action?.collectivity_id || storeCollectivity?._id}`)
-      if (!ok) return toast.error(code || "Une erreur est survenue")
-      setCollectivity(data)
-    } catch (error) {
-      toast.error(error.code || "Une erreur est survenue")
-    }
-  }
+  const targetId = action?.collectivity_id || storeCollectivity?._id
+  const hidden = !targetId || areResultsHidden(user, targetId)
 
   useEffect(() => {
+    setCollectivity(null)
+    if (hidden) return
+    // Réponse ignorée si la collectivité a changé entre-temps
+    let cancelled = false
+    const fetchCollectivity = async () => {
+      try {
+        const { ok, data } = await api.get(`/collectivity/${targetId}`)
+        // Simple information : en cas d'erreur, on n'affiche rien plutôt qu'un message d'erreur
+        if (!cancelled && ok) setCollectivity(data)
+      } catch (error) {
+        // idem
+      }
+    }
     fetchCollectivity()
-  }, [action?.collectivity_id, storeCollectivity?._id])
+    return () => {
+      cancelled = true
+    }
+  }, [targetId, hidden])
 
-  if (!collectivity || collectivity.siren || areResultsHidden(user, collectivity)) return null
+  if (hidden || !collectivity || collectivity._id !== targetId || collectivity.siren) return null
 
   return (
     <Alert
