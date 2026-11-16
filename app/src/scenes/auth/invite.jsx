@@ -51,7 +51,7 @@ const Invite = () => {
 
     setLoading(true)
     try {
-      const data = { ...values, invitation_token: inviteToken }
+      const data = { ...values, invitation_token: inviteToken, rgpd_accepted: true }
 
       const { ok, user, token, code, userActionRights, collectivity, economicActor } = await api.post("/user/invite-accepted", data)
       if (!ok) return toast.error(code || "Une erreur est survenue")

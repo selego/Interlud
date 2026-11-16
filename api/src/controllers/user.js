@@ -35,6 +35,12 @@ const USER_UPDATABLE_FIELDS = ['name', 'email', 'notifications_email', 'notifica
 // Champs qu'un admin de collectivité peut modifier sur un membre de sa collectivité
 const MEMBER_UPDATABLE_FIELDS = ['name', 'status', 'collectivities'];
 
+// Acceptation des CGU : la date est toujours celle du serveur, jamais celle envoyée par le client
+const stampRgpdAcceptance = (update) => {
+  if (update && Object.prototype.hasOwnProperty.call(update, 'rgpd_accepted_at')) update.rgpd_accepted_at = new Date();
+  return update;
+};
+
 // Modifications de PUT /user/:id autorisées pour un non-admin, ou null si refusé
 const getUserUpdate = (reqUser, target, body) => {
   const adminIds = (reqUser.collectivities || []).filter((c) => c.role === 'admin' && c.status === 'approved').map((c) => String(c.id));
@@ -50,7 +56,7 @@ const getUserUpdate = (reqUser, target, body) => {
     const updated = (Array.isArray(update.collectivities) ? update.collectivities : []).filter((c) => adminIds.includes(String(c?.id)));
     update.collectivities = [...kept, ...updated];
   }
-  return update;
+  return stampRgpdAcceptance(update);
 };
 
 // Collectivités où l'utilisateur est approuvé (optionnellement avec un rôle donné)
@@ -148,7 +154,7 @@ router.post('/signin', async (req, res) => {
 });
 
 router.post('/signup', async (req, res) => {
-  let { password, email, economic_actor_name, role, name } = req.body;
+  let { password, email, economic_actor_name, role, name, rgpd_accepted } = req.body;
   email = (email || '').trim().toLowerCase();
 
   try {
@@ -158,6 +164,8 @@ router.post('/signup', async (req, res) => {
     if (password && !validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
 
     let payload = { password, email, role: 'user', name };
+    // CGU acceptées via la case du formulaire d'inscription : évite de réafficher la modale juste après
+    if (rgpd_accepted === true) payload.rgpd_accepted_at = new Date();
     if (role === 'economic_actor') {
       const economic_actor = await EconomicActor.create({ name: economic_actor_name });
       payload.economic_actor_id = economic_actor._id;
@@ -441,7 +449,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }),
 
 router.put('/', passport.authenticate(['admin', 'user'], { session: false }), async (req, res) => {
   try {
-    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : pickFields(req.body, USER_UPDATABLE_FIELDS), { new: true, runValidators: true });
+    const data = await UserObject.findByIdAndUpdate(req.user._id, req.user.role === 'admin' ? req.body : stampRgpdAcceptance(pickFields(req.body, USER_UPDATABLE_FIELDS)), { new: true, runValidators: true });
     res.status(200).send({ ok: true, data });
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
@@ -855,7 +863,7 @@ router.post('/check-invitation-token', async (req, res) => {
 
 router.post('/invite-accepted', async (req, res) => {
   try {
-    const { email, password, name, invitation_token } = req.body || {};
+    const { email, password, name, invitation_token, rgpd_accepted } = req.body || {};
     // Jeton vide ou nul : correspondrait à tous les comptes sans invitation en cours
     if (typeof email !== 'string' || typeof invitation_token !== 'string' || !invitation_token.trim()) return res.status(404).send({ ok: false, code: ERROR_CODES.USER_NOT_FOUND });
     if (typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
@@ -866,6 +874,8 @@ router.post('/invite-accepted', async (req, res) => {
     if (!user.invitation_token_expires || new Date(user.invitation_token_expires) < new Date()) return res.status(400).send({ ok: false, code: ERROR_CODES.INVITATION_TOKEN_EXPIRED });
 
     const updateData = { password, name, invitation_token: null, invitation_token_expires: null, invitation_accepted_at: new Date(), last_login_at: new Date() };
+    // CGU acceptées via la case du formulaire d'invitation : évite de réafficher la modale juste après
+    if (rgpd_accepted === true) updateData.rgpd_accepted_at = new Date();
 
     user.set(updateData);
     await user.save();
