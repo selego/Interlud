@@ -19,13 +19,6 @@ class api {
     this.token = token
   }
 
-  // Session expirée ou invalide (401 de passport, sans JSON) : retour à la connexion (SEC-10)
-  redirectIfSessionExpired(response) {
-    if (response.status !== 401 || response.headers.get("content-type")?.includes("application/json")) return
-    if (window.location.pathname.startsWith("/auth")) return
-    window.location.href = "/auth"
-  }
-
   get(path) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -35,7 +28,6 @@ class api {
           credentials: "include",
           headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` }
         })
-        this.redirectIfSessionExpired(response)
 
         const res = await response.json()
         resolve(res)
@@ -55,7 +47,6 @@ class api {
           headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
           body: typeof body === "string" ? body : JSON.stringify(body)
         })
-        this.redirectIfSessionExpired(response)
 
         const res = await response.json()
         resolve(res)
@@ -79,7 +70,6 @@ class api {
           headers: {},
           body: formData
         })
-        this.redirectIfSessionExpired(response)
         const res = await response.json()
         console.log("e", res)
         resolve(res)
@@ -99,7 +89,6 @@ class api {
           method: "DELETE",
           headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` }
         })
-        this.redirectIfSessionExpired(response)
         const res = await response.json()
         resolve(res)
       } catch (e) {
@@ -118,7 +107,6 @@ class api {
           headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
           body: typeof body === "string" ? body : JSON.stringify(body)
         })
-        this.redirectIfSessionExpired(response)
 
         const res = await response.json()
         if (response.status !== 200) {
@@ -140,7 +128,6 @@ class api {
           headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
           body: typeof body === "string" ? body : JSON.stringify(body)
         })
-        this.redirectIfSessionExpired(response)
 
         if (response.status !== 200) {
           return reject(response)
