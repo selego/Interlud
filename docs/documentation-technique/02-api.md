@@ -504,7 +504,7 @@ Un indicateur peut n'être affiché que si une ou plusieurs conditions sont remp
 
 - [utils/indicators.js](../../api/src/utils/indicators.js) : `HIDDEN_IDS`, `buildYearMappings`, `shouldDisplayIndicator`.
 - [utils/errorCodes.js](../../api/src/utils/errorCodes.js) : codes métier FR (voir [§6](#6-codes-derreur)).
-- [utils/index.js](../../api/src/utils/index.js) : `uploadToS3FromBuffer(...)`, `validatePassword(...)`.
+- [utils/index.js](../../api/src/utils/index.js) : `validatePassword(...)`, `pickFields(...)`.
 - [utils/constants.js](../../api/src/utils/constants.js) : `BREVO_TEMPLATES`.
 
 ---

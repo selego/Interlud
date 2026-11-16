@@ -6,7 +6,7 @@ const ERROR_CODES = {
   USER_NOT_EXISTS: 'Utilisateur non trouvé',
   USER_ALREADY_REGISTERED: 'Cette adresse e-mail est déjà enregistrée',
   NOT_FOUND: 'Ressource non trouvée',
-  EMAIL_OR_PASSWORD_INVALID: 'Mot de passe ou email incorrect',
+  EMAIL_OR_PASSWORD_INVALID: 'E-mail ou mot de passe invalide',
   PASSWORD_INVALID: 'Mot de passe invalide',
   PASSWORD_NOT_VALIDATED: 'Mot de passe invalide',
   PASSWORD_TOKEN_EXPIRED_OR_INVALID: 'Token de mot de passe expiré ou invalide',

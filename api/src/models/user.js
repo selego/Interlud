@@ -35,6 +35,16 @@ const Schema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Champs jamais renvoyés par l'API (hash du mot de passe et jetons)
+const SENSITIVE_FIELDS = ['password', 'password_reset_token', 'password_reset_expires', 'invitation_token', 'invitation_token_expires'];
+
+Schema.set('toJSON', {
+  transform: (_, ret) => {
+    SENSITIVE_FIELDS.forEach((field) => delete ret[field]);
+    return ret;
+  },
+});
+
 Schema.pre('save', function (next) {
   if (this.isModified('password') || this.isNew) {
     bcrypt.hash(this.password, 10, (e, hash) => {
