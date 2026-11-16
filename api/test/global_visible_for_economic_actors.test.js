@@ -139,12 +139,42 @@ describe("Création d'action (POST /action)", () => {
     const res = await call('POST', '/action', 'member', createBody('g-b2'));
     assert.equal(res.status, 404);
   });
+
+  test("un acteur économique qui omet owner ou se déclare collectivité est quand même refusé", async () => {
+    assert.equal((await call('POST', '/action', 'ae', createBody('g-b2'))).status, 403);
+    assert.equal((await call('POST', '/action', 'ae', createBody('g-b2', { owner: 'collectivity' }))).status, 403);
+  });
+
+  test("une collectivité ne peut pas créer pour un acteur économique sur une fiche non visible", async () => {
+    const res = await call('POST', '/action', 'member', createBody('g-b2', { owner: 'economic_actor', economic_actor_id: 'ea-1' }));
+    assert.equal(res.status, 403);
+  });
+
+  test("une fiche existante sans le champ reste utilisable par un acteur économique", async () => {
+    assert.equal((await call('POST', '/action', 'ae', createBody('g-c1'))).status, 404);
+  });
+
+  test("le parent doit être une fiche du catalogue", async () => {
+    // L'action existante ae-b2 porte la feuille B2 mais n'est pas une fiche global
+    const res = await call('POST', '/action', 'ae', createBody('ae-b2'));
+    assert.equal(res.status, 400);
+  });
+
+  test("seul un admin peut créer une action d'un autre type que référence ou personnalisée", async () => {
+    assert.equal((await call('POST', '/action', 'ae', createBody('g-b3', { type: 'global' }))).status, 400);
+    assert.equal((await call('POST', '/action', 'member', createBody('g-b3', { type: 'global' }))).status, 400);
+    assert.equal((await call('POST', '/action', 'member', createBody('g-b3', { type: 'custom' }))).status, 404);
+  });
 });
 
 describe('Modification du champ (PUT /action/:id)', () => {
   test("seul l'admin plateforme modifie visible_for_economic_actors", async () => {
     const byMember = await call('PUT', '/action/g-b3', 'member', { visible_for_economic_actors: false });
     assert.equal(byMember.status, 200);
+    assert.equal(store.actions.find((a) => a._id === 'g-b3').visible_for_economic_actors, true);
+
+    const byAe = await call('PUT', '/action/g-b3', 'ae', { visible_for_economic_actors: false });
+    assert.equal(byAe.status, 403);
     assert.equal(store.actions.find((a) => a._id === 'g-b3').visible_for_economic_actors, true);
 
     const byAdmin = await call('PUT', '/action/g-b3', 'admin', { visible_for_economic_actors: false });

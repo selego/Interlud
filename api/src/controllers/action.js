@@ -160,8 +160,19 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     const hasExpost = !!req.body.year_expost;
 
+    // Seul un admin plateforme peut créer autre chose qu'une action de référence ou personnalisée
+    if (req.user.role !== 'admin' && req.body.type && !['reference', 'custom'].includes(req.body.type)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    // Un acteur économique crée toujours pour son propre compte
+    if (req.user.role === 'economic_actor') {
+      req.body.owner = 'economic_actor';
+      req.body.economic_actor_id = String(req.user.economic_actor_id);
+    }
+    delete req.body.visible_for_economic_actors;
+
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    // Le parent doit être une fiche du catalogue
+    if (parentAction.type !== 'global') return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     // Fiche du catalogue fermée aux acteurs économiques : création refusée
     if (parentAction.visible_for_economic_actors === false && (req.user.role === 'economic_actor' || req.body.owner === 'economic_actor')) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
