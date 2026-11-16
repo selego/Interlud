@@ -25,7 +25,6 @@
 | **Frontend principal** (`app/`) | React 18 + Vite + Zustand + TailwindCSS + DSFR |
 | **Authentification** | JWT via Passport.js + SSO Joptimiz (OAuth 2.0) |
 | **Emails** | Brevo (ex-Sendinblue) |
-| **Fichiers** | Stockage compatible S3 |
 | **Office** | Microsoft Graph API (SharePoint / Excel) |
 | **Monitoring** | Sentry |
 
@@ -42,7 +41,6 @@
 - **Microsoft Graph / SharePoint** : fichiers Excel par action, synchronisation bidirectionnelle avec les indicateurs.
 - **Brevo** : emails transactionnels (invitations, reset, notifications, formulaire de contact).
 - **Joptimiz** : fournisseur d'identité OAuth 2.0 (bouton « Se connecter avec Joptimiz »).
-- **AWS S3** (optionnel) : pièces jointes.
 - **Sentry** : suivi d'erreurs (production).
 
 ---
@@ -118,9 +116,6 @@ Les variables d'environnement sont exportées depuis ce fichier. Exception : les
 | `SECRET` | String | — (clé JWT) |
 | `APP_URL` | String | `http://localhost:3000` |
 | `SENTRY_DSN` | String | — |
-| `S3_ENDPOINT` | String | `''` |
-| `S3_ACCESSKEYID` | String | `''` |
-| `S3_SECRETACCESSKEY` | String | `''` |
 | `BREVO_KEY` | String | — |
 | `JOPTIMIZ_URL` | String | `https://account.joptimiz.preprod.allohouston.fr` (préprod) |
 | `JOPTIMIZ_CLIENT_ID` | String | `evalud` |
@@ -141,7 +136,6 @@ Les variables d'environnement sont exportées depuis ce fichier. Exception : les
 | `SECRET` | **Oui** | Clé secrète de signature JWT |
 | `APP_URL` | Non | URL du frontend (défaut http://localhost:3000) |
 | `SENTRY_DSN` | Non | DSN Sentry |
-| `S3_ENDPOINT` / `S3_ACCESSKEYID` / `S3_SECRETACCESSKEY` | Non | Storage S3 (optionnel) |
 | `BREVO_KEY` | Non | Clé API Brevo (emails, contact) |
 | `TENANT_ID` / `CLIENT_ID` / `CLIENT_SECRET` | Non* | Azure AD / App (Graph) — lus directement dans `microsoftGraph.js` |
 | `JOPTIMIZ_URL` | Non | URL du serveur OAuth Joptimiz (défaut préprod ; prod : `https://login.joptimiz.green`) |
@@ -152,7 +146,7 @@ Les variables d'environnement sont exportées depuis ce fichier. Exception : les
 *\* Requis si la synchronisation Excel/SharePoint est utilisée.*
 *\*\* Requis pour la connexion via Joptimiz.*
 
-> 🔒 `SECRET`, `CLIENT_SECRET`, `JOPTIMIZ_CLIENT_SECRET`, `S3_SECRETACCESSKEY` et `BREVO_KEY` sont des secrets. Ils ne sont jamais versionnés ni inclus dans une copie de ce document destinée à un tiers ; ils sont gérés via le coffre de variables d'environnement de CleverCloud.
+> 🔒 `SECRET`, `CLIENT_SECRET`, `JOPTIMIZ_CLIENT_SECRET` et `BREVO_KEY` sont des secrets. Ils ne sont jamais versionnés ni inclus dans une copie de ce document destinée à un tiers ; ils sont gérés via le coffre de variables d'environnement de CleverCloud.
 
 ### App (`app/.env`)
 
@@ -198,7 +192,6 @@ cd app   && npm run build && npm start
 | SharePoint (Azure) | Fichiers Excel collectivités | `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET` |
 | Joptimiz | SSO OAuth 2.0 | `JOPTIMIZ_*` |
 | Brevo | Emails transactionnels | `BREVO_KEY` |
-| S3 | Stockage fichiers uploadés | `S3_*` |
 | Sentry | Monitoring d'erreurs | `SENTRY_DSN` |
 
 ---
