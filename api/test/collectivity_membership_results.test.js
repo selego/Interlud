@@ -36,7 +36,11 @@ Action.find = async (query) => (query?._id?.$in ? actions.filter((a) => query._i
 Action.findOne = async (query) => actions.find((a) => query.$or.some((cond) => [...a.exel_files_prev, ...a.excel_files_expost].some((f) => f.excel_file_id === Object.values(cond)[0]))) || null;
 // Aucun classeur d'agrégation configuré : les routes s'arrêtent avant tout appel à Microsoft Graph
 Collectivity.findById = async () => null;
-Collectivity.findOne = async () => null;
+const collectivities = [
+  { _id: 'col-a', aggregation_excel_file_id: 'agg-a' },
+  { _id: 'col-b', aggregation_excel_file_id: 'agg-b' },
+];
+Collectivity.findOne = async (query) => collectivities.find((c) => c.aggregation_excel_file_id === query.aggregation_excel_file_id) || null;
 
 let server;
 let baseUrl;
@@ -122,4 +126,23 @@ test("POST /excel/export : le fichier d'une fiche d'une autre collectivité est 
 
 test('POST /excel/export : un fichier inconnu est refusé', async () => {
   assertForbidden(await call('/excel/export', 'member', { fileId: 'file-inconnu' }));
+});
+
+test("POST /excel/export : le fichier d'agrégation de sa collectivité est accepté, celui d'une autre refusé", async () => {
+  assert.equal((await call('/excel/export', 'member', { fileId: 'agg-a' })).status, 200);
+  assertForbidden(await call('/excel/export', 'member', { fileId: 'agg-b' }));
+});
+
+test('POST /excel/export : un fileId qui n\'est pas une chaîne est rejeté sans export', async () => {
+  const res = await call('/excel/export', 'member', { fileId: { $ne: null } });
+  assert.equal(res.body.ok, false);
+});
+
+test('POST /excel/action_aggregation : déclarer la fiche « global » dans le corps ne contourne pas le contrôle', async () => {
+  assertForbidden(await call('/excel/action_aggregation', 'member', { collectivity: { _id: 'col-a' }, action: { _id: 'act-b', type: 'global' } }));
+});
+
+test('POST /excel/home_aggregation : la collectivité passée par `id` est contrôlée aussi', async () => {
+  assert.equal((await call('/excel/home_aggregation', 'member', { collectivity: { id: 'col-a' } })).status, 200);
+  assertForbidden(await call('/excel/home_aggregation', 'member', { collectivity: { id: 'col-b' } }));
 });

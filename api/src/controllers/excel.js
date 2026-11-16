@@ -175,7 +175,7 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     const gainsYearRows = toYearRows(gainsResult);
     const emYearRows = toYearRows(emResult);
 
-    let query = { type: { $ne: 'config' }, collectivity_id: collectivity._id, action_parent_id: action._id };
+    let query = { type: { $ne: 'config' }, collectivity_id: collectivity._id || collectivity.id, action_parent_id: action._id };
     if (req.user.role === 'economic_actor' || (action.type !== 'global' && action.owner === 'economic_actor')) {
       query.owner = 'economic_actor';
       query.economic_actor_id = req.user?.role === 'economic_actor' ? req.user.economic_actor_id : action.economic_actor_id;
@@ -356,7 +356,7 @@ router.post('/export', passport.authenticate(['admin', 'user'], { session: false
     // Les acteurs économiques ne voient aucun résultat calculé ; sans collectivité ciblée, refusé dès qu'il est acteur économique quelque part
     if (areResultsHidden(req.user)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { fileId } = req.body;
-    if (!fileId) return res.json({ ok: false, data: { error: 'fileId is required' } });
+    if (!fileId || typeof fileId !== 'string') return res.json({ ok: false, data: { error: 'fileId is required' } });
     if (req.user.role !== 'admin') {
       // Le fichier doit être celui d'une fiche ou le fichier d'agrégation d'une collectivité dont l'utilisateur est membre
       const action = await Action.findOne({ $or: [{ 'exel_files_prev.excel_file_id': fileId }, { 'excel_files_expost.excel_file_id': fileId }] });

@@ -56,6 +56,11 @@ export default function CompareActions() {
 
   const fetchActions = async () => {
     if (!collectivity?._id) return
+    // Changement de collectivité : on repart d'une sélection vide pour ne pas comparer les fiches de la précédente
+    setActions([])
+    setSelectedType(null)
+    setSelectedActionIds([])
+    setActionData(null)
     try {
       setLoading(true)
       const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id })
@@ -106,7 +111,7 @@ export default function CompareActions() {
 
   useEffect(() => {
     fetchData()
-  }, [selectedActionIds, collectivity])
+  }, [selectedActionIds])
 
   const selectedActions = selectedActionIds.map((id) => actions.find((a) => a._id === id)).filter(Boolean)
   const allAvailableYears = actionData?.availableYears?.[activeIndicator] ?? []
