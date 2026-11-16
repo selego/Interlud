@@ -17,6 +17,8 @@ const Schema = new mongoose.Schema(
     instance_number: { type: Number, default: 1 },
     // Fiche brouillon / test : exclue des calculs globaux du fichier d'agrégation (colonne "Prise en compte" à FAUX)
     is_draft: { type: Boolean, default: false },
+    // Fiche du catalogue (type global) proposée aux acteurs économiques à la création d'action. Modifiable par l'admin plateforme uniquement.
+    visible_for_economic_actors: { type: Boolean, default: true },
 
     action_parent_id: { type: String, trim: true },
     action_parent_name: { type: String, trim: true },

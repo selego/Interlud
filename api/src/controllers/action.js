@@ -135,6 +135,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
       if (req.body.type === 'global') {
         delete query.owner;
         delete query.economic_actor_id;
+        // Un acteur économique ne voit que les fiches du catalogue qui lui sont ouvertes (champ absent = visible)
+        if (req.user.role === 'economic_actor') query.visible_for_economic_actors = { $ne: false };
       }
     }
 
@@ -158,8 +160,34 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
     const hasExpost = !!req.body.year_expost;
 
+    // Hors admin plateforme : uniquement une action de référence ou personnalisée (référence par défaut)
+    if (req.user.role !== 'admin') {
+      if (!req.body.type) req.body.type = 'reference';
+      if (!['reference', 'custom'].includes(req.body.type)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    }
+    // Un acteur économique crée toujours pour son propre compte
+    if (req.user.role === 'economic_actor') {
+      if (!req.user.economic_actor_id) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+      req.body.owner = 'economic_actor';
+      req.body.economic_actor_id = String(req.user.economic_actor_id);
+      req.body.economic_actor_name = req.user.economic_actor_name;
+    }
+    // Un membre de collectivité crée toujours pour la collectivité
+    if (req.user.role === 'user') {
+      req.body.owner = 'collectivity';
+      delete req.body.economic_actor_id;
+      delete req.body.economic_actor_name;
+    }
+    if (req.body.owner && !['collectivity', 'economic_actor'].includes(req.body.owner)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (req.body.owner === 'economic_actor' && (typeof req.body.economic_actor_id !== 'string' || !req.body.economic_actor_id.trim())) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    delete req.body.visible_for_economic_actors;
+
     const parentAction = await Action.findById(req.body.action_parent_id);
     if (!parentAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    // Le parent doit être une fiche du catalogue
+    if (parentAction.type !== 'global') return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    // Fiche du catalogue fermée aux acteurs économiques : création refusée
+    if (parentAction.visible_for_economic_actors === false && (req.user.role === 'economic_actor' || req.body.owner === 'economic_actor')) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
