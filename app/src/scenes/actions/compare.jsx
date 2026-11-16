@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { FiArrowLeft } from "react-icons/fi"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts"
@@ -54,17 +54,29 @@ export default function CompareActions() {
   const [viewTab, setViewTab] = useState("emissions")
   const [activeGainType, setActiveGainType] = useState("ecartExpostRef")
 
+  // Collectivité courante : une réponse arrivée après un changement de collectivité est ignorée
+  const collectivityIdRef = useRef(collectivity?._id)
+  collectivityIdRef.current = collectivity?._id
+
   const fetchActions = async () => {
-    if (!collectivity?._id) return
+    // Changement de collectivité : on repart d'une sélection vide pour ne pas comparer les fiches de la précédente
+    setActions([])
+    setSelectedType(null)
+    setSelectedActionIds([])
+    setActionData(null)
+    setLoadingData(false)
+    const collectivityId = collectivity?._id
+    if (!collectivityId) return
     try {
       setLoading(true)
-      const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivity._id })
+      const { ok, data, code } = await api.post("/action/search", { collectivity_id: collectivityId })
+      if (collectivityIdRef.current !== collectivityId) return
       if (!ok) return toast.error(code || "Erreur lors du chargement des actions")
       setActions(data)
     } catch (error) {
-      toast.error(error.code || "Erreur lors du chargement des actions")
+      if (collectivityIdRef.current === collectivityId) toast.error(error.code || "Erreur lors du chargement des actions")
     } finally {
-      setLoading(false)
+      if (collectivityIdRef.current === collectivityId) setLoading(false)
     }
   }
 
@@ -91,22 +103,24 @@ export default function CompareActions() {
 
   const fetchData = async () => {
     if (!selectedActionIds.length || !collectivity) return
+    const collectivityId = collectivity._id
     try {
       setLoadingData(true)
       const { ok, data, code } = await api.post("/excel/compare_actions", { collectivity, action_ids: selectedActionIds })
+      if (collectivityIdRef.current !== collectivityId) return
       if (!ok) return toast.error(code || "Erreur lors du chargement des actions")
       setActionData(data)
     } catch (error) {
-      toast.error(error.code || "Erreur lors du chargement des actions")
+      if (collectivityIdRef.current === collectivityId) toast.error(error.code || "Erreur lors du chargement des actions")
     } finally {
-      setLoadingData(false)
+      if (collectivityIdRef.current === collectivityId) setLoadingData(false)
     }
   }
 
 
   useEffect(() => {
     fetchData()
-  }, [selectedActionIds, collectivity])
+  }, [selectedActionIds])
 
   const selectedActions = selectedActionIds.map((id) => actions.find((a) => a._id === id)).filter(Boolean)
   const allAvailableYears = actionData?.availableYears?.[activeIndicator] ?? []
