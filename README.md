@@ -51,7 +51,6 @@ En production : app sur [app.evalud.green](https://app.evalud.green), API sur `a
 - **Base de données** : MongoDB via Mongoose
 - **Auth** : Passport.js + JWT (deux stratégies : `user` et `admin`) + SSO Joptimiz (OAuth 2.0)
 - **Emails** : Brevo (Sendinblue)
-- **Fichiers** : stockage S3 compatible (AWS / MinIO)
 - **Office** : Microsoft Graph API (synchronisation SharePoint / Excel, différée avec debounce)
 - **Erreurs** : Sentry
 

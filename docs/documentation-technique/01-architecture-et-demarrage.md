@@ -25,7 +25,6 @@
 | **Frontend principal** (`app/`) | React 18 + Vite + Zustand + TailwindCSS + DSFR |
 | **Authentification** | JWT via Passport.js + SSO Joptimiz (OAuth 2.0) |
 | **Emails** | Brevo (ex-Sendinblue) |
-| **Fichiers** | Stockage compatible S3 |
 | **Office** | Microsoft Graph API (SharePoint / Excel) |
 | **Monitoring** | Sentry |
 
@@ -42,7 +41,6 @@
 - **Microsoft Graph / SharePoint** : fichiers Excel par action, synchronisation bidirectionnelle avec les indicateurs.
 - **Brevo** : emails transactionnels (invitations, reset, notifications, formulaire de contact).
 - **Joptimiz** : fournisseur d'identité OAuth 2.0 (bouton « Se connecter avec Joptimiz »).
-- **AWS S3** (optionnel) : pièces jointes.
 - **Sentry** : suivi d'erreurs (production).
 
 ---
