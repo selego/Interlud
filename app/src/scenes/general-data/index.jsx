@@ -4,6 +4,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
+import { areResultsHidden } from "@/utils/results"
 import ProgressCircle from "@/components/ProgressCircle"
 import { FiInfo } from "react-icons/fi"
 import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
@@ -248,6 +249,7 @@ export default function Index() {
 }
 
 function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStatsRefresh, yearMappings, tabTotal }) {
+  const { user, collectivity } = useStore()
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
   const [economicActorData, setEconomicActorData] = useState({})
@@ -324,7 +326,8 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
   }
 
   const handleSaveIndicatorValue = async (indicatorValue) => {
-    toast.loading("Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
+    // Les acteurs économiques ne voient pas le dashboard : message neutre
+    toast.loading(areResultsHidden(user, collectivity) ? "Valeur enregistrée" : "Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
       setIndicatorValues((prev) => prev.map((iv) => (iv._id === indicatorValue._id ? indicatorValue : iv)))
       if (indicatorValue.indicator_excel_id) {

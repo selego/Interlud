@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
+import ResultsHidden from "@/components/ResultsHidden"
+import { areResultsHidden } from "@/utils/results"
 
 // ============================================================================
 // Métadonnées d'affichage par clé d'indicateur renvoyée par /excel/home_aggregation
@@ -136,9 +138,11 @@ export default function Home() {
     setReady(false)
     setData(null)
     setAllActions([])
-    setLoadingData(true)
+    // Les acteurs économiques ne voient aucun résultat : pas d'agrégation (route refusée par l'API), donc pas de chargement
+    setLoadingData(!areResultsHidden(user, collectivity))
     const load = async () => {
       await fetchActions()
+      if (areResultsHidden(user, collectivity)) return
       await fetchHomeAggregation()
     }
     load()
@@ -205,9 +209,15 @@ export default function Home() {
 
         {onboardingSteps.every((s) => s.done) && (
         <>
-        {loadingData && !data && <DashboardSkeleton />}
+        {areResultsHidden(user, collectivity) && (
+          <div className="mb-6">
+            <ResultsHidden />
+          </div>
+        )}
 
-        {data && indicator && (
+        {!areResultsHidden(user, collectivity) && loadingData && !data && <DashboardSkeleton />}
+
+        {!areResultsHidden(user, collectivity) && data && indicator && (
         <>
         {/* Hero narratif */}
         <div className="rounded-[20px] p-8 mb-6 border" style={{ background: "linear-gradient(135deg, #F9FFFC 0%, #fff 60%)", borderColor: "#D9EFE3" }}>
@@ -269,8 +279,9 @@ export default function Home() {
         </>
         )}
 
-        {/* Bas — 2 colonnes */}
-        <div className="grid grid-cols-[2fr_1fr] gap-5 mb-8">
+        {/* Bas — 2 colonnes (une seule quand le Top 5 est masqué) */}
+        <div className={`grid ${areResultsHidden(user, collectivity) ? "grid-cols-1" : "grid-cols-[2fr_1fr]"} gap-5 mb-8`}>
+          {!areResultsHidden(user, collectivity) && (
           <div className="card-shadow rounded-2xl p-6 bg-white">
             <SectionLabel sub="Classement par gain GES réel — cumulé sur la période">
               Top 5 actions contributrices
@@ -285,6 +296,7 @@ export default function Home() {
               <div className="text-[13px] text-[#768776] py-6">Aucune action contributrice pour l'instant.</div>
             )}
           </div>
+          )}
 
           <div className="flex flex-col gap-4">
             <div className="card-shadow rounded-2xl p-6 bg-white">

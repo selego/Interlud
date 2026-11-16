@@ -8,9 +8,12 @@ const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
+const { areResultsHidden } = require('../utils/results');
 
 router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
+    if (areResultsHidden(req.user, req.body.collectivity?._id || req.body.collectivity?.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity, action, date_start, date_end } = req.body;
     if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
@@ -52,6 +55,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
 // Les gains (= écart entre deux situations d'émission) sont dérivés côté front.
 router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
+    if (areResultsHidden(req.user, req.body.collectivity?._id || req.body.collectivity?.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity } = req.body;
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
 
@@ -126,6 +131,8 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
 
 router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
+    if (areResultsHidden(req.user, req.body.collectivity?._id || req.body.collectivity?.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity, action, date_start, date_end } = req.body;
     if (!action) return res.json({ ok: false, data: { error: 'action is required' } });
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
@@ -178,6 +185,8 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
 
 router.post('/compare_actions', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
+    if (areResultsHidden(req.user, req.body.collectivity?._id || req.body.collectivity?.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity, action_ids, date_start, date_end } = req.body;
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
     if (!action_ids?.length) return res.json({ ok: false, data: { error: 'action_ids is required' } });
@@ -331,6 +340,8 @@ router.post('/compare_actions', passport.authenticate(['admin', 'user'], { sessi
 
 router.post('/export', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Les acteurs économiques ne voient aucun résultat calculé ; sans collectivité ciblée, refusé dès qu'il est acteur économique quelque part
+    if (areResultsHidden(req.user)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { fileId } = req.body;
     if (!fileId) return res.json({ ok: false, data: { error: 'fileId is required' } });
     const result = await exportExcelFile(fileId);
