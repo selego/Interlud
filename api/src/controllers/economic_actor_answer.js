@@ -3,6 +3,7 @@ const router = express.Router();
 const passport = require('passport');
 const EconomicActorAnswer = require('../models/economic_actor_answer');
 const EconomicActorQuestion = require('../models/economic_actor_question');
+const EconomicActor = require('../models/economic_actor');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
 
@@ -48,6 +49,51 @@ router.put('/mine/:question_id', passport.authenticate('user', { session: false,
       { new: true, upsert: true },
     );
     return res.status(200).send({ ok: true, data: answer });
+  } catch (error) {
+    capture(error);
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
+  }
+});
+
+// Valeur lisible d'une réponse, au format de l'onglet « Réponses acteurs éco » de script/export_calculated_values.js.
+const formatValue = (value, type) => {
+  const raw = value?.[type];
+  if (Array.isArray(raw)) return raw.join(', ');
+  return raw === null || raw === undefined ? '' : String(raw);
+};
+
+// Lecture de toutes les réponses par l'admin plateforme : nom de l'acteur, libellé de la question et valeur lisible.
+// Seuls des champs de la réponse, de la question et du nom de l'acteur sont renvoyés (aucune donnée de compte utilisateur).
+// Filtre optionnel : question_id.
+router.post('/admin/search', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
+  try {
+    const answers = await EconomicActorAnswer.find(req.body.question_id ? { question_id: String(req.body.question_id) } : {});
+    const questions = await EconomicActorQuestion.find({});
+    const actors = await EconomicActor.find({ _id: { $in: [...new Set(answers.map((a) => a.economic_actor_id))] } });
+
+    const questionById = new Map(questions.map((q) => [String(q._id), q]));
+    const actorNameById = new Map(actors.map((a) => [String(a._id), a.name]));
+
+    const data = answers
+      .map((answer) => {
+        const question = questionById.get(answer.question_id);
+        const type = question?.type || '';
+        return {
+          _id: answer._id,
+          economic_actor_id: answer.economic_actor_id,
+          economic_actor_name: actorNameById.get(answer.economic_actor_id) || answer.economic_actor_name || '',
+          question_id: answer.question_id,
+          question_label: question?.label || answer.question_label || '',
+          question_type: type,
+          question_active: question ? !!question.active : false,
+          question_order: question?.order ?? Number.MAX_SAFE_INTEGER,
+          value_unit: question?.value_unit || '',
+          value: formatValue(answer.value, type),
+          updatedAt: answer.updatedAt,
+        };
+      })
+      .sort((a, b) => a.economic_actor_name.localeCompare(b.economic_actor_name, 'fr') || a.question_order - b.question_order);
+    return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
