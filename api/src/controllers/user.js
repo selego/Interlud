@@ -98,7 +98,7 @@ router.post('/signin', async (req, res) => {
     return res.status(200).send({ ok: true, token, user, userActionRights, collectivity, economicActor });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -128,7 +128,7 @@ router.post('/signup', async (req, res) => {
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -197,7 +197,7 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
     return res.status(200).send({ user, token, ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -239,7 +239,7 @@ router.post('/forgot_password', async (req, res) => {
     res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -261,7 +261,7 @@ router.post('/forgot_password_reset', async (req, res) => {
     return res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -284,7 +284,7 @@ router.post('/reset_password', passport.authenticate('user', { session: false })
     return res.status(200).send({ ok: true, user: obj });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -294,7 +294,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     return res.status(200).send({ ok: true, data });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -328,7 +328,7 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     return res.status(200).send({ ok: true, data: users, total: total });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -354,7 +354,7 @@ router.post('/', passport.authenticate(['admin'], { session: false }), async (re
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -372,7 +372,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false }),
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -383,7 +383,7 @@ router.put('/', passport.authenticate(['admin', 'user'], { session: false }), as
   } catch (error) {
     if (error.code === 11000) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -393,7 +393,7 @@ router.delete('/:id', passport.authenticate('admin', { session: false }), async 
     res.status(200).send({ ok: true });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -409,7 +409,7 @@ router.post('/reset_password/:id', passport.authenticate(['admin', 'user'], { se
     return res.status(200).send({ ok: true, user: obj });
   } catch (error) {
     capture(error);
-    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
@@ -871,7 +871,7 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     res.status(200).send({ ok: true, data: user });
   } catch (error) {
     capture(error);
-    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR, error });
+    res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
 
