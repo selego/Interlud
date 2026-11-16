@@ -82,6 +82,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Création réservée aux admins
+    if (req.user.role !== 'admin') return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const existingCollectivity = await Collectivity.findOne({ name: req.body.name });
     if (existingCollectivity) return res.status(400).send({ ok: false, code: ERROR_CODES.COLLECTIVITY_ALREADY_EXISTS });
@@ -102,6 +104,8 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
 router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    // Suppression réservée aux admins
+    if (req.user.role !== 'admin') return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const collectivity = await Collectivity.findByIdAndDelete(req.params.id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
