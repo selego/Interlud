@@ -16,6 +16,8 @@ const Collectivity = require('../src/models/collectivity');
 
 const users = {
   admin: { _id: 'u-admin', name: 'Admin', role: 'admin', collectivities: [] },
+  // Admin global qui a aussi le rôle 'economic_actor' dans col-a : l'admin voit toujours les résultats
+  adminAeInCol: { _id: 'u-admin-ae', name: 'Admin AE', role: 'admin', collectivities: [{ role: 'economic_actor', id: 'col-a', status: 'approved' }] },
   member: { _id: 'u-member', name: 'Membre A', role: 'user', collectivities: [{ id: 'col-a', role: 'user', status: 'approved' }] },
   ae: { _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [] },
   // Rôle global 'user', mais acteur économique dans col-a (rôle attribué par collectivité) et simple membre de col-b
@@ -86,6 +88,11 @@ for (const path of RESULT_ROUTES) {
       assert.equal(res.status, 200);
     });
 
+    test("un admin ayant le rôle 'economic_actor' dans la collectivité ciblée y a accès", async () => {
+      const res = await call(path, 'adminAeInCol', { collectivity_id: 'col-a', collectivity: { _id: 'col-a' } });
+      assert.equal(res.status, 200);
+    });
+
     test('un utilisateur acteur économique dans la collectivité ciblée est refusé (403 FORBIDDEN)', async () => {
       const res = await call(path, 'aeInCol', { collectivity_id: 'col-a', collectivity: { _id: 'col-a' } });
       assert.equal(res.status, 403);
@@ -101,6 +108,11 @@ for (const path of RESULT_ROUTES) {
     }
   });
 }
+
+test("POST /excel/export : un admin acteur économique dans une collectivité y a accès", async () => {
+  const res = await call('/excel/export', 'adminAeInCol', {});
+  assert.equal(res.status, 200);
+});
 
 test("POST /excel/export : refusé à un utilisateur acteur économique dans au moins une collectivité (fichier sans collectivité connue)", async () => {
   const res = await call('/excel/export', 'aeInCol', { fileId: 'f-1' });

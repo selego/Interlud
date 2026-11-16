@@ -640,7 +640,8 @@ export default function Dashboard({ action }) {
   const canRead = isAdmin || isEco || right?.can_read
   const canWrite = isAdmin || isEco || right?.can_write
   // Les acteurs économiques ne voient aucun résultat (graphiques, émissions, gains) : seulement la saisie et le taux de remplissage
-  const resultsHidden = areResultsHidden(user, collectivity)
+  // Évalué sur la collectivité de l'action (déjà chargée), pas sur celle du store
+  const resultsHidden = areResultsHidden(user, action.collectivity_id)
 
   const load = async () => {
     if (resultsHidden || !collectivity || !action?.excel_worksheetname) return

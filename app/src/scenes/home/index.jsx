@@ -139,7 +139,7 @@ export default function Home() {
     setData(null)
     setAllActions([])
     // Les acteurs économiques ne voient aucun résultat : pas d'agrégation (route refusée par l'API), donc pas de chargement
-    if (!areResultsHidden(user, collectivity)) setLoadingData(true)
+    setLoadingData(!areResultsHidden(user, collectivity))
     const load = async () => {
       await fetchActions()
       if (areResultsHidden(user, collectivity)) return

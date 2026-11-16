@@ -13,7 +13,7 @@ import { areResultsHidden } from "@/utils/results";
 
 export default function Index() {
   const { id } = useParams();
-  const { user, collectivity } = useStore();
+  const { user } = useStore();
   const [action, setAction] = useState(null);
   const fetchAction = async () => {
     try {
@@ -38,7 +38,7 @@ export default function Index() {
     <Routes>
       <Route path="/dashboard" element={<Dashboard action={action} />} />
       {/* Le tableau de bord de l'action parente affiche des résultats : refusé aux acteurs économiques (API comprise) */}
-      <Route path="/parent-dashboard" element={areResultsHidden(user, collectivity) ? <div className="p-8"><ResultsHidden /></div> : <ParentDashboard action={action} />} />
+      <Route path="/parent-dashboard" element={areResultsHidden(user, action.collectivity_id) ? <div className="p-8"><ResultsHidden /></div> : <ParentDashboard action={action} />} />
       <Route path="/completion" element={<Completion action={action} onSave={fetchAction} />} />
       <Route path="/settings" element={<Settings action={action}  onSave={fetchAction}/>} />
     </Routes>

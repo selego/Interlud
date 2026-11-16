@@ -3,7 +3,9 @@
 // ou s'il a le rôle 'economic_actor' dans la collectivité ciblée par la requête.
 // Sans collectivité ciblée (ex. /excel/export, qui ne reçoit qu'un fileId), on masque dès qu'il est acteur économique
 // dans au moins une collectivité : on ne peut pas savoir à quelle collectivité appartient le fichier demandé.
+// L'admin voit toujours les résultats, même s'il a le rôle 'economic_actor' dans une collectivité.
 function areResultsHidden(user, collectivityId) {
+  if (user?.role === 'admin') return false;
   if (user.role === 'economic_actor') return true;
   return (user.collectivities || []).some((c) => c.role === 'economic_actor' && (!collectivityId || c.id === String(collectivityId)));
 }
