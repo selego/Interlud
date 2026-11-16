@@ -4,6 +4,7 @@ const passport = require('passport');
 const Action = require('../models/action');
 const IndicatorValue = require('../models/indicator_value');
 const ERROR_CODES = require('../utils/errorCodes');
+const { searchRegex, isInvalidSearch } = require('../utils/search');
 const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Indicator = require('../models/indicator');
@@ -113,7 +114,8 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
     if (req.body.collectivity_ids) query.collectivity_id = { $in: req.body.collectivity_ids };
     if (req.body.action_parent_id) query.action_parent_id = req.body.action_parent_id;
     if (req.body.status) query.status = req.body.status;
-    if (req.body.search) query.name = { $regex: req.body.search, $options: 'i' };
+    if (isInvalidSearch(req.body.search)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (req.body.search) query.name = searchRegex(req.body.search);
     if (req.body.createdAt) query.createdAt = { $gte: new Date(req.body.createdAt) };
     if (req.body.is_subsidized_by_program === true || req.body.is_subsidized_by_program === false) query.is_subsidized_by_program = req.body.is_subsidized_by_program;
     if (req.body.pilote) query.pilote = req.body.pilote;
