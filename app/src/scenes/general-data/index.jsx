@@ -6,6 +6,7 @@ import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import { areResultsHidden } from "@/utils/results"
 import ProgressCircle from "@/components/ProgressCircle"
+import SirenMissingAlert from "@/components/SirenMissingAlert"
 import { FiInfo } from "react-icons/fi"
 import { isIndicatorValueFilled, shouldDisplayIndicatorFromMap, fetchConditionValuesMap } from "@/utils/indicatorHelpers"
 import IndicatorsList from "./IndicatorsList"
@@ -92,6 +93,7 @@ export default function Index() {
       <div className="min-h-screen p-8">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Données générales</h1>
+          <SirenMissingAlert className="mb-4" />
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -118,6 +120,8 @@ export default function Index() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-3xl font-bold text-gray-900">Données générales</h1>
           </div>
+
+          <SirenMissingAlert className="mb-4" />
 
           {configActions.length > 1 && (
             <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5 mb-4">
