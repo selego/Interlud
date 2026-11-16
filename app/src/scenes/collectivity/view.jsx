@@ -27,7 +27,8 @@ export default function View() {
     getUser()
   }, [id])
 
-  if (!user)
+  // Rechargement direct : la collectivité arrive après le user, les onglets en ont besoin dès le premier rendu
+  if (!user || !collectivity)
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg text-gray-600">Chargement...</div>
@@ -93,7 +94,7 @@ function UserInfoTab({ user, setUser }) {
     name: user?.name || "",
     email: user?.email || "",
     status: user.status || "",
-    collectivityRole: user.collectivities?.find((c) => c.id === collectivity?._id).role || "user"
+    collectivityRole: user.collectivities?.find((c) => c.id === collectivity?._id)?.role || "user"
   })
 
   const onUpdate = async () => {
