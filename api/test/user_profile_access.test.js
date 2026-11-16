@@ -51,7 +51,8 @@ const users = {
   adminB: makeUser('adminb', { name: 'Admin B', collectivities: [{ id: COL_B, role: 'admin', status: 'approved' }] }),
   pendingAdminA: makeUser('pendingadmina', { name: 'Admin A en attente', collectivities: [{ id: COL_A, role: 'admin', status: 'pending' }] }),
   memberB: makeUser('memberb', { name: 'Membre B', collectivities: [{ id: COL_B, role: 'user', status: 'approved' }] }),
-  ae: makeUser('ae', { name: 'AE', role: 'economic_actor', economic_actor_id: EA_1 }),
+  ae: makeUser('ae', { name: 'AE', role: 'economic_actor', economic_actor_id: EA_1, collectivities: [{ id: COL_A, role: 'economic_actor', status: 'approved' }] }),
+  adminInA: makeUser('admininA', { name: 'Admin plateforme rattaché à A', role: 'admin', collectivities: [{ id: COL_A, role: 'user', status: 'approved' }] }),
 };
 const all = Object.values(users);
 
@@ -168,6 +169,7 @@ describe('GET /user/:id', () => {
     ['un admin de collectivité non approuvé ne lit pas le profil', 'pendingAdminA', 'member'],
     ['un acteur économique ne lit pas un profil tiers', 'ae', 'member'],
     ["un admin de collectivité ne lit pas l'admin plateforme", 'adminA', 'admin'],
+    ["un admin de collectivité ne lit pas l'admin plateforme rattaché à sa collectivité", 'adminA', 'adminInA'],
   ];
   for (const [label, who, target] of forbidden) {
     test(label, async () => {
@@ -189,7 +191,13 @@ describe('POST /user/search', () => {
     assert.equal((await call('POST', '/user/search', 'member', { role: 'admin' })).status, 403);
   });
 
-  test('un membre approuvé liste les membres de sa collectivité', async () => {
+  test("un membre simple ou un acteur économique rattaché ne liste pas sa collectivité", async () => {
+    assert.equal((await call('POST', '/user/search', 'member', { collectivity_id: COL_A })).status, 403);
+    assert.equal((await call('POST', '/user/search', 'ae', { collectivity_id: COL_A })).status, 403);
+    assert.equal((await call('POST', '/user/search', 'adminA', { collectivity_id: { $ne: COL_B } })).status, 403);
+  });
+
+  test('un admin de collectivité liste les membres de sa collectivité', async () => {
     const res = await call('POST', '/user/search', 'adminA', { collectivity_id: COL_A });
     assert.equal(res.status, 200);
     assertNoSecrets(res);

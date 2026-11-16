@@ -53,14 +53,16 @@ const approvedCollectivityIds = (user, role) =>
 const canReadUser = (reqUser, target) => {
   if (reqUser.role === 'admin') return true;
   if (reqUser._id.toString() === target._id.toString()) return true;
+  // Un admin de collectivité ne lit jamais un admin de la plateforme, même rattaché à sa collectivité
+  if (target.role === 'admin') return false;
   const adminIds = approvedCollectivityIds(reqUser, 'admin');
   return (target.collectivities || []).some((c) => adminIds.includes(String(c.id)));
 };
 
-// Recherche par un non-admin : limitée à ses collectivités ou à son acteur économique
+// Recherche par un non-admin : limitée aux collectivités dont il est administrateur approuvé, ou à son acteur économique
 const canSearchUsers = (reqUser, body) => {
   if (reqUser.role === 'admin') return true;
-  if (body.collectivity_id && approvedCollectivityIds(reqUser).includes(String(body.collectivity_id))) return true;
+  if (typeof body.collectivity_id === 'string' && approvedCollectivityIds(reqUser, 'admin').includes(body.collectivity_id)) return true;
   return !!(body.economic_actor_id && reqUser.economic_actor_id && String(body.economic_actor_id) === String(reqUser.economic_actor_id));
 };
 
