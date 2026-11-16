@@ -163,8 +163,15 @@ const AddQuestionModal = ({ isOpen, onClose }) => {
     }
   }
 
+  // Formulaire vidé à la fermeture : une nouvelle ouverture ne reprend pas la saisie précédente
+  const handleClose = () => {
+    setLabel("")
+    setRequired(false)
+    onClose()
+  }
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md">
+    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-md">
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Ajouter une question</h2>

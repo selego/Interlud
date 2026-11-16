@@ -143,6 +143,8 @@ function Answers({ questions }) {
 
   return (
     <div className="flex flex-col gap-[11px]">
+      {/* Zone toujours présente : les lecteurs d'écran annoncent l'apparition, le changement et la disparition de l'encart */}
+      <div aria-live="polite" aria-atomic="true">
       {missingRequired.length > 0 && (
         <Alert
           severity="warning"
@@ -158,6 +160,7 @@ function Answers({ questions }) {
           }
         />
       )}
+      </div>
       {questions.map((question) => (
         <QuestionCard
           key={question._id}
