@@ -18,6 +18,7 @@ const { searchRegex, isInvalidSearch } = require('../utils/search');
 const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
+const microsoftGraph = require('../services/microsoftGraph');
 const joptimiz = require('../services/joptimiz');
 const { capture } = require('../services/sentry');
 
@@ -912,16 +913,25 @@ router.post('/invite-accepted', async (req, res) => {
   }
 });
 
-router.post('/request-collectivity-access', passport.authenticate(['user', 'applicant'], { session: false }), async (req, res) => {
+router.post('/request-collectivity-access', passport.authenticate('user', { session: false }), async (req, res) => {
   try {
     const { collectivityId } = req.body;
-    if (!collectivityId) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (typeof collectivityId !== 'string' || !mongoose.isValidObjectId(collectivityId)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const collectivity = await Collectivity.findById(collectivityId);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const user = await UserObject.findById(req.user._id);
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Un acteur économique n'impacte pas les résultats de la collectivité : son organisation la rejoint
+    // immédiatement, sans validation (y compris après un refus ou une demande restée en attente).
+    if (user.role === 'economic_actor') {
+      const actor = user.economic_actor_id ? await EconomicActor.findById(user.economic_actor_id) : null;
+      if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      await attachCollectivityToEconomicActor(actor, collectivity);
+      return res.status(200).send({ ok: true, data: await UserObject.findById(user._id) });
+    }
 
     if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_REQUESTED });
 
@@ -990,5 +1000,34 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
+
+// Même effet que l'ajout d'une collectivité à un acteur économique depuis l'admin : fichier d'agrégation
+// créé une seule fois, puis accès approuvé pour tous les membres de l'organisation. Idempotent.
+async function attachCollectivityToEconomicActor(actor, collectivity) {
+  const collectivityId = collectivity._id.toString();
+
+  if (!actor.collectivities?.some((c) => c.id === collectivityId)) {
+    const aggregation_excel_file_id = await microsoftGraph.duplicateExcelFile(
+      `${actor.name} - ${collectivity.name} - Aggregation_V5.xlsx`,
+      collectivity.sharepoint_folder_id,
+      microsoftGraph.aggregationTemplateFileId
+    );
+    // Condition sur l'absence de la collectivité : deux demandes simultanées n'ajoutent pas de doublon
+    await EconomicActor.updateOne(
+      { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
+      { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
+    );
+  }
+
+  const members = await UserObject.find({ economic_actor_id: actor._id.toString(), role: 'economic_actor' });
+  for (const member of members) {
+    if (member.collectivities?.some((c) => c.id === collectivityId && c.status === 'approved')) continue;
+    member.collectivities = [
+      ...(member.collectivities || []).filter((c) => c.id !== collectivityId),
+      { id: collectivityId, name: collectivity.name, role: 'economic_actor', status: 'approved' },
+    ];
+    await member.save();
+  }
+}
 
 module.exports = router;
