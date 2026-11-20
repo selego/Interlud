@@ -155,25 +155,39 @@ router.post('/signin', async (req, res) => {
 
 router.post('/signup', async (req, res) => {
   let { password, email, economic_actor_name, role, name, rgpd_accepted } = req.body;
-  email = (email || '').trim().toLowerCase();
+  email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  economic_actor_name = typeof economic_actor_name === 'string' ? economic_actor_name.trim() : '';
 
   try {
+    if (!email || typeof password !== 'string' || !password) return res.status(400).send({ ok: false, code: ERROR_CODES.EMAIL_AND_PASSWORD_REQUIRED });
+    // Acteur économique : le nom de la structure est obligatoire (il crée l'organisation)
+    if (role === 'economic_actor' && (!economic_actor_name || economic_actor_name.length > 100)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (name !== undefined && typeof name !== 'string') return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+
     const existingUser = await UserObject.findOne({ email });
     if (existingUser) return res.status(409).send({ ok: false, code: ERROR_CODES.USER_ALREADY_REGISTERED });
 
-    if (password && !validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
+    if (!validatePassword(password)) return res.status(400).send({ ok: false, user: null, code: ERROR_CODES.PASSWORDS_NOT_MATCH });
 
     let payload = { password, email, role: 'user', name };
     // CGU acceptées via la case du formulaire d'inscription : évite de réafficher la modale juste après
     if (rgpd_accepted === true) payload.rgpd_accepted_at = new Date();
+    let economic_actor = null;
     if (role === 'economic_actor') {
-      const economic_actor = await EconomicActor.create({ name: economic_actor_name });
+      economic_actor = await EconomicActor.create({ name: economic_actor_name });
       payload.economic_actor_id = economic_actor._id;
       payload.economic_actor_name = economic_actor.name;
       payload.role = 'economic_actor';
     }
 
-    const user = await UserObject.create(payload);
+    let user;
+    try {
+      user = await UserObject.create(payload);
+    } catch (error) {
+      // Compte non créé : on ne laisse pas une organisation sans membre
+      if (economic_actor) await EconomicActor.deleteOne({ _id: economic_actor._id }).catch(capture);
+      throw error;
+    }
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie('jwt', token, cookieOptions());
 
