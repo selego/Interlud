@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 const User = require('../src/models/user');
 const Collectivity = require('../src/models/collectivity');
@@ -20,6 +21,8 @@ const microsoftGraph = require('../src/services/microsoftGraph');
 const COL_A = '64b000000000000000000001';
 const COL_B = '64b000000000000000000002';
 const UNKNOWN_COL = '64b0000000000000000000ff';
+const EA_1 = '64e000000000000000000001';
+const EA_2 = '64e000000000000000000002';
 
 // ---------- Modèles simulés ----------
 let users;
@@ -36,16 +39,17 @@ const makeUser = (data) => {
 
 beforeEach(() => {
   users = [
-    makeUser({ _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: 'ea-1' }),
-    makeUser({ _id: 'u-ae-collegue', name: 'Collègue', role: 'economic_actor', economic_actor_id: 'ea-1' }),
-    makeUser({ _id: 'u-ae-autre', name: 'Autre AE', role: 'economic_actor', economic_actor_id: 'ea-2' }),
+    makeUser({ _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: EA_1 }),
+    makeUser({ _id: 'u-ae-collegue', name: 'Collègue', role: 'economic_actor', economic_actor_id: EA_1 }),
+    makeUser({ _id: 'u-ae-autre', name: 'Autre AE', role: 'economic_actor', economic_actor_id: EA_2 }),
     makeUser({ _id: 'u-ae-sans-org', name: 'AE sans organisation', role: 'economic_actor', economic_actor_id: '' }),
+    makeUser({ _id: 'u-ae-org-invalide', name: 'AE organisation invalide', role: 'economic_actor', economic_actor_id: 'pas-un-id' }),
     makeUser({ _id: 'u-public', name: 'Acteur public', role: 'user' }),
     makeUser({ _id: 'u-admin-col', name: 'Admin collectivité', role: 'user', email: 'admin@exemple.fr', collectivities: [{ id: COL_A, role: 'admin', status: 'approved' }] }),
   ];
   actors = [
-    { _id: 'ea-1', name: 'Transporteur', collectivities: [] },
-    { _id: 'ea-2', name: 'Autre', collectivities: [] },
+    { _id: EA_1, name: 'Transporteur', collectivities: [] },
+    { _id: EA_2, name: 'Autre', collectivities: [] },
   ];
   duplicateCalls = [];
   notifications = [];
@@ -64,7 +68,11 @@ User.find = async (query) => {
   return users.filter((u) => u.economic_actor_id === query.economic_actor_id && (!query.role || u.role === query.role));
 };
 Collectivity.findById = async (id) => collectivities.find((c) => c._id === id) || null;
-EconomicActor.findById = async (id) => actors.find((a) => a._id === id) || null;
+// Comme Mongoose : un identifiant mal formé lève une CastError
+EconomicActor.findById = async (id) => {
+  if (!mongoose.isValidObjectId(id)) throw new Error(`CastError: ${id}`);
+  return actors.find((a) => a._id === id) || null;
+};
 EconomicActor.updateOne = async (filter, update) => {
   const actor = actors.find((a) => a._id === filter._id);
   if (!actor || actor.collectivities.some((c) => c.id === filter['collectivities.id'].$ne)) return { modifiedCount: 0 };
@@ -172,9 +180,11 @@ test("organisation déjà rattachée : aucun nouveau fichier d'agrégation, le m
   assert.equal(users[0].collectivities.filter((c) => c.id === COL_A).length, 1);
 });
 
-test('un acteur économique sans organisation est refusé (404)', async () => {
-  const res = await requestAccess('u-ae-sans-org', COL_A);
-  assert.equal(res.status, 404);
+test('un acteur économique sans organisation (ou identifiant invalide) est refusé (404)', async () => {
+  for (const who of ['u-ae-sans-org', 'u-ae-org-invalide']) {
+    const res = await requestAccess(who, COL_A);
+    assert.equal(res.status, 404);
+  }
   assert.equal(duplicateCalls.length, 0);
 });
 

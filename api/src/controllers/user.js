@@ -927,7 +927,7 @@ router.post('/request-collectivity-access', passport.authenticate('user', { sess
     // Un acteur économique n'impacte pas les résultats de la collectivité : son organisation la rejoint
     // immédiatement, sans validation (y compris après un refus ou une demande restée en attente).
     if (user.role === 'economic_actor') {
-      const actor = user.economic_actor_id ? await EconomicActor.findById(user.economic_actor_id) : null;
+      const actor = mongoose.isValidObjectId(user.economic_actor_id) ? await EconomicActor.findById(user.economic_actor_id) : null;
       if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
       await attachCollectivityToEconomicActor(actor, collectivity);
       return res.status(200).send({ ok: true, data: await UserObject.findById(user._id) });
