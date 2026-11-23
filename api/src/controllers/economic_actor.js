@@ -10,6 +10,7 @@ const { capture } = require('../services/sentry');
 const { duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const { pickFields } = require('../utils');
+const { isObjectId } = require('../utils/collectivityAccess');
 
 const ECONOMIC_ACTOR_UPDATABLE_FIELDS = ['name', 'description'];
 
@@ -86,8 +87,10 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
   }
 });
 
-router.put('/:id/add_collectivity', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+router.put('/:id/add_collectivity', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
   try {
+    if (!isObjectId(req.params.id) || !isObjectId(req.body.collectivity_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
     const actor = await EconomicActor.findById(req.params.id);
     if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
@@ -107,8 +110,10 @@ router.put('/:id/add_collectivity', passport.authenticate(['admin', 'user'], { s
   }
 });
 
-router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
+router.delete('/:id', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
   try {
+    if (!isObjectId(req.params.id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
     const actor = await EconomicActor.findByIdAndDelete(req.params.id);
     if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
