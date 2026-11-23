@@ -717,7 +717,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
 router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!isObjectId(req.params.id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findOne({ _id: req.params.id });
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
