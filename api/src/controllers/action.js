@@ -17,6 +17,7 @@ const { isPercentUnit } = require('../utils/indicators');
 const { writeDraftFlag, warmSessionsForAction } = require('../services/excelSync');
 const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
 const { pickFields } = require('../utils');
+const { canEditAction, canCreateAction } = require('../utils/collectivityAccess');
 
 const ACTION_UPDATABLE_FIELDS = [
   'name', 'description', 'status', 'priority', 'blocked_reason', 'step_description', 'date_start', 'date_end',
@@ -24,14 +25,6 @@ const ACTION_UPDATABLE_FIELDS = [
   'pilote', 'pilote_description', 'partners', 'partners_description',
   'is_subsidized_by_program', 'related_initiatives', 'comment', 'is_draft',
 ];
-
-// Modification et suppression d'une action : admin plateforme, membre approuvé de sa collectivité
-// (hors rôle acteur économique) ou acteur économique propriétaire.
-function canEditAction(user, action) {
-  if (user.role === 'admin') return true;
-  if ((user.collectivities || []).some((c) => c.id === action.collectivity_id && c.status === 'approved' && c.role !== 'economic_actor')) return true;
-  return !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
-}
 
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
@@ -162,6 +155,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_init) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!canCreateAction(req.user, req.body.collectivity_id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const hasExpost = !!req.body.year_expost;
 
@@ -194,6 +188,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     // Fiche du catalogue fermée aux acteurs économiques : création refusée
     if (parentAction.visible_for_economic_actors === false && (req.user.role === 'economic_actor' || req.body.owner === 'economic_actor')) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
+    if (!mongoose.isValidObjectId(req.body.collectivity_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
@@ -862,8 +857,10 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     // Vérifier si cette année prévisionnelle existe déjà
     const existingPrev = action.exel_files_prev?.find((f) => f.year_prev === year_prev);
@@ -1232,8 +1229,10 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     // Vérifier si cette année expost existe déjà
     const existingExpost = action.excel_files_expost?.find((f) => f.year_expost === year_expost);
@@ -1677,8 +1676,10 @@ router.post('/remove_year_previsionnel', passport.authenticate(['admin', 'user']
     const { action_id, year_prev } = req.body;
     if (!action_id || !year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const entry = (action.exel_files_prev || []).find((f) => f.year_prev === year_prev);
     if (!entry) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
@@ -1752,8 +1753,10 @@ router.post('/remove_year_expost', passport.authenticate(['admin', 'user'], { se
     const { action_id, year_expost } = req.body;
     if (!action_id || !year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
+    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const entry = (action.excel_files_expost || []).find((f) => f.year_expost === year_expost);
     if (!entry) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });

@@ -83,7 +83,7 @@ describe("Les erreurs serveur ne divulguent pas d'informations techniques", () =
   for (const [method, path, body] of [
     ['GET', '/user/boom'],
     ['POST', '/excel/export', { fileId: 'file-1' }],
-    ['POST', '/indicator_value/importIndicatorValues', { fileBase64: 'eA==', collectivity: { _id: 'col-a' }, action_id: 'act-a' }],
+    ['POST', '/indicator_value/importIndicatorValues', { fileBase64: 'eA==', collectivity: { _id: 'col-a' }, action_id: 'a0000000000000000000000a' }],
   ]) {
     test(`${method} ${path} renvoie un code générique`, async () => {
       const before = captured.length;

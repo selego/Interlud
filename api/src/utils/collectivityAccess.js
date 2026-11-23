@@ -13,4 +13,19 @@ function isActionInCollectivity(action, collectivityId) {
   return !!action.collectivity_id && action.collectivity_id === String(collectivityId);
 }
 
-module.exports = { isApprovedMember, isActionInCollectivity };
+// Écriture sur une action existante (modification, années, valeurs) : admin plateforme, membre approuvé de sa
+// collectivité (hors rôle acteur économique) ou acteur économique propriétaire.
+function canEditAction(user, action) {
+  if (user.role === 'admin') return true;
+  if (!!action.collectivity_id && (user.collectivities || []).some((c) => c.id === action.collectivity_id && c.status === 'approved' && c.role !== 'economic_actor')) return true;
+  return !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
+}
+
+// Création d'une action dans une collectivité : admin plateforme, administrateur approuvé de la collectivité,
+// ou acteur économique dont le rattachement à la collectivité est approuvé (il crée alors pour sa propre organisation).
+function canCreateAction(user, collectivityId) {
+  if (user.role === 'admin') return true;
+  return (user.collectivities || []).some((c) => c.id === String(collectivityId) && c.status === 'approved' && (user.role === 'economic_actor' || c.role === 'admin'));
+}
+
+module.exports = { isApprovedMember, isActionInCollectivity, canEditAction, canCreateAction };

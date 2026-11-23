@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const passport = require('passport');
 const ExcelJS = require('exceljs');
@@ -13,7 +14,9 @@ const { enqueueCellUpdate, enqueueAggregation, isSyncPending } = require('../ser
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
+const { canEditAction } = require('../utils/collectivityAccess');
 const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicNames, collectConditionExcelIds } = require('../utils/indicators');
+const OWNERSHIP_FIELDS = ['action_id', 'collectivity_id', 'owner', 'economic_actor_id'];
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -275,11 +278,15 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
 
 router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const indicatorValue = await IndicatorValue.findById(req.params.id);
     if (!indicatorValue) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const action = await Action.findById(indicatorValue.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // Le rattachement d'une valeur (action, collectivité, propriétaire) n'est modifiable que par l'admin plateforme
+    if (req.user.role !== 'admin') OWNERSHIP_FIELDS.forEach((field) => delete req.body[field]);
 
     let collectivity = null;
     if (action.owner === 'economic_actor') {
@@ -546,6 +553,13 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.body.action_id)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    const action = await Action.findById(req.body.action_id);
+    if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // Hors admin plateforme, la valeur est rattachée à la collectivité et au propriétaire de son action
+    if (req.user.role !== 'admin') Object.assign(req.body, { collectivity_id: action.collectivity_id, owner: action.owner, economic_actor_id: action.economic_actor_id });
+
     const indicatorValue = await IndicatorValue.create(req.body);
     return res.status(200).send({ ok: true, data: indicatorValue });
   } catch (error) {
@@ -661,8 +675,12 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
     if (!collectivity) return res.status(400).json({ ok: false, data: { error: 'collectivity is required' } });
     if (!action_id) return res.status(400).json({ ok: false, data: { error: 'action_id is required' } });
 
+    if (!mongoose.isValidObjectId(action_id)) return res.status(404).json({ ok: false, data: { error: 'Action not found' } });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).json({ ok: false, data: { error: 'Action not found' } });
+    if (!canEditAction(req.user, action)) return res.status(403).json({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // Hors admin plateforme, l'import ne porte que sur la collectivité de l'action
+    if (req.user.role !== 'admin' && String(collectivity._id) !== action.collectivity_id) return res.status(403).json({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const fileBuffer = Buffer.from(fileBase64, 'base64');
 
@@ -686,6 +704,9 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       });
     }
 
+    // L'import ne touche que les fichiers et les valeurs du propriétaire de l'action
+    const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
+
     // Sync to SharePoint Excel files if any exist
     const excelFileIds = [];
     for (const excelFile of action.exel_files_prev || []) {
@@ -697,6 +718,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
         year_init: action.year_init,
         _id: { $ne: action._id },
         'exel_files_prev.0.excel_file_id': { $exists: true },
+        ...ownerFilter,
       });
       for (const targetAction of actionsWithSameYearInit) {
         for (const excelFile of targetAction.exel_files_prev || []) {
@@ -716,6 +738,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       indicator_id: { $in: indicators.map((ind) => ind._id.toString()) },
       collectivity_id: collectivity._id,
       situation: { $in: [...new Set(extractedData.map((d) => d.situation))] },
+      ...ownerFilter,
     };
     if (req.body.year) ivQuery.year = req.body.year;
     const indicatorValues = await IndicatorValue.find(ivQuery);
@@ -804,7 +827,6 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
       // Cross-action sync: propagate updated values to other indicator values sharing same indicator_id/situation/year/owner (like PUT)
       const syncLogs = [];
       const excelUpdatePromises = [];
-      const ownerFilter = { owner: action.owner, ...(action.owner === 'economic_actor' ? { economic_actor_id: action.economic_actor_id } : {}) };
       const collectivityFilter = action.owner === 'economic_actor' ? {} : { collectivity_id: action.collectivity_id };
 
       for (const { indicatorValue, indicator, newTypedValue } of updatedValues) {
