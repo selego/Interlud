@@ -102,7 +102,8 @@ export default function Home() {
   const [loadingData, setLoadingData] = useState(false)
 
   useEffect(() => {
-    if (user?.role !== "user") return
+    // Acteur public comme acteur économique : sans territoire validé, il faut d'abord en demander un
+    if (!["user", "economic_actor"].includes(user?.role)) return
     if (user.collectivities?.some((c) => c.status === "approved")) return
     navigate("/collectivity/join", { replace: true })
   }, [user])

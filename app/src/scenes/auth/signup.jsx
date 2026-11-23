@@ -25,7 +25,7 @@ export default () => {
     if (values.password !== values.confirmPassword) return setErrors({ ...errors, confirmPassword: "Les mots de passe ne correspondent pas" })
     if (!values.first_name) return setErrors({ ...errors, first_name: "Ce champ est requis" })
     if (!values.last_name) return setErrors({ ...errors, last_name: "Ce champ est requis" })
-    if (!values.entityName && accountType === "economic_actor") return setErrors({ ...errors, entityName: "Ce champ est requis" })
+    if (!values.entityName.trim() && accountType === "economic_actor") return setErrors({ ...errors, entityName: "Ce champ est requis" })
     if (!acceptedTerms) return setErrors({ ...errors, acceptedTerms: "Vous devez accepter les conditions d'utilisation" })
 
     const payload = {
@@ -37,7 +37,7 @@ export default () => {
     }
 
     if (accountType === "economic_actor") {
-      payload.economic_actor_name = values.entityName
+      payload.economic_actor_name = values.entityName.trim()
     }
 
     try {
@@ -76,7 +76,7 @@ export default () => {
               >
                 Acteur public
               </button>
-              {/* <button
+              <button
                 type="button"
                 className={`w-full px-4 py-2 text-sm font-medium border rounded-lg transition-colors ${
                   accountType === "economic_actor" ? "bg-primary-green text-white border-primary-green" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
@@ -84,7 +84,7 @@ export default () => {
                 onClick={() => setAccountType("economic_actor")}
               >
                 Acteur économique
-              </button> */}
+              </button>
             </div>
           </div>
 
@@ -97,7 +97,7 @@ export default () => {
             {accountType === "economic_actor" && (
               <div className="mb-6">
                 <label htmlFor="entityName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom de l'entité <span className="text-red-500">*</span>
+                  Nom de votre structure <span className="text-red-500">*</span>
                 </label>
                 <input
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
@@ -105,7 +105,8 @@ export default () => {
                   id="entityName"
                   value={values.entityName}
                   onChange={(e) => setValues({ ...values, entityName: e.target.value })}
-                  placeholder="Nom de votre structure"
+                  placeholder="Entreprise, transporteur, commerce…"
+                  maxLength={100}
                   required={accountType === "economic_actor"}
                 />
                 {errors.entityName && <p className="text-sm text-red-500 mt-1">{errors.entityName}</p>}
