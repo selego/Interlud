@@ -253,6 +253,15 @@ test("deux organisations de même nom ont chacune leur fichier d'agrégation", a
   assert.notEqual(duplicateCalls[0].name, duplicateCalls[1].name);
 });
 
+test("les caractères spéciaux du nom de l'organisation ne se retrouvent pas dans le nom du fichier", async () => {
+  actors[0].name = 'Dupont & Fils #3 / A:B "C" d\'été';
+
+  const res = await requestAccess('u-ae', COL_A);
+
+  assert.equal(res.status, 200);
+  assert.equal(duplicateCalls[0].name, `Dupont Fils 3 A B C d été - Territoire A - ${EA_1} - Aggregation_V5.xlsx`);
+});
+
 test("entrée ajoutée sans fichier pendant la copie : le fichier lui est quand même associé", async () => {
   const pending = requestAccess('u-ae', COL_A);
   await new Promise((resolve) => setTimeout(resolve, 5));
