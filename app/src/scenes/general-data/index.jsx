@@ -256,7 +256,6 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
   const { user, collectivity } = useStore()
   const [indicatorValues, setIndicatorValues] = useState([])
   const [conditionValuesMap, setConditionValuesMap] = useState(new Map())
-  const [economicActorData, setEconomicActorData] = useState({})
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -269,31 +268,6 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
     setConditionValuesMap(map)
   }
 
-  const fetchEconomicActorData = async (data) => {
-    const indicatorIds = new Set()
-    for (const iv of data) indicatorIds.add(iv.indicator_id)
-    if (indicatorIds.size === 0) return
-    const {
-      ok,
-      data: resData,
-      code
-    } = await api.post("/indicator_value/search", {
-      indicator_ids: [...indicatorIds],
-      situation: activeSituation,
-      collectivity_id: activeConfigAction.collectivity_id,
-      owner: "economic_actor",
-      limit: 10000,
-      year: activeYear
-    })
-    if (!ok) return toast.error(code || "Une erreur est survenue")
-    const grouped = {}
-    for (const iv of resData) {
-      if (!grouped[iv.indicator_id]) grouped[iv.indicator_id] = []
-      grouped[iv.indicator_id].push(iv)
-    }
-    setEconomicActorData(grouped)
-  }
-
   const loadData = async () => {
     if (!activeConfigAction || !activeSituation) return
     setIsLoading(true)
@@ -304,7 +278,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
       if (!ok) return toast.error(code || "Une erreur est survenue")
       // Figé au chargement : un indicateur rempli en cours de session reste dans sa section jusqu'au prochain chargement
       setIndicatorValues(data.map((iv) => ({ ...iv, initially_filled: isIndicatorValueFilled(iv) })))
-      await Promise.all([fetchConditionValues(data), fetchEconomicActorData(data)])
+      await fetchConditionValues(data)
     } catch (error) {
       toast.error("Une erreur est survenue")
     } finally {
@@ -413,7 +387,6 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
         <SituationTab
           displayedIndicatorValues={displayedIndicatorValues}
           selectedCategory={selectedCategory}
-          economicActorData={economicActorData}
           onSave={handleSaveIndicatorValue}
           isViewLoading={isLoading}
         />

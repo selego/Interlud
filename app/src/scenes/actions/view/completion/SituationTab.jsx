@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { FiStar } from "react-icons/fi"
-import { isIndicatorValueFilled, isPercentUnit } from "@/utils/indicatorHelpers"
+import { isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import IndicatorValueInput from "./IndicatorValueInput"
 import Loader from "@/components/loader"
 
@@ -32,7 +32,7 @@ const STATE_STYLES = {
   }
 }
 
-export default function SituationTab({ displayedIndicatorValues, selectedCategory, economicActorData, onSave, isViewLoading }) {
+export default function SituationTab({ displayedIndicatorValues, selectedCategory, onSave, isViewLoading }) {
   const [doneCollapsed, setDoneCollapsed] = useState(true)
 
   useEffect(() => {
@@ -91,7 +91,7 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
           <div className="bg-[#FFFBF5] border border-[#FCE6C8] rounded-[14px] px-[13px] pt-[11px] pb-[13px] flex flex-col gap-[11px]">
             <p className="text-[12.5px] text-[#9a6a1f] m-0 leading-relaxed">Fort impact sur le calcul des gains — à renseigner manuellement.</p>
             {groupPrio.map(iv => (
-              <IndicatorCard key={iv._id} indicatorValue={iv} economicActorValues={economicActorData[iv.indicator_id] || []} onSave={onSave} />
+              <IndicatorCard key={iv._id} indicatorValue={iv} onSave={onSave} />
             ))}
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
           </div>
           <div className="flex flex-col gap-[11px]">
             {groupTodo.map(iv => (
-              <IndicatorCard key={iv._id} indicatorValue={iv} economicActorValues={economicActorData[iv.indicator_id] || []} onSave={onSave} />
+              <IndicatorCard key={iv._id} indicatorValue={iv} onSave={onSave} />
             ))}
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
           {!doneCollapsed && (
             <div className="flex flex-col gap-[11px]">
               {groupDone.map(iv => (
-                <IndicatorCard key={iv._id} indicatorValue={iv} economicActorValues={economicActorData[iv.indicator_id] || []} onSave={onSave} />
+                <IndicatorCard key={iv._id} indicatorValue={iv} onSave={onSave} />
               ))}
             </div>
           )}
@@ -133,16 +133,9 @@ export default function SituationTab({ displayedIndicatorValues, selectedCategor
   )
 }
 
-function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
+function IndicatorCard({ indicatorValue, onSave }) {
   const filled = isIndicatorValueFilled(indicatorValue)
   const stateStyle = STATE_STYLES[filled ? "done" : indicatorValue.is_primordial ? "prio" : "todo"]
-
-  const filledEAValues = economicActorValues.filter(isIndicatorValueFilled)
-  let aggregatedValue = null
-  if (filledEAValues.length >= 3 && indicatorValue.indicator_type === 'number') {
-    const numbers = filledEAValues.map(iv => iv.value?.number).filter(n => n !== null && n !== undefined)
-    if (numbers.length > 0) aggregatedValue = isPercentUnit(indicatorValue.indicator_value_unit) ? numbers.reduce((a, b) => a + b, 0) / numbers.length : numbers.reduce((a, b) => a + b, 0)
-  }
 
   return (
     <div
@@ -167,7 +160,7 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-6">
+      <div className="grid grid-cols-[1.3fr_1fr] gap-6">
         <div className="flex flex-col">
           <label className="block text-[10.5px] font-semibold uppercase tracking-wider text-[#9aa8a4] mb-2">Valeur</label>
           <div className="flex items-center gap-2">
@@ -209,44 +202,6 @@ function IndicatorCard({ indicatorValue, economicActorValues, onSave }) {
             )}
           </div>
         </div>
-
-        <EconomicActorValues
-          indicatorValue={indicatorValue}
-          economicActorData={economicActorValues}
-          filledEAValues={filledEAValues}
-          aggregatedValue={aggregatedValue}
-          onApplyValue={(value) => onSave({ ...indicatorValue, value: { [indicatorValue.indicator_type]: value } })}
-        />
-      </div>
-    </div>
-  )
-}
-
-function EconomicActorValues({ indicatorValue, filledEAValues, aggregatedValue, onApplyValue }) {
-  return (
-    <div className="flex flex-col">
-      <div className="flex items-center gap-2 mb-2">
-        <label className="block text-[10.5px] font-semibold uppercase tracking-wider text-[#9aa8a4]">Acteurs économiques</label>
-        {filledEAValues.length >= 3 ? (
-          <Tooltip content={`Valeur agrégée de ${filledEAValues.length} acteur${filledEAValues.length > 1 ? 's' : ''} économique${filledEAValues.length > 1 ? 's' : ''}`} />
-        ) : (
-          <Tooltip content="Pour respecter la confidentialité des acteurs, la valeur n'est affichée que si au moins 3 acteurs ont rempli l'indicateur" />
-        )}
-      </div>
-      <div className="flex items-center gap-2 min-h-[38px]">
-        <p className="text-[13px] text-[#123314] font-semibold">{aggregatedValue ?? '—'}</p>
-        {filledEAValues.length >= 3 && aggregatedValue != null && (
-          <Tooltip content="Appliquer cette valeur">
-            <button
-              onClick={() => onApplyValue(aggregatedValue)}
-              className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-lg bg-[#D9EFE3] text-[#2DAC6A] hover:bg-[#c4e5d4] transition-colors shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-            </button>
-          </Tooltip>
-        )}
       </div>
     </div>
   )
