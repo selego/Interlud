@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const router = express.Router();
 const passport = require('passport');
 const Action = require('../models/action');
@@ -17,7 +16,7 @@ const { isPercentUnit } = require('../utils/indicators');
 const { writeDraftFlag, warmSessionsForAction } = require('../services/excelSync');
 const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
 const { pickFields } = require('../utils');
-const { canEditAction, canCreateAction } = require('../utils/collectivityAccess');
+const { canEditAction, canCreateAction, isObjectId } = require('../utils/collectivityAccess');
 
 const ACTION_UPDATABLE_FIELDS = [
   'name', 'description', 'status', 'priority', 'blocked_reason', 'step_description', 'date_start', 'date_end',
@@ -188,7 +187,7 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
     // Fiche du catalogue fermée aux acteurs économiques : création refusée
     if (parentAction.visible_for_economic_actors === false && (req.user.role === 'economic_actor' || req.body.owner === 'economic_actor')) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
-    if (!mongoose.isValidObjectId(req.body.collectivity_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!isObjectId(req.body.collectivity_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
@@ -857,7 +856,7 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!isObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
@@ -1229,7 +1228,7 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!isObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
@@ -1676,7 +1675,7 @@ router.post('/remove_year_previsionnel', passport.authenticate(['admin', 'user']
     const { action_id, year_prev } = req.body;
     if (!action_id || !year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!isObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
@@ -1753,7 +1752,7 @@ router.post('/remove_year_expost', passport.authenticate(['admin', 'user'], { se
     const { action_id, year_expost } = req.body;
     if (!action_id || !year_expost) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
-    if (!mongoose.isValidObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!isObjectId(action_id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findById(action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });

@@ -66,6 +66,9 @@ const IV_COL = 'f00000000000000000000001';
 const IV_AE = 'f00000000000000000000002';
 const IV_CONFIG_AE = 'f00000000000000000000003';
 const IV_COL_B = 'f00000000000000000000004';
+// Données générales du même acteur économique dans une autre collectivité
+const CONFIG_AE_B = 'a00000000000000000000005';
+const IV_CONFIG_AE_B = 'f00000000000000000000005';
 const UNKNOWN = 'a00000000000000000000009';
 
 const users = {
@@ -122,7 +125,7 @@ const chain = (rows) => {
 
 // Comme Mongoose, un identifiant mal formé lève une erreur de conversion
 const byId = (key) => async (id) => {
-  if (!mongoose.isValidObjectId(id)) throw new Error('Cast to ObjectId failed');
+  if (typeof id !== 'string' || !mongoose.isValidObjectId(id)) throw new Error('Cast to ObjectId failed');
   return store[key].find((d) => d._id === String(id)) || null;
 };
 
@@ -232,6 +235,7 @@ beforeEach(() => {
       makeDoc({ _id: ACTION_COL, name: 'Action collectivité A', type: 'reference', owner: 'collectivity', collectivity_id: COL_A, action_parent_id: PARENT, year_init: 2024, exel_files_prev: [{ excel_file_id: 'file-col-prev', year_prev: 2030, year_ref: 2030 }], excel_files_expost: [{ excel_file_id: 'file-col-expost', year_expost: 2031, year_ref: 2031 }] }),
       makeDoc({ _id: ACTION_AE, name: 'Action acteur 1', type: 'reference', owner: 'economic_actor', economic_actor_id: 'ea-1', economic_actor_name: 'Acteur 1', collectivity_id: COL_A, action_parent_id: PARENT, year_init: 2024, exel_files_prev: [{ excel_file_id: 'file-ae-prev', year_prev: 2030, year_ref: 2030 }], excel_files_expost: [{ excel_file_id: 'file-ae-expost', year_expost: 2031, year_ref: 2031 }] }),
       makeDoc({ _id: CONFIG_AE, name: 'Données de base', type: 'config', owner: 'economic_actor', economic_actor_id: 'ea-1', collectivity_id: COL_A }),
+      makeDoc({ _id: CONFIG_AE_B, name: 'Données de base', type: 'config', owner: 'economic_actor', economic_actor_id: 'ea-1', collectivity_id: COL_B }),
       makeDoc({ _id: ACTION_COL_B, name: 'Action collectivité B', type: 'reference', owner: 'collectivity', collectivity_id: COL_B, action_parent_id: PARENT, year_init: 2024, exel_files_prev: [{ excel_file_id: 'file-b-prev', year_prev: 2030, year_ref: 2030 }], excel_files_expost: [] }),
     ],
     values: [
@@ -239,9 +243,10 @@ beforeEach(() => {
       value({ _id: IV_AE, action_id: ACTION_AE, collectivity_id: COL_A, owner: 'economic_actor', economic_actor_id: 'ea-1' }),
       value({ _id: IV_CONFIG_AE, action_id: CONFIG_AE, collectivity_id: COL_A, owner: 'economic_actor', economic_actor_id: 'ea-1' }),
       value({ _id: IV_COL_B, action_id: ACTION_COL_B, collectivity_id: COL_B, owner: 'collectivity' }),
+      value({ _id: IV_CONFIG_AE_B, action_id: CONFIG_AE_B, collectivity_id: COL_B, owner: 'economic_actor', economic_actor_id: 'ea-1' }),
     ],
     collectivities: [makeDoc({ _id: COL_A, name: 'Collectivité A', sharepoint_folder_id: 'folder-a' }), makeDoc({ _id: COL_B, name: 'Collectivité B', sharepoint_folder_id: 'folder-b' })],
-    actors: [makeDoc({ _id: 'ea-1', name: 'Acteur 1', collectivities: [{ id: COL_A, name: 'Collectivité A' }] })],
+    actors: [makeDoc({ _id: 'ea-1', name: 'Acteur 1', collectivities: [{ id: COL_A, name: 'Collectivité A' }, { id: COL_B, name: 'Collectivité B' }] })],
     logs: [],
     writes: [],
     errors: [],
@@ -360,6 +365,7 @@ for (const route of YEAR_ROUTES) {
       await assertRefused('POST', route.path, 'admin', { action_id: UNKNOWN, ...route.body }, 404);
       await assertRefused('POST', route.path, 'admin', { action_id: 'pas-un-id', ...route.body }, 404);
       await assertRefused('POST', route.path, 'memberA', { action_id: { $ne: null }, ...route.body }, 404);
+      await assertRefused('POST', route.path, 'memberA', { action_id: 123, ...route.body }, 404);
     });
   });
 }
@@ -406,6 +412,28 @@ describe('PUT /indicator_value/:id', () => {
     assert.equal(storedValue(IV_COL_B).value.number, 1);
   });
 
+  test("l'indicateur, la situation et l'année d'une valeur ne changent pas", async () => {
+    await assertAllowed('PUT', `/indicator_value/${IV_COL}`, 'memberA', { source: 'manual', value: { number: 7 }, indicator_id: 'ind-2', situation: 'prev', year: 2099 });
+    assert.equal(storedValue(IV_COL).indicator_id, 'ind-1');
+    assert.equal(storedValue(IV_COL).situation, 'init');
+    assert.equal(storedValue(IV_COL).year, 2024);
+  });
+
+  for (const who of ['admin', 'aeOwner', 'aeInvited']) {
+    test(`données générales d'un acteur économique : la saisie de ${who} vaut pour toutes ses collectivités`, async () => {
+      await assertAllowed('PUT', `/indicator_value/${IV_CONFIG_AE}`, who, { source: 'manual', value: { number: 7 } });
+      assert.equal(storedValue(IV_CONFIG_AE_B).value.number, 7);
+    });
+  }
+
+  for (const who of ['memberA', 'adminA']) {
+    test(`données générales d'un acteur économique : la saisie de ${who} ne sort pas de sa collectivité`, async () => {
+      await assertAllowed('PUT', `/indicator_value/${IV_CONFIG_AE}`, who, { source: 'manual', value: { number: 7 } });
+      assert.equal(storedValue(IV_CONFIG_AE).value.number, 7);
+      assert.equal(storedValue(IV_CONFIG_AE_B).value.number, 1);
+    });
+  }
+
   test('401 sans authentification, 404 pour une valeur inconnue ou un identifiant mal formé', async () => {
     await assertRefused('PUT', `/indicator_value/${IV_COL}`, null, { value: { number: 7 } }, 401);
     await assertRefused('PUT', `/indicator_value/${UNKNOWN}`, 'admin', { value: { number: 7 } }, 404);
@@ -436,6 +464,7 @@ describe('POST /indicator_value', () => {
   test("la valeur créée est rattachée à la collectivité et au propriétaire de l'action", async () => {
     await assertAllowed('POST', '/indicator_value', 'memberA', { action_id: ACTION_COL, collectivity_id: COL_B, owner: 'economic_actor', economic_actor_id: 'ea-2', name: 'Nouvelle valeur' });
     const created = store.values.find((v) => v.name === 'Nouvelle valeur');
+    assert.equal(created.action_id, ACTION_COL);
     assert.equal(created.collectivity_id, COL_A);
     assert.equal(created.owner, 'collectivity');
     assert.equal(created.economic_actor_id, undefined);
@@ -445,6 +474,7 @@ describe('POST /indicator_value', () => {
     await assertRefused('POST', '/indicator_value', null, { action_id: ACTION_COL }, 401);
     await assertRefused('POST', '/indicator_value', 'memberA', { name: 'Nouvelle valeur' }, 400);
     await assertRefused('POST', '/indicator_value', 'memberA', { action_id: 'pas-un-id' }, 400);
+    await assertRefused('POST', '/indicator_value', 'memberA', { action_id: 123 }, 400);
     await assertRefused('POST', '/indicator_value', 'admin', { action_id: UNKNOWN }, 404);
   });
 });
@@ -482,6 +512,19 @@ describe('POST /indicator_value/importIndicatorValues', () => {
     });
   }
 
+  test("données générales d'un acteur économique : l'import d'un membre de collectivité ne sort pas de sa collectivité", async () => {
+    await assertAllowed('POST', '/indicator_value/importIndicatorValues', 'memberA', importBody(CONFIG_AE));
+    assert.equal(storedValue(IV_CONFIG_AE).value.number, 42);
+    assert.equal(storedValue(IV_CONFIG_AE_B).value.number, 1);
+    assert.equal(storedValue(IV_COL).value.number, 1);
+  });
+
+  test("données générales d'un acteur économique : son propre import vaut pour toutes ses collectivités", async () => {
+    await assertAllowed('POST', '/indicator_value/importIndicatorValues', 'aeOwner', importBody(CONFIG_AE));
+    assert.equal(storedValue(IV_CONFIG_AE_B).value.number, 42);
+    assert.equal(storedValue(IV_COL_B).value.number, 1);
+  });
+
   test("refusé si la collectivité transmise n'est pas celle de l'action", async () => {
     await assertRefused('POST', '/indicator_value/importIndicatorValues', 'memberA', importBody(ACTION_COL, COL_B));
   });
@@ -490,5 +533,6 @@ describe('POST /indicator_value/importIndicatorValues', () => {
     await assertRefused('POST', '/indicator_value/importIndicatorValues', null, importBody(ACTION_COL), 401);
     await assertRefused('POST', '/indicator_value/importIndicatorValues', 'admin', importBody(UNKNOWN), 404);
     await assertRefused('POST', '/indicator_value/importIndicatorValues', 'admin', importBody('pas-un-id'), 404);
+    await assertRefused('POST', '/indicator_value/importIndicatorValues', 'memberA', importBody(123), 404);
   });
 });

@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 // Accès aux données d'une collectivité : l'admin plateforme passe toujours,
 // les autres utilisateurs doivent en être membres avec une adhésion approuvée.
 function isApprovedMember(user, collectivityId) {
@@ -28,4 +30,16 @@ function canCreateAction(user, collectivityId) {
   return (user.collectivities || []).some((c) => c.id === String(collectivityId) && c.status === 'approved' && (user.role === 'economic_actor' || c.role === 'admin'));
 }
 
-module.exports = { isApprovedMember, isActionInCollectivity, canEditAction, canCreateAction };
+// Périmètre de propagation d'une valeur vers les autres valeurs et fichiers du propriétaire de l'action.
+// Les données d'un acteur économique sont communes à ses collectivités : seuls l'acteur lui-même et l'admin plateforme
+// les propagent hors de la collectivité de l'action.
+function propagationScope(user, action) {
+  if (action.owner !== 'economic_actor' || !action.economic_actor_id) return { owner: action.owner, collectivity_id: action.collectivity_id };
+  if (user.role === 'admin' || action.economic_actor_id === user.economic_actor_id) return { owner: 'economic_actor', economic_actor_id: action.economic_actor_id };
+  return { owner: 'economic_actor', economic_actor_id: action.economic_actor_id, collectivity_id: action.collectivity_id };
+}
+
+// Identifiant Mongo transmis par le client : une chaîne convertible en ObjectId (ni nombre, ni objet)
+const isObjectId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
+
+module.exports = { isApprovedMember, isActionInCollectivity, canEditAction, canCreateAction, propagationScope, isObjectId };
