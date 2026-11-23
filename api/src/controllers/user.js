@@ -18,6 +18,7 @@ const { searchRegex, isInvalidSearch } = require('../utils/search');
 const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
+const microsoftGraph = require('../services/microsoftGraph');
 const joptimiz = require('../services/joptimiz');
 const { capture } = require('../services/sentry');
 
@@ -912,16 +913,25 @@ router.post('/invite-accepted', async (req, res) => {
   }
 });
 
-router.post('/request-collectivity-access', passport.authenticate(['user', 'applicant'], { session: false }), async (req, res) => {
+router.post('/request-collectivity-access', passport.authenticate('user', { session: false }), async (req, res) => {
   try {
     const { collectivityId } = req.body;
-    if (!collectivityId) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (typeof collectivityId !== 'string' || !mongoose.isValidObjectId(collectivityId)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const collectivity = await Collectivity.findById(collectivityId);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
     const user = await UserObject.findById(req.user._id);
     if (!user) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+
+    // Un acteur économique n'impacte pas les résultats de la collectivité : son organisation la rejoint
+    // immédiatement, sans validation (y compris après un refus ou une demande restée en attente).
+    if (user.role === 'economic_actor') {
+      const actor = mongoose.isValidObjectId(user.economic_actor_id) ? await EconomicActor.findById(user.economic_actor_id) : null;
+      if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+      await attachCollectivityToEconomicActor(actor._id.toString(), collectivity);
+      return res.status(200).send({ ok: true, data: await UserObject.findById(user._id) });
+    }
 
     if (user.collectivities?.find((c) => c.id === collectivityId)) return res.status(409).send({ ok: false, code: ERROR_CODES.ALREADY_REQUESTED });
 
@@ -990,5 +1000,67 @@ router.post('/request-collectivity-access', passport.authenticate(['user', 'appl
     res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
   }
 });
+
+// Même effet que l'ajout d'une collectivité à un acteur économique depuis l'admin : fichier d'agrégation
+// créé une seule fois, puis accès approuvé pour tous les membres de l'organisation. Idempotent.
+// Les demandes simultanées pour un même couple organisation / collectivité partagent le même traitement.
+// Ce partage est propre au processus (l'API tourne sur une seule instance) ; entre plusieurs instances, les
+// écritures conditionnelles ci-dessous garantissent quand même une seule entrée et un seul fichier référencé.
+const attachesInProgress = new Map();
+function attachCollectivityToEconomicActor(actorId, collectivity) {
+  const key = `${actorId}:${collectivity._id}`;
+  if (!attachesInProgress.has(key)) {
+    attachesInProgress.set(
+      key,
+      runAttachCollectivityToEconomicActor(actorId, collectivity).finally(() => attachesInProgress.delete(key))
+    );
+  }
+  return attachesInProgress.get(key);
+}
+
+async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
+  const collectivityId = collectivity._id.toString();
+
+  // Relu ici : l'état a pu changer pendant qu'une demande précédente se terminait
+  const actor = await EconomicActor.findById(actorId);
+  if (!actor) throw new Error('Economic actor not found');
+
+  // Le fichier est créé d'abord : si la création échoue, rien n'est enregistré et aucun accès n'est accordé.
+  // Son nom contient l'identifiant de l'organisation : deux organisations de même nom n'ont jamais le même fichier.
+  // Le nom de l'organisation, saisi librement, est réduit aux lettres, chiffres, espaces, points et tirets
+  // (caractères refusés par SharePoint ou par la recherche du fichier copié).
+  const actorFileName = actor.name
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{N} .-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  const existing = actor.collectivities?.find((c) => c.id === collectivityId);
+  if (!existing?.aggregation_excel_file_id) {
+    const aggregation_excel_file_id = await microsoftGraph.duplicateExcelFile(
+      [actorFileName, collectivity.name, actor._id, 'Aggregation_V5.xlsx'].filter(Boolean).join(' - '),
+      collectivity.sharepoint_folder_id,
+      microsoftGraph.aggregationTemplateFileId
+    );
+    // Écritures conditionnelles : ni doublon de collectivité, ni fichier existant écrasé. Les deux sont tentées,
+    // l'entrée ayant pu être ajoutée sans fichier entre-temps (approbation par la collectivité).
+    await EconomicActor.updateOne(
+      { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
+      { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
+    );
+    await EconomicActor.updateOne(
+      { _id: actor._id, collectivities: { $elemMatch: { id: collectivityId, aggregation_excel_file_id: { $in: [null, ''] } } } },
+      { $set: { 'collectivities.$.aggregation_excel_file_id': aggregation_excel_file_id } }
+    );
+  }
+
+  // Écritures atomiques sur les membres : une modification simultanée de leur compte n'est pas écrasée
+  const members = { economic_actor_id: actor._id.toString(), role: 'economic_actor' };
+  await UserObject.updateMany(members, { $pull: { collectivities: { id: collectivityId, status: { $ne: 'approved' } } } });
+  await UserObject.updateMany(
+    { ...members, 'collectivities.id': { $ne: collectivityId } },
+    { $push: { collectivities: { id: collectivityId, name: collectivity.name, role: 'economic_actor', status: 'approved' } } }
+  );
+}
 
 module.exports = router;

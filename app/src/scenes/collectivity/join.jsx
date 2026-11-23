@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { FiCheckCircle, FiClock, FiXCircle } from "react-icons/fi"
 import toast from "react-hot-toast"
+import { useNavigate } from "react-router-dom"
 
 import api from "@/services/api"
 import useStore from "@/services/store"
@@ -9,16 +10,28 @@ import CollectivitySelector from "@/components/CollectivitySelector"
 const Join = () => {
   const { user, setUser } = useStore()
   const [selectedCollectivity, setSelectedCollectivity] = useState(null)
+  const [sending, setSending] = useState(false)
+  const navigate = useNavigate()
 
   const handleRequestAccess = async () => {
     if (!selectedCollectivity) return toast.error("Sélectionnez une collectivité")
     try {
+      setSending(true)
       const { ok, data, code } = await api.post("/user/request-collectivity-access", { collectivityId: selectedCollectivity._id })
       if (!ok) return toast.error(code || "Une erreur est survenue")
+      if (user.role !== "economic_actor") {
+        setUser(data)
+        return toast.success("Demande envoyée avec succès ! En attente d'approbation")
+      }
+      // Acteur économique : accès immédiat, on ouvre l'application sur ce territoire (chargé par UserLayout)
+      localStorage.setItem("selectedCollectivityId", selectedCollectivity._id)
       setUser(data)
-      toast.success("Demande envoyée avec succès ! En attente d'approbation")
+      toast.success(`Vous avez rejoint ${selectedCollectivity.name}`)
+      navigate("/")
     } catch (error) {
       toast.error(error.code || "Une erreur est survenue")
+    } finally {
+      setSending(false)
     }
   }
 
@@ -46,10 +59,10 @@ const Join = () => {
 
                 <button
                   onClick={handleRequestAccess}
-                  disabled={!selectedCollectivity}
+                  disabled={!selectedCollectivity || sending}
                   className="button-primary w-full px-6 py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Demander l'accès
+                  {user.role === "economic_actor" ? "Rejoindre la collectivité" : "Demander l'accès"}
                 </button>
               </div>
 
@@ -67,7 +80,7 @@ const Join = () => {
                   Vous ne trouvez pas votre collectivité ? &nbsp;
                   <button
                     className="text-primary-green hover:text-primary-green font-medium transition-colors underline"
-                    onClick={() => toast.info("Contactez le support InTerLUD+ pour ajouter votre collectivité")}
+                    onClick={() => toast("Contactez le support InTerLUD+ pour ajouter votre collectivité")}
                   >
                     Contacter le support InTerLUD+
                   </button>
@@ -88,7 +101,11 @@ const Join = () => {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-primary-green">Une fois votre demande approuvée, vous pourrez accéder au tableau de bord</p>
+                  <p className="text-sm text-primary-green">
+                    {user.role === "economic_actor"
+                      ? "En tant qu'acteur économique, vous rejoignez la collectivité immédiatement, avec votre organisation, sans validation."
+                      : "Une fois votre demande approuvée, vous pourrez accéder au tableau de bord"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -101,7 +118,7 @@ const Join = () => {
               {user.collectivities?.length > 0 ? (
                 <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
                   {user.collectivities.map(collectivity => (
-                    <CollectivityStatus key={collectivity.id} collectivity={collectivity} />
+                    <CollectivityStatus key={collectivity.id} collectivity={collectivity} user={user} />
                   ))}
                 </div>
               ) : (
@@ -126,7 +143,7 @@ const Join = () => {
   )
 }
 
-const CollectivityStatus = ({ collectivity }) => {
+const CollectivityStatus = ({ collectivity, user }) => {
   if (!collectivity) return null
 
   if (collectivity.status === "approved") {
@@ -156,7 +173,11 @@ const CollectivityStatus = ({ collectivity }) => {
               <h4 className="text-base font-semibold text-red-900">{collectivity.name}</h4>
               <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-red-100 text-red-800">Demande rejetée</span>
             </div>
-            <p className="text-xs text-red-700">Cette demande n&apos;a pas été retenue. Contactez-nous pour en savoir plus.</p>
+            <p className="text-xs text-red-700">
+              {user.role === "economic_actor"
+                ? "Cette demande n'avait pas été retenue. Sélectionnez à nouveau cette collectivité pour la rejoindre."
+                : "Cette demande n'a pas été retenue. Contactez-nous pour en savoir plus."}
+            </p>
           </div>
         </div>
       </div>
@@ -172,7 +193,11 @@ const CollectivityStatus = ({ collectivity }) => {
             <h4 className="text-base font-semibold text-yellow-900">{collectivity.name}</h4>
             <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">En attente d&apos;approbation</span>
           </div>
-          <p className="text-xs text-yellow-700">Votre demande est en cours de traitement par la collectivité.</p>
+          <p className="text-xs text-yellow-700">
+            {user.role === "economic_actor"
+              ? "Sélectionnez à nouveau cette collectivité pour la rejoindre immédiatement."
+              : "Votre demande est en cours de traitement par la collectivité."}
+          </p>
         </div>
       </div>
     </div>
