@@ -68,6 +68,15 @@ User.find = async (query) => {
   if (query.collectivities) return users.filter((u) => u.collectivities.some((c) => c.id === query.collectivities.$elemMatch.id && c.role === query.collectivities.$elemMatch.role));
   return users.filter((u) => u.economic_actor_id === query.economic_actor_id && (!query.role || u.role === query.role));
 };
+User.updateMany = async (filter, update) => {
+  for (const u of users.filter((x) => x.economic_actor_id === filter.economic_actor_id && x.role === filter.role)) {
+    if (update.$pull) {
+      const { id } = update.$pull.collectivities; // retire l'entrée de cette collectivité si elle n'est pas approuvée
+      u.collectivities = u.collectivities.filter((c) => !(c.id === id && c.status !== 'approved'));
+    }
+    if (update.$push && !u.collectivities.some((c) => c.id === filter['collectivities.id'].$ne)) u.collectivities.push(update.$push.collectivities);
+  }
+};
 Collectivity.findById = async (id) => collectivities.find((c) => c._id === id) || null;
 // Comme Mongoose : un identifiant mal formé lève une CastError
 EconomicActor.findById = async (id) => {
@@ -141,7 +150,7 @@ test("un acteur économique sans territoire rejoint immédiatement la collectivi
 
   // Fichier d'agrégation créé une fois, dans le dossier de la collectivité, comme depuis l'admin
   assert.equal(duplicateCalls.length, 1);
-  assert.equal(duplicateCalls[0].name, 'Transporteur - Territoire A - Aggregation_V5.xlsx');
+  assert.equal(duplicateCalls[0].name, `Transporteur - Territoire A - ${EA_1} - Aggregation_V5.xlsx`);
   assert.equal(duplicateCalls[0].folderId, 'folder-a');
   assert.equal(duplicateCalls[0].templateId, microsoftGraph.aggregationTemplateFileId);
   assert.equal(actors[0].collectivities.length, 1);
@@ -232,6 +241,36 @@ test("organisation rattachée sans fichier d'agrégation : le fichier est créé
   assert.equal(actors[0].collectivities.length, 1);
   assert.equal(actors[0].collectivities[0].aggregation_excel_file_id, 'agg-1');
   assert.equal(entryOf('u-ae', COL_A).status, 'approved');
+});
+
+test("deux organisations de même nom ont chacune leur fichier d'agrégation", async () => {
+  actors[1].name = 'Transporteur';
+
+  await requestAccess('u-ae', COL_A);
+  await requestAccess('u-ae-autre', COL_A);
+
+  assert.equal(duplicateCalls.length, 2);
+  assert.notEqual(duplicateCalls[0].name, duplicateCalls[1].name);
+});
+
+test("entrée ajoutée sans fichier pendant la copie : le fichier lui est quand même associé", async () => {
+  const pending = requestAccess('u-ae', COL_A);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  actors[0].collectivities.push({ id: COL_A, name: 'Territoire A' });
+
+  const res = await pending;
+
+  assert.equal(res.status, 200);
+  assert.equal(actors[0].collectivities.length, 1);
+  assert.equal(actors[0].collectivities[0].aggregation_excel_file_id, 'agg-1');
+});
+
+test("les autres rattachements d'un membre sont conservés", async () => {
+  users[1].collectivities = [{ id: COL_B, name: 'Territoire B', role: 'economic_actor', status: 'approved' }];
+
+  await requestAccess('u-ae', COL_A);
+
+  assert.deepEqual(users[1].collectivities.map((c) => c.id).sort(), [COL_A, COL_B]);
 });
 
 test('un acteur économique sans organisation (ou identifiant invalide) est refusé (404)', async () => {

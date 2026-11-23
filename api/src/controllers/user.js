@@ -1025,37 +1025,34 @@ async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
   const actor = await EconomicActor.findById(actorId);
   if (!actor) throw new Error('Economic actor not found');
 
-  // Le fichier est créé d'abord : si la création échoue, rien n'est enregistré et aucun accès n'est accordé
+  // Le fichier est créé d'abord : si la création échoue, rien n'est enregistré et aucun accès n'est accordé.
+  // Son nom contient l'identifiant de l'organisation : deux organisations de même nom n'ont jamais le même fichier.
   const existing = actor.collectivities?.find((c) => c.id === collectivityId);
   if (!existing?.aggregation_excel_file_id) {
     const aggregation_excel_file_id = await microsoftGraph.duplicateExcelFile(
-      `${actor.name} - ${collectivity.name} - Aggregation_V5.xlsx`,
+      `${actor.name} - ${collectivity.name} - ${actor._id} - Aggregation_V5.xlsx`,
       collectivity.sharepoint_folder_id,
       microsoftGraph.aggregationTemplateFileId
     );
-    // Écritures conditionnelles : ni doublon de collectivité, ni fichier existant écrasé
-    if (existing) {
-      await EconomicActor.updateOne(
-        { _id: actor._id, collectivities: { $elemMatch: { id: collectivityId, aggregation_excel_file_id: { $in: [null, ''] } } } },
-        { $set: { 'collectivities.$.aggregation_excel_file_id': aggregation_excel_file_id } }
-      );
-    } else {
-      await EconomicActor.updateOne(
-        { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
-        { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
-      );
-    }
+    // Écritures conditionnelles : ni doublon de collectivité, ni fichier existant écrasé. Les deux sont tentées,
+    // l'entrée ayant pu être ajoutée sans fichier entre-temps (approbation par la collectivité).
+    await EconomicActor.updateOne(
+      { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
+      { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
+    );
+    await EconomicActor.updateOne(
+      { _id: actor._id, collectivities: { $elemMatch: { id: collectivityId, aggregation_excel_file_id: { $in: [null, ''] } } } },
+      { $set: { 'collectivities.$.aggregation_excel_file_id': aggregation_excel_file_id } }
+    );
   }
 
-  const members = await UserObject.find({ economic_actor_id: actor._id.toString(), role: 'economic_actor' });
-  for (const member of members) {
-    if (member.collectivities?.some((c) => c.id === collectivityId && c.status === 'approved')) continue;
-    member.collectivities = [
-      ...(member.collectivities || []).filter((c) => c.id !== collectivityId),
-      { id: collectivityId, name: collectivity.name, role: 'economic_actor', status: 'approved' },
-    ];
-    await member.save();
-  }
+  // Écritures atomiques sur les membres : une modification simultanée de leur compte n'est pas écrasée
+  const members = { economic_actor_id: actor._id.toString(), role: 'economic_actor' };
+  await UserObject.updateMany(members, { $pull: { collectivities: { id: collectivityId, status: { $ne: 'approved' } } } });
+  await UserObject.updateMany(
+    { ...members, 'collectivities.id': { $ne: collectivityId } },
+    { $push: { collectivities: { id: collectivityId, name: collectivity.name, role: 'economic_actor', status: 'approved' } } }
+  );
 }
 
 module.exports = router;
