@@ -47,7 +47,10 @@ microsoftGraph.createFolder = async () => {
 };
 microsoftGraph.createWorkbookSession = async () => 'session-test';
 microsoftGraph.readExcelDefaultValues = async () => new Map();
-excelSync.enqueueCellUpdate = () => write('sync.enqueueCellUpdate');
+excelSync.enqueueCellUpdate = ({ fileId }) => {
+  write('sync.enqueueCellUpdate');
+  store.syncedFiles.push(fileId);
+};
 excelSync.enqueueAggregation = () => write('sync.enqueueAggregation');
 excelSync.writeDraftFlag = async () => write('sync.writeDraftFlag');
 excelSync.warmSessionsForAction = () => {};
@@ -69,6 +72,10 @@ const IV_COL_B = 'f00000000000000000000004';
 // Données générales du même acteur économique dans une autre collectivité
 const CONFIG_AE_B = 'a00000000000000000000005';
 const IV_CONFIG_AE_B = 'f00000000000000000000005';
+const ACTION_AE_B = 'a00000000000000000000006';
+// Données générales de la collectivité A
+const CONFIG_COL = 'a00000000000000000000007';
+const IV_CONFIG_COL = 'f00000000000000000000007';
 const UNKNOWN = 'a00000000000000000000009';
 
 const users = {
@@ -236,6 +243,8 @@ beforeEach(() => {
       makeDoc({ _id: ACTION_AE, name: 'Action acteur 1', type: 'reference', owner: 'economic_actor', economic_actor_id: 'ea-1', economic_actor_name: 'Acteur 1', collectivity_id: COL_A, action_parent_id: PARENT, year_init: 2024, exel_files_prev: [{ excel_file_id: 'file-ae-prev', year_prev: 2030, year_ref: 2030 }], excel_files_expost: [{ excel_file_id: 'file-ae-expost', year_expost: 2031, year_ref: 2031 }] }),
       makeDoc({ _id: CONFIG_AE, name: 'Données de base', type: 'config', owner: 'economic_actor', economic_actor_id: 'ea-1', collectivity_id: COL_A }),
       makeDoc({ _id: CONFIG_AE_B, name: 'Données de base', type: 'config', owner: 'economic_actor', economic_actor_id: 'ea-1', collectivity_id: COL_B }),
+      makeDoc({ _id: ACTION_AE_B, name: 'Action acteur 1 en B', type: 'reference', owner: 'economic_actor', economic_actor_id: 'ea-1', collectivity_id: COL_B, action_parent_id: PARENT, year_init: 2024, exel_files_prev: [{ excel_file_id: 'file-ae-b-prev', year_prev: 2030, year_ref: 2030 }], excel_files_expost: [] }),
+      makeDoc({ _id: CONFIG_COL, name: 'Données de base', type: 'config', owner: 'collectivity', collectivity_id: COL_A }),
       makeDoc({ _id: ACTION_COL_B, name: 'Action collectivité B', type: 'reference', owner: 'collectivity', collectivity_id: COL_B, action_parent_id: PARENT, year_init: 2024, exel_files_prev: [{ excel_file_id: 'file-b-prev', year_prev: 2030, year_ref: 2030 }], excel_files_expost: [] }),
     ],
     values: [
@@ -243,12 +252,14 @@ beforeEach(() => {
       value({ _id: IV_AE, action_id: ACTION_AE, collectivity_id: COL_A, owner: 'economic_actor', economic_actor_id: 'ea-1' }),
       value({ _id: IV_CONFIG_AE, action_id: CONFIG_AE, collectivity_id: COL_A, owner: 'economic_actor', economic_actor_id: 'ea-1' }),
       value({ _id: IV_COL_B, action_id: ACTION_COL_B, collectivity_id: COL_B, owner: 'collectivity' }),
+      value({ _id: IV_CONFIG_COL, action_id: CONFIG_COL, collectivity_id: COL_A, owner: 'collectivity' }),
       value({ _id: IV_CONFIG_AE_B, action_id: CONFIG_AE_B, collectivity_id: COL_B, owner: 'economic_actor', economic_actor_id: 'ea-1' }),
     ],
     collectivities: [makeDoc({ _id: COL_A, name: 'Collectivité A', sharepoint_folder_id: 'folder-a' }), makeDoc({ _id: COL_B, name: 'Collectivité B', sharepoint_folder_id: 'folder-b' })],
     actors: [makeDoc({ _id: 'ea-1', name: 'Acteur 1', collectivities: [{ id: COL_A, name: 'Collectivité A' }, { id: COL_B, name: 'Collectivité B' }] })],
     logs: [],
     writes: [],
+    syncedFiles: [],
     errors: [],
   };
   // Les acteurs économiques ont un identifiant libre dans ce jeu de données
@@ -423,6 +434,9 @@ describe('PUT /indicator_value/:id', () => {
     test(`données générales d'un acteur économique : la saisie de ${who} vaut pour toutes ses collectivités`, async () => {
       await assertAllowed('PUT', `/indicator_value/${IV_CONFIG_AE}`, who, { source: 'manual', value: { number: 7 } });
       assert.equal(storedValue(IV_CONFIG_AE_B).value.number, 7);
+      assert.ok(store.syncedFiles.includes('file-ae-prev'));
+      assert.ok(store.syncedFiles.includes('file-ae-b-prev'));
+      assert.ok(!store.syncedFiles.includes('file-col-prev'));
     });
   }
 
@@ -431,6 +445,25 @@ describe('PUT /indicator_value/:id', () => {
       await assertAllowed('PUT', `/indicator_value/${IV_CONFIG_AE}`, who, { source: 'manual', value: { number: 7 } });
       assert.equal(storedValue(IV_CONFIG_AE).value.number, 7);
       assert.equal(storedValue(IV_CONFIG_AE_B).value.number, 1);
+      assert.ok(store.syncedFiles.includes('file-ae-prev'));
+      assert.ok(!store.syncedFiles.includes('file-ae-b-prev'));
+      assert.ok(!store.syncedFiles.includes('file-col-prev'));
+    });
+  }
+
+  for (const who of COLLECTIVITY_WRITERS) {
+    test(`données générales d'une collectivité : la saisie de ${who} vaut pour les actions de la collectivité, pas au-delà`, async () => {
+      await assertAllowed('PUT', `/indicator_value/${IV_CONFIG_COL}`, who, { source: 'manual', value: { number: 7 } });
+      assert.equal(storedValue(IV_COL).value.number, 7);
+      assert.equal(storedValue(IV_AE).value.number, 1);
+      assert.equal(storedValue(IV_COL_B).value.number, 1);
+      assert.deepEqual([...new Set(store.syncedFiles)].sort(), ['file-col-expost', 'file-col-prev']);
+    });
+  }
+
+  for (const who of [...STRANGERS, 'aeOwner']) {
+    test(`données générales d'une collectivité : refusé pour ${who}, rien n'est écrit`, async () => {
+      await assertRefused('PUT', `/indicator_value/${IV_CONFIG_COL}`, who, { source: 'manual', value: { number: 7 } });
     });
   }
 
