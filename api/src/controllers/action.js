@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const passport = require('passport');
 const Action = require('../models/action');
@@ -24,6 +25,14 @@ const ACTION_UPDATABLE_FIELDS = [
   'is_subsidized_by_program', 'related_initiatives', 'comment', 'is_draft',
 ];
 
+// Modification et suppression d'une action : admin plateforme, membre approuvé de sa collectivité
+// (hors rôle acteur économique) ou acteur économique propriétaire.
+function canEditAction(user, action) {
+  if (user.role === 'admin') return true;
+  if ((user.collectivities || []).some((c) => c.id === action.collectivity_id && c.status === 'approved' && c.role !== 'economic_actor')) return true;
+  return !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
+}
+
 router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const action = await Action.findById(req.params.id);
@@ -45,11 +54,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    if (req.user.role !== 'admin') {
-      const isCollectivityMember = req.user.collectivities.some((c) => c.id === action.collectivity_id && c.status === 'approved' && c.role !== 'economic_actor');
-      const isActionActor = !!action.economic_actor_id && action.economic_actor_id === req.user.economic_actor_id;
-      if (!isCollectivityMember && !isActionActor) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
-    }
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const updates = req.user.role === 'admin' ? req.body : pickFields(req.body, ACTION_UPDATABLE_FIELDS);
 
@@ -718,8 +723,10 @@ router.post('/', passport.authenticate(['admin', 'user'], { session: false, fail
 
 router.delete('/:id', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
     const action = await Action.findOne({ _id: req.params.id });
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     await Log.create({
       model_name: 'action',
