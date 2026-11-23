@@ -929,7 +929,7 @@ router.post('/request-collectivity-access', passport.authenticate('user', { sess
     if (user.role === 'economic_actor') {
       const actor = mongoose.isValidObjectId(user.economic_actor_id) ? await EconomicActor.findById(user.economic_actor_id) : null;
       if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      await attachCollectivityToEconomicActor(actor, collectivity);
+      await attachCollectivityToEconomicActor(actor._id.toString(), collectivity);
       return res.status(200).send({ ok: true, data: await UserObject.findById(user._id) });
     }
 
@@ -1003,20 +1003,48 @@ router.post('/request-collectivity-access', passport.authenticate('user', { sess
 
 // Même effet que l'ajout d'une collectivité à un acteur économique depuis l'admin : fichier d'agrégation
 // créé une seule fois, puis accès approuvé pour tous les membres de l'organisation. Idempotent.
-async function attachCollectivityToEconomicActor(actor, collectivity) {
+// Les demandes simultanées pour un même couple organisation / collectivité partagent le même traitement.
+// Ce partage est propre au processus (l'API tourne sur une seule instance) ; entre plusieurs instances, les
+// écritures conditionnelles ci-dessous garantissent quand même une seule entrée et un seul fichier référencé.
+const attachesInProgress = new Map();
+function attachCollectivityToEconomicActor(actorId, collectivity) {
+  const key = `${actorId}:${collectivity._id}`;
+  if (!attachesInProgress.has(key)) {
+    attachesInProgress.set(
+      key,
+      runAttachCollectivityToEconomicActor(actorId, collectivity).finally(() => attachesInProgress.delete(key))
+    );
+  }
+  return attachesInProgress.get(key);
+}
+
+async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
   const collectivityId = collectivity._id.toString();
 
-  if (!actor.collectivities?.some((c) => c.id === collectivityId)) {
+  // Relu ici : l'état a pu changer pendant qu'une demande précédente se terminait
+  const actor = await EconomicActor.findById(actorId);
+  if (!actor) throw new Error('Economic actor not found');
+
+  // Le fichier est créé d'abord : si la création échoue, rien n'est enregistré et aucun accès n'est accordé
+  const existing = actor.collectivities?.find((c) => c.id === collectivityId);
+  if (!existing?.aggregation_excel_file_id) {
     const aggregation_excel_file_id = await microsoftGraph.duplicateExcelFile(
       `${actor.name} - ${collectivity.name} - Aggregation_V5.xlsx`,
       collectivity.sharepoint_folder_id,
       microsoftGraph.aggregationTemplateFileId
     );
-    // Condition sur l'absence de la collectivité : deux demandes simultanées n'ajoutent pas de doublon
-    await EconomicActor.updateOne(
-      { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
-      { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
-    );
+    // Écritures conditionnelles : ni doublon de collectivité, ni fichier existant écrasé
+    if (existing) {
+      await EconomicActor.updateOne(
+        { _id: actor._id, collectivities: { $elemMatch: { id: collectivityId, aggregation_excel_file_id: { $in: [null, ''] } } } },
+        { $set: { 'collectivities.$.aggregation_excel_file_id': aggregation_excel_file_id } }
+      );
+    } else {
+      await EconomicActor.updateOne(
+        { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
+        { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
+      );
+    }
   }
 
   const members = await UserObject.find({ economic_actor_id: actor._id.toString(), role: 'economic_actor' });

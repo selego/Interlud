@@ -52,6 +52,7 @@ beforeEach(() => {
     { _id: EA_2, name: 'Autre', collectivities: [] },
   ];
   duplicateCalls = [];
+  duplicateFailure = false;
   notifications = [];
   emails = [];
 });
@@ -75,15 +76,27 @@ EconomicActor.findById = async (id) => {
 };
 EconomicActor.updateOne = async (filter, update) => {
   const actor = actors.find((a) => a._id === filter._id);
-  if (!actor || actor.collectivities.some((c) => c.id === filter['collectivities.id'].$ne)) return { modifiedCount: 0 };
-  actor.collectivities.push(update.$push.collectivities);
+  if (!actor) return { modifiedCount: 0 };
+  if (update.$push) {
+    if (actor.collectivities.some((c) => c.id === filter['collectivities.id'].$ne)) return { modifiedCount: 0 };
+    actor.collectivities.push(update.$push.collectivities);
+    return { modifiedCount: 1 };
+  }
+  // $set du fichier d'agrégation, seulement si l'entrée n'en a pas encore
+  const entry = actor.collectivities.find((c) => c.id === filter.collectivities.$elemMatch.id && !c.aggregation_excel_file_id);
+  if (!entry) return { modifiedCount: 0 };
+  entry.aggregation_excel_file_id = update.$set['collectivities.$.aggregation_excel_file_id'];
   return { modifiedCount: 1 };
 };
 Notification.create = async (payload) => notifications.push(payload);
 brevo.sendEmail = async (html, options) => emails.push(options);
+let duplicateFailure;
 microsoftGraph.duplicateExcelFile = async (name, folderId, templateId) => {
   duplicateCalls.push({ name, folderId, templateId });
-  return `agg-${duplicateCalls.length}`;
+  const id = `agg-${duplicateCalls.length}`;
+  await new Promise((resolve) => setTimeout(resolve, 20)); // la copie SharePoint prend du temps
+  if (duplicateFailure) throw new Error('Cannot copy Excel file');
+  return id;
 };
 
 // ---------- Serveur de test ----------
@@ -178,6 +191,47 @@ test("organisation déjà rattachée : aucun nouveau fichier d'agrégation, le m
   assert.equal(actors[0].collectivities.length, 1);
   assert.equal(actors[0].collectivities[0].aggregation_excel_file_id, 'agg-existant');
   assert.equal(users[0].collectivities.filter((c) => c.id === COL_A).length, 1);
+});
+
+test("deux demandes simultanées (deux membres de la même organisation) : un seul fichier d'agrégation", async () => {
+  const [first, second] = await Promise.all([requestAccess('u-ae', COL_A), requestAccess('u-ae-collegue', COL_A)]);
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(duplicateCalls.length, 1);
+  assert.equal(actors[0].collectivities.length, 1);
+  assert.equal(entryOf('u-ae', COL_A).status, 'approved');
+  assert.equal(entryOf('u-ae-collegue', COL_A).status, 'approved');
+});
+
+test("si la création du fichier d'agrégation échoue, aucun accès n'est accordé et une nouvelle demande aboutit", async () => {
+  duplicateFailure = true;
+  const failed = await requestAccess('u-ae', COL_A);
+
+  assert.equal(failed.status, 500);
+  assert.equal(actors[0].collectivities.length, 0);
+  assert.equal(entryOf('u-ae', COL_A), undefined);
+  assert.equal(entryOf('u-ae-collegue', COL_A), undefined);
+
+  duplicateFailure = false;
+  const retried = await requestAccess('u-ae', COL_A);
+
+  assert.equal(retried.status, 200);
+  assert.equal(actors[0].collectivities.length, 1);
+  assert.ok(actors[0].collectivities[0].aggregation_excel_file_id);
+  assert.equal(entryOf('u-ae', COL_A).status, 'approved');
+});
+
+test("organisation rattachée sans fichier d'agrégation : le fichier est créé avant d'approuver le membre", async () => {
+  actors[0].collectivities = [{ id: COL_A, name: 'Territoire A' }];
+
+  const res = await requestAccess('u-ae', COL_A);
+
+  assert.equal(res.status, 200);
+  assert.equal(duplicateCalls.length, 1);
+  assert.equal(actors[0].collectivities.length, 1);
+  assert.equal(actors[0].collectivities[0].aggregation_excel_file_id, 'agg-1');
+  assert.equal(entryOf('u-ae', COL_A).status, 'approved');
 });
 
 test('un acteur économique sans organisation (ou identifiant invalide) est refusé (404)', async () => {
