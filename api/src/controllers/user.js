@@ -544,12 +544,12 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
         const addedBodyHTML = `
         <div style="font-family: 'Source Sans Pro', Arial, sans-serif; line-height: 1.6; color: #123314; max-width: 600px; margin: 0 auto; background: #ffffff;">
           <div style="background-color: #2DAC6A; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Nouvel acteur économique</h1>
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Nouvelle organisation</h1>
           </div>
           <div style="padding: 40px 30px; background: #F9FFFC; border-radius: 0 0 12px 12px;">
             <p style="font-size: 16px; margin-bottom: 20px;">Bonjour${exist.name ? ` ${exist.name}` : ''},</p>
             <p style="font-size: 16px; margin-bottom: 20px;">
-              Vous avez été ajouté à l'acteur économique <strong>${obj.economic_actor.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
+              Vous avez été ajouté à l'organisation <strong>${obj.economic_actor.name}</strong> sur la plateforme <strong>InTerLUD+</strong>.
             </p>
             <div style="text-align: center; margin: 40px 0;">
               <a href="${config.APP_URL}" style="background: #2DAC6A; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(45, 172, 106, 0.3);">
@@ -604,7 +604,7 @@ router.post('/invite', passport.authenticate(['admin', 'user'], { session: false
 
           <!-- En-tête avec dégradé vert Interlud (background-color de repli pour Outlook) -->
           <div style="background-color: #2DAC6A; background: linear-gradient(135deg, #2DAC6A 0%, #56BDB8 100%); padding: 40px 30px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre votre acteur économique</h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Invitation à rejoindre votre organisation</h1>
           </div>
 
           <!-- Corps du message -->

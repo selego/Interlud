@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { FiArrowLeft } from "react-icons/fi"
 import api from "@/services/api"
+import store from "@/services/store"
 import toast from "react-hot-toast"
 import Loader from "@/components/loader"
 
@@ -43,7 +44,10 @@ export default function Answers() {
       <button onClick={() => navigate("/admin/economic-actor-questions")} className="flex items-center gap-2 text-sm text-gray-600 mb-4">
         <FiArrowLeft /> Retour au questionnaire
       </button>
-      <h1 className="text-3xl font-bold mb-6">Réponses des acteurs économiques</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Réponses des acteurs économiques</h1>
+        <ExportButton />
+      </div>
 
       <QuestionFilter filters={filters} setFilters={setFilters} />
 
@@ -86,6 +90,39 @@ export default function Answers() {
         </table>
       )}
     </div>
+  )
+}
+
+// Export Excel de toutes les réponses, réservé à l'administrateur de la plateforme
+function ExportButton() {
+  const { user } = store()
+  const [loading, setLoading] = useState(false)
+
+  if (user?.role !== "admin") return null
+
+  const exportAnswers = async () => {
+    setLoading(true)
+    try {
+      const response = await api.download("/economic_actor_answer/admin/export", {})
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `reponses_questionnaire_${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      toast.error("L'export des réponses a échoué. Réessayez dans quelques instants.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button onClick={exportAnswers} disabled={loading} className="button-primary disabled:opacity-50">
+      {loading ? "Export en cours…" : "Exporter les réponses (Excel)"}
+    </button>
   )
 }
 
