@@ -172,7 +172,6 @@ router.post('/admin/export', passport.authenticate('admin', { session: false, fa
           active: yesNo(question.active),
           value: entry.value,
           date: entry.answer.updatedAt ? new Date(entry.answer.updatedAt) : null,
-          author: cellText(entry.answer.last_modif_by_name),
         });
       }
     }
@@ -188,12 +187,11 @@ router.post('/admin/export', passport.authenticate('admin', { session: false, fa
         { header: 'Obligatoire', key: 'required', width: 12 },
         { header: 'Question active', key: 'active', width: 15 },
         { header: 'Réponse', key: 'value', width: 40 },
-        { header: 'Date de la réponse', key: 'date', width: 20, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
-        { header: 'Auteur', key: 'author', width: 25 },
+        { header: 'Date de la réponse (UTC)', key: 'date', width: 24, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
       ],
       longRows,
     );
-    longSheet.autoFilter = { from: 'A1', to: 'J1' };
+    longSheet.autoFilter = { from: 'A1', to: 'I1' };
 
     const questionKey = (question) => `q_${question._id}`;
     const questionHeader = (question) => `${question.label}${question.value_unit ? ` (${question.value_unit})` : ''}${question.active ? '' : ' [désactivée]'}`;

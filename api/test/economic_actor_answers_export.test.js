@@ -42,7 +42,8 @@ const answers = [
 const actors = [
   { _id: 'ea-1', name: 'Transports Un', collectivities: [{ id: 'c-1', name: 'CA Nord' }, { id: 'c-2', name: 'CC Sud' }] },
   { _id: 'ea-2', name: 'Livraisons Deux', collectivities: [{ id: 'c-1', name: 'CA Nord' }] },
-  { _id: 'ea-3', name: 'Ateliers Trois', collectivities: [] },
+  // Nom commençant par « = » : neutralisé comme les réponses libres
+  { _id: 'ea-3', name: '=Ateliers Trois', collectivities: [] },
 ];
 
 User.findOne = async (query) => Object.values(users).find((u) => u._id === query._id) || null;
@@ -108,7 +109,7 @@ test("l'admin obtient un fichier .xlsx daté avec les trois onglets", async () =
 
   // Format long : une ligne par réponse non vide, organisations triées, questions dans l'ordre paramétré
   const long = rowsOf(workbook.getWorksheet('Réponses'));
-  assert.deepEqual(long[0], ['Organisation', 'Territoires', 'Question', 'Type de question', 'Unité', 'Obligatoire', 'Question active', 'Réponse', 'Date de la réponse', 'Auteur']);
+  assert.deepEqual(long[0], ['Organisation', 'Territoires', 'Question', 'Type de question', 'Unité', 'Obligatoire', 'Question active', 'Réponse', 'Date de la réponse (UTC)']);
   assert.deepEqual(
     long.slice(1).map((row) => row.slice(0, 8)),
     [
@@ -119,12 +120,13 @@ test("l'admin obtient un fichier .xlsx daté avec les trois onglets", async () =
       ['Transports Un', 'CA Nord; CC Sud', 'Énergies utilisées', 'Choix multiples', undefined, 'non', 'non', 'Diesel; Électrique'],
     ],
   );
-  // Un nombre reste un nombre ; la date est une vraie date ; l'auteur est repris
+  // Un nombre reste un nombre ; la date est une vraie date ; le nom de l'auteur de la réponse n'est pas exporté
   const longSheet = workbook.getWorksheet('Réponses');
   assert.equal(typeof longSheet.getCell('H3').value, 'number');
   assert.equal(longSheet.getCell('H3').type, ExcelJS.ValueType.Number);
   assert.equal(longSheet.getCell('I3').value.toISOString(), updatedAt.toISOString());
-  assert.equal(longSheet.getCell('J3').value, 'AE 1');
+  assert.equal(longSheet.getCell('J3').value, null);
+  assert.doesNotMatch(JSON.stringify(long), /AE 1/);
   // Une réponse libre commençant par « = » est un texte, jamais une formule
   assert.equal(longSheet.getCell('H4').type, ExcelJS.ValueType.String);
 
@@ -132,7 +134,7 @@ test("l'admin obtient un fichier .xlsx daté avec les trois onglets", async () =
   const wide = rowsOf(workbook.getWorksheet('Par organisation'));
   assert.deepEqual(wide[0], ['Organisation', 'Territoires', 'Nombre de véhicules (véhicules)', 'Commentaire', 'Type de flotte', 'Énergies utilisées [désactivée]']);
   assert.deepEqual(wide.slice(1), [
-    ['Ateliers Trois'],
+    ["'=Ateliers Trois"],
     ['Livraisons Deux', 'CA Nord', 0],
     ['Transports Un', 'CA Nord; CC Sud', 12, "'=1+1", 'Louée', 'Diesel; Électrique'],
   ]);
