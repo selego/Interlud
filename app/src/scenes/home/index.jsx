@@ -38,54 +38,76 @@ const fmtSigned = (v, decimals = 1) => {
 
 const ecart = (situation, reference) => (situation ? situation - reference : 0)
 
-const buildIndicators = (emissions) =>
+// Gain signé (négatif = baisse d'émissions) : « −4,2 M », « +1,3 k »
+const fmtGain = (v) => `${v > 0 ? "+" : ""}${fmtNum(v)}`
+// Lecture en clair d'un écart à la référence
+const sensGain = (v, unit) => (v < 0 ? `baisse d'émissions de ${fmtNum(-v)} ${unit}` : v > 0 ? `hausse d'émissions de ${fmtNum(v)} ${unit}` : "aucun écart d'émissions")
+
+// Actions retenues par /excel/home_aggregation (types custom/reference portés par la collectivité, brouillons compris)
+// dont l'ex post est saisi : leurs feuilles Excel forment le périmètre du réalisé.
+const getSheetsWithExpost = (actions) =>
+  new Set(actions.filter((a) => ["custom", "reference"].includes(a.type) && a.owner === "collectivity" && a.completion_expost > 0).map((a) => a.excel_worksheetname))
+
+// Gains = écart à la référence (négatif = baisse d'émissions). Le réalisé et sa cible ne comptent que les feuilles
+// dont l'ex post est saisi (sans ex post, la série expost peut recopier la référence) ; gainPrevTotal couvre toutes les feuilles.
+const buildIndicators = (emissions, sheetsWithExpost) =>
   Object.entries(emissions || {}).map(([key, em]) => {
     const byYear = new Map()
+    let gainPrevTotal = 0
+    let gainPrev = 0
+    let gainReel = 0
     for (const a of em.actions) for (const d of a.yearly) {
-      const acc = byYear.get(d.year) || { prev: 0, reel: 0 }
-      acc.prev += d.previsionnelle || 0
-      acc.reel += d.expost || 0
+      const prev = ecart(d.previsionnelle, d.reference)
+      gainPrevTotal += prev
+      const acc = byYear.get(d.year) || { reel: 0 }
+      if (sheetsWithExpost.has(a.code)) {
+        gainPrev += prev
+        gainReel += ecart(d.expost, d.reference)
+        acc.reel += ecart(d.expost, d.reference)
+      }
       byYear.set(d.year, acc)
     }
-    let cumPrev = 0
     let cumReel = 0
     const yearly = [...byYear.keys()].sort((a, b) => a - b).map((year) => {
-      cumPrev += byYear.get(year).prev
       cumReel += byYear.get(year).reel
-      return { year, prev: Math.abs(cumPrev), reel: Math.abs(cumReel) }
+      return { year, reel: Math.abs(cumReel) }
     })
-    const firstIdx = yearly.findIndex((d) => d.prev !== 0 || d.reel !== 0)
+    const firstIdx = yearly.findIndex((d) => d.reel !== 0)
+    // Pourcentage seulement quand une baisse est prévue ; un réalisé en hausse compte 0 %
+    const advancement = gainPrev < 0 ? (gainReel < 0 ? (gainReel / gainPrev) * 100 : 0) : null
     return {
       key,
       unit: em.unit,
       ...(META[key] || { short: key, label: key }),
-      targetCumul: Math.abs(cumPrev),
-      realCumul: Math.abs(cumReel),
-      advancement: Math.abs(cumPrev) > 0 ? (Math.abs(cumReel) / Math.abs(cumPrev)) * 100 : 0,
-      ecartRelatif: Math.abs(cumPrev) > 0 ? ((Math.abs(cumReel) - Math.abs(cumPrev)) / Math.abs(cumPrev)) * 100 : 0,
+      gainPrevTotal,
+      gainPrev,
+      gainReel,
+      advancement,
+      ecartRelatif: advancement != null ? advancement - 100 : null,
       yearly: firstIdx >= 0 ? yearly.slice(firstIdx) : [],
     }
   })
 
-const buildContributions = (em) =>
-  (em?.actions || []).map((a) => ({
+const buildContributions = (em, sheetsWithExpost) =>
+  (em?.actions || []).filter((a) => sheetsWithExpost.has(a.code)).map((a) => ({
     action: a.code,
     name: a.name,
     ges: a.yearly.reduce((s, d) => s + ecart(d.expost, d.reference), 0),
     ges_prev: a.yearly.reduce((s, d) => s + ecart(d.previsionnelle, d.reference), 0),
   }))
 
-// Graphe : barres = émissions ex-post réelles par action/année, ligne = total prévisionnel par année.
-const buildEmissionChart = (em) => {
-  const actions = em?.actions || []
+// Graphe : barres = émissions ex-post par action/année (actions avec ex post saisi) ; lignes référence et prévisionnel
+// sur ces mêmes actions quand il y a des barres, sur toutes les actions sinon.
+const buildEmissionChart = (em, sheetsWithExpost) => {
+  const all = em?.actions || []
+  const withExpost = all.filter((a) => sheetsWithExpost.has(a.code) && a.yearly.some((d) => d.expost > 0))
+  const actions = withExpost.length ? withExpost : all
   const yearSet = new Set()
   for (const a of actions) for (const d of a.yearly) if (d.expost || d.previsionnelle) yearSet.add(d.year)
   const years = [...yearSet].sort((a, b) => a - b)
   return {
     years,
-    actions: actions
-      .map((a) => ({ code: a.code, name: a.name, yearly: years.map((y) => ({ year: y, value: a.yearly.find((d) => d.year === y)?.expost || 0 })) }))
-      .filter((a) => a.yearly.some((d) => d.value > 0)),
+    actions: withExpost.map((a) => ({ code: a.code, name: a.name, yearly: years.map((y) => ({ year: y, value: a.yearly.find((d) => d.year === y)?.expost || 0 })) })),
     prevByYear: years.map((y) => ({ year: y, value: actions.reduce((s, a) => s + (a.yearly.find((d) => d.year === y)?.previsionnelle || 0), 0) })),
     refByYear: years.map((y) => ({ year: y, value: actions.reduce((s, a) => s + (a.yearly.find((d) => d.year === y)?.reference || 0), 0) })),
   }
@@ -164,18 +186,24 @@ export default function Home() {
     },
   ]
 
-  const indicators = data ? buildIndicators(data.emissions) : []
+  // /excel/home_aggregation agrège par feuille Excel les actions portées par la collectivité
+  const allSheets = new Set((data?.emissions?.GES?.actions || []).map((a) => a.code))
+  const sheetsWithExpost = new Set([...getSheetsWithExpost(allActions)].filter((code) => allSheets.has(code)))
+  // Précision de périmètre seulement si une partie des actions n'a pas d'ex post
+  const perimetre = sheetsWithExpost.size === allSheets.size ? null : `${sheetsWithExpost.size > 1 ? `les ${sheetsWithExpost.size} actions` : "l'action"} dont l'ex post est saisi (${allSheets.size} action${allSheets.size > 1 ? "s" : ""} au total)`
+  const indicators = data ? buildIndicators(data.emissions, sheetsWithExpost) : []
   if (data) console.table((data.emissions?.GES?.actions?.[0]?.yearly || []).filter((d) => d.year >= 2020 && d.year <= 2028))
   const indicator = indicators.find((i) => i.key === activeIndicator) || indicators[0]
   const ges = indicators.find((i) => i.key === "GES") || indicator
-  const advancement = ges?.advancement || 0
+  const advancement = ges?.advancement
   const traj = indicator?.yearly || []
   const yearExpost = [...traj].reverse().find((d) => d.reel > 0)?.year
 
-  const contributions = data ? buildContributions(data.emissions.GES) : []
+  const contributions = data ? buildContributions(data.emissions.GES, sheetsWithExpost) : []
   const topActions = [...contributions].filter((a) => a.ges < 0).sort((a, b) => a.ges - b.ges).slice(0, 5)
   const maxAction = Math.max(...contributions.map((a) => Math.abs(a.ges_prev)), 1)
-  const nbRetard = indicators.filter((i) => i.ecartRelatif < 0).length
+  const nbRetard = indicators.filter((i) => i.ecartRelatif != null && i.ecartRelatif < 0).length
+  const chart = data && indicator ? buildEmissionChart(data.emissions[indicator.key], sheetsWithExpost) : null
 
   return (
     <div className="bg-white">
@@ -223,24 +251,55 @@ export default function Home() {
         {/* Hero narratif */}
         <div className="rounded-[20px] p-8 mb-6 border" style={{ background: "linear-gradient(135deg, #F9FFFC 0%, #fff 60%)", borderColor: "#D9EFE3" }}>
           <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
+            {sheetsWithExpost.size > 0 && advancement != null ? (
             <div>
+              {ges.gainReel > 0 ? (
               <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
-                Vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévu,
-                soit <span className="font-bold">{fmtNum(ges.realCumul)} {ges.unit}</span> évitées sur {fmtNum(ges.targetCumul)} attendues.
+                En ex post, vous avez réalisé <span className="text-[#FB6B69] font-bold">0 %</span> du gain GES prévisionnel :
+                émissions en <span className="font-bold text-[#FB6B69]">hausse de {fmtNum(ges.gainReel)} {ges.unit}</span> par rapport à la référence, pour une baisse attendue de {fmtNum(-ges.gainPrev)} {ges.unit}.
               </h2>
+              ) : (
+              <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
+                En ex post, vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévisionnel,
+                soit {ges.gainReel < 0 ? <><span className="font-bold">{fmtNum(-ges.gainReel)} {ges.unit}</span> évitées</> : <span className="font-bold">aucune baisse d'émissions</span>} sur {fmtNum(-ges.gainPrev)} attendues.
+              </h2>
+              )}
               <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
-                <strong className="text-font-primary">{nbRetard} indicateur{nbRetard > 1 ? "s" : ""} sur {indicators.length}</strong> sont en retard sur leur cible cumulée.
+                {perimetre && <>Calculé sur {perimetre}. Gain GES prévisionnel de l'ensemble des actions : {fmtGain(ges.gainPrevTotal)} {ges.unit}.{" "}</>}
+                <strong className="text-font-primary">{nbRetard} indicateur{nbRetard > 1 ? "s" : ""} sur {indicators.length}</strong> {nbRetard > 1 ? "sont" : "est"} en retard sur {nbRetard > 1 ? "leur" : "sa"} cible cumulée.
               </p>
             </div>
-            <div className="flex justify-center">
-              <ProgressDonut value={advancement} size={200} stroke={20} label="de la cible" sub="atteinte" color={advancement >= 90 ? "#2DAC6A" : advancement >= 70 ? "#F59600" : "#FB6B69"} />
+            ) : sheetsWithExpost.size > 0 ? (
+            <div>
+              <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
+                {ges.gainPrev > 0 ? <>Hausse GES prévue de {fmtNum(ges.gainPrev)} {ges.unit} par rapport à la référence.</> : <>Aucun gain GES prévisionnel par rapport à la référence.</>}
+                {" "}En ex post : <span className="font-bold">{sensGain(ges.gainReel, ges.unit)}</span>.
+              </h2>
+              <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
+                Pas de pourcentage de réalisation sans baisse prévue.{perimetre && <> Calculé sur {perimetre}. Gain GES prévisionnel de l'ensemble des actions : {fmtGain(ges.gainPrevTotal)} {ges.unit}.</>}
+              </p>
             </div>
+            ) : (
+            <div>
+              <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
+                Gain GES prévisionnel : <span className={`font-bold ${ges.gainPrevTotal > 0 ? "text-[#FB6B69]" : "text-primary-green"}`}>{fmtGain(ges.gainPrevTotal)} {ges.unit}</span>, soit {ges.gainPrevTotal === 0 ? "aucun écart d'émissions" : `une ${sensGain(ges.gainPrevTotal, ges.unit)}`} par rapport à la référence.
+              </h2>
+              <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
+                Aucune situation ex post n'est encore saisie. Saisissez une situation ex post pour suivre le gain réalisé.
+              </p>
+            </div>
+            )}
+            {sheetsWithExpost.size > 0 && advancement != null && (
+            <div className="flex justify-center">
+              <ProgressDonut value={advancement} size={200} stroke={20} label="de la cible" sub="atteinte" color={ges.gainReel > 0 ? "#FB6B69" : advancement >= 90 ? "#2DAC6A" : advancement >= 70 ? "#F59600" : "#FB6B69"} />
+            </div>
+            )}
           </div>
         </div>
 
         {/* Indicateurs */}
         <div className="mb-6">
-          <SectionLabel sub="Cliquez pour explorer la trajectoire d'un indicateur">
+          <SectionLabel sub={`Cliquez pour explorer la trajectoire d'un indicateur${sheetsWithExpost.size > 0 && perimetre ? ` · réalisé et cible calculés sur ${perimetre}` : ""}`}>
             Que disent les indicateurs ?
           </SectionLabel>
           <div className="grid grid-cols-3 gap-3.5">
@@ -252,13 +311,28 @@ export default function Home() {
               >
                 <div className="flex justify-between mb-2">
                   <span className="text-[13px] font-semibold text-font-primary">{ind.label}</span>
-                  <DeltaPill value={ind.ecartRelatif} suffix="%" size="sm" />
+                  {sheetsWithExpost.size > 0 && ind.ecartRelatif != null && <DeltaPill value={ind.ecartRelatif} suffix="%" size="sm" />}
                 </div>
+                {sheetsWithExpost.size === 0 ? (
                 <div className="text-[13px] text-[#768776] leading-[1.4]">
-                  Réalisé <strong className="text-font-primary font-bold">{fmtNum(ind.realCumul)} {ind.unit}</strong>
-                  {" "}vs cible <strong className="text-font-primary">{fmtNum(ind.targetCumul)}</strong>
+                  Gain prévisionnel <strong className="text-font-primary font-bold">{fmtGain(ind.gainPrevTotal)} {ind.unit}</strong> par rapport à la référence
+                </div>
+                ) : ind.gainPrev >= 0 ? (
+                <div className="text-[13px] text-[#768776] leading-[1.4]">
+                  {ind.gainPrev > 0 ? <>Hausse prévue de <strong className="text-font-primary">{fmtNum(ind.gainPrev)} {ind.unit}</strong> par rapport à la référence</> : "Pas de gain prévisionnel"}
+                  {` · ex post : ${sensGain(ind.gainReel, ind.unit)}`}
+                </div>
+                ) : ind.gainReel > 0 ? (
+                <div className="text-[13px] text-red-600 leading-[1.4]">
+                  Émissions en hausse de <strong className="font-bold">{fmtNum(ind.gainReel)} {ind.unit}</strong> par rapport à la référence (cible {fmtGain(ind.gainPrev)}) · 0 % de la cible
+                </div>
+                ) : (
+                <div className="text-[13px] text-[#768776] leading-[1.4]">
+                  Réalisé <strong className="text-font-primary font-bold">{fmtGain(ind.gainReel)} {ind.unit}</strong>
+                  {" "}vs cible <strong className="text-font-primary">{fmtGain(ind.gainPrev)}</strong>
                   {ind.ecartRelatif > 0 ? " · objectif dépassé" : ` · ${Math.round(ind.advancement)}% de la cible`}
                 </div>
+                )}
               </button>
             ))}
           </div>
@@ -270,12 +344,14 @@ export default function Home() {
             <div>
               <h3 className="text-[16px] font-semibold m-0 text-font-primary">Émissions {indicator.label}</h3>
               <p className="text-[12px] text-[#768776] mt-1 mb-0">
-                Les barres sont des projections établies à partir des valeurs ex-post mesurées, décomposées par action. Les pointillés indiquent les trajectoires de référence et prévisionnelle.
+                {chart.actions.length
+                  ? `Les barres sont des projections établies à partir des valeurs ex-post mesurées, décomposées par action. Les pointillés indiquent les trajectoires de référence et prévisionnelle de ces mêmes actions (${chart.actions.length} action${chart.actions.length > 1 ? "s" : ""} dont l'ex post est saisi).`
+                  : `Les pointillés indiquent les émissions annuelles des situations de référence et prévisionnelle, toutes actions confondues. Aucune barre : ${sheetsWithExpost.size ? "aucune valeur ex post à afficher" : "aucun ex post n'est saisi"}.`}
               </p>
             </div>
             <IndicatorPicker active={activeIndicator} onChange={setActiveIndicator} indicators={indicators} />
           </div>
-          <StackedActionsChart emissions={buildEmissionChart(data.emissions[indicator.key])} unit={indicator.unit} yearExpost={yearExpost} />
+          <StackedActionsChart emissions={chart} unit={indicator.unit} yearExpost={yearExpost} />
         </div>
         </>
         )}
@@ -284,7 +360,7 @@ export default function Home() {
         <div className={`grid ${areResultsHidden(user, collectivity) ? "grid-cols-1" : "grid-cols-[2fr_1fr]"} gap-5 mb-8`}>
           {!areResultsHidden(user, collectivity) && (
           <div className="card-shadow rounded-2xl p-6 bg-white">
-            <SectionLabel sub="Classement par gain GES réel — cumulé sur la période">
+            <SectionLabel sub="Classement par gain GES réel — cumulé sur la période, actions dont l'ex post est saisi">
               Top 5 actions contributrices
             </SectionLabel>
             {topActions.length ? (
@@ -420,7 +496,7 @@ function IndicatorPicker({ active, onChange, indicators }) {
 }
 
 function ActionBar({ action, max }) {
-  const performance = action.ges_prev !== 0 ? (action.ges / action.ges_prev) * 100 : 0
+  const performance = action.ges_prev < 0 ? (action.ges / action.ges_prev) * 100 : null
   const isDegradation = action.ges > 0
   return (
     <div className="w-full py-2.5 border-b border-[#e1e5e8] last:border-b-0">
@@ -430,7 +506,7 @@ function ActionBar({ action, max }) {
           <span className="text-[13px] font-medium text-font-primary truncate">{action.name}</span>
         </div>
         <div className="shrink-0 text-[12px] font-semibold text-font-primary" style={{ fontFamily: "ui-monospace, SF Mono, monospace" }}>
-          {fmtNum(Math.abs(action.ges))} <span className="text-[#768776] font-normal">tCO₂e</span>
+          {fmtGain(action.ges)} <span className="text-[#768776] font-normal">tCO₂e</span>
         </div>
       </div>
       <div className="relative h-2 bg-[#F1F4F2] rounded-full overflow-hidden">
@@ -438,9 +514,9 @@ function ActionBar({ action, max }) {
         <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${Math.min((Math.abs(action.ges) / max) * 100, 100)}%`, background: isDegradation ? "#FB6B69" : "#2DAC6A", opacity: isDegradation ? 0.85 : 1 }} />
       </div>
       <div className="flex justify-between mt-1 text-[10px] text-[#9CA3AF]">
-        <span>Cible : {fmtNum(Math.abs(action.ges_prev))} tCO₂e</span>
+        <span>Cible : {fmtGain(action.ges_prev)} tCO₂e</span>
         <span className={`font-semibold ${isDegradation ? "text-red-600" : performance > 100 ? "text-primary-green" : "text-primary-orange"}`}>
-          {isDegradation ? "Dégradation" : `${Math.round(performance)}% de la cible`}
+          {isDegradation ? "Dégradation" : performance == null ? "Pas de baisse prévue" : `${Math.round(performance)}% de la cible`}
         </span>
       </div>
     </div>

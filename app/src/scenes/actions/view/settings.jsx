@@ -8,6 +8,7 @@ import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
 import DebounceInput from "@/components/debounceInput";
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_INVALID_CHARACTERS, ACTION_NAME_MAX_LENGTH, getActionNameError } from "@/utils/fileName";
 
 export default function Settings({ action: initialAction, onSave }) {
   const navigate = useNavigate();
@@ -200,6 +201,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [nameError, setNameError] = useState("");
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
   const [newPrevYear, setNewPrevYear] = useState("");
   const [isAddingPrev, setIsAddingPrev] = useState(false);
@@ -261,6 +263,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
     try {
       setIsAddingPrev(true);
       const { ok, data, code } = await api.post("/action/add_year_previsionnel", { action_id: action._id, year_prev: parseInt(newPrevYear) });
+      if (code === ACTION_NAME_INVALID_CHARACTERS) setNameError(`${code}. Renommez l'action pour ajouter une année.`);
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Situation prévisionnelle ajoutée");
       setIsAddPrevModalOpen(false);
@@ -281,6 +284,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
     try {
       setIsAddingExpost(true);
       const { ok, data, code } = await api.post("/action/add_year_expost", { action_id: action._id, year_expost: parseInt(newExpostYear) });
+      if (code === ACTION_NAME_INVALID_CHARACTERS) setNameError(`${code}. Renommez l'action pour ajouter une année.`);
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Situation ex-post ajoutée");
       setIsAddExpostModalOpen(false);
@@ -343,9 +347,19 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             <DebounceInput
               type="text"
               value={action.name || ""}
-              onChange={(e) => onUpdate("name", e.target.value)}
-              className="w-full input-primary"
+              // L'erreur suit la valeur saisie (onChange n'est appelé que si elle diffère du nom enregistré)
+              onInput={(e) => setNameError(e.target.value === (action.name || "") ? "" : getActionNameError(e.target.value))}
+              onChange={(e) => {
+                if (getActionNameError(e.target.value)) return;
+                onUpdate("name", e.target.value);
+              }}
+              maxLength={ACTION_NAME_MAX_LENGTH}
+              aria-invalid={!!nameError}
+              aria-describedby={nameError ? "action-name-hint action-name-error" : "action-name-hint"}
+              className={`w-full input-primary ${nameError ? "!border-red-500" : ""}`}
             />
+            <p id="action-name-hint" className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+            {nameError && <p id="action-name-error" role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Priorité</label>

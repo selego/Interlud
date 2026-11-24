@@ -4,6 +4,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
 import { FiArrowLeft } from "react-icons/fi"
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_ERRORS, ACTION_NAME_MAX_LENGTH, getActionNameError } from "@/utils/fileName"
 
 export default function View() {
   const {id} = useParams()
@@ -11,6 +12,9 @@ export default function View() {
   const [parentActions, setParentActions] = useState([])
   const [collectivities, setCollectivities] = useState([])
   const [deleting, setDeleting] = useState(false)
+  const [nameError, setNameError] = useState("")
+  // Nom chargé : une action au nom plus ancien reste modifiable tant que son nom ne change pas
+  const [savedName, setSavedName] = useState("")
   const [action, setAction] = useState({
     type: "custom",
     action_parent_id: "",
@@ -61,6 +65,7 @@ export default function View() {
       const { ok, data, code } = await api.get(`/action/${id}`);
       if (!ok) return toast.error(code || "Une erreur est survenue")
       setAction(data)
+      setSavedName(data.name)
     } catch (error) {
       toast.error(error || "Une erreur est survenue")
     }
@@ -84,9 +89,15 @@ export default function View() {
   }
 
   const handleSave = async () => {
+    if (action.name !== savedName) {
+      const error = getActionNameError(action.name)
+      if (error) return setNameError(error)
+    }
     try {
       const { ok, data, code } = await api.put(`/action/${id}`, action);
+      if (ACTION_NAME_ERRORS.includes(code)) return setNameError(code)
       if (!ok) return toast.error(code || "Une erreur est survenue")
+      setSavedName(data.name)
       toast.success("Action sauvegardée !")
     } catch (error) {
       toast.error(error || "Une erreur est survenue")
@@ -178,9 +189,14 @@ export default function View() {
                 <input
                   type="text"
                   value={action.name || ""}
-                  onChange={(e) => setAction({...action, name: e.target.value})}
-                  className="w-full input-primary"
+                  onChange={(e) => { setAction({...action, name: e.target.value}); setNameError("") }}
+                  maxLength={ACTION_NAME_MAX_LENGTH}
+                  aria-invalid={!!nameError}
+                  aria-describedby={nameError ? "action-name-hint action-name-error" : "action-name-hint"}
+                  className={`w-full input-primary ${nameError ? "!border-red-500" : ""}`}
                 />
+                <p id="action-name-hint" className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+                {nameError && <p id="action-name-error" role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Priorité</label>

@@ -306,6 +306,10 @@ async function createFolder(folderName, parentFolderId = null) {
   return folder.id;
 }
 
+// Recherche d'un fichier par son nom dans un dossier : apostrophe doublée (OData), puis valeur encodée pour l'URL
+// (sans quoi + ; = & coupent ou modifient le filtre)
+const childByNamePath = (siteId, folderId, fileName) => `/sites/${siteId}/drive/items/${folderId}/children?$filter=${encodeURIComponent(`name eq '${fileName.replace(/'/g, "''")}'`)}`;
+
 async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFileId = null) {
   const siteId = await getSiteId();
   const fileIdToCopy = sourceFileId || masterExcelFileId;
@@ -329,8 +333,7 @@ async function duplicateExcelFile(newFileName, targetFolderId = null, sourceFile
   const searchFolderId = targetFolderId || sourceFile.parentReference.id;
   for (let attempts = 0; attempts < 20; attempts++) {
     await new Promise((r) => setTimeout(r, 1000));
-    const escapedName = newFileName.replace(/'/g, "''");
-    const searchResult = await graphFetch(`/sites/${siteId}/drive/items/${searchFolderId}/children?$filter=name eq '${escapedName}'`);
+    const searchResult = await graphFetch(childByNamePath(siteId, searchFolderId, newFileName));
     if (searchResult.value?.length > 0) return searchResult.value[0].id;
   }
 
@@ -503,6 +506,7 @@ module.exports = {
   updateExcelCellByIndicatorId,
   updateExcelCellsBatch,
   duplicateExcelFile,
+  childByNamePath,
   exportExcelFile,
   exportExcelFileWithSpecificSheets,
   importSheetsToExcelFile,
