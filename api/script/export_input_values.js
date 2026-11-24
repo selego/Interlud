@@ -384,6 +384,9 @@ const noteFor = (cell, text) => {
   return { ...(typeof cell.note === 'object' ? cell.note : {}), texts: [{ font, text }] };
 };
 
+// Nombre de caractères tenant sur une ligne de l'onglet Lisez-moi (largeur de colonne du template)
+const README_CHARS_PER_LINE = 130;
+
 const updateReadme = (workbook) => {
   const readme = workbook.getWorksheet('Lisez-moi');
   if (!readme) return;
@@ -403,6 +406,14 @@ const updateReadme = (workbook) => {
       previous += 1;
     }
   }
+  // Les lignes longues doivent rester lisibles en entier : hauteur adaptée au texte, avec retour à la ligne
+  readme.eachRow((row) => {
+    const cell = row.getCell(1);
+    const length = String(cell.value || '').length;
+    if (length <= README_CHARS_PER_LINE) return;
+    row.height = Math.ceil(length / README_CHARS_PER_LINE) * 13;
+    cell.alignment = { ...(cell.alignment || {}), wrapText: true, vertical: 'top' };
+  });
 };
 
 // Prépare les onglets du template (en-tête gardé tel quel, lignes d'exemple retirées, filtre, format des dates)
