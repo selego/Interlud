@@ -15,6 +15,17 @@ const jwt = require('jsonwebtoken');
 const User = require('../src/models/user');
 const Action = require('../src/models/action');
 const Collectivity = require('../src/models/collectivity');
+const EconomicActor = require('../src/models/economic_actor');
+const { ACTION_GAINS_RANGES } = require('../src/services/aggregationReader');
+
+// Microsoft Graph simulé : on note le classeur d'agrégation lu, sans aucun appel externe
+const graph = require('../src/services/microsoftGraph');
+const graphCalls = [];
+graph.getSiteId = async () => 'site';
+graph.graphFetchWithSession = async (fileId) => {
+  graphCalls.push(fileId);
+  return { values: [] };
+};
 
 const users = {
   admin: { _id: 'u-admin', name: 'Admin', role: 'admin', collectivities: [] },
@@ -23,6 +34,10 @@ const users = {
   member: { _id: 'u-member', name: 'Membre A', role: 'user', collectivities: [{ id: 'col-a', role: 'user', status: 'approved' }] },
   ae: { _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'user', status: 'approved' }] },
   // Rôle global 'user', mais acteur économique dans col-a (rôle attribué par collectivité) et simple membre de col-b
+  // Ancien membre d'une organisation : rôle global 'user', identifiant d'organisation resté sur le compte
+  formerAe: { _id: 'u-former-ae', name: 'Ancien AE', role: 'user', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'economic_actor', status: 'approved' }] },
+  // Compte acteur économique en attente d'approbation dans col-a
+  aePending: { _id: 'u-ae-pending', name: 'AE en attente', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'user', status: 'pending' }] },
   aeInCol: {
     _id: 'u-ae-col',
     name: 'AE par collectivité',
@@ -41,12 +56,22 @@ const actions = [
   { _id: 'act-ae2', type: 'custom', owner: 'economic_actor', economic_actor_id: 'ea-2', collectivity_id: 'col-a', excel_worksheetname: 'INCONNUE' },
   { _id: 'act-col', type: 'custom', owner: 'collectivity', collectivity_id: 'col-a', excel_worksheetname: 'INCONNUE' },
   { _id: 'act-global', type: 'global', excel_worksheetname: 'INCONNUE' },
+  // Fiche du catalogue avec une feuille Excel connue : la route va jusqu'à la lecture du classeur et la recherche des actions
+  { _id: 'act-global-known', type: 'global', excel_worksheetname: Object.keys(ACTION_GAINS_RANGES)[0] },
 ];
+const economicActors = [{ _id: 'ea-1', collectivities: [{ id: 'col-a', aggregation_excel_file_id: 'file-ea-1' }] }];
+EconomicActor.findById = async (id) => economicActors.find((e) => e._id === id) || null;
 
 User.findOne = async (query) => Object.values(users).find((u) => u._id === query._id) || null;
 Action.findById = async (id) => actions.find((a) => a._id === id) || null;
 // Aucune action : les routes collectives s'arrêtent avant tout appel à Microsoft Graph
-Action.find = async () => [];
+const findQueries = [];
+Action.find = (query) => {
+  findQueries.push(query);
+  const result = Promise.resolve([]);
+  result.sort = () => result;
+  return result;
+};
 // Aucun classeur d'agrégation configuré : /excel/home_aggregation s'arrête avant tout appel à Microsoft Graph
 Collectivity.findById = async () => null;
 
@@ -181,6 +206,41 @@ describe("Résultats des actions d'un acteur économique", () => {
   test("POST /excel/action_aggregation : refusé sur sa propre action s'il n'est pas rattaché à la collectivité ciblée", async () => {
     assertForbidden(await call('/excel/action_aggregation', 'ae', { collectivity: { _id: 'col-b' }, action: { _id: 'act-ae1' } }));
   });
+
+  test("POST /excel/parent_action_aggregation : la fiche ne lit que le classeur et les actions de son organisation", async () => {
+    graphCalls.length = 0;
+    findQueries.length = 0;
+    const res = await call('/excel/parent_action_aggregation', 'ae', { collectivity: { _id: 'col-a' }, action: { _id: 'act-global-known', owner: 'collectivity', economic_actor_id: 'ea-2' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.deepEqual([...new Set(graphCalls)], ['file-ea-1']);
+    assert.equal(findQueries.length, 1);
+    assert.equal(findQueries[0].owner, 'economic_actor');
+    assert.equal(findQueries[0].economic_actor_id, 'ea-1');
+    assert.equal(findQueries[0].collectivity_id, 'col-a');
+  });
+
+  test("POST /excel/parent_action_aggregation : 404 si son organisation n'est pas rattachée à la collectivité", async () => {
+    economicActors[0].collectivities = [];
+    const res = await call('/excel/parent_action_aggregation', 'ae', actionBody('act-global-known'));
+    economicActors[0].collectivities = [{ id: 'col-a', aggregation_excel_file_id: 'file-ea-1' }];
+    assert.equal(res.status, 404);
+  });
+
+  for (const path of ['/excel/action_aggregation', '/excel/parent_action_aggregation']) {
+    test(`POST ${path} : un ancien membre d'organisation (rôle global utilisateur) reste refusé`, async () => {
+      assertForbidden(await call(path, 'formerAe', actionBody('act-ae1')));
+      assertForbidden(await call(path, 'formerAe', actionBody('act-global')));
+    });
+
+    test(`POST ${path} : un acteur économique non approuvé dans la collectivité est refusé`, async () => {
+      assertForbidden(await call(path, 'aePending', actionBody('act-ae1')));
+    });
+
+    test(`POST ${path} : un identifiant de collectivité sous forme d'objet est refusé`, async () => {
+      assertForbidden(await call(path, 'ae', { collectivity: { _id: { $ne: null } }, action: { _id: 'act-ae1' } }));
+    });
+  }
 
   test('POST /dashboard/synthese : la synthèse du territoire reste refusée', async () => {
     assertForbidden(await call('/dashboard/synthese', 'ae', { collectivity_id: 'col-a' }));

@@ -15,7 +15,7 @@ export function areResultsHidden(user, collectivity) {
 // Le tableau de bord collectif (accueil, comparaison) reste masqué.
 export function areActionResultsHidden(user, action, collectivity) {
   if (!areResultsHidden(user, collectivity)) return false
-  if (!user?.economic_actor_id) return true
-  if (action?.type === "global") return user.role !== "economic_actor"
+  if (user?.role !== "economic_actor" || !user.economic_actor_id) return true
+  if (action?.type === "global") return false
   return !(action?.owner === "economic_actor" && action.economic_actor_id === user.economic_actor_id)
 }
