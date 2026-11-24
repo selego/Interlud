@@ -348,7 +348,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               type="text"
               value={action.name || ""}
               // L'erreur suit la valeur saisie (onChange n'est appelé que si elle diffère du nom enregistré)
-              onInput={(e) => setNameError(getActionNameError(e.target.value))}
+              onInput={(e) => setNameError(e.target.value === (action.name || "") ? "" : getActionNameError(e.target.value))}
               onChange={(e) => {
                 if (getActionNameError(e.target.value)) return;
                 onUpdate("name", e.target.value);
