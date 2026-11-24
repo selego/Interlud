@@ -9,3 +9,13 @@ export function areResultsHidden(user, collectivity) {
   const collectivityId = typeof collectivity === "string" ? collectivity : collectivity?._id
   return (user?.collectivities || []).some((c) => c.role === "economic_actor" && (!collectivityId || c.id === collectivityId))
 }
+
+// Exception (décision du 24/11), même règle que l'API : un acteur économique voit les résultats de ses propres actions
+// (action de son organisation, ou fiche du catalogue regroupant ses remplissages pour un compte acteur économique).
+// Le tableau de bord collectif (accueil, comparaison) reste masqué.
+export function areActionResultsHidden(user, action, collectivity) {
+  if (!areResultsHidden(user, collectivity)) return false
+  if (!user?.economic_actor_id) return true
+  if (action?.type === "global") return user.role !== "economic_actor"
+  return !(action?.owner === "economic_actor" && action.economic_actor_id === user.economic_actor_id)
+}

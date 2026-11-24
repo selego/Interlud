@@ -5,7 +5,7 @@ import toast from "react-hot-toast"
 import { FiArrowLeft, FiBarChart2, FiPlus, FiCalendar, FiInfo } from "react-icons/fi"
 import { shouldDisplayIndicatorFromMap, fetchConditionValuesMap, isIndicatorValueFilled } from "@/utils/indicatorHelpers"
 import useStore from "@/services/store"
-import { areResultsHidden } from "@/utils/results"
+import { areActionResultsHidden } from "@/utils/results"
 import Loader from "@/components/loader"
 import ProgressCircle from "@/components/ProgressCircle"
 import Modal from "@/components/modal"
@@ -107,8 +107,8 @@ export default function Completion({ action, onSave }) {
                 {action.name}
                 {action.instance_number > 1 && <span className="text-lg font-medium text-gray-400 ml-2">#{action.instance_number}</span>}
               </h1>
-              {/* Les graphiques sont des résultats : bouton masqué pour les acteurs économiques */}
-              {!areResultsHidden(user, action.collectivity_id) && (
+              {/* Les graphiques sont des résultats : bouton masqué pour un acteur économique hors de ses propres actions */}
+              {!areActionResultsHidden(user, action, action.collectivity_id) && (
               <button
                 onClick={() => {
                   onSave?.()
@@ -316,8 +316,8 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
       await Promise.all([onStatsRefresh(), refreshDynamicFields(mySaveId)])
       // La synchro Excel est différée côté API : on garde le loading tant que le dashboard n'est pas à jour
-      // Les acteurs économiques ne voient pas le dashboard : message neutre
-      toast.loading(areResultsHidden(user, action.collectivity_id) ? "Valeur enregistrée" : "Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
+      // Dashboard non visible (acteur économique hors de ses propres actions) : message neutre
+      toast.loading(areActionResultsHidden(user, action, action.collectivity_id) ? "Valeur enregistrée" : "Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
       for (let i = 0; i < 120; i++) {
         await new Promise((resolve) => setTimeout(resolve, 1000))
         if (mySaveId !== saveCounterRef.current) return
@@ -326,7 +326,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
       }
       // Fin de synchro : les défauts relus depuis l'Excel et les valeurs qui les suivent sont rechargés sur l'onglet affiché
       await refreshDynamicFields(mySaveId)
-      toast.success(areResultsHidden(user, action.collectivity_id) ? "Valeur enregistrée" : "Valeur enregistrée, dashboard à jour", { id: "indicator-save" })
+      toast.success(areActionResultsHidden(user, action, action.collectivity_id) ? "Valeur enregistrée" : "Valeur enregistrée, dashboard à jour", { id: "indicator-save" })
     } catch (error) {
       toast.error("Une erreur est survenue", { id: "indicator-save" })
     }

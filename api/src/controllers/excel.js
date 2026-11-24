@@ -8,13 +8,11 @@ const EconomicActor = require('../models/economic_actor');
 const Collectivity = require('../models/collectivity');
 const Action = require('../models/action');
 const ERROR_CODES = require('../utils/errorCodes');
-const { areResultsHidden } = require('../utils/results');
+const { areResultsHidden, areActionResultsHidden } = require('../utils/results');
 const { isApprovedMember, isActionInCollectivity } = require('../utils/collectivityAccess');
 
 router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
-    if (areResultsHidden(req.user, req.body.collectivity?._id || req.body.collectivity?.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity, date_start, date_end } = req.body;
     if (!req.body.action) return res.json({ ok: false, data: { error: 'action is required' } });
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
@@ -22,6 +20,8 @@ router.post('/action_aggregation', passport.authenticate(['admin', 'user'], { se
     // Fiche relue en base : sa collectivité et son propriétaire ne sont pas pris dans le corps de la requête
     const action = await Action.findById(req.body.action._id);
     if (!action || !isActionInCollectivity(action, collectivity._id || collectivity.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // Les acteurs économiques ne voient que les résultats de leurs propres actions (vérifié sur la fiche relue en base)
+    if (areActionResultsHidden(req.user, action, collectivity._id || collectivity.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const worksheetKey = action.excel_worksheetname;
     if (!worksheetKey) return res.json({ ok: false, data: { error: 'action has no excel_worksheetname' } });
@@ -137,8 +137,6 @@ router.post('/home_aggregation', passport.authenticate(['admin', 'user'], { sess
 
 router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    // Les acteurs économiques (rôle global ou dans la collectivité ciblée) ne voient aucun résultat calculé
-    if (areResultsHidden(req.user, req.body.collectivity?._id || req.body.collectivity?.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
     const { collectivity, date_start, date_end } = req.body;
     if (!req.body.action) return res.json({ ok: false, data: { error: 'action is required' } });
     if (!collectivity) return res.json({ ok: false, data: { error: 'collectivity is required' } });
@@ -146,6 +144,8 @@ router.post('/parent_action_aggregation', passport.authenticate(['admin', 'user'
     // Fiche relue en base : sa collectivité et son propriétaire ne sont pas pris dans le corps de la requête
     const action = await Action.findById(req.body.action._id);
     if (!action || !isActionInCollectivity(action, collectivity._id || collectivity.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    // Les acteurs économiques ne voient que les résultats de leurs propres actions (vérifié sur la fiche relue en base)
+    if (areActionResultsHidden(req.user, action, collectivity._id || collectivity.id)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const worksheetKey = action.excel_worksheetname;
     if (!worksheetKey) return res.json({ ok: false, data: { error: 'action has no excel_worksheetname' } });
