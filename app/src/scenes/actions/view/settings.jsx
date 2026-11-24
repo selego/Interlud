@@ -200,6 +200,7 @@ function IndicatorsTab({ action }) {
 function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteLoadingSeconds, setDeleteLoadingSeconds] = useState(0);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [nameError, setNameError] = useState("");
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
@@ -216,6 +217,18 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const [yearToRemoveExpost, setYearToRemoveExpost] = useState(null);
   const [isRemovingExpost, setIsRemovingExpost] = useState(false);
   const [removeExpostLoadingSeconds, setRemoveExpostLoadingSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isDeleting) { setDeleteLoadingSeconds(0); return; }
+    const interval = setInterval(() => setDeleteLoadingSeconds((s) => s + 1), 1000);
+    // Le navigateur demande confirmation avant de fermer ou recharger l'onglet pendant la suppression
+    const preventUnload = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", preventUnload);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", preventUnload);
+    };
+  }, [isDeleting]);
 
   useEffect(() => {
     if (!isAddingPrev) { setPrevLoadingSeconds(0); return; }
@@ -753,7 +766,8 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
               </div>
               <div className="text-center">
                 <p className="text-lg font-semibold text-gray-800 mb-1">Suppression en cours...</p>
-                <p className="text-xs text-gray-400">Cette opération peut prendre quelques instants</p>
+                <p className="text-sm text-gray-500 mb-3">{deleteLoadingSeconds} s écoulées</p>
+                <p className="text-xs text-gray-400">Ne quittez pas cette page : la suppression des fichiers Excel peut prendre une à deux minutes</p>
               </div>
             </div>
           ) : (
