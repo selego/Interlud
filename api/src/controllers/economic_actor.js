@@ -10,6 +10,7 @@ const { capture } = require('../services/sentry');
 const { duplicateExcelFile, aggregationTemplateFileId } = require('../services/microsoftGraph');
 const Collectivity = require('../models/collectivity');
 const { pickFields } = require('../utils');
+const { toSafeFileName } = require('../utils/fileName');
 const { isObjectId } = require('../utils/collectivityAccess');
 
 const ECONOMIC_ACTOR_UPDATABLE_FIELDS = ['name', 'description'];
@@ -97,7 +98,7 @@ router.put('/:id/add_collectivity', passport.authenticate('admin', { session: fa
     const collectivity = await Collectivity.findById(req.body.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
-    const aggregation_excel_file_id = await duplicateExcelFile(`${actor.name} - ${collectivity.name} - Aggregation_V5.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
+    const aggregation_excel_file_id = await duplicateExcelFile(`${toSafeFileName(actor.name)} - ${collectivity.name} - Aggregation_V5.xlsx`, collectivity.sharepoint_folder_id, aggregationTemplateFileId);
 
     const newCollectivity = { id: req.body.collectivity_id, name: req.body.collectivity_name, joined_at: new Date(), aggregation_excel_file_id };
     actor.collectivities = [...(actor.collectivities || []), newCollectivity];

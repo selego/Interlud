@@ -4,6 +4,7 @@ import Modal from "@/components/modal"
 import Select from "@/components/Select"
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_ERRORS, ACTION_NAME_MAX_LENGTH, getActionNameError } from "@/utils/fileName"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import { areActionResultsHidden, areResultsHidden } from "@/utils/results"
@@ -219,6 +220,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const { user } = useStore()
     const [selectedActionId, setSelectedActionId] = useState("")
     const [customName, setCustomName] = useState("")
+    const [nameError, setNameError] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
     const [isDraft, setIsDraft] = useState(false)
@@ -257,6 +259,10 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
 
         const selectedAction = actions.find(a => a._id === selectedActionId)
+        // Sans nom personnalisé, l'action prend le nom de la fiche : c'est lui qui est contrôlé
+        const toNameError = (error) => customName.trim() ? error : `Le nom de la fiche « ${selectedAction.name} » ne peut pas servir de nom d'action : saisissez un nom personnalisé. ${error}`
+        const localNameError = getActionNameError(customName.trim() || selectedAction.name)
+        if (localNameError) return setNameError(toNameError(localNameError))
         const payload = {
           action_parent_id: selectedActionId,
           action_parent_name: selectedAction.name,
@@ -272,6 +278,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         }
 
         const { ok, data , code} = await api.post("/action/", payload)
+        if (ACTION_NAME_ERRORS.includes(code)) return setNameError(toNameError(code))
         if (!ok) return toast.error(code || "Une erreur est survenue")
         setCreatedActionId(data._id)
       } catch (error) {
@@ -444,9 +451,14 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 type="text"
                 placeholder="Entrez un nom personnalisé"
                 value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+                onChange={(e) => { setCustomName(e.target.value); setNameError("") }}
+                maxLength={ACTION_NAME_MAX_LENGTH}
+                aria-invalid={!!nameError}
+                aria-describedby={nameError ? "custom-name-hint custom-name-error" : "custom-name-hint"}
+                className={`w-full px-4 py-3 border ${nameError ? "border-red-500" : "border-gray-300"} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all`}
               />
+              <p id="custom-name-hint" className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+              {nameError && <p id="custom-name-error" role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
             </div>
 
             <div className="mt-6">

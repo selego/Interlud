@@ -8,6 +8,7 @@ const DebounceInput = ({
   className = "",
   type = "text",
   rows,
+  ...inputProps
 }) => {
   const [inputValue, setInputValue] = useState(value);
 
@@ -42,6 +43,7 @@ const DebounceInput = ({
       placeholder={placeholder}
       value={inputValue}
       onChange={(event) => setInputValue(event.target.value)}
+      {...inputProps}
       {...(type === "number" && {
         onWheel: (e) => e.target.blur(),
         onKeyDown: (e) => { if (e.key === "e") e.preventDefault(); },
