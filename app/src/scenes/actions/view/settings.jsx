@@ -8,7 +8,7 @@ import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
 import DebounceInput from "@/components/debounceInput";
-import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_INVALID_CHARACTERS, hasForbiddenFileNameCharacters } from "@/utils/fileName";
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_INVALID_CHARACTERS, ACTION_NAME_MAX_LENGTH, getActionNameError } from "@/utils/fileName";
 
 export default function Settings({ action: initialAction, onSave }) {
   const navigate = useNavigate();
@@ -263,6 +263,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
     try {
       setIsAddingPrev(true);
       const { ok, data, code } = await api.post("/action/add_year_previsionnel", { action_id: action._id, year_prev: parseInt(newPrevYear) });
+      if (code === ACTION_NAME_INVALID_CHARACTERS) setNameError(`${code}. Renommez l'action pour ajouter une année.`);
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Situation prévisionnelle ajoutée");
       setIsAddPrevModalOpen(false);
@@ -283,6 +284,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
     try {
       setIsAddingExpost(true);
       const { ok, data, code } = await api.post("/action/add_year_expost", { action_id: action._id, year_expost: parseInt(newExpostYear) });
+      if (code === ACTION_NAME_INVALID_CHARACTERS) setNameError(`${code}. Renommez l'action pour ajouter une année.`);
       if (!ok) return toast.error(code || "Une erreur est survenue");
       toast.success("Situation ex-post ajoutée");
       setIsAddExpostModalOpen(false);
@@ -345,15 +347,19 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             <DebounceInput
               type="text"
               value={action.name || ""}
+              // L'erreur suit la valeur saisie (onChange n'est appelé que si elle diffère du nom enregistré)
+              onInput={(e) => setNameError(getActionNameError(e.target.value))}
               onChange={(e) => {
-                if (hasForbiddenFileNameCharacters(e.target.value)) return setNameError(ACTION_NAME_INVALID_CHARACTERS);
-                setNameError("");
+                if (getActionNameError(e.target.value)) return;
                 onUpdate("name", e.target.value);
               }}
+              maxLength={ACTION_NAME_MAX_LENGTH}
+              aria-invalid={!!nameError}
+              aria-describedby={nameError ? "action-name-hint action-name-error" : "action-name-hint"}
               className={`w-full input-primary ${nameError ? "!border-red-500" : ""}`}
             />
-            <p className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
-            {nameError && <p role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
+            <p id="action-name-hint" className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+            {nameError && <p id="action-name-error" role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Priorité</label>

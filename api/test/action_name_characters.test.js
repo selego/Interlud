@@ -26,9 +26,12 @@ const ERROR_CODES = require('../src/utils/errorCodes');
 const COL_A = 'cccccccccccccccccccccccc';
 const PARENT = 'aaaaaaaaaaaaaaaaaaaaaaa1';
 const ACTION_A = 'aaaaaaaaaaaaaaaaaaaaaaa2';
+const ACTION_OLD = 'aaaaaaaaaaaaaaaaaaaaaaa3';
 
 const users = {
   member: { _id: 'u-member', name: 'Membre A', role: 'user', collectivities: [{ id: COL_A, role: 'admin', status: 'approved' }] },
+  admin: { _id: 'u-admin', name: 'Admin', role: 'admin', collectivities: [] },
+  aeEmpty: { _id: 'u-ae-empty', name: 'AE 2', role: 'economic_actor', economic_actor_id: 'ea-2', economic_actor_name: '&&&', collectivities: [{ id: COL_A, role: 'economic_actor', status: 'approved' }] },
   ae: { _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: 'ea-1', economic_actor_name: "TEST Fret & Logistique / Quai #3 de l'Ouest", collectivities: [{ id: COL_A, role: 'economic_actor', status: 'approved' }] },
 };
 
@@ -78,6 +81,7 @@ Indicator.find = async () => [];
 IndicatorValue.find = async () => [];
 IndicatorValue.insertMany = async () => [];
 IndicatorValue.findOneAndUpdate = async () => null;
+IndicatorValue.findOne = async () => null;
 Log.create = async (body) => body;
 Log.insertMany = async (logs) => logs;
 
@@ -114,6 +118,8 @@ beforeEach(() => {
     actions: [
       makeDoc({ _id: PARENT, type: 'global', owner: 'collectivity', name: 'Fiche', excel_worksheetname: 'B3' }),
       makeDoc({ _id: ACTION_A, type: 'custom', owner: 'collectivity', name: 'Mon action', collectivity_id: COL_A }),
+      // Action nommée avant le contrôle des caractères
+      makeDoc({ _id: ACTION_OLD, type: 'custom', owner: 'collectivity', name: 'Port #2', collectivity_id: COL_A, budget_costs: 10, exel_files_prev: [{ year_prev: 2030, excel_file_id: 'f-prev' }], excel_files_expost: [] }),
     ],
   };
 });
@@ -150,4 +156,112 @@ test('renommage refusé avec un caractère refusé, accepté sinon', async () =>
   const accepted = await call('PUT', `/action/${ACTION_A}`, 'member', { name: "Port d'Est (2)" });
   assert.equal(accepted.status, 200);
   assert.equal(store.actions.find((a) => a._id === ACTION_A).name, "Port d'Est (2)");
+});
+
+test('action au nom ancien : modifier un autre champ en renvoyant toute l\'action est accepté', async () => {
+  const { _id, ...current } = store.actions.find((a) => a._id === ACTION_OLD);
+  const res = await call('PUT', `/action/${ACTION_OLD}`, 'member', { ...current, budget_costs: 20 });
+  assert.equal(res.status, 200);
+  const action = store.actions.find((a) => a._id === ACTION_OLD);
+  assert.equal(action.budget_costs, 20);
+  assert.equal(action.name, 'Port #2');
+});
+
+test('action au nom ancien : renommage vers un nom valide accepté, vers un autre nom invalide refusé', async () => {
+  const refused = await call('PUT', `/action/${ACTION_OLD}`, 'member', { name: 'Port #3' });
+  assert.equal(refused.status, 400);
+  assert.equal(refused.body.code, ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS);
+  assert.equal(store.actions.find((a) => a._id === ACTION_OLD).name, 'Port #2');
+
+  const accepted = await call('PUT', `/action/${ACTION_OLD}`, 'member', { name: 'Port 2' });
+  assert.equal(accepted.status, 200);
+  assert.equal(store.actions.find((a) => a._id === ACTION_OLD).name, 'Port 2');
+});
+
+test('renommage : espaces de début et de fin retirés, nom vide refusé', async () => {
+  const empty = await call('PUT', `/action/${ACTION_A}`, 'member', { name: '   ' });
+  assert.equal(empty.status, 400);
+  assert.equal(empty.body.code, ERROR_CODES.INVALID_BODY);
+
+  const res = await call('PUT', `/action/${ACTION_A}`, 'member', { name: '  Nouveau nom  ' });
+  assert.equal(res.status, 200);
+  assert.equal(store.actions.find((a) => a._id === ACTION_A).name, 'Nouveau nom');
+});
+
+test('création : espaces de début et de fin retirés du nom et du nom du fichier', async () => {
+  const res = await call('POST', '/action', 'member', createBody('  Mon action  '));
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.name, 'Mon action');
+  assert.deepEqual(store.graphCalls, ['Mon action_Prev2030.xlsx']);
+});
+
+test('création : nom vide après nettoyage refusé comme un nom manquant', async () => {
+  const res = await call('POST', '/action', 'member', createBody('   '));
+  assert.equal(res.status, 400);
+  assert.equal(res.body.code, ERROR_CODES.INVALID_BODY);
+  assert.deepEqual(store.graphCalls, []);
+});
+
+test('création : nom de plus de 150 caractères refusé, 150 accepté', async () => {
+  const tooLong = await call('POST', '/action', 'member', createBody('a'.repeat(151)));
+  assert.equal(tooLong.status, 400);
+  assert.equal(tooLong.body.code, ERROR_CODES.ACTION_NAME_TOO_LONG);
+  assert.deepEqual(store.graphCalls, []);
+
+  const max = await call('POST', '/action', 'member', createBody('a'.repeat(150)));
+  assert.equal(max.status, 200);
+});
+
+for (const name of ['Ligne 1\nLigne 2', 'Avec\ttabulation']) {
+  test(`création refusée pour un nom avec caractère de contrôle (${JSON.stringify(name)})`, async () => {
+    const res = await call('POST', '/action', 'member', createBody(name));
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS);
+    assert.deepEqual(store.graphCalls, []);
+  });
+}
+
+test('création par un administrateur : même contrôle du nom', async () => {
+  const refused = await call('POST', '/action', 'admin', createBody('Port #2'));
+  assert.equal(refused.status, 400);
+  assert.equal(refused.body.code, ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS);
+  assert.deepEqual(store.graphCalls, []);
+
+  const accepted = await call('POST', '/action', 'admin', createBody('Livraisons + stockage'));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(store.graphCalls, ['Livraisons + stockage_Prev2030.xlsx']);
+});
+
+test("organisation dont le nom nettoyé est vide : le nom du fichier commence par « Organisation »", async () => {
+  const res = await call('POST', '/action', 'aeEmpty', createBody('Mon action AE'));
+  assert.equal(res.status, 200);
+  assert.deepEqual(store.graphCalls, ['Organisation_Mon action AE_Prev2030.xlsx']);
+});
+
+for (const [route, body] of [
+  ['/action/add_year_previsionnel', { action_id: ACTION_OLD, year_prev: 2035 }],
+  ['/action/add_year_expost', { action_id: ACTION_OLD, year_expost: 2035 }],
+]) {
+  test(`${route} : action au nom ancien refusée (400) avant tout appel à SharePoint`, async () => {
+    const res = await call('POST', route, 'member', body);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS);
+    assert.deepEqual(store.graphCalls, []);
+  });
+
+  test(`${route} : après renommage, le fichier est créé avec le nouveau nom`, async () => {
+    store.actions.find((a) => a._id === ACTION_OLD).name = 'Port 2';
+    await call('POST', route, 'member', body);
+    assert.deepEqual(store.graphCalls, [route.endsWith('previsionnel') ? 'Port 2_Prev2035.xlsx' : 'Port 2_Expost2035.xlsx']);
+  });
+}
+
+test('recherche du fichier copié : le nom est encodé dans le filtre, apostrophe doublée', () => {
+  for (const name of ['Livraisons + stockage_Prev2030.xlsx', "L'atelier_Prev2030.xlsx", 'A=B;C_Prev2030.xlsx', 'Fret & Logistique.xlsx']) {
+    const path = microsoftGraph.childByNamePath('site', 'folder', name);
+    const url = new URL(`https://graph.microsoft.com/v1.0${path}`);
+    assert.equal(url.pathname, '/v1.0/sites/site/drive/items/folder/children');
+    assert.deepEqual([...url.searchParams.keys()], ['$filter']);
+    assert.equal(url.searchParams.get('$filter'), `name eq '${name.replace(/'/g, "''")}'`);
+  }
 });

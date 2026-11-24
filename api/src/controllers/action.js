@@ -16,7 +16,7 @@ const { isPercentUnit } = require('../utils/indicators');
 const { writeDraftFlag, warmSessionsForAction } = require('../services/excelSync');
 const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
 const { pickFields } = require('../utils');
-const { hasForbiddenFileNameCharacters, toSafeFileName } = require('../utils/fileName');
+const { hasForbiddenFileNameCharacters, getActionNameError, toSafeFileName } = require('../utils/fileName');
 const { canEditAction, canCreateAction, isObjectId } = require('../utils/collectivityAccess');
 
 const ACTION_UPDATABLE_FIELDS = [
@@ -50,8 +50,14 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
     if (!canEditAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const updates = req.user.role === 'admin' ? req.body : pickFields(req.body, ACTION_UPDATABLE_FIELDS);
-    // Le nom de l'action sert à nommer les fichiers Excel des années ajoutées ensuite
-    if (hasForbiddenFileNameCharacters(updates.name)) return res.status(400).send({ ok: false, code: ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS });
+    // Le nom de l'action sert à nommer les fichiers Excel des années ajoutées ensuite. Il n'est contrôlé que s'il change :
+    // l'écran renvoie toute l'action à chaque modification, une action au nom plus ancien reste modifiable.
+    if (updates.name !== undefined && updates.name !== action.name) {
+      const name = typeof updates.name === 'string' ? updates.name.trim() : '';
+      const nameError = getActionNameError(name);
+      if (nameError) return res.status(400).send({ ok: false, code: nameError });
+      updates.name = name;
+    }
 
     action.last_modif_by_id = req.user._id;
     action.last_modif_by_name = req.user.name;
@@ -153,9 +159,10 @@ router.post('/search', passport.authenticate(['admin', 'user'], { session: false
 
 router.post('/', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
-    if (!req.body.name) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     // Le nom de l'action sert à nommer les fichiers Excel sur SharePoint
-    if (hasForbiddenFileNameCharacters(req.body.name)) return res.status(400).send({ ok: false, code: ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS });
+    req.body.name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const nameError = getActionNameError(req.body.name);
+    if (nameError) return res.status(400).send({ ok: false, code: nameError });
     if (!req.body.action_parent_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_init) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     if (!req.body.year_prev) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
@@ -873,10 +880,14 @@ router.post('/add_year_previsionnel', passport.authenticate(['admin', 'user'], {
     const collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    // Action nommée avant le contrôle des caractères : le nom du fichier serait refusé, l'action doit d'abord être renommée
+    if (hasForbiddenFileNameCharacters(action.name)) return res.status(400).send({ ok: false, code: ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS });
+
     // Construire le nom du fichier Excel selon le owner
+    const actionFileName = String(action.name || '').trim();
     const instanceSuffixPrev = action.instance_number > 1 ? `_${action.instance_number}` : '';
-    let excelFileName = `${action.name}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
-    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${toSafeFileName(action.economic_actor_name)}_${action.name}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
+    let excelFileName = `${actionFileName}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${toSafeFileName(action.economic_actor_name)}_${actionFileName}${instanceSuffixPrev}_Prev${year_prev}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier existant de cette action
     const sourceExcelId = action.exel_files_prev?.[0]?.excel_file_id || null;
@@ -1245,10 +1256,14 @@ router.post('/add_year_expost', passport.authenticate(['admin', 'user'], { sessi
     const collectivity = await Collectivity.findById(action.collectivity_id);
     if (!collectivity) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
 
+    // Action nommée avant le contrôle des caractères : le nom du fichier serait refusé, l'action doit d'abord être renommée
+    if (hasForbiddenFileNameCharacters(action.name)) return res.status(400).send({ ok: false, code: ERROR_CODES.ACTION_NAME_INVALID_CHARACTERS });
+
     // Construire le nom du fichier Excel selon le owner
+    const actionFileName = String(action.name || '').trim();
     const instanceSuffixExpost = action.instance_number > 1 ? `_${action.instance_number}` : '';
-    let excelFileName = `${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
-    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${toSafeFileName(action.economic_actor_name)}_${action.name}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
+    let excelFileName = `${actionFileName}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
+    if (action.owner === 'economic_actor' && action.economic_actor_name) excelFileName = `${toSafeFileName(action.economic_actor_name)}_${actionFileName}${instanceSuffixExpost}_Expost${year_expost}.xlsx`;
 
     // Dupliquer l'Excel depuis le premier fichier expost existant, sinon fallback sur le premier fichier prev
     // (pour récupérer init + infos collectivité + config quand expost n'existait pas à la création de l'action)
