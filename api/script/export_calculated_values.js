@@ -24,7 +24,7 @@ const { loadInputRows, prepareInputSheets, writeWorkbook } = require('./export_i
 //
 // --with-answers ajoute l'onglet « Réponses acteurs éco » (questionnaire AE, lu en base uniquement).
 //
-// Mongo : find uniquement. SharePoint : GET de plages, via readAggregationBlocks.
+// Mongo : lecture seule (find, countDocuments, aggregate). SharePoint : GET de plages, via readAggregationBlocks.
 // La sortie est un fichier local. Ne pas lancer sur autre chose qu'un petit échantillon au début.
 
 const USAGE = `Usage : node script/export_calculated_values.js --collectivities <id1,id2|all> [--template ../Template_export_Interlud.xlsx] [--out ./out/export_valeurs_calculees.xlsx] [--with-answers]
@@ -276,6 +276,8 @@ async function main() {
   try {
     await mongoose.connect(config.MONGODB_ENDPOINT);
     connected = true;
+    // Base visée, sans identifiants : vérifier avant toute lecture.
+    console.log(`Base     : ${mongoose.connection.host}:${mongoose.connection.port} / ${mongoose.connection.name}`);
 
     // Mongoose convertit le filtre en ObjectId sur place : on garde la liste demandée à part.
     const requested = options.collectivities === 'all' ? [] : options.collectivities.split(',').map((id) => id.trim()).filter(Boolean);
@@ -308,6 +310,14 @@ async function main() {
     }
     if (orphans) console.warn(`${orphans} fiche(s) d'acteur économique sans fichier d'agrégation identifié, ignorée(s).`);
 
+    // Données d'entrée lues en base avant les appels SharePoint : le garde-fou de volume échoue tôt.
+    const inputsStart = Date.now();
+    const inputs = await loadInputRows({ collectivities, actors });
+    if (inputs.orphans) console.warn(`${inputs.orphans} valeur(s) d'indicateur sans fiche action dans ces collectivités, ignorée(s).`);
+    console.log(
+      `Données d'entrée (${Date.now() - inputsStart} ms) : ${Object.entries(inputs.sheets).map(([name, list]) => `${name} ${list.length}`).join(', ')} ligne(s) ; ${inputs.stats.hidden} valeur(s) d'indicateurs masqués par une condition d'affichage et ${inputs.stats.neverDisplayed} d'indicateurs jamais affichés, non exportées.`,
+    );
+
     console.log(`${jobs.length} fichier(s) d'agrégation à lire.`);
     const results = [];
     for (const [index, job] of jobs.entries()) {
@@ -322,11 +332,7 @@ async function main() {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(options.template);
     addCalculatedValuesSheet(workbook, rows);
-    const inputsStart = Date.now();
-    const inputs = await loadInputRows({ collectivities, actors });
     const appended = prepareInputSheets(workbook, inputs.sheets);
-    if (inputs.orphans) console.warn(`${inputs.orphans} valeur(s) d'indicateur sans fiche action dans ces collectivités, ignorée(s).`);
-    console.log(`Données d'entrée (${Date.now() - inputsStart} ms) : ${Object.entries(inputs.sheets).map(([name, list]) => `${name} ${list.length}`).join(', ')} ligne(s).`);
     if (options.withAnswers) {
       const questions = await EconomicActorQuestion.find({}).sort({ order: 1, createdAt: 1 });
       const answers = await EconomicActorAnswer.find({ economic_actor_id: { $in: actors.map((actor) => String(actor._id)) } });

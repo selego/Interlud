@@ -9,6 +9,7 @@ const ExcelJS = require('exceljs');
 
 const { GAINS_FIRST_ROW, EMISSIONS_FIRST_ROW, ACTION_GAINS_RANGES, ACTION_EMISSIONS_RANGES, GAIN_COLUMNS, parseNumber, cellNumber, extractAggregation, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
 const graph = require('../src/services/microsoftGraph');
+const { prepareInputSheets, writeWorkbook } = require('../script/export_input_values');
 
 const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, README_TITLE, SHEET_NAME, EXCEL_MAX_ROWS, ANSWERS_SHEET_NAME, answerRows, addAnswersSheet } = require('../script/export_calculated_values');
 
@@ -295,15 +296,22 @@ describe('script', () => {
     const before = crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(template);
-    addCalculatedValuesSheet(wb, []);
+    addCalculatedValuesSheet(wb, [{ collectivite: 'CA Exemple', valeur: 12.5, fiche: 'C1' }]);
+    // Même chemin d'écriture que le script : onglets d'entrée préparés puis classeur écrit en flux.
     const out = path.join(os.tmpdir(), `export-calculees-${process.pid}.xlsx`);
-    await wb.xlsx.writeFile(out);
+    await writeWorkbook(wb, out, prepareInputSheets(wb, {}));
     assert.equal(crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex'), before);
 
     const check = new ExcelJS.Workbook();
     await check.xlsx.readFile(out);
     fs.unlinkSync(out);
     assert.deepEqual(check.worksheets.map((sheet) => sheet.name), ['Lisez-moi', 'Valeurs', SHEET_NAME, 'Actions', 'Collectivités', 'Acteurs économiques']);
+    const calculated = check.getWorksheet(SHEET_NAME);
+    assert.equal(calculated.getRow(2).getCell(15).value, 12.5);
+    assert.equal(calculated.getRow(1).getCell(1).font?.bold, true);
+    assert.equal(calculated.getColumn(1).width, 28);
+    assert.equal(calculated.autoFilter, 'A1:P2');
+    assert.equal(calculated.views[0].state, 'frozen');
     for (const name of ['Valeurs', 'Actions', 'Collectivités', 'Acteurs économiques']) {
       const sheet = check.getWorksheet(name);
       assert.equal(sheet.actualRowCount, 1, `${name} ne garde que l'en-tête`);
