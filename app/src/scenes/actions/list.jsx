@@ -6,7 +6,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
-import { areResultsHidden } from "@/utils/results"
+import { areActionResultsHidden, areResultsHidden } from "@/utils/results"
 import { FiInfo } from "react-icons/fi"
 
 const getStatusLabel = (status) => {
@@ -159,8 +159,9 @@ export default function List() {
           ).flatMap(([parentName, children]) => [
             <tr
               key={parentName}
-              // Le tableau de bord de l'action parente affiche des résultats : ligne non cliquable pour les acteurs économiques
-              {...(areResultsHidden(user, collectivity)
+              // Le tableau de bord de l'action parente (fiche du catalogue) affiche des résultats : ligne cliquable pour un
+              // acteur économique seulement s'il y voit ses propres remplissages
+              {...(areActionResultsHidden(user, { type: "global" }, collectivity)
                 ? { className: "bg-gray-50" }
                 : {
                     role: "button",

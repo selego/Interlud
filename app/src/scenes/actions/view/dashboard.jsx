@@ -5,7 +5,7 @@ import useStore from "@/services/store"
 import { FiArrowLeft, FiEdit, FiPlus, FiTrendingUp, FiTrendingDown, FiMinus, FiArrowRight, FiLock, FiBarChart2 } from "react-icons/fi"
 import Loader from "@/components/loader"
 import ResultsHidden from "@/components/ResultsHidden"
-import { areResultsHidden } from "@/utils/results"
+import { areActionResultsHidden } from "@/utils/results"
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, Rectangle } from "recharts"
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -639,9 +639,9 @@ export default function Dashboard({ action }) {
   const right = userActionRights.find((r) => r.action_id === action._id)
   const canRead = isAdmin || isEco || right?.can_read
   const canWrite = isAdmin || isEco || right?.can_write
-  // Les acteurs économiques ne voient aucun résultat (graphiques, émissions, gains) : seulement la saisie et le taux de remplissage
+  // Les acteurs économiques ne voient les résultats (graphiques, émissions, gains) que de leurs propres actions
   // Évalué sur la collectivité de l'action (déjà chargée), pas sur celle du store
-  const resultsHidden = areResultsHidden(user, action.collectivity_id)
+  const resultsHidden = areActionResultsHidden(user, action, action.collectivity_id)
 
   const load = async () => {
     // Collectivité de l'action en priorité : celle du store peut être une autre (lien direct)

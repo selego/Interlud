@@ -10,7 +10,7 @@ import Settings from "./settings";
 import ResultsHidden from "@/components/ResultsHidden";
 import SirenMissingAlert from "@/components/SirenMissingAlert";
 import useStore from "@/services/store";
-import { areResultsHidden } from "@/utils/results";
+import { areActionResultsHidden } from "@/utils/results";
 
 export default function Index() {
   const { id } = useParams();
@@ -40,7 +40,7 @@ export default function Index() {
     <SirenMissingAlert action={action} className="max-w-7xl mt-8 mx-8 xl:mx-auto" />
     <Routes>
       <Route path="/dashboard" element={<Dashboard action={action} />} />
-      {/* Le tableau de bord de l'action parente affiche des résultats : refusé aux acteurs économiques (API comprise) */}
+      {/* Le tableau de bord de l'action parente affiche des résultats : un acteur économique n'y voit que ses propres remplissages (API comprise) */}
       {/* Une fiche du catalogue n'a pas de collectivité : on se base alors sur celle du store (celle que cible ParentDashboard) */}
       <Route
         path="/parent-dashboard"
@@ -49,7 +49,7 @@ export default function Index() {
             <div className="flex items-center justify-center min-h-screen">
               <div className="text-lg text-gray-600">Chargement...</div>
             </div>
-          ) : areResultsHidden(user, action.collectivity_id || collectivity) ? (
+          ) : areActionResultsHidden(user, action, action.collectivity_id || collectivity) ? (
             <div className="p-8">
               <ResultsHidden />
             </div>
