@@ -189,7 +189,8 @@ export default function Home() {
   // /excel/home_aggregation agrège par feuille Excel les actions portées par la collectivité
   const allSheets = new Set((data?.emissions?.GES?.actions || []).map((a) => a.code))
   const sheetsWithExpost = new Set([...getSheetsWithExpost(allActions)].filter((code) => allSheets.has(code)))
-  const perimetre = `${sheetsWithExpost.size > 1 ? `les ${sheetsWithExpost.size} actions` : "l'action"} dont l'ex post est saisi (${allSheets.size} action${allSheets.size > 1 ? "s" : ""} au total)`
+  // Précision de périmètre seulement si une partie des actions n'a pas d'ex post
+  const perimetre = sheetsWithExpost.size === allSheets.size ? null : `${sheetsWithExpost.size > 1 ? `les ${sheetsWithExpost.size} actions` : "l'action"} dont l'ex post est saisi (${allSheets.size} action${allSheets.size > 1 ? "s" : ""} au total)`
   const indicators = data ? buildIndicators(data.emissions, sheetsWithExpost) : []
   if (data) console.table((data.emissions?.GES?.actions?.[0]?.yearly || []).filter((d) => d.year >= 2020 && d.year <= 2028))
   const indicator = indicators.find((i) => i.key === activeIndicator) || indicators[0]
@@ -264,8 +265,8 @@ export default function Home() {
               </h2>
               )}
               <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
-                Calculé sur {perimetre}. Gain GES prévisionnel de l'ensemble des actions : {fmtGain(ges.gainPrevTotal)} {ges.unit}.
-                {" "}<strong className="text-font-primary">{nbRetard} indicateur{nbRetard > 1 ? "s" : ""} sur {indicators.length}</strong> {nbRetard > 1 ? "sont" : "est"} en retard sur {nbRetard > 1 ? "leur" : "sa"} cible cumulée.
+                {perimetre && <>Calculé sur {perimetre}. Gain GES prévisionnel de l'ensemble des actions : {fmtGain(ges.gainPrevTotal)} {ges.unit}.{" "}</>}
+                <strong className="text-font-primary">{nbRetard} indicateur{nbRetard > 1 ? "s" : ""} sur {indicators.length}</strong> {nbRetard > 1 ? "sont" : "est"} en retard sur {nbRetard > 1 ? "leur" : "sa"} cible cumulée.
               </p>
             </div>
             ) : sheetsWithExpost.size > 0 ? (
@@ -275,7 +276,7 @@ export default function Home() {
                 {" "}En ex post : <span className="font-bold">{sensGain(ges.gainReel, ges.unit)}</span>.
               </h2>
               <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
-                Pas de pourcentage de réalisation sans baisse prévue. Calculé sur {perimetre}. Gain GES prévisionnel de l'ensemble des actions : {fmtGain(ges.gainPrevTotal)} {ges.unit}.
+                Pas de pourcentage de réalisation sans baisse prévue.{perimetre && <> Calculé sur {perimetre}. Gain GES prévisionnel de l'ensemble des actions : {fmtGain(ges.gainPrevTotal)} {ges.unit}.</>}
               </p>
             </div>
             ) : (
@@ -298,7 +299,7 @@ export default function Home() {
 
         {/* Indicateurs */}
         <div className="mb-6">
-          <SectionLabel sub={`Cliquez pour explorer la trajectoire d'un indicateur${sheetsWithExpost.size > 0 ? ` · réalisé et cible calculés sur ${perimetre}` : ""}`}>
+          <SectionLabel sub={`Cliquez pour explorer la trajectoire d'un indicateur${sheetsWithExpost.size > 0 && perimetre ? ` · réalisé et cible calculés sur ${perimetre}` : ""}`}>
             Que disent les indicateurs ?
           </SectionLabel>
           <div className="grid grid-cols-3 gap-3.5">
