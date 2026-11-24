@@ -128,14 +128,13 @@ describe('Version du master dans les logs de valeur', () => {
 
     const [log] = valueLogs(IV_NUMBER);
     assert.equal(log.master_version, microsoftGraph.masterExcelVersion);
-    assert.equal(log.master_version, 'V45');
     assert.equal(log.source, 'manual');
     assert.equal(log.previous_value.number, 12);
     assert.equal(log.new_value.number, 30);
 
     const [syncLog] = valueLogs(IV_NUMBER_TWIN);
     assert.equal(syncLog.source, 'synchronization');
-    assert.equal(syncLog.master_version, 'V45');
+    assert.equal(syncLog.master_version, microsoftGraph.masterExcelVersion);
   });
 
   test('import Excel : le log porte la version du master et garde la valeur écrasée par une cellule illisible', async () => {
@@ -151,7 +150,7 @@ describe('Version du master dans les logs de valeur', () => {
 
     const [log] = valueLogs(IV_NUMBER);
     assert.equal(log.source, 'import_excel');
-    assert.equal(log.master_version, 'V45');
+    assert.equal(log.master_version, microsoftGraph.masterExcelVersion);
     assert.equal(log.type_value, 'number');
     assert.equal(log.previous_value.number, 12);
     assert.equal(log.new_value.number, null);
