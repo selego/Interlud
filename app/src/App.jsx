@@ -112,16 +112,17 @@ const PublicLayout = () => {
 const UserLayout = () => {
   const [loading, setLoading] = useState(true)
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, setUser, setCollectivity, setEconomicActor } = useStore()
+  const { user, setUser, setCollectivity, setEconomicActor, setActionRights } = useStore()
   
   async function fetchUser() {
     try {
-      const { ok, token, user } = await api.get("/user/signin_token")
+      const { ok, token, user, userActionRights } = await api.get("/user/signin_token")
       if (!ok) {
         setUser(null)
         return
       }
       api.setToken(token)
+      setActionRights(userActionRights || [])
       setUser(user)
     } catch (e) {
       console.log(e)
