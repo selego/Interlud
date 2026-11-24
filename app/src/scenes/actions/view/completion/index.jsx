@@ -297,7 +297,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
   }
 
   const saveCounterRef = useRef(0)
-  const handleSaveIndicatorValue = async (indicatorValue) => {
+  const handleSaveIndicatorValue = async (indicatorValue, source = "manual") => {
     saveCounterRef.current += 1
     const mySaveId = saveCounterRef.current
     toast.loading("Enregistrement...", { id: "indicator-save" })
@@ -312,7 +312,7 @@ function IndicatorView({ action, activeSituation, activeYear, onStatsRefresh, ye
           return next
         })
       }
-      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
+      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source, ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
       await Promise.all([onStatsRefresh(), refreshDynamicFields(mySaveId)])
       // La synchro Excel est différée côté API : on garde le loading tant que le dashboard n'est pas à jour

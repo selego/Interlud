@@ -99,6 +99,11 @@ export default function History({ action, onSave }) {
                         Source : <span className="font-medium text-gray-700">{formatSource(log.source)}</span>
                       </div>
                     )}
+                    {log.master_version && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Version du master : <span className="font-medium text-gray-700">{log.master_version}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right ml-4">
