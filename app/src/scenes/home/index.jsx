@@ -225,7 +225,7 @@ export default function Home() {
           <div className="grid grid-cols-[1fr_280px] gap-8 items-center">
             <div>
               <h2 className="text-[26px] font-semibold leading-[1.25] tracking-tight max-w-[640px] text-font-primary m-0">
-                Vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévu,
+                En ex post, vous avez réalisé <span className="text-primary-green font-bold">{Math.round(advancement)} %</span> du gain GES prévisionnel,
                 soit <span className="font-bold">{fmtNum(ges.realCumul)} {ges.unit}</span> évitées sur {fmtNum(ges.targetCumul)} attendues.
               </h2>
               <p className="text-[15px] text-[#768776] leading-[1.55] mt-3.5 mb-0 max-w-[640px]">
