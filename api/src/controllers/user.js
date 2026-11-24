@@ -264,7 +264,7 @@ router.get('/signin_token', passport.authenticate(['user', 'admin'], { session: 
     const token = jwt.sign({ _id: user._id }, config.SECRET, { expiresIn: JWT_MAX_AGE });
     res.cookie('jwt', token, cookieOptions());
 
-    return res.status(200).send({ user, token, ok: true });
+    return res.status(200).send({ user, token, userActionRights: await UserActionRightObject.find({ user_id: user._id }), ok: true });
   } catch (error) {
     capture(error);
     return res.status(500).send({ ok: false, code: ERROR_CODES.SERVER_ERROR });
