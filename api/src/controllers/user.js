@@ -15,6 +15,7 @@ const { validatePassword, pickFields } = require('../utils');
 const { BREVO_TEMPLATES } = require('../utils/constants');
 const ERROR_CODES = require('../utils/errorCodes');
 const { searchRegex, isInvalidSearch } = require('../utils/search');
+const { toSafeFileName } = require('../utils/fileName');
 const Notification = require('../models/notification');
 
 const brevo = require('../services/brevo');
@@ -1027,14 +1028,8 @@ async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
 
   // Le fichier est créé d'abord : si la création échoue, rien n'est enregistré et aucun accès n'est accordé.
   // Son nom contient l'identifiant de l'organisation : deux organisations de même nom n'ont jamais le même fichier.
-  // Le nom de l'organisation, saisi librement, est réduit aux lettres, chiffres, espaces, points et tirets
-  // (caractères refusés par SharePoint ou par la recherche du fichier copié).
-  const actorFileName = actor.name
-    .normalize('NFC')
-    .replace(/[^\p{L}\p{N} .-]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
+  // Le nom de l'organisation, saisi librement, est réduit aux lettres, chiffres, espaces, points et tirets.
+  const actorFileName = toSafeFileName(actor.name);
   const existing = actor.collectivities?.find((c) => c.id === collectivityId);
   if (!existing?.aggregation_excel_file_id) {
     const aggregation_excel_file_id = await microsoftGraph.duplicateExcelFile(

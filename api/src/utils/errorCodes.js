@@ -28,6 +28,7 @@ const ERROR_CODES = {
   YEAR_PREV_ALREADY_EXISTS: 'Année prévisionnelle déjà existante',
   YEAR_EXPOST_ALREADY_EXISTS: 'Année ex-post déjà existante',
   TOO_MANY_REQUESTS: 'Trop de tentatives, veuillez réessayer plus tard',
+  ACTION_NAME_INVALID_CHARACTERS: 'Le nom de l\'action contient des caractères non acceptés : / \\ : * ? " < > | # & %',
 };
 
 module.exports = ERROR_CODES;

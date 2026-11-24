@@ -8,6 +8,7 @@ import Select from "@/components/Select";
 import History from "./history";
 import Pagination from "@/components/pagination";
 import DebounceInput from "@/components/debounceInput";
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_INVALID_CHARACTERS, hasForbiddenFileNameCharacters } from "@/utils/fileName";
 
 export default function Settings({ action: initialAction, onSave }) {
   const navigate = useNavigate();
@@ -200,6 +201,7 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [nameError, setNameError] = useState("");
   const [isAddPrevModalOpen, setIsAddPrevModalOpen] = useState(false);
   const [newPrevYear, setNewPrevYear] = useState("");
   const [isAddingPrev, setIsAddingPrev] = useState(false);
@@ -343,9 +345,15 @@ function ActionSettingsTab({ action, onUpdate, onActionUpdate }) {
             <DebounceInput
               type="text"
               value={action.name || ""}
-              onChange={(e) => onUpdate("name", e.target.value)}
-              className="w-full input-primary"
+              onChange={(e) => {
+                if (hasForbiddenFileNameCharacters(e.target.value)) return setNameError(ACTION_NAME_INVALID_CHARACTERS);
+                setNameError("");
+                onUpdate("name", e.target.value);
+              }}
+              className={`w-full input-primary ${nameError ? "!border-red-500" : ""}`}
             />
+            <p className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+            {nameError && <p role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
           </div>
           <div>
             <label className="block text-sm font-semibold mb-2">Priorité</label>

@@ -4,6 +4,7 @@ import Modal from "@/components/modal"
 import Select from "@/components/Select"
 import api from "@/services/api"
 import toast from "react-hot-toast"
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_INVALID_CHARACTERS, hasForbiddenFileNameCharacters } from "@/utils/fileName"
 import useStore from "@/services/store"
 import Loader from "@/components/loader"
 import { areResultsHidden } from "@/utils/results"
@@ -218,6 +219,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
     const { user } = useStore()
     const [selectedActionId, setSelectedActionId] = useState("")
     const [customName, setCustomName] = useState("")
+    const [nameError, setNameError] = useState("")
     const [actions, setActions] = useState([])
     const [startedBeforeInterlud, setStartedBeforeInterlud] = useState(null)
     const [isDraft, setIsDraft] = useState(false)
@@ -254,6 +256,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         if (!year.init) return toast.error("Veuillez sélectionner une année initiale")
         if (!year.prev) return toast.error("Veuillez sélectionner une année prévisionnelle")
         if (startedBeforeInterlud === null) return toast.error("Veuillez indiquer si la mise en œuvre avait commencé avant InTerLUD+")
+        if (hasForbiddenFileNameCharacters(customName)) return setNameError(ACTION_NAME_INVALID_CHARACTERS)
 
         const selectedAction = actions.find(a => a._id === selectedActionId)
         const payload = {
@@ -271,6 +274,7 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
         }
 
         const { ok, data , code} = await api.post("/action/", payload)
+        if (code === ACTION_NAME_INVALID_CHARACTERS) return setNameError(code)
         if (!ok) return toast.error(code || "Une erreur est survenue")
         setCreatedActionId(data._id)
       } catch (error) {
@@ -443,9 +447,13 @@ const AddActionModal = ({ isOpen, onClose, collectivity }) => {
                 type="text"
                 placeholder="Entrez un nom personnalisé"
                 value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all"
+                onChange={(e) => { setCustomName(e.target.value); setNameError("") }}
+                aria-invalid={!!nameError}
+                aria-describedby="custom-name-hint custom-name-error"
+                className={`w-full px-4 py-3 border ${nameError ? "border-red-500" : "border-gray-300"} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-green focus:border-transparent transition-all`}
               />
+              <p id="custom-name-hint" className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+              {nameError && <p id="custom-name-error" role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
             </div>
 
             <div className="mt-6">

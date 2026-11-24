@@ -4,6 +4,7 @@ import api from "@/services/api"
 import toast from "react-hot-toast"
 import Select from "@/components/Select"
 import { FiArrowLeft } from "react-icons/fi"
+import { FORBIDDEN_CHARACTERS_HINT, ACTION_NAME_INVALID_CHARACTERS, hasForbiddenFileNameCharacters } from "@/utils/fileName"
 
 export default function View() {
   const {id} = useParams()
@@ -11,6 +12,7 @@ export default function View() {
   const [parentActions, setParentActions] = useState([])
   const [collectivities, setCollectivities] = useState([])
   const [deleting, setDeleting] = useState(false)
+  const [nameError, setNameError] = useState("")
   const [action, setAction] = useState({
     type: "custom",
     action_parent_id: "",
@@ -84,6 +86,7 @@ export default function View() {
   }
 
   const handleSave = async () => {
+    if (hasForbiddenFileNameCharacters(action.name)) return setNameError(ACTION_NAME_INVALID_CHARACTERS)
     try {
       const { ok, data, code } = await api.put(`/action/${id}`, action);
       if (!ok) return toast.error(code || "Une erreur est survenue")
@@ -178,9 +181,11 @@ export default function View() {
                 <input
                   type="text"
                   value={action.name || ""}
-                  onChange={(e) => setAction({...action, name: e.target.value})}
-                  className="w-full input-primary"
+                  onChange={(e) => { setAction({...action, name: e.target.value}); setNameError("") }}
+                  className={`w-full input-primary ${nameError ? "!border-red-500" : ""}`}
                 />
+                <p className="mt-1 text-xs text-gray-500">{FORBIDDEN_CHARACTERS_HINT}</p>
+                {nameError && <p role="alert" className="mt-1 text-xs text-red-600">{nameError}</p>}
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-2">Priorité</label>
