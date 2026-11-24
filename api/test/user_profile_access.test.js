@@ -91,7 +91,10 @@ User.create = async (doc) => {
   created.push(doc);
   return doc;
 };
-brevo.sendEmail = async () => {};
+const sentEmails = [];
+brevo.sendEmail = async (html, options) => {
+  sentEmails.push({ html, ...options });
+};
 
 // ---------- Serveur de test ----------
 let server;
@@ -293,6 +296,21 @@ describe('POST /user/invite', () => {
     assert.equal(doc.economic_actor_id, EA_1);
     assert.ok(doc.invitation_token);
     assert.ok(doc.invitation_token_expires);
+  });
+
+  test("le mail d'invitation dans un acteur économique parle de « votre organisation »", async () => {
+    assert.equal((await invite('ae', { email: 'mail-orga@test.fr', economic_actor: { _id: EA_1 } })).status, 200);
+    const mail = sentEmails.at(-1);
+    assert.match(mail.html, /Invitation à rejoindre votre organisation/);
+    assert.match(mail.html, /<strong>Acteur 1<\/strong>/);
+    assert.doesNotMatch(mail.html, /acteur économique/i);
+
+    all.push(makeUser('orga-existant', { name: 'Sans orga', role: 'economic_actor' }));
+    assert.equal((await invite('ae', { email: 'orga-existant@test.fr', economic_actor: { _id: EA_1 } })).status, 200);
+    const added = sentEmails.at(-1);
+    assert.match(added.html, /Nouvelle organisation/);
+    assert.match(added.html, /ajouté à l'organisation <strong>Acteur 1<\/strong>/);
+    assert.doesNotMatch(added.html, /acteur économique/i);
   });
 
   test("un membre d'acteur économique ne rattache pas un agent de collectivité existant", async () => {
