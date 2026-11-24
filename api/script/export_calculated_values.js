@@ -12,9 +12,11 @@ const EconomicActor = require('../src/models/economic_actor');
 const EconomicActorQuestion = require('../src/models/economic_actor_question');
 const EconomicActorAnswer = require('../src/models/economic_actor_answer');
 const { ACTION_GAINS_RANGES, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
+const { loadInputRows, prepareInputSheets, writeWorkbook } = require('./export_input_values');
 
 // Export local, en lecture seule, des valeurs calculées (émissions, gains, atteinte)
-// lues dans le fichier d'agrégation SharePoint de chaque collectivité.
+// lues dans le fichier d'agrégation SharePoint de chaque collectivité, et des données d'entrée
+// (onglets Valeurs, Actions, Collectivités, Acteurs économiques) lues en base (export_input_values.js).
 //
 // Depuis api/ :
 //   node script/export_calculated_values.js --collectivities <id1,id2|all> \
@@ -320,6 +322,11 @@ async function main() {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(options.template);
     addCalculatedValuesSheet(workbook, rows);
+    const inputsStart = Date.now();
+    const inputs = await loadInputRows({ collectivities, actors });
+    const appended = prepareInputSheets(workbook, inputs.sheets);
+    if (inputs.orphans) console.warn(`${inputs.orphans} valeur(s) d'indicateur sans fiche action dans ces collectivités, ignorée(s).`);
+    console.log(`Données d'entrée (${Date.now() - inputsStart} ms) : ${Object.entries(inputs.sheets).map(([name, list]) => `${name} ${list.length}`).join(', ')} ligne(s).`);
     if (options.withAnswers) {
       const questions = await EconomicActorQuestion.find({}).sort({ order: 1, createdAt: 1 });
       const answers = await EconomicActorAnswer.find({ economic_actor_id: { $in: actors.map((actor) => String(actor._id)) } });
@@ -328,7 +335,7 @@ async function main() {
       console.log(`Réponses acteurs éco : ${answersRows.length} ligne(s), ${answers.length} réponse(s) saisie(s).`);
     }
     await fs.promises.mkdir(path.dirname(options.out), { recursive: true });
-    await workbook.xlsx.writeFile(options.out);
+    await writeWorkbook(workbook, options.out, appended);
     console.log(`Résumé : ${ok} OK, ${ko} KO, ${rows.length} ligne(s) → ${options.out}`);
     if (ko) exitCode = 1;
   } catch (error) {
