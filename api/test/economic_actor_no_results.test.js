@@ -33,11 +33,13 @@ const users = {
   adminAeInCol: { _id: 'u-admin-ae', name: 'Admin AE', role: 'admin', collectivities: [{ role: 'economic_actor', id: 'col-a', status: 'approved' }] },
   member: { _id: 'u-member', name: 'Membre A', role: 'user', collectivities: [{ id: 'col-a', role: 'user', status: 'approved' }] },
   ae: { _id: 'u-ae', name: 'AE', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'user', status: 'approved' }] },
-  // Rôle global 'user', mais acteur économique dans col-a (rôle attribué par collectivité) et simple membre de col-b
   // Ancien membre d'une organisation : rôle global 'user', identifiant d'organisation resté sur le compte
   formerAe: { _id: 'u-former-ae', name: 'Ancien AE', role: 'user', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'economic_actor', status: 'approved' }] },
+  // Compte acteur économique sans organisation
+  aeNoOrg: { _id: 'u-ae-no-org', name: 'AE sans organisation', role: 'economic_actor', collectivities: [{ id: 'col-a', role: 'user', status: 'approved' }] },
   // Compte acteur économique en attente d'approbation dans col-a
   aePending: { _id: 'u-ae-pending', name: 'AE en attente', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'user', status: 'pending' }] },
+  // Rôle global 'user', mais acteur économique dans col-a (rôle attribué par collectivité) et simple membre de col-b
   aeInCol: {
     _id: 'u-ae-col',
     name: 'AE par collectivité',
@@ -231,6 +233,11 @@ describe("Résultats des actions d'un acteur économique", () => {
     test(`POST ${path} : un ancien membre d'organisation (rôle global utilisateur) reste refusé`, async () => {
       assertForbidden(await call(path, 'formerAe', actionBody('act-ae1')));
       assertForbidden(await call(path, 'formerAe', actionBody('act-global')));
+    });
+
+    test(`POST ${path} : un acteur économique sans organisation est refusé`, async () => {
+      assertForbidden(await call(path, 'aeNoOrg', actionBody('act-ae1')));
+      assertForbidden(await call(path, 'aeNoOrg', actionBody('act-global')));
     });
 
     test(`POST ${path} : un acteur économique non approuvé dans la collectivité est refusé`, async () => {
