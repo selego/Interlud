@@ -72,7 +72,7 @@ const updateOnboardingStatus = async (action) => {
 router.post('/stats', passport.authenticate(['admin', 'user'], { session: false, failWithError: true }), async (req, res) => {
   try {
     const { action_id } = req.body;
-    if (!action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
+    if (!isObjectId(action_id)) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
 
     const matchQuery = { action_id, indicator_excel_id: { $nin: HIDDEN_IDS } };
     matchQuery.owner = req.body.owner || 'collectivity';
@@ -85,7 +85,8 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
 
     // Parallel: fetch indicator values + config action at the same time
     const [indicatorValues, configAction] = await Promise.all([IndicatorValue.find(matchQuery), Action.findById(action_id)]);
-    if (configAction && !canReadAction(req.user, configAction)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
+    if (!configAction) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canReadAction(req.user, configAction)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     // Build situationYears + collect condExcelIds in a single pass
     const situationYears = {};

@@ -42,6 +42,7 @@ const users = {
   memberB: { _id: 'u-member-b', name: 'Membre B', role: 'user', collectivities: [{ id: 'col-b', role: 'admin', status: 'approved' }] },
   noCollectivity: { _id: 'u-none', name: 'Sans collectivité', role: 'user', collectivities: [] },
   aeOwner: { _id: 'u-ae-1', name: 'AE 1', role: 'economic_actor', economic_actor_id: 'ea-1', collectivities: [{ id: 'col-a', role: 'economic_actor', status: 'approved' }] },
+  aeKeptMembership: { _id: 'u-ae-3', name: 'AE 3, ancienne adhésion conservée', role: 'economic_actor', economic_actor_id: 'ea-3', collectivities: [{ id: 'col-a', role: 'admin', status: 'approved' }] },
   aeOther: { _id: 'u-ae-2', name: 'AE 2', role: 'economic_actor', economic_actor_id: 'ea-2', collectivities: [{ id: 'col-a', role: 'economic_actor', status: 'approved' }] },
 };
 
@@ -101,7 +102,7 @@ beforeEach(() => {
 
 // Comptes autorisés / refusés par action
 const CASES = [
-  { label: "action d'une collectivité", id: ACTION_COL, allowed: ['admin', 'memberA', 'adminA', 'aeRoleMemberA'], forbidden: ['aeOwner', 'aeOther', 'memberB', 'pendingA', 'rejectedA', 'noCollectivity'] },
+  { label: "action d'une collectivité", id: ACTION_COL, allowed: ['admin', 'memberA', 'adminA', 'aeRoleMemberA'], forbidden: ['aeOwner', 'aeOther', 'aeKeptMembership', 'memberB', 'pendingA', 'rejectedA', 'noCollectivity'] },
   { label: "action d'un acteur économique", id: ACTION_AE, allowed: ['admin', 'aeOwner', 'memberA', 'adminA', 'aeRoleMemberA'], forbidden: ['aeOther', 'memberB', 'pendingA', 'noCollectivity'] },
   { label: 'fiche du catalogue', id: ACTION_GLOBAL, allowed: Object.keys(users), forbidden: [] },
   { label: 'fiche du catalogue fermée aux acteurs économiques', id: ACTION_GLOBAL_CLOSED, allowed: Object.keys(users), forbidden: [] },
@@ -131,6 +132,17 @@ for (const c of CASES) {
     }
   });
 }
+
+describe('POST /indicator_value/stats — une seule action par appel', () => {
+  test('400 quand action_id est un filtre et non un identifiant', async () => {
+    const res = await call('POST', '/indicator_value/stats', 'memberB', { action_id: { $in: [ACTION_GLOBAL, ACTION_COL] } });
+    assert.equal(res.status, 400);
+  });
+
+  test('404 pour une action inexistante', async () => {
+    assert.equal((await call('POST', '/indicator_value/stats', 'memberA', { action_id: UNKNOWN })).status, 404);
+  });
+});
 
 describe('GET /action/:id — cas limites', () => {
   test('refusé sans authentification', async () => {
