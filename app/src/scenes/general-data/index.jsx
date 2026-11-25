@@ -303,7 +303,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
     )
   }
 
-  const handleSaveIndicatorValue = async (indicatorValue) => {
+  const handleSaveIndicatorValue = async (indicatorValue, source = "manual") => {
     // Les acteurs économiques ne voient pas le dashboard : message neutre
     toast.loading(areResultsHidden(user, collectivity) ? "Valeur enregistrée" : "Valeur enregistrée, modification du dashboard en cours...", { id: "indicator-save" })
     try {
@@ -317,7 +317,7 @@ function IndicatorView({ activeConfigAction, activeSituation, activeYear, onStat
           return next
         })
       }
-      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source: "manual", ...indicatorValue })
+      const { ok, code } = await api.put(`/indicator_value/${indicatorValue._id}`, { source, ...indicatorValue })
       if (!ok) return toast.error(code || "Une erreur est survenue", { id: "indicator-save" })
       await Promise.all([onStatsRefresh(), refreshDynamicFields()])
       toast.success("Valeur enregistrée", { id: "indicator-save" })

@@ -8,7 +8,7 @@ const { capture } = require('../services/sentry');
 const Log = require('../models/log');
 const Action = require('../models/action');
 const Indicator = require('../models/indicator');
-const { updateExcelCellByIndicatorId, importSheetsToExcelFile } = require('../services/microsoftGraph');
+const { updateExcelCellByIndicatorId, importSheetsToExcelFile, masterExcelVersion } = require('../services/microsoftGraph');
 const { enqueueCellUpdate, enqueueAggregation, isSyncPending } = require('../services/excelSync');
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
@@ -17,6 +17,8 @@ const { canEditAction, propagationScope, isObjectId } = require('../utils/collec
 const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicNames, collectConditionExcelIds } = require('../utils/indicators');
 // Champs d'une valeur qui déterminent son rattachement et la propagation de sa saisie
 const IDENTITY_FIELDS = ['action_id', 'collectivity_id', 'owner', 'economic_actor_id', 'indicator_id', 'situation', 'year'];
+// Clé du journal (schéma log) pour une valeur vidée, selon le type de l'indicateur
+const EMPTY_VALUE_LOG_TYPES = { number: 'number', text: 'string', radio: 'string', checkbox: 'array' };
 const SITUATION_SHEETS = [
   { sheetName: 'Remplissage - Sit. Init.', situation: 'init' },
   { sheetName: 'Remplissage - Sit. Ref.', situation: 'ref' },
@@ -326,6 +328,8 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
       let logType = typeof actualNewValue;
       if (actualNewValue instanceof Date) logType = 'date';
       if (Array.isArray(actualNewValue)) logType = 'array';
+      // Champ vidé : le log reste sous le type de l'indicateur, pour conserver l'ancienne valeur
+      if (field === 'value' && actualNewValue == null) logType = EMPTY_VALUE_LOG_TYPES[indicatorValue.indicator_type] || logType;
 
       const log = {
         model_name: 'indicator_value',
@@ -337,6 +341,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         type_value: logType,
         date: new Date(),
         source: req.body.source || indicatorValue.value_source,
+        master_version: masterExcelVersion,
         user_id: req.user._id,
         user_name: req.user.name,
         user_email: req.user.email,
@@ -443,6 +448,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
         let logType = typeof actualNewValue;
         if (actualNewValue instanceof Date) logType = 'date';
         if (Array.isArray(actualNewValue)) logType = 'array';
+        if (actualNewValue == null) logType = EMPTY_VALUE_LOG_TYPES[indicatorValue.indicator_type] || logType;
 
         const syncLog = {
           model_name: 'indicator_value',
@@ -454,6 +460,7 @@ router.put('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
           type_value: logType,
           date: new Date(),
           source: 'synchronization',
+          master_version: masterExcelVersion,
           user_id: req.user._id,
           user_name: req.user.name,
           user_email: req.user.email,
@@ -770,17 +777,20 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
         const isNewEmpty = convertedValue == null || convertedValue === '' || (Array.isArray(convertedValue) && convertedValue.length === 0);
         if (isOldEmpty && isNewEmpty) continue;
         if (JSON.stringify(oldValue) === JSON.stringify(convertedValue)) continue;
+        let logType = Array.isArray(convertedValue) ? 'array' : typeof convertedValue;
+        if (convertedValue == null) logType = EMPTY_VALUE_LOG_TYPES[indicatorValue.indicator_type] || logType;
         logs.push(
           new Log({
             model_name: 'indicator_value',
             name: indicator.name,
             field: 'value',
             operation: 'update',
-            new_value: { [Array.isArray(convertedValue) ? 'array' : typeof convertedValue]: convertedValue },
+            new_value: { [logType]: convertedValue },
             previous_value: { [Array.isArray(oldValue) ? 'array' : typeof oldValue]: oldValue },
-            type_value: Array.isArray(convertedValue) ? 'array' : typeof convertedValue,
+            type_value: logType,
             date: new Date(),
             source: 'import_excel',
+            master_version: masterExcelVersion,
             user_id: req.user._id,
             user_name: req.user.name,
             user_email: req.user.email,
@@ -837,6 +847,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
           let logType = typeof newTypedValue;
           if (newTypedValue instanceof Date) logType = 'date';
           if (Array.isArray(newTypedValue)) logType = 'array';
+          if (newTypedValue == null) logType = EMPTY_VALUE_LOG_TYPES[indicatorValue.indicator_type] || logType;
 
           syncLogs.push({
             model_name: 'indicator_value',
@@ -848,6 +859,7 @@ router.post('/importIndicatorValues', passport.authenticate(['admin', 'user'], {
             type_value: logType,
             date: new Date(),
             source: 'synchronization',
+            master_version: masterExcelVersion,
             user_id: req.user._id,
             user_name: req.user.name,
             user_email: req.user.email,

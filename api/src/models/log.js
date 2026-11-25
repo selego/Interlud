@@ -28,6 +28,8 @@ const Schema = new mongoose.Schema(
     type_value: { type: String },
     date: { type: Date, default: Date.now },
     source: { type: String, enum: ['manual', 'import_excel', 'default_value', 'synchronization', 'restore'] },
+    // Version du classeur Excel maître au moment de l'écriture (logs de valeur uniquement, absente des anciens logs)
+    master_version: { type: String },
 
     // References
     user_id: { type: String },
