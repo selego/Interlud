@@ -1024,14 +1024,15 @@ async function notifyEconomicActorJoined(user, actor, collectivity) {
   const admins = await UserObject.find({ collectivities: { $elemMatch: { id: collectivityId, role: 'admin', status: 'approved' } } });
   const who = actor.name ? `${user.name} (${actor.name})` : user.name;
   for (const admin of admins) {
-    if (admin.notifications_push === false) continue;
+    // Pas de notification pour soi-même, ni pour qui a désactivé les notifications dans l'application
+    if (String(admin._id) === String(user._id) || admin.notifications_push === false) continue;
+    // Un échec pour un destinataire n'empêche pas de prévenir les suivants
     await Notification.create({
       message: `${who} a rejoint la collectivité ${collectivity.name}`,
       user_id: admin._id,
-      user_name: admin.name,
       user_email: admin.email,
       redirect: `${config.APP_URL}/collectivity?collectivityId=${collectivityId}`,
-    });
+    }).catch(capture);
   }
 }
 

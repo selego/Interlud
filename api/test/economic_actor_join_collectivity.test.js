@@ -105,7 +105,7 @@ EconomicActor.updateOne = async (filter, update) => {
 };
 let notificationFailure;
 Notification.create = async (payload) => {
-  if (notificationFailure) throw new Error('Cannot create notification');
+  if (notificationFailure === true || notificationFailure === payload.user_id) throw new Error('Cannot create notification');
   notifications.push(payload);
 };
 brevo.sendEmail = async (html, options) => emails.push(options);
@@ -177,7 +177,6 @@ test("un acteur économique sans territoire rejoint immédiatement la collectivi
     {
       message: 'AE (Transporteur) a rejoint la collectivité Territoire A',
       user_id: 'u-admin-col',
-      user_name: 'Admin collectivité',
       user_email: 'admin@exemple.fr',
       redirect: `${require('../src/config').APP_URL}/collectivity?collectivityId=${COL_A}`,
     },
@@ -202,6 +201,25 @@ test("un administrateur qui a désactivé les notifications dans l'application n
   assert.equal(res.status, 200);
   assert.equal(notifications.length, 0);
   assert.equal(emails.length, 0);
+});
+
+test("un acteur économique aussi administrateur de la collectivité ne reçoit pas sa propre notification", async () => {
+  users.find((u) => u._id === 'u-ae').collectivities.push({ id: COL_B, role: 'admin', status: 'approved' });
+
+  const res = await requestAccess('u-ae', COL_B);
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(notifications.map((n) => n.user_id), ['u-admin-col-b']);
+});
+
+test("si la notification d'un administrateur échoue, les autres sont quand même prévenus", async () => {
+  users.push(makeUser({ _id: 'u-admin-col-2', name: 'Second admin', role: 'user', email: 'second@exemple.fr', collectivities: [{ id: COL_A, role: 'admin', status: 'approved' }] }));
+  notificationFailure = 'u-admin-col';
+
+  const res = await requestAccess('u-ae', COL_A);
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(notifications.map((n) => n.user_id), ['u-admin-col-2']);
 });
 
 test('requête rejouée : une seule notification', async () => {
