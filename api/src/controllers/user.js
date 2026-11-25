@@ -930,7 +930,9 @@ router.post('/request-collectivity-access', passport.authenticate('user', { sess
     if (user.role === 'economic_actor') {
       const actor = mongoose.isValidObjectId(user.economic_actor_id) ? await EconomicActor.findById(user.economic_actor_id) : null;
       if (!actor) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
-      await attachCollectivityToEconomicActor(actor._id.toString(), collectivity);
+      const joined = await attachCollectivityToEconomicActor(actor._id.toString(), collectivity);
+      // Information des administrateurs de la collectivité (pas de mail) ; un échec n'annule pas le rattachement
+      if (joined) await notifyEconomicActorJoined(user, actor, collectivity).catch(capture);
       return res.status(200).send({ ok: true, data: await UserObject.findById(user._id) });
     }
 
@@ -1007,16 +1009,30 @@ router.post('/request-collectivity-access', passport.authenticate('user', { sess
 // Les demandes simultanées pour un même couple organisation / collectivité partagent le même traitement.
 // Ce partage est propre au processus (l'API tourne sur une seule instance) ; entre plusieurs instances, les
 // écritures conditionnelles ci-dessous garantissent quand même une seule entrée et un seul fichier référencé.
+// Renvoie true seulement à la demande qui a effectivement ajouté l'organisation à la collectivité.
 const attachesInProgress = new Map();
 function attachCollectivityToEconomicActor(actorId, collectivity) {
   const key = `${actorId}:${collectivity._id}`;
-  if (!attachesInProgress.has(key)) {
-    attachesInProgress.set(
-      key,
-      runAttachCollectivityToEconomicActor(actorId, collectivity).finally(() => attachesInProgress.delete(key))
-    );
+  if (attachesInProgress.has(key)) return attachesInProgress.get(key).then(() => false);
+  const attach = runAttachCollectivityToEconomicActor(actorId, collectivity).finally(() => attachesInProgress.delete(key));
+  attachesInProgress.set(key, attach);
+  return attach;
+}
+
+async function notifyEconomicActorJoined(user, actor, collectivity) {
+  const collectivityId = collectivity._id.toString();
+  const admins = await UserObject.find({ collectivities: { $elemMatch: { id: collectivityId, role: 'admin', status: 'approved' } } });
+  const who = actor.name ? `${user.name} (${actor.name})` : user.name;
+  for (const admin of admins) {
+    if (admin.notifications_push === false) continue;
+    await Notification.create({
+      message: `${who} a rejoint la collectivité ${collectivity.name}`,
+      user_id: admin._id,
+      user_name: admin.name,
+      user_email: admin.email,
+      redirect: `${config.APP_URL}/collectivity?collectivityId=${collectivityId}`,
+    });
   }
-  return attachesInProgress.get(key);
 }
 
 async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
@@ -1031,6 +1047,7 @@ async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
   // Le nom de l'organisation, saisi librement, est réduit aux lettres, chiffres, espaces, points et tirets.
   const actorFileName = toSafeFileName(actor.name);
   const existing = actor.collectivities?.find((c) => c.id === collectivityId);
+  let joined = false;
   if (!existing?.aggregation_excel_file_id) {
     const aggregation_excel_file_id = await microsoftGraph.duplicateExcelFile(
       [actorFileName, collectivity.name, actor._id, 'Aggregation_V5.xlsx'].filter(Boolean).join(' - '),
@@ -1039,10 +1056,11 @@ async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
     );
     // Écritures conditionnelles : ni doublon de collectivité, ni fichier existant écrasé. Les deux sont tentées,
     // l'entrée ayant pu être ajoutée sans fichier entre-temps (approbation par la collectivité).
-    await EconomicActor.updateOne(
+    const added = await EconomicActor.updateOne(
       { _id: actor._id, 'collectivities.id': { $ne: collectivityId } },
       { $push: { collectivities: { id: collectivityId, name: collectivity.name, joined_at: new Date(), aggregation_excel_file_id } } }
     );
+    joined = added.modifiedCount === 1;
     await EconomicActor.updateOne(
       { _id: actor._id, collectivities: { $elemMatch: { id: collectivityId, aggregation_excel_file_id: { $in: [null, ''] } } } },
       { $set: { 'collectivities.$.aggregation_excel_file_id': aggregation_excel_file_id } }
@@ -1056,6 +1074,7 @@ async function runAttachCollectivityToEconomicActor(actorId, collectivity) {
     { ...members, 'collectivities.id': { $ne: collectivityId } },
     { $push: { collectivities: { id: collectivityId, name: collectivity.name, role: 'economic_actor', status: 'approved' } } }
   );
+  return joined;
 }
 
 module.exports = router;
