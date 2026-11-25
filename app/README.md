@@ -17,6 +17,8 @@ Prérequis : Node.js 18+, l'API lancée sur le port 8080 (voir [api/README.md](.
 
 Pas de fichier `.env` : l'environnement est déduit de l'URL dans `src/config.js` (`localhost` → API locale, sinon API de production).
 
+Seule variable d'environnement, facultative : `SENTRY_URL` (DSN Sentry du front). Elle est lue au moment du build (`vite.config.js`) et inscrite dans le bundle ; il faut donc rebuilder après l'avoir changée. Sans elle, Sentry n'est pas initialisé. Ne jamais committer sa valeur.
+
 ## Stack
 
 - React 18 + Vite, React Router v6

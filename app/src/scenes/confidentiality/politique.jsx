@@ -1,4 +1,5 @@
 import React from "react"
+import { RGPD_LAST_UPDATE } from "@/utils/constants"
 
 export default function Politique() {
   return (
@@ -6,7 +7,7 @@ export default function Politique() {
       <div className="bg-white rounded-lg shadow-sm p-8 space-y-6">
         <div className="border-b border-gray-200 pb-4">
           <h1 className="text-3xl font-bold text-gray-900">Politique de Confidentialité</h1>
-          <p className="text-sm text-gray-500 mt-2">Dernière mise à jour : {new Date().toLocaleDateString('fr-FR')}</p>
+          <p className="text-sm text-gray-500 mt-2">Dernière mise à jour : {new Date(RGPD_LAST_UPDATE).toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</p>
         </div>
 
         <div className="prose max-w-none space-y-6">

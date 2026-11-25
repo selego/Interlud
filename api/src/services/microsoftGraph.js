@@ -7,6 +7,8 @@ const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const sharePointSiteName = 'selegobv';
 const masterExcelFileId = '01IBL4ADMNNAK2EMK5EJEZ76LVHNKOEVBJ';
+// Version du master ci-dessus, enregistrée dans l'historique des valeurs : à changer en même temps que l'ID
+const masterExcelVersion = 'V45';
 // Agrégation résultats charte_V5.xlsx
 const aggregationTemplateFileId = '01IBL4ADMXS4VGWITQ5ZEKM3NACKQK5HNM';
 
@@ -501,6 +503,7 @@ module.exports = {
   graphFetch,
   getSiteId,
   sharePointSiteName,
+  masterExcelVersion,
   aggregationTemplateFileId,
   createFolder,
   updateExcelCellByIndicatorId,
