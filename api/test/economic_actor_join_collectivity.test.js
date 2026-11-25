@@ -46,6 +46,8 @@ beforeEach(() => {
     makeUser({ _id: 'u-ae-org-invalide', name: 'AE organisation invalide', role: 'economic_actor', economic_actor_id: 'pas-un-id' }),
     makeUser({ _id: 'u-public', name: 'Acteur public', role: 'user' }),
     makeUser({ _id: 'u-admin-col', name: 'Admin collectivité', role: 'user', email: 'admin@exemple.fr', collectivities: [{ id: COL_A, role: 'admin', status: 'approved' }] }),
+    makeUser({ _id: 'u-admin-col-attente', name: 'Admin en attente', role: 'user', email: 'attente@exemple.fr', collectivities: [{ id: COL_A, role: 'admin', status: 'pending' }] }),
+    makeUser({ _id: 'u-admin-col-b', name: 'Admin B', role: 'user', email: 'b@exemple.fr', collectivities: [{ id: COL_B, role: 'admin', status: 'approved' }] }),
   ];
   actors = [
     { _id: EA_1, name: 'Transporteur', collectivities: [] },
@@ -54,6 +56,7 @@ beforeEach(() => {
   duplicateCalls = [];
   duplicateFailure = false;
   notifications = [];
+  notificationFailure = false;
   emails = [];
 });
 
@@ -65,7 +68,10 @@ const collectivities = [
 User.findOne = async (query) => users.find((u) => u._id === query._id) || null;
 User.findById = async (id) => users.find((u) => u._id === id) || null;
 User.find = async (query) => {
-  if (query.collectivities) return users.filter((u) => u.collectivities.some((c) => c.id === query.collectivities.$elemMatch.id && c.role === query.collectivities.$elemMatch.role));
+  if (query.collectivities) {
+    const { id, role, status } = query.collectivities.$elemMatch;
+    return users.filter((u) => u.collectivities.some((c) => c.id === id && c.role === role && (!status || c.status === status)));
+  }
   return users.filter((u) => u.economic_actor_id === query.economic_actor_id && (!query.role || u.role === query.role));
 };
 User.updateMany = async (filter, update) => {
@@ -97,7 +103,11 @@ EconomicActor.updateOne = async (filter, update) => {
   entry.aggregation_excel_file_id = update.$set['collectivities.$.aggregation_excel_file_id'];
   return { modifiedCount: 1 };
 };
-Notification.create = async (payload) => notifications.push(payload);
+let notificationFailure;
+Notification.create = async (payload) => {
+  if (notificationFailure === true || notificationFailure === payload.user_id) throw new Error('Cannot create notification');
+  notifications.push(payload);
+};
 brevo.sendEmail = async (html, options) => emails.push(options);
 let duplicateFailure;
 microsoftGraph.duplicateExcelFile = async (name, folderId, templateId) => {
@@ -162,9 +172,77 @@ test("un acteur économique sans territoire rejoint immédiatement la collectivi
   assert.equal(entryOf('u-ae-autre', COL_A), undefined);
   assert.equal(actors[1].collectivities.length, 0);
 
-  // Aucune action requise : pas de demande envoyée aux administrateurs
+  // Les administrateurs approuvés de la collectivité sont informés dans l'application, sans mail
+  assert.deepEqual(notifications, [
+    {
+      message: 'AE (Transporteur) a rejoint la collectivité Territoire A',
+      user_id: 'u-admin-col',
+      user_email: 'admin@exemple.fr',
+      redirect: `${require('../src/config').APP_URL}/collectivity?collectivityId=${COL_A}`,
+    },
+  ]);
+  assert.equal(emails.length, 0);
+});
+
+test("organisation sans nom : la notification n'a pas de parenthèse", async () => {
+  actors[0].name = '';
+
+  await requestAccess('u-ae', COL_A);
+
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].message, 'AE a rejoint la collectivité Territoire A');
+});
+
+test("un administrateur qui a désactivé les notifications dans l'application n'en reçoit pas", async () => {
+  users.find((u) => u._id === 'u-admin-col').notifications_push = false;
+
+  const res = await requestAccess('u-ae', COL_A);
+
+  assert.equal(res.status, 200);
   assert.equal(notifications.length, 0);
   assert.equal(emails.length, 0);
+});
+
+test("un acteur économique aussi administrateur de la collectivité ne reçoit pas sa propre notification", async () => {
+  users.find((u) => u._id === 'u-ae').collectivities.push({ id: COL_B, role: 'admin', status: 'approved' });
+
+  const res = await requestAccess('u-ae', COL_B);
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(notifications.map((n) => n.user_id), ['u-admin-col-b']);
+});
+
+test("si la notification d'un administrateur échoue, les autres sont quand même prévenus", async () => {
+  users.push(makeUser({ _id: 'u-admin-col-2', name: 'Second admin', role: 'user', email: 'second@exemple.fr', collectivities: [{ id: COL_A, role: 'admin', status: 'approved' }] }));
+  notificationFailure = 'u-admin-col';
+
+  const res = await requestAccess('u-ae', COL_A);
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(notifications.map((n) => n.user_id), ['u-admin-col-2']);
+});
+
+test('requête rejouée : une seule notification', async () => {
+  const first = await requestAccess('u-ae', COL_A);
+  const second = await requestAccess('u-ae', COL_A);
+  const colleague = await requestAccess('u-ae-collegue', COL_A);
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(colleague.status, 200);
+  assert.equal(notifications.length, 1);
+});
+
+test("si la notification échoue, le rattachement est quand même acquis", async () => {
+  notificationFailure = true;
+
+  const res = await requestAccess('u-ae', COL_A);
+
+  assert.equal(res.status, 200);
+  assert.equal(entryOf('u-ae', COL_A).status, 'approved');
+  assert.equal(entryOf('u-ae-collegue', COL_A).status, 'approved');
+  assert.equal(actors[0].collectivities.length, 1);
+  assert.equal(notifications.length, 0);
 });
 
 test('un acteur économique refusé auparavant peut redemander et est rattaché', async () => {
@@ -197,6 +275,7 @@ test("organisation déjà rattachée : aucun nouveau fichier d'agrégation, le m
   assert.equal(first.status, 200);
   assert.equal(second.status, 200);
   assert.equal(duplicateCalls.length, 0);
+  assert.equal(notifications.length, 0);
   assert.equal(actors[0].collectivities.length, 1);
   assert.equal(actors[0].collectivities[0].aggregation_excel_file_id, 'agg-existant');
   assert.equal(users[0].collectivities.filter((c) => c.id === COL_A).length, 1);
@@ -208,6 +287,7 @@ test("deux demandes simultanées (deux membres de la même organisation) : un se
   assert.equal(first.status, 200);
   assert.equal(second.status, 200);
   assert.equal(duplicateCalls.length, 1);
+  assert.equal(notifications.length, 1);
   assert.equal(actors[0].collectivities.length, 1);
   assert.equal(entryOf('u-ae', COL_A).status, 'approved');
   assert.equal(entryOf('u-ae-collegue', COL_A).status, 'approved');
@@ -323,8 +403,12 @@ test('un acteur public reste en attente de validation et les administrateurs son
   assert.equal(entryOf('u-public', COL_A).status, 'pending');
   assert.equal(entryOf('u-public', COL_A).role, 'user');
   assert.equal(duplicateCalls.length, 0);
-  assert.equal(notifications.length, 1);
-  assert.equal(emails.length, 1);
+  // Inchangé : tous les administrateurs de la collectivité (même en attente), notification et mail
+  assert.deepEqual(notifications.map((n) => [n.user_id, n.message]), [
+    ['u-admin-col', 'Acteur public a demandé à rejoindre la collectivité Territoire A'],
+    ['u-admin-col-attente', 'Acteur public a demandé à rejoindre la collectivité Territoire A'],
+  ]);
+  assert.equal(emails.length, 2);
 
   const again = await requestAccess('u-public', COL_A);
   assert.equal(again.status, 409);
