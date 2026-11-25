@@ -13,7 +13,7 @@ const { enqueueCellUpdate, enqueueAggregation, isSyncPending } = require('../ser
 const Collectivity = require('../models/collectivity');
 const EconomicActor = require('../models/economic_actor');
 const { isIndicatorValueFilled, computeActionCompletion } = require('../utils/completion');
-const { canEditAction, propagationScope, isObjectId } = require('../utils/collectivityAccess');
+const { canEditAction, canReadAction, propagationScope, isObjectId } = require('../utils/collectivityAccess');
 const { HIDDEN_IDS, isPercentUnit, buildYearMappings, shouldDisplayIndicator, resolveDynamicPossibilities, resolveDynamicNames, collectConditionExcelIds } = require('../utils/indicators');
 // Champs d'une valeur qui déterminent son rattachement et la propagation de sa saisie
 const IDENTITY_FIELDS = ['action_id', 'collectivity_id', 'owner', 'economic_actor_id', 'indicator_id', 'situation', 'year'];
@@ -85,6 +85,7 @@ router.post('/stats', passport.authenticate(['admin', 'user'], { session: false,
 
     // Parallel: fetch indicator values + config action at the same time
     const [indicatorValues, configAction] = await Promise.all([IndicatorValue.find(matchQuery), Action.findById(action_id)]);
+    if (configAction && !canReadAction(req.user, configAction)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     // Build situationYears + collect condExcelIds in a single pass
     const situationYears = {};
@@ -568,6 +569,7 @@ router.post('/export_indicator_values_excel', passport.authenticate(['admin', 'u
     if (!req.body.action_id) return res.status(400).send({ ok: false, code: ERROR_CODES.INVALID_BODY });
     const action = await Action.findById(req.body.action_id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canReadAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     const query = { action_id: action._id, indicator_excel_id: { $nin: HIDDEN_IDS } };
     if (req.body.situation) query.situation = req.body.situation;
