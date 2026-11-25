@@ -15,7 +15,7 @@ const { refreshDefaultsForFile, syncIndicatorValuesToExcel, getActionScopeIds } 
 //        temporaire "DRYRUN_…" du dossier SharePoint de la collectivité, écriture des valeurs F depuis la base, recalcul, relecture des
 //        défauts, puis suppression du fichier temporaire. Seul effet de bord : ce fichier temporaire, supprimé à la fin.
 
-const MASTER_FILE_ID = "01IBL4ADNDE2JFJTPINBGKQSUGPXLK7DQN";
+const MASTER_FILE_ID = "01IBL4ADOALEXOBXQDJFCZGA6265HTAGXV";
 const args = process.argv.slice(2);
 const fresh = args.includes("--fresh");
 const [collectivityArg, actionArg] = args.filter((a) => a !== "--fresh");
