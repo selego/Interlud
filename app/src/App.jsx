@@ -35,7 +35,7 @@ import api from "@/services/api"
 
 import { environment, SENTRY_URL } from "./config"
 
-if (environment === "production") {
+if (environment === "production" && SENTRY_URL) {
   Sentry.init({ dsn: SENTRY_URL, environment: "app" })
 }
 

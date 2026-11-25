@@ -13,7 +13,9 @@ export default defineConfig({
     port: 3000
   },
   define: {
-    process: { env: {} }
+    process: { env: {} },
+    // DSN Sentry du front, lu dans l'environnement au moment du build (vide si la variable est absente)
+    'process.env.SENTRY_URL': JSON.stringify(process.env.SENTRY_URL || '')
   },
 
   resolve: {

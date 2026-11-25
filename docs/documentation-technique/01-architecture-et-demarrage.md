@@ -148,11 +148,11 @@ Les variables d'environnement sont exportées depuis ce fichier. Exception : les
 
 > 🔒 `SECRET`, `CLIENT_SECRET`, `JOPTIMIZ_CLIENT_SECRET` et `BREVO_KEY` sont des secrets. Ils ne sont jamais versionnés ni inclus dans une copie de ce document destinée à un tiers ; ils sont gérés via le coffre de variables d'environnement de CleverCloud.
 
-### App (`app/.env`)
+### App (environnement du build)
 
 | Variable | Description |
 |----------|-------------|
-| `SENTRY_URL` | DSN Sentry frontend |
+| `SENTRY_URL` | DSN Sentry frontend, facultatif. Lu au moment du build (`npm run build`), pas à l'exécution ; sans lui, Sentry n'est pas initialisé |
 
 L'URL de l'API est déterminée automatiquement par `config.js` selon l'environnement détecté (voir [Application frontend §5](04-frontend.md#5-utilitaires-frontend)).
 
