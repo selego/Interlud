@@ -36,7 +36,15 @@ import api from "@/services/api"
 import { environment, SENTRY_URL } from "./config"
 
 if (environment === "production" && SENTRY_URL) {
-  Sentry.init({ dsn: SENTRY_URL, environment: "app" })
+  // Replays : toutes les sessions sont enregistrées, textes et champs visibles.
+  // Les champs mot de passe restent toujours masqués (imposé par le SDK Sentry).
+  Sentry.init({
+    dsn: SENTRY_URL,
+    environment: "app",
+    integrations: [new Sentry.Replay({ maskAllText: false, maskAllInputs: false, blockAllMedia: false })],
+    replaysSessionSampleRate: 1.0,
+    replaysOnErrorSampleRate: 1.0
+  })
 }
 
 function ScrollToTop() {
