@@ -340,6 +340,22 @@ describe('script', () => {
     assert.deepEqual(rest, ['Garder', '• Valeurs — exemple', README_BULLET]);
   });
 
+  test('Lisez-moi : une ancienne ligne de version au-dessus du titre est remplacée sous le titre', () => {
+    const wb = new ExcelJS.Workbook();
+    const readme = wb.addWorksheet('Lisez-moi');
+    [`${README_VERSION_PREFIX} V45. Export du 01/01/2026.`, README_TITLE, 'Suite'].forEach((value, index) => {
+      readme.getCell(index + 1, 1).value = value;
+    });
+    for (let run = 0; run < 2; run++) {
+      addCalculatedValuesSheet(wb, []);
+      const [title, version, ...rest] = readme.getColumn(1).values.slice(1);
+      assert.equal(title, README_TITLE);
+      assert.ok(version.startsWith(`${README_VERSION_PREFIX} V`) && !version.includes('V45'));
+      assert.deepEqual(rest.filter((value) => String(value).startsWith(README_VERSION_PREFIX)), []);
+      assert.equal(rest[0], 'Suite');
+    }
+  });
+
   test('les exemples du template sont retirés avant la création de l’onglet', (t) => {
     const wb = new ExcelJS.Workbook();
     const values = wb.addWorksheet('Valeurs');

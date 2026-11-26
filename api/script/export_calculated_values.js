@@ -194,10 +194,10 @@ const addReadmeBullet = (workbook) => {
 const addReadmeVersion = (workbook, date = new Date()) => {
   const sheet = workbook.getWorksheet('Lisez-moi');
   if (!sheet) return;
-  const values = Array.from(sheet.getColumn(1).values, (value) => String(value || ''));
-  const existing = values.findIndex((value) => value.startsWith(README_VERSION_PREFIX));
+  const column = () => Array.from(sheet.getColumn(1).values, (value) => String(value || ''));
+  const existing = column().findIndex((value) => value.startsWith(README_VERSION_PREFIX));
   if (existing !== -1) sheet.spliceRows(existing, 1);
-  const titleRow = values.indexOf(README_TITLE);
+  const titleRow = column().indexOf(README_TITLE);
   sheet.insertRow(titleRow === -1 ? 1 : titleRow + 1, [
     `${README_VERSION_PREFIX} ${masterExcelVersion}. Export du ${date.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}.`,
   ]);
