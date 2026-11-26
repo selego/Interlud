@@ -16,18 +16,34 @@ export default function Index() {
   const { id } = useParams();
   const { user, collectivity } = useStore();
   const [action, setAction] = useState(null);
+  const [errorCode, setErrorCode] = useState(null);
   const fetchAction = async () => {
     try {
       const { ok, data, code } = await api.get(`/action/${id}`);
-      if (!ok) return toast.error(code || "Une erreur est survenue");
+      if (!ok) {
+        setErrorCode(code || "une erreur est survenue");
+        return toast.error(code || "Une erreur est survenue");
+      }
       setAction(data);
   } catch (error) {
+      setErrorCode("une erreur est survenue");
       toast.error("Une erreur est survenue");
     }
   };
   useEffect(() => {
+    setAction(null);
+    setErrorCode(null);
     fetchAction();
   }, [id]);
+
+  // Action refusée ou introuvable : un message plutôt qu'un chargement sans fin
+  if (!action && errorCode) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-lg text-gray-600">
+        Impossible d'ouvrir cette action : {errorCode}
+      </div>
+    </div>
+  );
 
   if (!action) return (
     <div className="flex items-center justify-center min-h-screen">
