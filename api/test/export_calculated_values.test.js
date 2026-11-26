@@ -238,7 +238,7 @@ describe('script', () => {
     assert.ok(sheet.autoFilter);
     assert.equal(readme.getCell('A11').value, README_BULLET);
     assert.equal(readme.getColumn(1).values.filter((value) => value === README_BULLET).length, 1);
-    assert.match(readme.getCell('A1').value, /^Version du classeur de calcul \(master Excel\) : V\d+\. Export du \d{2}\/\d{2}\/\d{4}\.$/);
+    assert.match(readme.getCell('A1').value, /^Version du master Excel en service : V\d+\. Export du \d{2}\/\d{2}\/\d{4}\.$/);
     assert.equal(readme.getColumn(1).values.filter((value) => String(value).startsWith(README_VERSION_PREFIX)).length, 1);
   });
 

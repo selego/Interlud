@@ -41,7 +41,7 @@ const EXCEL_MAX_ROWS = 1048576;
 const README_TITLE = 'Export des données Interlud+';
 const README_BULLET =
   "• Valeurs calculées — émissions, gains (écarts entre situations) et taux d'atteinte, une ligne par valeur, lus dans le fichier d'agrégation de la collectivité ou de l'acteur économique (feuilles « 3. Émissions par action » et « 4. Gains par action »). Ce sont les valeurs au moment de l'export : un nouvel export les remplace, sans historique. Ligne Total : atteinte = cumul ex-post ÷ cumul prévisionnel sur toutes les années, comme sur l'accueil.";
-const README_VERSION_PREFIX = 'Version du classeur de calcul (master Excel) :';
+const README_VERSION_PREFIX = 'Version du master Excel en service :';
 // Fond jaune des lignes d'exemple fictives du template.
 const EXAMPLE_FILL = 'FFFFF8DC';
 const OPTIONS = ['collectivities', 'template', 'out'];
