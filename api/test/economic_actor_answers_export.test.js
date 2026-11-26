@@ -151,7 +151,7 @@ test("l'admin obtient un fichier .xlsx daté avec les quatre onglets", async () 
   // Version du master Excel et date de l'export
   const info = rowsOf(workbook.getWorksheet('Informations'));
   assert.deepEqual(info[0], ['Information', 'Valeur']);
-  assert.deepEqual(info[1], ['Version du classeur de calcul (master Excel)', require('../src/utils/constants').MASTER_EXCEL_VERSION]);
+  assert.deepEqual(info[1], ['Version du master Excel en service', require('../src/utils/constants').MASTER_EXCEL_VERSION]);
   assert.equal(info[2][0], "Date de l'export");
   assert.match(info[2][1], /^\d{2}\/\d{2}\/\d{4}$/);
 });

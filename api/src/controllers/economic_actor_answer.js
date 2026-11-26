@@ -243,7 +243,7 @@ router.post('/admin/export', passport.authenticate('admin', { session: false, fa
         { header: 'Valeur', key: 'value', width: 24 },
       ],
       [
-        { label: 'Version du classeur de calcul (master Excel)', value: MASTER_EXCEL_VERSION },
+        { label: 'Version du master Excel en service', value: MASTER_EXCEL_VERSION },
         { label: "Date de l'export", value: new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) },
       ],
     );
