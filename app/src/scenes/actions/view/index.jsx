@@ -17,26 +17,28 @@ export default function Index() {
   const { user, collectivity } = useStore();
   const [action, setAction] = useState(null);
   const [errorCode, setErrorCode] = useState(null);
-  // Identifiant affiché : une réponse arrivée après un changement d'action est ignorée
-  const currentId = useRef(id);
+  // Numéro de visite : une réponse arrivée après un changement d'action (même un retour à la même action) est ignorée
+  // L'identifiant est aussi vérifié : un rafraîchissement lancé par un écran de l'action précédente ne s'applique pas
+  const visit = useRef({ id, count: 0 });
   const fetchAction = async () => {
-    const requestedId = id;
+    const requestVisit = visit.current;
+    if (requestVisit.id !== id) return;
     try {
-      const { ok, data, code } = await api.get(`/action/${requestedId}`);
-      if (currentId.current !== requestedId) return;
+      const { ok, data, code } = await api.get(`/action/${id}`);
+      if (visit.current !== requestVisit) return;
       if (!ok) {
         setErrorCode(code || "une erreur est survenue");
         return toast.error(code || "Une erreur est survenue");
       }
       setAction(data);
   } catch (error) {
-      if (currentId.current !== requestedId) return;
+      if (visit.current !== requestVisit) return;
       setErrorCode("une erreur est survenue");
       toast.error("Une erreur est survenue");
     }
   };
   useEffect(() => {
-    currentId.current = id;
+    visit.current = { id, count: visit.current.count + 1 };
     setAction(null);
     setErrorCode(null);
     fetchAction();
