@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Routes, Route, useParams } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
@@ -17,20 +17,26 @@ export default function Index() {
   const { user, collectivity } = useStore();
   const [action, setAction] = useState(null);
   const [errorCode, setErrorCode] = useState(null);
+  // Identifiant affiché : une réponse arrivée après un changement d'action est ignorée
+  const currentId = useRef(id);
   const fetchAction = async () => {
+    const requestedId = id;
     try {
-      const { ok, data, code } = await api.get(`/action/${id}`);
+      const { ok, data, code } = await api.get(`/action/${requestedId}`);
+      if (currentId.current !== requestedId) return;
       if (!ok) {
         setErrorCode(code || "une erreur est survenue");
         return toast.error(code || "Une erreur est survenue");
       }
       setAction(data);
   } catch (error) {
+      if (currentId.current !== requestedId) return;
       setErrorCode("une erreur est survenue");
       toast.error("Une erreur est survenue");
     }
   };
   useEffect(() => {
+    currentId.current = id;
     setAction(null);
     setErrorCode(null);
     fetchAction();

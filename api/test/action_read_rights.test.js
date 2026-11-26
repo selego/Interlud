@@ -31,6 +31,8 @@ const ACTION_GLOBAL_CLOSED = 'a00000000000000000000004';
 const CONFIG_COL = 'a00000000000000000000005';
 const CONFIG_AE = 'a00000000000000000000006';
 const UNKNOWN = 'a00000000000000000000009';
+// Action de collectivité portant aussi un identifiant d'acteur économique (création par l'admin plateforme)
+const ACTION_COL_MIXED = 'a00000000000000000000010';
 
 const users = {
   admin: { _id: 'u-admin', name: 'Admin', role: 'admin', collectivities: [] },
@@ -49,6 +51,7 @@ const users = {
 const actions = [
   { _id: ACTION_COL, name: 'Action collectivité A', type: 'custom', owner: 'collectivity', collectivity_id: 'col-a', exel_files_prev: [], excel_files_expost: [] },
   { _id: ACTION_AE, name: 'Action acteur 1', type: 'reference', owner: 'economic_actor', collectivity_id: 'col-a', economic_actor_id: 'ea-1', exel_files_prev: [], excel_files_expost: [] },
+  { _id: ACTION_COL_MIXED, name: 'Action collectivité A avec identifiant acteur', type: 'custom', owner: 'collectivity', collectivity_id: 'col-a', economic_actor_id: 'ea-1', exel_files_prev: [], excel_files_expost: [] },
   { _id: ACTION_GLOBAL, name: 'Fiche du catalogue', type: 'global', exel_files_prev: [], excel_files_expost: [] },
   { _id: ACTION_GLOBAL_CLOSED, name: 'Fiche fermée aux acteurs', type: 'global', visible_for_economic_actors: false, exel_files_prev: [], excel_files_expost: [] },
   { _id: CONFIG_COL, name: 'Parc types', type: 'config', owner: 'collectivity', collectivity_id: 'col-a', exel_files_prev: [], excel_files_expost: [] },
@@ -103,6 +106,7 @@ beforeEach(() => {
 // Comptes autorisés / refusés par action
 const CASES = [
   { label: "action d'une collectivité", id: ACTION_COL, allowed: ['admin', 'memberA', 'adminA', 'aeRoleMemberA'], forbidden: ['aeOwner', 'aeOther', 'aeKeptMembership', 'memberB', 'pendingA', 'rejectedA', 'noCollectivity'] },
+  { label: "action d'une collectivité portant un identifiant d'acteur", id: ACTION_COL_MIXED, allowed: ['admin', 'memberA', 'adminA', 'aeRoleMemberA'], forbidden: ['aeOwner', 'aeOther', 'aeKeptMembership', 'memberB', 'pendingA', 'rejectedA', 'noCollectivity'] },
   { label: "action d'un acteur économique", id: ACTION_AE, allowed: ['admin', 'aeOwner', 'memberA', 'adminA', 'aeRoleMemberA'], forbidden: ['aeOther', 'memberB', 'pendingA', 'noCollectivity'] },
   { label: 'fiche du catalogue', id: ACTION_GLOBAL, allowed: Object.keys(users), forbidden: [] },
   { label: 'fiche du catalogue fermée aux acteurs économiques', id: ACTION_GLOBAL_CLOSED, allowed: Object.keys(users), forbidden: [] },

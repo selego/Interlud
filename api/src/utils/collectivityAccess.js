@@ -28,7 +28,7 @@ function canEditAction(user, action) {
 // dans la collectivité (comme les routes de résultats). Un compte acteur économique ne lit que les actions de son organisation.
 function canReadAction(user, action) {
   if (action.type === 'global') return true;
-  if (user.role === 'economic_actor') return !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
+  if (user.role === 'economic_actor') return action.owner === 'economic_actor' && !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
   return canEditAction(user, action) || isApprovedMember(user, action.collectivity_id);
 }
 
