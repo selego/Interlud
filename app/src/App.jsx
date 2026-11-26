@@ -36,8 +36,6 @@ import api from "@/services/api"
 import { environment, SENTRY_URL } from "./config"
 
 if (environment === "production" && SENTRY_URL) {
-  // Replays : toutes les sessions sont enregistrées, textes et champs visibles.
-  // Les champs mot de passe restent toujours masqués (imposé par le SDK Sentry).
   Sentry.init({
     dsn: SENTRY_URL,
     environment: "app",
