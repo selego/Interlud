@@ -23,6 +23,15 @@ function canEditAction(user, action) {
   return !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
 }
 
+// Lecture d'une action : les fiches du catalogue (type global) sont lues par tous (catalogue, tableau de bord parent).
+// Sinon, mêmes droits que l'écriture, élargis aux membres approuvés de la collectivité de l'action quel que soit leur rôle
+// dans la collectivité (comme les routes de résultats). Un compte acteur économique ne lit que les actions de son organisation.
+function canReadAction(user, action) {
+  if (action.type === 'global') return true;
+  if (user.role === 'economic_actor') return action.owner === 'economic_actor' && !!action.economic_actor_id && action.economic_actor_id === user.economic_actor_id;
+  return canEditAction(user, action) || isApprovedMember(user, action.collectivity_id);
+}
+
 // Création d'une action dans une collectivité : admin plateforme, administrateur approuvé de la collectivité,
 // ou acteur économique dont le rattachement à la collectivité est approuvé (il crée alors pour sa propre organisation).
 function canCreateAction(user, collectivityId) {
@@ -42,4 +51,4 @@ function propagationScope(user, action) {
 // Identifiant Mongo transmis par le client : une chaîne convertible en ObjectId (ni nombre, ni objet)
 const isObjectId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 
-module.exports = { isApprovedMember, isActionInCollectivity, canEditAction, canCreateAction, propagationScope, isObjectId };
+module.exports = { isApprovedMember, isActionInCollectivity, canEditAction, canReadAction, canCreateAction, propagationScope, isObjectId };

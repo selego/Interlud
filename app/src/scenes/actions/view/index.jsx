@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Routes, Route, useParams } from "react-router-dom";
 import api from "@/services/api";
 import toast from "react-hot-toast";
@@ -16,18 +16,42 @@ export default function Index() {
   const { id } = useParams();
   const { user, collectivity } = useStore();
   const [action, setAction] = useState(null);
+  const [errorCode, setErrorCode] = useState(null);
+  // Numéro de visite : une réponse arrivée après un changement d'action (même un retour à la même action) est ignorée
+  // L'identifiant est aussi vérifié : un rafraîchissement lancé par un écran de l'action précédente ne s'applique pas
+  const visit = useRef({ id, count: 0 });
   const fetchAction = async () => {
+    const requestVisit = visit.current;
+    if (requestVisit.id !== id) return;
     try {
       const { ok, data, code } = await api.get(`/action/${id}`);
-      if (!ok) return toast.error(code || "Une erreur est survenue");
+      if (visit.current !== requestVisit) return;
+      if (!ok) {
+        setErrorCode(code || "une erreur est survenue");
+        return toast.error(code || "Une erreur est survenue");
+      }
       setAction(data);
   } catch (error) {
+      if (visit.current !== requestVisit) return;
+      setErrorCode("une erreur est survenue");
       toast.error("Une erreur est survenue");
     }
   };
   useEffect(() => {
+    visit.current = { id, count: visit.current.count + 1 };
+    setAction(null);
+    setErrorCode(null);
     fetchAction();
   }, [id]);
+
+  // Action refusée ou introuvable : un message plutôt qu'un chargement sans fin
+  if (!action && errorCode) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-lg text-gray-600">
+        Impossible d'ouvrir cette action : {errorCode}
+      </div>
+    </div>
+  );
 
   if (!action) return (
     <div className="flex items-center justify-center min-h-screen">

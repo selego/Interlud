@@ -17,7 +17,7 @@ const { writeDraftFlag, warmSessionsForAction } = require('../services/excelSync
 const { refreshDefaultsAfterSync } = require('../services/excelDefaults');
 const { pickFields } = require('../utils');
 const { hasForbiddenFileNameCharacters, getActionNameError, toSafeFileName } = require('../utils/fileName');
-const { canEditAction, canCreateAction, isObjectId } = require('../utils/collectivityAccess');
+const { canEditAction, canReadAction, canCreateAction, isObjectId } = require('../utils/collectivityAccess');
 
 const ACTION_UPDATABLE_FIELDS = [
   'name', 'description', 'status', 'priority', 'blocked_reason', 'step_description', 'date_start', 'date_end',
@@ -30,6 +30,7 @@ router.get('/:id', passport.authenticate(['admin', 'user'], { session: false, fa
   try {
     const action = await Action.findById(req.params.id);
     if (!action) return res.status(404).send({ ok: false, code: ERROR_CODES.NOT_FOUND });
+    if (!canReadAction(req.user, action)) return res.status(403).send({ ok: false, code: ERROR_CODES.FORBIDDEN });
 
     // Pré-ouvre les sessions SharePoint des fichiers de l'action (sans attendre) : la première synchro
     // Excel après ouverture de la page ne paie plus le chargement à froid des classeurs
