@@ -1,14 +1,15 @@
 const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const { isPercentUnit } = require('../utils/indicators');
+const { MASTER_EXCEL_VERSION } = require('../utils/constants');
 
 const tenantId = process.env.TENANT_ID;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const sharePointSiteName = 'selegobv';
 const masterExcelFileId = '01IBL4ADOALEXOBXQDJFCZGA6265HTAGXV';
-// Version du master ci-dessus, enregistrée dans l'historique des valeurs : à changer en même temps que l'ID
-const masterExcelVersion = 'V46';
+// Version du master ci-dessus : définie dans utils/constants.js (MASTER_EXCEL_VERSION), à changer en même temps que l'ID
+const masterExcelVersion = MASTER_EXCEL_VERSION;
 // Agrégation résultats charte_V5.xlsx
 const aggregationTemplateFileId = '01IBL4ADMXS4VGWITQ5ZEKM3NACKQK5HNM';
 

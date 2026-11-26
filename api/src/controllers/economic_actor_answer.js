@@ -7,6 +7,7 @@ const EconomicActorQuestion = require('../models/economic_actor_question');
 const EconomicActor = require('../models/economic_actor');
 const ERROR_CODES = require('../utils/errorCodes');
 const { capture } = require('../services/sentry');
+const { MASTER_EXCEL_VERSION } = require('../utils/constants');
 
 // Réponses au questionnaire acteurs économiques. L'acteur est toujours celui du token, jamais celui du corps de la requête.
 // Aucune synchronisation Microsoft Graph ni écriture Excel ici.
@@ -129,8 +130,8 @@ const addSheet = (workbook, name, columns, rows) => {
   return sheet;
 };
 
-// Trois onglets : « Réponses » (une ligne par organisation et par question), « Par organisation » (une colonne par question)
-// et « Questions ». Les questions désactivées et les organisations sans réponse sont incluses.
+// Quatre onglets : « Réponses » (une ligne par organisation et par question), « Par organisation » (une colonne par question),
+// « Questions » et « Informations » (version du master Excel, date de l'export). Les questions désactivées et les organisations sans réponse sont incluses.
 router.post('/admin/export', passport.authenticate('admin', { session: false, failWithError: true }), async (req, res) => {
   try {
     const [answers, questionDocs, actorDocs] = await Promise.all([EconomicActorAnswer.find({}), EconomicActorQuestion.find({}), EconomicActor.find({})]);
@@ -232,6 +233,19 @@ router.post('/admin/export', passport.authenticate('admin', { session: false, fa
         required: yesNo(question.required),
         active: yesNo(question.active),
       })),
+    );
+
+    addSheet(
+      workbook,
+      'Informations',
+      [
+        { header: 'Information', key: 'label', width: 45 },
+        { header: 'Valeur', key: 'value', width: 24 },
+      ],
+      [
+        { label: 'Version du classeur de calcul (master Excel)', value: MASTER_EXCEL_VERSION },
+        { label: "Date de l'export", value: new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) },
+      ],
     );
 
     const buffer = await workbook.xlsx.writeBuffer();
