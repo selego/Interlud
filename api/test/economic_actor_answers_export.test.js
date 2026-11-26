@@ -93,7 +93,7 @@ test("un AE, un utilisateur de collectivité ou un visiteur sans token n'obtient
   }
 });
 
-test("l'admin obtient un fichier .xlsx daté avec les trois onglets", async () => {
+test("l'admin obtient un fichier .xlsx daté avec les quatre onglets", async () => {
   const res = await call('admin');
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type'), /spreadsheetml\.sheet/);
@@ -103,7 +103,7 @@ test("l'admin obtient un fichier .xlsx daté avec les trois onglets", async () =
   await workbook.xlsx.load(res.buffer);
   assert.deepEqual(
     workbook.worksheets.map((sheet) => sheet.name),
-    ['Réponses', 'Par organisation', 'Questions'],
+    ['Réponses', 'Par organisation', 'Questions', 'Informations'],
   );
   for (const sheet of workbook.worksheets) assert.equal(sheet.views[0].state, 'frozen');
 
@@ -147,4 +147,11 @@ test("l'admin obtient un fichier .xlsx daté avec les trois onglets", async () =
     [3, 'Type de flotte', 'Choix unique', 'Propre; Louée', undefined, 'non', 'oui'],
     [4, 'Énergies utilisées', 'Choix multiples', 'Diesel; Électrique; GNV', undefined, 'non', 'non'],
   ]);
+
+  // Version du master Excel et date de l'export
+  const info = rowsOf(workbook.getWorksheet('Informations'));
+  assert.deepEqual(info[0], ['Information', 'Valeur']);
+  assert.deepEqual(info[1], ['Version du master Excel en service', require('../src/utils/constants').MASTER_EXCEL_VERSION]);
+  assert.equal(info[2][0], "Date de l'export");
+  assert.match(info[2][1], /^\d{2}\/\d{2}\/\d{4}$/);
 });
