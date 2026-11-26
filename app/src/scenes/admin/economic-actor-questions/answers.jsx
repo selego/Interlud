@@ -121,7 +121,7 @@ function ExportButton() {
 
   return (
     <button onClick={exportAnswers} disabled={loading} className="button-primary disabled:opacity-50">
-      {loading ? "Export en cours…" : "Exporter les réponses (Excel)"}
+      {loading ? "Export en cours…" : "Exporter les réponses"}
     </button>
   )
 }

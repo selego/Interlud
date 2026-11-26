@@ -11,7 +11,7 @@ const { GAINS_FIRST_ROW, EMISSIONS_FIRST_ROW, ACTION_GAINS_RANGES, ACTION_EMISSI
 const graph = require('../src/services/microsoftGraph');
 const { prepareInputSheets, writeWorkbook } = require('../script/export_input_values');
 
-const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, README_TITLE, SHEET_NAME, EXCEL_MAX_ROWS, ANSWERS_SHEET_NAME, answerRows, addAnswersSheet } = require('../script/export_calculated_values');
+const { parseArgs, jobsForCollectivity, addCalculatedValuesSheet, safeError, README_BULLET, README_TITLE, README_VERSION_PREFIX, SHEET_NAME, EXCEL_MAX_ROWS, ANSWERS_SHEET_NAME, answerRows, addAnswersSheet } = require('../script/export_calculated_values');
 
 // Feuilles complètes A19:FU572 et A21:FU574.
 const blankSheet = () => Array.from({ length: 554 }, () => []);
@@ -236,8 +236,10 @@ describe('script', () => {
     assert.equal(sheet.getRow(2).getCell(1).value, 'CA Exemple');
     assert.equal(sheet.views[0].state, 'frozen');
     assert.ok(sheet.autoFilter);
-    assert.equal(readme.getCell('A10').value, README_BULLET);
+    assert.equal(readme.getCell('A11').value, README_BULLET);
     assert.equal(readme.getColumn(1).values.filter((value) => value === README_BULLET).length, 1);
+    assert.match(readme.getCell('A1').value, /^Version du master Excel en service : V\d+\. Export du \d{2}\/\d{2}\/\d{4}\.$/);
+    assert.equal(readme.getColumn(1).values.filter((value) => String(value).startsWith(README_VERSION_PREFIX)).length, 1);
   });
 
   test('réponses acteurs éco : une ligne par acteur et question active, plus les questions désactivées déjà répondues', () => {
@@ -320,6 +322,7 @@ describe('script', () => {
     const readme = Array.from(check.getWorksheet('Lisez-moi').getColumn(1).values, (value) => String(value || ''));
     assert.ok(!readme.some((value) => /Questions pour BL|exemple fictive|Document de travail|proposition de format|L'export serait|^\d\. /.test(value)));
     assert.equal(readme[1], README_TITLE);
+    assert.ok(readme[2].startsWith(`${README_VERSION_PREFIX} V`));
     assert.equal(readme.indexOf(README_BULLET), readme.findIndex((value) => value.startsWith('• Valeurs —')) + 1);
   });
 
@@ -331,7 +334,26 @@ describe('script', () => {
     });
     readme.getCell(8, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8DC' } };
     addCalculatedValuesSheet(wb, []);
-    assert.deepEqual(readme.getColumn(1).values.slice(1), [README_TITLE, 'Garder', '• Valeurs — exemple', README_BULLET]);
+    const [title, version, ...rest] = readme.getColumn(1).values.slice(1);
+    assert.equal(title, README_TITLE);
+    assert.ok(version.startsWith(README_VERSION_PREFIX));
+    assert.deepEqual(rest, ['Garder', '• Valeurs — exemple', README_BULLET]);
+  });
+
+  test('Lisez-moi : une ancienne ligne de version au-dessus du titre est remplacée sous le titre', () => {
+    const wb = new ExcelJS.Workbook();
+    const readme = wb.addWorksheet('Lisez-moi');
+    [`${README_VERSION_PREFIX} V45. Export du 01/01/2026.`, README_TITLE, 'Suite'].forEach((value, index) => {
+      readme.getCell(index + 1, 1).value = value;
+    });
+    for (let run = 0; run < 2; run++) {
+      addCalculatedValuesSheet(wb, []);
+      const [title, version, ...rest] = readme.getColumn(1).values.slice(1);
+      assert.equal(title, README_TITLE);
+      assert.ok(version.startsWith(`${README_VERSION_PREFIX} V`) && !version.includes('V45'));
+      assert.deepEqual(rest.filter((value) => String(value).startsWith(README_VERSION_PREFIX)), []);
+      assert.equal(rest[0], 'Suite');
+    }
   });
 
   test('les exemples du template sont retirés avant la création de l’onglet', (t) => {
