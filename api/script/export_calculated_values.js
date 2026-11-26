@@ -13,6 +13,7 @@ const EconomicActorQuestion = require('../src/models/economic_actor_question');
 const EconomicActorAnswer = require('../src/models/economic_actor_answer');
 const { ACTION_GAINS_RANGES, readAggregationBlocks, rowsForFile } = require('../src/services/aggregationReader');
 const { loadInputRows, prepareInputSheets, writeWorkbook } = require('./export_input_values');
+const { masterExcelVersion } = require('../src/services/microsoftGraph');
 
 // Export local, en lecture seule, des valeurs calculées (émissions, gains, atteinte)
 // lues dans le fichier d'agrégation SharePoint de chaque collectivité, et des données d'entrée
@@ -40,6 +41,7 @@ const EXCEL_MAX_ROWS = 1048576;
 const README_TITLE = 'Export des données Interlud+';
 const README_BULLET =
   "• Valeurs calculées — émissions, gains (écarts entre situations) et taux d'atteinte, une ligne par valeur, lus dans le fichier d'agrégation de la collectivité ou de l'acteur économique (feuilles « 3. Émissions par action » et « 4. Gains par action »). Ce sont les valeurs au moment de l'export : un nouvel export les remplace, sans historique. Ligne Total : atteinte = cumul ex-post ÷ cumul prévisionnel sur toutes les années, comme sur l'accueil.";
+const README_VERSION_PREFIX = 'Version du classeur de calcul (master Excel) :';
 // Fond jaune des lignes d'exemple fictives du template.
 const EXAMPLE_FILL = 'FFFFF8DC';
 const OPTIONS = ['collectivities', 'template', 'out'];
@@ -188,6 +190,19 @@ const addReadmeBullet = (workbook) => {
   sheet.insertRow(valuesRow + 1, [README_BULLET], 'i');
 };
 
+// Ligne sous le titre : version du master Excel qui a produit les valeurs, et date de l'export.
+const addReadmeVersion = (workbook, date = new Date()) => {
+  const sheet = workbook.getWorksheet('Lisez-moi');
+  if (!sheet) return;
+  const values = Array.from(sheet.getColumn(1).values, (value) => String(value || ''));
+  const existing = values.findIndex((value) => value.startsWith(README_VERSION_PREFIX));
+  if (existing !== -1) sheet.spliceRows(existing, 1);
+  const titleRow = values.indexOf(README_TITLE);
+  sheet.insertRow(titleRow === -1 ? 1 : titleRow + 1, [
+    `${README_VERSION_PREFIX} ${masterExcelVersion}. Export du ${date.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}.`,
+  ]);
+};
+
 const addCalculatedValuesSheet = (workbook, rows) => {
   if (rows.length + 1 > EXCEL_MAX_ROWS) {
     throw new Error(`Export annulé : l'onglet « ${SHEET_NAME} » compterait ${rows.length + 1} lignes (en-tête compris), au-delà de la limite Excel de ${EXCEL_MAX_ROWS}. Relancer avec moins de collectivités.`);
@@ -205,6 +220,7 @@ const addCalculatedValuesSheet = (workbook, rows) => {
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(sheet.rowCount, 1), column: CALCULATED_COLUMNS.length } };
   moveSheetAfter(workbook, SHEET_NAME, 'Valeurs');
   addReadmeBullet(workbook);
+  addReadmeVersion(workbook);
   return sheet;
 };
 
@@ -360,6 +376,7 @@ module.exports = {
   USAGE,
   README_BULLET,
   README_TITLE,
+  README_VERSION_PREFIX,
   SHEET_NAME,
   EXCEL_MAX_ROWS,
   ANSWERS_SHEET_NAME,
